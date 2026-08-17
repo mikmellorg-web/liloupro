@@ -1,0 +1,310 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() && (request.auth.token.email == 'mikmellorg@gmail.com' || request.auth.token.email == 'miqueiasmellopro@gmail.com');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (isMasterAdmin() || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidSettings(data) {
+      return (data.whatsappAdmin == null || data.whatsappAdmin is string)
+        && (data.updatedAt == null || data.updatedAt is timestamp);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+
+    // --- Validation Blueprints ---
+
+    function isValidMember(data) {
+      return (data.get('name', null) == null || (data.name is string && data.name.size() > 0 && data.name.size() <= 500))
+        && (data.get('uid', null) == null || (data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128))
+        && (data.get('roles', null) == null || data.roles is list)
+        && (data.get('email', null) == null || (data.email is string && data.email.size() <= 200))
+        && (data.get('isAdmin', null) == null || data.isAdmin is bool)
+        && (data.get('availability', null) == null || data.availability is map)
+        && (data.get('availabilityStatus', null) == null || data.availabilityStatus is map)
+        && (data.get('whatsapp', null) == null || data.whatsapp is string)
+        && (data.get('lastAvailabilityUpdate', null) == null || data.lastAvailabilityUpdate is timestamp)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
+        && (data.get('favoriteSongs', null) == null || data.favoriteSongs is list)
+        && (data.get('defaultBibleVersion', null) == null || data.defaultBibleVersion is string);
+    }
+
+    function isValidAdminEntry(data) {
+      return (data.get('email', null) == null || (data.email is string && data.email.size() > 0 && data.email.size() <= 150))
+        && (data.get('assignedAt', null) == null || data.assignedAt is timestamp);
+    }
+
+    function isValidChordOverride(data) {
+      return data.get('frets', null) is list
+        && (data.get('fingers', null) == null || data.fingers is list)
+        && (data.get('baseFret', null) == null || data.baseFret is number)
+        && (data.get('barre', null) == null || data.barre is map);
+    }
+
+    function isValidPianoChordOverride(data) {
+      return data.get('keys', null) is list;
+    }
+
+    function isValidSong(data) {
+      return (data.get('title', null) == null || (data.title is string && data.title.size() > 0 && data.title.size() <= 500))
+        && (data.get('lyrics', null) == null || (data.lyrics is string && data.lyrics.size() <= 100000))
+        && (data.get('artist', null) == null || (data.artist is string && data.artist.size() <= 500))
+        && (data.get('chords', null) == null || (data.chords is string && data.chords.size() <= 100000))
+        && (data.get('bpm', null) == null || data.bpm is number)
+        && (data.get('tags', null) == null || data.tags is list)
+        && (data.get('audio', null) == null || data.audio is list)
+        && (data.get('baseKey', null) == null || data.baseKey is string)
+        && (data.get('driveAudioLink', null) == null || data.driveAudioLink is string)
+        && (data.get('driveFilesLink', null) == null || data.driveFilesLink is string)
+        && (data.get('files', null) == null || data.files is list)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
+    }
+
+    function isValidService(data) {
+      return (data.get('title', null) == null || (data.get('title', '') is string && data.get('title', '').size() <= 1000))
+        && (data.get('date', null) == null || (data.get('date', '') is string && data.get('date', '').size() > 0))
+        && (data.get('scales', null) == null || data.get('scales', null) is map)
+        && (data.get('setlist', null) == null || data.get('setlist', null) is list)
+        && (data.get('liturgy', null) == null || data.get('liturgy', null) is list)
+        && (data.get('availability', null) == null || data.get('availability', null) is map)
+        && (data.get('playlistUrl', null) == null || (data.get('playlistUrl', '') is string && data.get('playlistUrl', '').size() <= 2000))
+        && (data.get('createdAt', null) == null || data.get('createdAt', null) is timestamp)
+        && (data.get('churchId', null) == null || (data.get('churchId', '') is string && data.get('churchId', '').size() <= 128));
+    }
+
+    function isValidAvailability(data) {
+      return (data.get('userId', null) == null || data.userId == request.auth.uid || isAdmin())
+        && (data.get('date', null) == null || (data.date is string && data.date.size() >= 10 && data.date.size() <= 64))
+        && (data.get('status', null) == null || data.status in ['available', 'unavailable'])
+        && (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
+    }
+
+    function isValidAvailabilityLock(data) {
+      return (data.unlocked is bool)
+        && (data.get('unlockedAt', null) == null || data.unlockedAt is string)
+        && (data.get('deadline', null) == null || data.deadline is string);
+    }
+
+    function isValidAnnouncement(data) {
+      return (data.get('text', null) == null || (data.text is string && data.text.size() > 0 && data.text.size() <= 2000))
+        && (data.get('color', null) == null || (data.color is string && data.color.size() <= 100))
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
+    }
+
+    function isValidMuralItem(data) {
+      return (data.get('text', null) == null || (data.text is string && data.text.size() > 0 && data.text.size() <= 2000))
+        && (data.get('type', null) == null || data.type in ['sugestao', 'ideia', 'necessidade', 'oracao', 'outro'])
+        && (data.get('authorId', null) == null || (data.authorId is string && data.authorId == request.auth.uid))
+        && (data.get('authorName', null) == null || (data.authorName is string && data.authorName.size() <= 200))
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
+    }
+
+    function isValidNotification(data) {
+      return (data.get('userId', null) == null || data.userId is string)
+        && (data.get('title', null) == null || data.title is string)
+        && (data.get('content', null) == null || data.content is string)
+        && (data.get('type', null) == null || data.type in ['announcement', 'mural', 'service', 'general'])
+        && (data.get('read', null) == null || data.read is bool)
+        && (data.get('deleted', null) == null || data.deleted is bool)
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp);
+    }
+
+    function isValidChatMessage(data) {
+      return (data.get('text', null) == null || (data.text is string && data.text.size() > 0 && data.text.size() <= 2000))
+        && (data.get('authorId', null) == null || (data.authorId is string && data.authorId == request.auth.uid))
+        && (data.get('authorName', null) == null || (data.authorName is string && data.authorName.size() <= 200))
+        && (data.get('authorRole', null) == null || (data.authorRole is string && data.authorRole.size() <= 100))
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
+    }
+
+    function isValidProjectionPreset(data) {
+      return (data.get('name', '') is string && data.get('name', '').size() > 0 && data.get('name', '').size() <= 200)
+        && (data.get('url', '') is string && data.get('url', '').size() > 0 && data.get('url', '').size() <= 2500000)
+        && (data.get('desc', null) == null || (data.desc is string && data.desc.size() <= 1000))
+        && (data.get('icon', null) == null || (data.icon is string && data.icon.size() <= 50))
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp);
+    }
+
+    function isValidPresence(data) {
+      return data.name is string && data.name.size() <= 200
+        && (data.get('lastActive', null) == null || data.lastActive is timestamp);
+    }
+
+    function isValidChurch(data) {
+      return (data.get('name', null) == null || (data.name is string && data.name.size() > 0 && data.name.size() <= 500))
+        && (data.get('inviteCode', null) == null || (data.inviteCode is string && data.inviteCode.size() > 0 && data.inviteCode.size() <= 100))
+        && (data.get('createdBy', null) == null || (data.createdBy is string))
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt is string);
+    }
+
+    // --- Collection Rules ---
+    match /chord_overrides/{chordName} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && incoming().keys().hasAll(['frets']) && isValidChordOverride(incoming());
+      allow update: if isAdmin() && isValidChordOverride(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /piano_chord_overrides/{chordName} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && incoming().keys().hasAll(['keys']) && isValidPianoChordOverride(incoming());
+      allow update: if isAdmin() && isValidPianoChordOverride(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidSettings(incoming());
+      allow update: if isAdmin() && isValidSettings(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /projection_presets/{presetId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && incoming().keys().hasAll(['name', 'url']) && isValidProjectionPreset(incoming());
+      allow update: if isSignedIn() && isValidProjectionPreset(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    // Admin List Rules
+    match /admins/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isMasterAdmin() && incoming().keys().hasAll(['email']) && isValidAdminEntry(incoming());
+      allow update: if isMasterAdmin() && isValidAdminEntry(incoming());
+      allow delete: if isMasterAdmin();
+    }
+
+    // Announcement Rules
+    match /announcements/{annId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && incoming().keys().hasAll(['text']) && isValidAnnouncement(incoming());
+      allow update: if isAdmin() && isValidAnnouncement(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Availability Rules
+    match /availability/{availabilityId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().keys().hasAll(['userId', 'date', 'status']) && isValidAvailability(incoming());
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && isValidAvailability(incoming());
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Availability Lock Rules
+    match /availability_locks/{lockId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && incoming().keys().hasAll(['unlocked']) && isValidAvailabilityLock(incoming());
+      allow update: if isAdmin() && isValidAvailabilityLock(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Member Rules
+    match /members/{memberId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().keys().hasAll(['name', 'uid', 'roles']) && isValidMember(incoming());
+      allow update: if (isAdmin() || request.auth.uid == memberId) && isValidMember(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Song Rules
+    match /songs/{songId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin() && incoming().keys().hasAll(['title']) && isValidSong(incoming());
+      allow update: if isAdmin() && isValidSong(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Service Rules
+    match /services/{serviceId} {
+      allow get, list: if true;
+      allow create: if isAdmin() && incoming().keys().hasAll(['title', 'date']) && isValidService(incoming());
+      allow update: if (isAdmin() && isValidService(incoming()))
+                      || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['availability']) && isValidService(incoming()));
+      allow delete: if isAdmin();
+    }
+
+    // Mural Rules
+    match /mural/{itemId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'type', 'authorId', 'authorName', 'createdAt']) && isValidMuralItem(incoming());
+      allow update: if (isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid)) && isValidMuralItem(incoming());
+      allow delete: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
+    }
+
+    // Notification Rules
+    match /notifications/{notifId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()) && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted']);
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Chat Rules
+    match /chat/{messageId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'authorId', 'authorName', 'createdAt']) && isValidChatMessage(incoming());
+      allow update: if (isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid)) && isValidChatMessage(incoming());
+      allow delete: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
+    }
+
+    // Presence Rules
+    match /presence/{userId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidPresence(incoming());
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Church Rules
+    match /churches/{churchId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Kiwify Webhook Log Rules
+    match /kiwify_webhooks/{logId} {
+      allow read, write: if true;
+    }
+
+    // Password Token Rules
+    match /password_tokens/{tokenId} {
+      allow read, write: if true;
+    }
+
+    // Default deny - placed at the end to ensure more specific matches have priority
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

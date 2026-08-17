@@ -1,0 +1,317 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "A group member with specific roles and availability.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "uid": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "availability": {
+          "type": "object",
+          "description": "Map of ISO date strings to availability status (available, unavailable, maybe)"
+        },
+        "favoriteSongs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of song IDs marked as favorites by the member."
+        }
+      },
+      "required": ["name", "email", "uid", "roles"]
+    },
+    "Song": {
+      "title": "Song",
+      "description": "Song details including lyrics, chords, and metadata.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "lyrics": { "type": "string" },
+        "chords": { "type": "string" },
+        "baseKey": { "type": "string" },
+        "bpm": { "type": "number" },
+        "timeSignature": { "type": "string" },
+        "category": { 
+          "type": "string",
+          "enum": [
+            "CRIAÇÃO/ADORAÇÃO",
+            "QUEDA/CONFISSÃO",
+            "REDENÇÃO/AÇÃO DE GRAÇAS",
+            "CONSUMAÇÃO/RESPOSTA"
+          ]
+        },
+        "audio": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "url": { "type": "string" } } } },
+        "files": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "url": { "type": "string" }, "type": { "type": "string" } } } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "driveAudioLink": { "type": "string" },
+        "driveFilesLink": { "type": "string" }
+      },
+      "required": ["title"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "A scheduled service event with a staff scale and setlist.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "title": { "type": "string" },
+        "scales": {
+          "type": "object",
+          "description": "Map of role name to member ID"
+        },
+        "setlist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of Song IDs"
+        },
+        "liturgy": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "enum": ["reading", "song", "speech", "prayer", "announcements", "other"] },
+              "title": { "type": "string" },
+              "content": { "type": "string" }
+            }
+          },
+          "description": "Ordered sequence of service events"
+        },
+        "playlistUrl": {
+          "type": "string",
+          "description": "Optional YouTube playlist link for the service"
+        }
+      },
+      "required": ["date", "title"]
+    },
+    "Availability": {
+      "title": "Availability",
+      "description": "User availability for a specific date.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "unavailable"] }
+      },
+      "required": ["userId", "date", "status"]
+    },
+    "AvailabilityLock": {
+      "title": "AvailabilityLock",
+      "description": "Lock status and deadline for monthly availability submissions.",
+      "type": "object",
+      "properties": {
+        "unlocked": { "type": "boolean" },
+        "unlockedAt": { "type": "string", "format": "date-time" },
+        "deadline": { "type": "string", "format": "date-time" }
+      },
+      "required": ["unlocked"]
+    },
+    "MuralItem": {
+      "title": "Mural Item",
+      "description": "A post in the team mural (suggestions, ideas, prayers, etc.).",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "type": { 
+          "type": "string", 
+          "enum": ["sugestao", "ideia", "necessidade", "oracao", "outro"] 
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "authorId", "authorName", "type", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["announcement", "mural", "service", "general"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "link": { "type": "string" }
+      },
+      "required": ["userId", "title", "content", "type", "read", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A real-time message exchanged in the team chat.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "authorId", "authorName", "createdAt"]
+    },
+    "ProjectionPreset": {
+      "title": "Projection Preset",
+      "description": "A custom background image preset for projections in the congregation.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "desc": { "type": "string" },
+        "url": { "type": "string" },
+        "icon": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "url"]
+    },
+    "Church": {
+      "title": "Church",
+      "description": "A registered church congregation.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "inviteCode"]
+    },
+    "PianoChordOverride": {
+      "title": "PianoChordOverride",
+      "description": "Custom administrator-configured piano chord shapes.",
+      "type": "object",
+      "properties": {
+        "keys": { "type": "array", "items": { "type": "number" } }
+      },
+      "required": ["keys"]
+    },
+    "KiwifyWebhookLog": {
+      "title": "KiwifyWebhookLog",
+      "description": "Log of received Kiwify payment webhooks for automatic church subscription provisioning.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "orderStatus": { "type": "string" },
+        "eventType": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerName": { "type": "string" },
+        "productName": { "type": "string" },
+        "planStatus": { "type": "string" },
+        "churchId": { "type": "string" },
+        "receivedAt": { "type": "string" },
+        "rawPayload": { "type": "object" }
+      },
+      "required": ["orderId", "customerEmail", "receivedAt"]
+    }
+  },
+  "firestore": {
+    "/piano_chord_overrides/{chordName}": {
+      "schema": "PianoChordOverride",
+      "description": "Custom administrator-configured piano chord shapes."
+    },
+    "/chord_overrides/{chordName}": {
+      "schema": {
+        "title": "ChordOverride",
+        "type": "object",
+        "properties": {
+          "frets": { "type": "array", "items": { "type": "number" } },
+          "fingers": { "type": "array", "items": { "type": "number" } },
+          "baseFret": { "type": "number" },
+          "barre": {
+            "type": "object",
+            "properties": {
+              "fret": { "type": "number" },
+              "start": { "type": "number" },
+              "end": { "type": "number" }
+            }
+          }
+        },
+        "required": ["frets"]
+      },
+      "description": "Custom administrator-configured guitar chord shapes."
+    },
+    "/projection_presets/{presetId}": {
+      "schema": "ProjectionPreset",
+      "description": "Custom background presets for projection slides."
+    },
+    "/presence/{userId}": {
+      "schema": {
+        "title": "Presence",
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "lastActive": { "type": "string", "format": "date-time" }
+        },
+        "required": ["name"]
+      },
+      "description": "Real-time user online presence states."
+    },
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Collection of group members."
+    },
+    "/admins/{userId}": {
+      "schema": {
+        "title": "Admin",
+        "type": "object",
+        "properties": {
+          "email": { "type": "string" },
+          "assignedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["email"]
+      },
+      "description": "Trusted collection of user IDs that possess administrative privileges."
+    },
+    "/songs/{songId}": {
+      "schema": "Song",
+      "description": "Collection of songs in the repertoire."
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Collection of scheduled services/cultos."
+    },
+    "/availability/{availabilityId}": {
+      "schema": "Availability",
+      "description": "User-specific availability records by date."
+    },
+    "/availability_locks/{lockId}": {
+      "schema": "AvailabilityLock",
+      "description": "Monthly availability submission lock status, managed by administrative users."
+    },
+    "/announcements/{announcementId}": {
+      "schema": {
+        "title": "Announcement",
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "color": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["text"]
+      },
+      "description": "Weekly announcements for the dashboard."
+    },
+    "/mural/{itemId}": {
+      "schema": "MuralItem",
+      "description": "Shared community board for the team."
+    },
+    "/notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "User notifications for events like new announcements or mural posts."
+    },
+    "/chat/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Collection of real-time chat messages for team communication."
+    },
+    "/churches/{churchId}": {
+      "schema": "Church",
+      "description": "Collection of registered church organizations."
+    },
+    "/kiwify_webhooks/{logId}": {
+      "schema": "KiwifyWebhookLog",
+      "description": "Collection of received Kiwify webhook logs."
+    }
+  }
+}

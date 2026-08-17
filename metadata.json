@@ -1,0 +1,6 @@
+{
+  "name": "LiLouPro",
+  "description": "Sistema completo de gestão para grupos de louvor: escalas, disponibilidade de membros e repertório digital com cifras transponíveis.",
+  "requestFramePermissions": ["camera", "microphone", "midi"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
