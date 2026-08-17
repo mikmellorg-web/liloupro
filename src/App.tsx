@@ -1661,7 +1661,9 @@ function MainContent() {
       landing === 'true' ||
       sales === 'true' ||
       pathname === '/landing' ||
-      pathname === '/sales'
+      pathname === '/sales' ||
+      window.location.hash === '#landing' ||
+      window.location.hash === '#sales'
     );
   });
   const [activeTab, setActiveTab] = useState<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>('home');
@@ -2875,6 +2877,13 @@ function MainContent() {
                     active={isOpenHelpCenter}
                     onClick={() => { setIsOpenHelpCenter(true); setShowMoreMenu(false); }} 
                     label="Tutoriais & Manual" 
+                    isCollapsed={isSidebarCollapsed} 
+                    subItem 
+                  />
+                  <NavIcon 
+                    icon={<Globe size={18} className="text-brand" />} 
+                    onClick={() => { setShowLandingPage(true); setShowMoreMenu(false); }} 
+                    label="Página de Apresentação" 
                     isCollapsed={isSidebarCollapsed} 
                     subItem 
                   />
