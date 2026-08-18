@@ -584,12 +584,19 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             </p>
             <a 
               id="link-footer-whatsapp"
-              href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Preciso%20de%20ajuda%20com%20o%20Liloupro."
+              href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Gostaria%20de%20falar%20com%20a%20equipe%20do%20LiLouPro."
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-bold text-sm bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 transition-all hover:bg-emerald-500/20"
+              className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-semibold text-sm bg-emerald-500/10 px-3.5 py-2 rounded-xl border border-emerald-500/20 transition-all hover:bg-emerald-500/20"
             >
-              <span>WhatsApp: (51) 92636-1240</span>
+              <svg 
+                className="w-4 h-4 fill-emerald-400" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M17.472 14.382c-.301-.15-1.777-.877-2.052-.977-.276-.1-.477-.15-.677.15-.2.301-.777.977-.953 1.177-.175.2-.351.226-.652.075-.301-.15-1.272-.469-2.423-1.496-.897-.801-1.503-1.791-1.679-2.092-.175-.301-.019-.464.132-.614.136-.135.301-.351.452-.527.15-.175.201-.301.301-.502.1-.2.05-.376-.025-.526-.075-.15-.677-1.63-.927-2.232-.244-.587-.492-.507-.677-.517-.175-.01-.376-.01-.577-.01-.2 0-.527.075-.802.376-.276.301-1.053 1.028-1.053 2.508 0 1.48 1.078 2.909 1.229 3.11.15.2 2.122 3.24 5.141 4.544 3.02 1.304 3.02.87 3.571.815.552-.055 1.777-.726 2.028-1.43.25-.703.25-1.304.175-1.43-.075-.125-.276-.2-.577-.35zM12.042 21.666a9.585 9.585 0 01-4.887-1.332l-.35-.208-3.633.953.97-3.541-.227-.362a9.58 9.58 0 01-1.469-5.136c0-5.302 4.316-9.617 9.623-9.617 2.569 0 4.985 1.002 6.802 2.82 1.817 1.818 2.818 4.234 2.818 6.804 0 5.304-4.316 9.619-9.647 9.619zm7.98-17.592A11.233 11.233 0 0012.042 1C5.938 1 .97 5.968.97 12.072c0 1.95.508 3.856 1.474 5.534L1 23.364l5.908-1.55a11.206 11.206 0 005.134 1.248h.005c6.104 0 11.072-4.969 11.072-11.074 0-2.959-1.152-5.741-3.249-7.838z" />
+              </svg>
+              <span>Fale com nossa equipe no WhatsApp</span>
             </a>
             <p className="text-brand font-mono text-xs font-semibold pt-1">suporte@liloupro.com.br</p>
           </div>
