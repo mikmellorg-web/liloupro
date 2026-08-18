@@ -149,10 +149,7 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
 
   // WhatsApp Share / Prospecting States
   const appInviteLink = useMemo(() => {
-    if (typeof window !== 'undefined' && window.location.origin.includes('localhost')) {
-      return 'https://liloupro.com';
-    }
-    return typeof window !== 'undefined' ? `${window.location.origin}?page=landing` : 'https://liloupro.com';
+    return 'https://www.liloupro.com.br/?landing=true';
   }, []);
 
   const DEFAULT_WA_MESSAGES = useMemo(() => ({
@@ -326,9 +323,9 @@ Conte conosco para servir seu ministério com excelência!`
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
-  const officialDomain = 'https://liloupro.ai.studio';
+  const officialDomain = 'https://www.liloupro.com.br';
   const webhookFullUrl = `${officialDomain}/api/webhooks/kiwify`;
-  const salesPageFullUrl = `${officialDomain}/?page=landing`;
+  const salesPageFullUrl = `${officialDomain}/?landing=true`;
 
   // Dev preview URLs for testing
   const currentDevOrigin = typeof window !== 'undefined' ? window.location.origin : officialDomain;
@@ -1055,7 +1052,7 @@ Conte conosco para servir seu ministério com excelência!`
                   Página de Vendas Oficial (Sales Page)
                 </h2>
                 <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                  Insira este link no campo <strong>Página de Vendas</strong> na Kiwify. O parâmetro <code className="text-amber-300 bg-black/40 px-1.5 py-0.5 rounded font-mono font-bold">?page=landing</code> garante que qualquer pessoa veja a Landing Page pública mesmo se estiver com sessão ativa no navegador.
+                  Insira este link no campo <strong>Página de Vendas</strong> na Kiwify. O link oficial <code className="text-amber-300 bg-black/40 px-1.5 py-0.5 rounded font-mono font-bold">https://www.liloupro.com.br/?landing=true</code> direciona os visitantes diretamente para a Landing Page de conversão com os novos botões de checkout.
                 </p>
               </div>
 
