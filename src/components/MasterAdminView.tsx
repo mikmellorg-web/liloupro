@@ -47,8 +47,8 @@ import {
 } from 'lucide-react';
 import kiwifyBannerImg from '../assets/images/liloupro_kiwify_banner_1785284387740.jpg';
 import kiwifyBannerLifetimeImg from '../assets/images/kiwify_banner_lifetime_launch_1785518386491.jpg';
-import luxuryAppIcon from '../assets/images/luxury_app_icon_1786273418814.jpg';
-import { motion, AnimatePresence } from 'framer-motion';
+import luxuryAppIcon from '../assets/images/luxury_app_icon_1784410901246.jpg';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ChurchItem {
   id: string;

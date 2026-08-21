@@ -3,7 +3,7 @@ import {
   Tv, Monitor, Search, ChevronRight, Play, Square, Settings as SettingsIcon, 
   HelpCircle, RefreshCw, Calendar, Music, Sparkles, BookOpen, ExternalLink, Trash2,
   Plus, UploadCloud, Check, Volume2, Megaphone, Gift, History as HistoryIcon,
-  Keyboard, Info, Sliders, LayoutGrid
+  Keyboard, Info, Sliders, LayoutGrid, Smartphone, QrCode, Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BibleSearch } from './BibleSearch';
@@ -245,6 +245,8 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
   // Panel settings and details
   const [showLinkPanel, setShowLinkPanel] = useState<boolean>(false);
   const [showEditLyricsPanel, setShowEditLyricsPanel] = useState<boolean>(false);
+  const [showRemoteModal, setShowRemoteModal] = useState<boolean>(false);
+  const [copiedRemoteLink, setCopiedRemoteLink] = useState<boolean>(false);
   const [manualLinkSelection, setManualLinkSelection] = useState<string>('');
   const [quickLyricsText, setQuickLyricsText] = useState<string>('');
   const [freeText, setFreeText] = useState<string>('');
@@ -817,6 +819,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
     
     // 1. Storage update (backup)
     localStorage.setItem('lilo-projection-state', JSON.stringify(config));
+    localStorage.setItem('lilo-projection-church-id', userChurchId);
     
     // 1.5 Add to slide history
     if (textToShow && textToShow.trim()) {
@@ -839,6 +842,26 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
       channel.close();
     } catch (e) {
       // Safe fallback
+    }
+
+    // 3. Sync to Firestore projection_sessions for mobile remote control
+    if (userChurchId) {
+      try {
+        const sessionRef = doc(db, 'projection_sessions', userChurchId);
+        setDoc(sessionRef, {
+          ...config,
+          churchId: userChurchId,
+          activeSlideIdx,
+          slides,
+          activeSongTitle: activeSong?.title || '',
+          activeSongArtist: activeSong?.artist || '',
+          updatedAt: new Date()
+        }, { merge: true }).catch(err => {
+          console.warn("Could not sync to Firestore projection_sessions:", err);
+        });
+      } catch (err) {
+        // Safe fallback
+      }
     }
   };
 
@@ -952,6 +975,37 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [slides, activeSlideIdx, theme, fontSize, blackout, clearText, showLogo, scrollingAlert]);
+
+  // Sync state changes coming from mobile remote control back to ProjectionView
+  useEffect(() => {
+    if (!userChurchId) return;
+
+    const sessionRef = doc(db, 'projection_sessions', userChurchId);
+    const unsub = onSnapshot(sessionRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (typeof data.activeSlideIdx === 'number' && data.activeSlideIdx !== activeSlideIdx) {
+          setActiveSlideIdx(data.activeSlideIdx);
+        }
+        if (data.blackout !== undefined && data.blackout !== blackout) {
+          setBlackout(data.blackout);
+        }
+        if (data.clearText !== undefined && data.clearText !== clearText) {
+          setClearText(data.clearText);
+        }
+        if (data.showLogo !== undefined && data.showLogo !== showLogo) {
+          setShowLogo(data.showLogo);
+        }
+        if (data.scrollingAlert !== undefined && data.scrollingAlert !== scrollingAlert) {
+          setScrollingAlert(data.scrollingAlert || '');
+        }
+      }
+    }, (err) => {
+      console.warn("ProjectionView remote listener error:", err);
+    });
+
+    return () => unsub();
+  }, [userChurchId, activeSlideIdx, blackout, clearText, showLogo, scrollingAlert]);
 
   // Open dedicated standalone projector tab
   const handleOpenProjectorWindow = async () => {
@@ -1423,6 +1477,14 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
 
         <div className="flex flex-wrap gap-2.5">
           <Button 
+            onClick={() => setShowRemoteModal(true)} 
+            className="shadow-md shadow-purple-600/20 py-2 sm:py-2.5 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 shrink-0 font-extrabold text-[11px] uppercase tracking-wider text-white border border-purple-400/30 animate-pulse"
+          >
+            <Smartphone size={14} className="stroke-[2.5]" />
+            <span>Controle pelo Celular 📱</span>
+          </Button>
+
+          <Button 
             onClick={() => setShowPracticalGuide(!showPracticalGuide)} 
             variant="secondary"
             className={`py-2 sm:py-2.5 px-4 shrink-0 font-extrabold text-[11px] uppercase tracking-wider ${
@@ -1430,7 +1492,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
             }`}
           >
             <HelpCircle size={14} className={showPracticalGuide ? 'text-amber-500 animate-pulse' : ''} />
-            <span>Manual do Operador {showPracticalGuide ? '▲' : '▼'}</span>
+            <span>Manual {showPracticalGuide ? '▲' : '▼'}</span>
           </Button>
 
           <Button 
@@ -1438,11 +1500,11 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
             className="shadow-md shadow-brand/20 py-2 sm:py-2.5 px-4 bg-brand hover:brightness-110 shrink-0 font-extrabold text-[11px] uppercase tracking-wider"
           >
             <ExternalLink size={14} />
-            <span>Abrir Janela do Projetor ↗️</span>
+            <span>Janela do Projetor ↗️</span>
           </Button>
 
           <a 
-            href={`${window.location.origin}?projection=true`}
+            href={`${window.location.origin}?projection=true&churchId=${userChurchId}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => {
@@ -3467,6 +3529,115 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
 
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Remote Control Modal (Holyrics Style) */}
+      <AnimatePresence>
+        {showRemoteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-left relative overflow-hidden"
+            >
+              {/* Background Glow */}
+              <div className="absolute -top-16 -right-16 w-36 h-36 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shrink-0">
+                    <Smartphone size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white">Controle pelo Celular 📱</h3>
+                    <p className="text-xs text-slate-400">Passe slides do telão direto pelo smartphone</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowRemoteModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-bold text-sm transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center shadow-inner space-y-2">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                    `${typeof window !== 'undefined' ? window.location.origin : ''}?remote=true&churchId=${userChurchId}`
+                  )}`}
+                  alt="QR Code Controle Remoto"
+                  className="w-44 h-44 rounded-lg select-none"
+                />
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-900 text-center">
+                  Escaneie com a câmera do seu celular
+                </p>
+              </div>
+
+              {/* Direct Link Section */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                  Ou acesse pelo link direto:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}?remote=true&churchId=${userChurchId}`}
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-purple-300 select-all outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const url = `${typeof window !== 'undefined' ? window.location.origin : ''}?remote=true&churchId=${userChurchId}`;
+                      navigator.clipboard.writeText(url);
+                      setCopiedRemoteLink(true);
+                      setTimeout(() => setCopiedRemoteLink(false), 2000);
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shrink-0 ${
+                      copiedRemoteLink
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                    }`}
+                  >
+                    {copiedRemoteLink ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedRemoteLink ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200 space-y-1.5 leading-relaxed">
+                <p className="font-bold flex items-center gap-1.5 text-purple-300">
+                  ✨ Sem cabos e sem complicações
+                </p>
+                <p className="text-[11px] opacity-90">
+                  Qualquer pessoa da equipe de louvor ou liderança pode abrir este link no celular para avançar, retroceder e ativar Blackout ou Logo em tempo real.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <a
+                  href={`${typeof window !== 'undefined' ? window.location.origin : ''}?remote=true&churchId=${userChurchId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black uppercase tracking-wider text-center border border-slate-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ExternalLink size={14} />
+                  <span>Testar no Computador</span>
+                </a>
+
+                <button
+                  onClick={() => setShowRemoteModal(false)}
+                  className="py-3 px-5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-wider transition-colors"
+                >
+                  Pronto
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

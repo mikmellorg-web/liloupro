@@ -187,6 +187,30 @@
       },
       "required": ["keys"]
     },
+    "ProjectionSession": {
+      "title": "Projection Session",
+      "description": "Real-time state and remote control session for live projector/data show slide transitions.",
+      "type": "object",
+      "properties": {
+        "churchId": { "type": "string" },
+        "activeSongTitle": { "type": "string" },
+        "activeSongArtist": { "type": "string" },
+        "activeSlideIdx": { "type": "number" },
+        "text": { "type": "string" },
+        "slides": { "type": "array" },
+        "theme": { "type": "string" },
+        "fontSize": { "type": "number" },
+        "customBgUrl": { "type": "string" },
+        "slideImageUrl": { "type": "string" },
+        "blackout": { "type": "boolean" },
+        "clearText": { "type": "boolean" },
+        "showLogo": { "type": "boolean" },
+        "scrollingAlert": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastUpdatedBy": { "type": "string" }
+      },
+      "required": ["churchId", "activeSlideIdx"]
+    },
     "KiwifyWebhookLog": {
       "title": "KiwifyWebhookLog",
       "description": "Log of received Kiwify payment webhooks for automatic church subscription provisioning.",
@@ -235,6 +259,10 @@
     "/projection_presets/{presetId}": {
       "schema": "ProjectionPreset",
       "description": "Custom background presets for projection slides."
+    },
+    "/projection_sessions/{churchId}": {
+      "schema": "ProjectionSession",
+      "description": "Real-time state and remote slide control session for congregation data show projections."
     },
     "/presence/{userId}": {
       "schema": {

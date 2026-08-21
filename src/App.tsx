@@ -36,6 +36,7 @@ import { twMerge } from 'tailwind-merge';
 import { BibleSearch } from './components/BibleSearch';
 import { ProjectorDisplay } from './components/ProjectorDisplay';
 import { ProjectionView } from './components/ProjectionView';
+import { ProjectionRemoteView } from './components/ProjectionRemoteView';
 import { ChatView } from './components/ChatView';
 import { ChordDictionaryModal, ChordDictionaryCard } from './components/ChordDictionary';
 import CommercialLandingPage from './components/CommercialLandingPage';
@@ -54,6 +55,7 @@ import MasterAdminView from './components/MasterAdminView';
 import { TrialBanner } from './components/TrialBanner';
 import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
+import { ConfirmButton } from './components/ConfirmButton';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import luxuryAppIcon from './assets/images/luxury_app_icon_1786273418814.jpg';
 
@@ -848,42 +850,6 @@ const compressAndResizeImage = (file: File, maxWidth = 180, maxHeight = 180): Pr
   });
 };
 
-const ConfirmButton = ({ 
-  onConfirm, children, className, title 
-}: { 
-  onConfirm: () => void, children: React.ReactNode, className?: string, title?: string 
-}) => {
-  const [confirming, setConfirming] = useState(false);
-  
-  useEffect(() => {
-    if (confirming) {
-      const t = setTimeout(() => setConfirming(false), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [confirming]);
-  
-  return (
-    <button 
-      onClick={(e) => { 
-        e.stopPropagation(); 
-        if (confirming) { 
-          onConfirm(); 
-          setConfirming(false); 
-        } else {
-          setConfirming(true);
-        }
-      }}
-      title={title}
-      className={cn(
-        "transition-all duration-200",
-        confirming ? "bg-red-500 text-white scale-110 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg z-50 animate-pulse border-none ring-2 ring-white/20" : className
-      )}
-    >
-      {confirming ? "Tem certeza?" : children}
-    </button>
-  );
-};
-
 const formatDate = (date: any, options?: Intl.DateTimeFormatOptions) => {
   if (!date) return '';
   try {
@@ -1182,10 +1148,31 @@ function parseYoutubeVideoId(url: string): string | null {
 // --- Main App Logic ---
 
 export default function App() {
-  const isProjectionWindow = window.location.search.includes('projection=true');
+  const isProjectionWindow = typeof window !== 'undefined' && (
+    window.location.search.includes('projection=true') || 
+    window.location.hash.includes('projection')
+  );
+
+  const isRemoteControlWindow = typeof window !== 'undefined' && (
+    window.location.search.includes('remote=true') || 
+    window.location.search.includes('projection-remote=true') ||
+    window.location.hash.includes('remote')
+  );
 
   if (isProjectionWindow) {
     return <ProjectorDisplay />;
+  }
+
+  if (isRemoteControlWindow) {
+    return (
+      <AuthProvider>
+        <ProjectionRemoteView onBackToApp={() => {
+          if (typeof window !== 'undefined') {
+            window.location.search = '';
+          }
+        }} />
+      </AuthProvider>
+    );
   }
 
   return (
@@ -1617,6 +1604,9 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
       --brand-text: ${brandDarkText};
       --accent: ${activeTheme.accent};
       --surface: ${activeTheme.surfaceDark};
+      --card: ${activeTheme.surfaceDark === '#0b0f19' ? '#111827' : '#0f172a'};
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
     }
     .light {
       --primary: ${activeTheme.primary};
@@ -1624,6 +1614,9 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
       --brand-text: ${brandLightText};
       --accent: ${activeTheme.accent};
       --surface: ${activeTheme.surfaceLight};
+      --card: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
     }
     .dark select option {
       background-color: ${activeTheme.surfaceDark};
@@ -2501,11 +2494,11 @@ function MainContent() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-white">
+      <div className="h-screen w-screen flex items-center justify-center bg-[#070b14] text-white">
         <motion.div 
           animate={{ scale: [1, 1.1, 1] }}
           transition={{ repeat: Infinity, duration: 1.5 }}
-          className="text-primary"
+          className="text-brand"
         >
           <Music2 size={48} />
         </motion.div>
@@ -2587,7 +2580,7 @@ function MainContent() {
               allowed: false,
               limit: 0,
               currentCount: 0,
-              resourceNameLabel: effectivePlan.plan.name,
+              resourceNameLabel: effectivePlan.plan?.name || effectivePlan.planName,
               effectivePlan
             });
           }} 
@@ -17071,9 +17064,13 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const checkForUpdates = async () => {
     setIsCheckingUpdate(true);
     try {
-      const result = await forceCheckForAppUpdates();
+      const hasUpdate = await forceCheckForAppUpdates();
       setIsCheckingUpdate(false);
-      alert(result.message);
+      if (hasUpdate) {
+        alert('Uma nova versão foi encontrada e atualizada!');
+      } else {
+        alert('O aplicativo já está na versão mais recente.');
+      }
     } catch (err) {
       setIsCheckingUpdate(false);
       console.error('Erro ao buscar atualizações:', err);

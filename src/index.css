@@ -1,500 +1,57 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@400;700;800;900&family=Space+Grotesk:wght@400;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: var(--primary);
-  --color-brand: var(--brand);
-  --color-brand-text: var(--brand-text);
-  --color-accent: var(--accent);
-  --color-surface: var(--surface);
-  --color-card: var(--surface-card);
-  --color-border: var(--border-color);
-  --color-text-main: var(--text-main);
-  --color-text-muted: var(--text-muted);
-  
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-brand: var(--brand, #3b82f6);
+  --color-brand-text: var(--brand-text, #ffffff);
+  --color-surface: var(--surface, #0f172a);
+  --color-card: var(--card, #1e293b);
+  --color-border: var(--border, rgba(255, 255, 255, 0.1));
+  --color-text-main: var(--text-main, #f8fafc);
+  --color-text-muted: var(--text-muted, #94a3b8);
 }
 
 :root {
-  --primary: #1e3a8a;
   --brand: #3b82f6;
   --brand-text: #ffffff;
-  --accent: #1d4ed8;
   --surface: #0f172a;
-  --surface-card: rgba(255, 255, 255, 0.05);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --text-main: #ffffff;
+  --card: #1e293b;
+  --border: rgba(255, 255, 255, 0.1);
+  --text-main: #f8fafc;
   --text-muted: #94a3b8;
 }
 
-.light {
-  --primary: #1e3a8a;
-  --brand: #0284c7;
-  --brand-text: #ffffff;
-  --accent: #1d4ed8;
-  --surface: #ffffff;
-  --surface-card: #f8fafc;
-  --border-color: #cbd5e1;
-  --text-main: #000000;
-  --text-muted: #1e293b;
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--surface);
+  color: var(--text-main);
+  -webkit-tap-highlight-color: transparent;
 }
 
-@layer base {
-  body {
-    @apply bg-surface text-text-main antialiased transition-colors duration-300;
-  }
-  
-  select option {
-    @apply bg-surface text-text-main;
-  }
-
-  .dark select option {
-    background-color: #0f172a;
-    color: #ffffff;
-  }
-
-  .light select option {
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  /* Ensure maximum color contrast and legibility in light mode */
-  .light {
-    color: #000000;
-  }
-
-  /* Global high-contrast theme overrides for brand-background components */
-  .bg-brand,
-  .bg-\[var\(--brand\)\] {
-    background-color: var(--brand) !important;
-    color: var(--brand-text) !important;
-  }
-
-  .bg-brand *,
-  .bg-\[var\(--brand\)\] * {
-    color: var(--brand-text) !important;
-  }
-
-  .light h1, 
-  .light h2, 
-  .light h3, 
-  .light h4, 
-  .light h5, 
-  .light h6 {
-    color: #000000 !important;
-    font-weight: 700 !important;
-  }
-
-  /* Fix Next Service Card legibility in light mode */
-  .light .next-service-card h2,
-  .light .next-service-card h3,
-  .light .next-service-card p,
-  .light .next-service-card span:not(button *):not(button),
-  .light .next-service-card div:not(button *):not(button) {
-    color: #ffffff !important;
-  }
-  .light .next-service-card .text-white\/90 {
-    color: rgba(255, 255, 255, 0.9) !important;
-  }
-  .light .next-service-card .text-white\/60 {
-    color: rgba(255, 255, 255, 0.6) !important;
-  }
-
-  /* Sticky Scroll Header Legibility and Contrast */
-  .sticky-scroll-header {
-    background-color: rgba(15, 23, 42, 0.96) !important; /* Rich deep slate in dark mode */
-    border-color: rgba(255, 255, 255, 0.1) !important;
-  }
-  .sticky-scroll-header .text-text-main {
-    color: #ffffff !important;
-  }
-  .sticky-scroll-header .text-text-muted {
-    color: #cbd5e1 !important;
-  }
-  
-  .light .sticky-scroll-header {
-    background-color: rgba(255, 255, 255, 0.98) !important; /* High opacity pure white in light mode */
-    border-color: #cbd5e1 !important;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
-  }
-  .light .sticky-scroll-header h4,
-  .light .sticky-scroll-header .text-text-main,
-  .light .sticky-scroll-header [class*="text-text-main"] {
-    color: #090d16 !important; /* Deep near-black for title */
-  }
-  .light .sticky-scroll-header p,
-  .light .sticky-scroll-header .text-text-muted,
-  .light .sticky-scroll-header [class*="text-text-muted"] {
-    color: #475569 !important; /* Visible dark gray-slate for dates and secondary texts */
-  }
-  .light .sticky-scroll-header button[class*="text-text-muted"] {
-    color: #475569 !important;
-  }
-  .light .sticky-scroll-header button[class*="text-text-muted"]:hover {
-    color: #090d16 !important;
-    background-color: rgba(0, 0, 0, 0.05) !important;
-  }
-
-  /* Force pure black for main texts and dark slate for muted text in light mode */
-  .light .text-text-main,
-  .light [class*="text-slate-800"],
-  .light [class*="text-slate-900"],
-  .light [class*="text-zinc-800"],
-  .light [class*="text-zinc-900"],
-  .light [class*="text-gray-800"],
-  .light [class*="text-gray-900"] {
-    color: #000000 !important;
-  }
-
-  .light .text-text-muted,
-  .light .text-slate-500,
-  .light .text-slate-600,
-  .light .text-zinc-500,
-  .light .text-zinc-600,
-  .light .text-gray-500,
-  .light .text-gray-600 {
-    color: #1e293b !important; /* extremely dark slate */
-  }
-
-  .light .text-slate-400,
-  .light .text-zinc-400,
-  .light .text-gray-400 {
-    color: #334155 !important; /* clearly visible dark slate */
-  }
-
-  /* High contrast sidebar / navigation */
-  .light nav {
-    background-color: #ffffff !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  /* Menus labels should be bold and dark */
-  .light nav button span {
-    color: #000000 !important;
-    font-weight: 600 !important;
-  }
-
-  /* Active NavIcon should have bold white text on high-contrast brand color, inactive must have black/slate */
-  .light nav button:not([class*="bg-brand"]):not([class*="bg-green-500"]) span {
-    color: #000000 !important;
-  }
-  
-  .light nav button:not([class*="bg-brand"]):not([class*="bg-green-500"]) svg {
-    color: #1e293b !important;
-  }
-
-  .light nav button:not([class*="bg-brand"]):not([class*="bg-green-500"]):hover {
-    background-color: rgba(0, 0, 0, 0.08) !important;
-  }
-
-  /* Ensure More Menu (Mais) container options are fully responsive and theme-color aligned */
-  .more-menu-container {
-    background-color: var(--surface) !important;
-    border-color: var(--border-color) !important;
-  }
-
-  .more-menu-container button:not([class*="bg-brand"]):not([class*="bg-green-500"]),
-  .more-menu-container button:not([class*="bg-brand"]):not([class*="bg-green-500"]) span {
-    color: var(--text-main) !important;
-  }
-  
-  .more-menu-container button:not([class*="bg-brand"]):not([class*="bg-green-500"]) svg {
-    color: var(--text-muted) !important;
-  }
-
-  .more-menu-container button:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-  }
-  
-  .light .more-menu-container button:hover {
-    background-color: rgba(0, 0, 0, 0.06) !important;
-  }
-
-  /* Make sure inputs and selectors stand out with extremely visible border styling */
-  .light input,
-  .light textarea,
-  .light select {
-    background-color: #ffffff !important;
-    border-color: #94a3b8 !important; /* slate-400 border */
-    color: #000000 !important;
-  }
-  
-  .light input::placeholder,
-  .light textarea::placeholder {
-    color: #475569 !important; /* dark readable grey placeholder */
-  }
-
-  /* High opacity for badge/type tags so they remain legible in light mode */
-  .light span[class*="bg-"][class*="/10"] {
-    background-color: rgba(14, 116, 144, 0.15) !important;
-    color: #000000 !important;
-    border-color: rgba(14, 116, 144, 0.3) !important;
-    font-weight: 700 !important;
-  }
-
-  /* Ensure Next Service gradient card (which uses .next-service-card) keeps its high-contrast white text and has a beautiful deep navy gradient in light mode */
-  .light .next-service-card {
-    background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important;
-    border: none !important;
-  }
-
-  .light .next-service-card,
-  .light .next-service-card * {
-    color: #ffffff !important;
-  }
-
-  /* Date/Time badge fonts inside the next-service-card in light mode must be white and elegant */
-  .light .next-service-card span[class*="bg-"][class*="/10"] {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    border-color: rgba(255, 255, 255, 0.25) !important;
-  }
-
-  .light .next-service-card span[class*="bg-"][class*="/10"],
-  .light .next-service-card span[class*="bg-"][class*="/10"] * {
-    color: #ffffff !important;
-  }
-
-  /* Make the text of the white buttons blue in light mode */
-  .light .next-service-card button.bg-white,
-  .light .next-service-card button.bg-white * {
-    color: #1e3a8a !important;
-  }
-
-  /* Ensure Study Player (Modo Estudo) keeps its high-contrast white text and sky-blue accessories on the dark background in light mode */
-  .light .study-player-card,
-  .light .study-player-card * {
-    color: #ffffff !important;
-  }
-
-  .light .study-player-card .text-brand {
-    color: #38bdf8 !important;
-  }
-
-  .light .study-player-card .text-slate-400 {
-    color: #94a3b8 !important;
-  }
-
-  .light .study-player-card .text-slate-300 {
-    color: #cbd5e1 !important;
-  }
-
-  .light .study-player-card .border-white\/10 {
-    border-color: rgba(255, 255, 255, 0.1) !important;
-  }
-
-  /* Light mode adjustments for Liturgies and Calendars */
-  .light .liturgy-view,
-  .light .calendar-view {
-    color: #000000 !important;
-  }
-
-  .light .liturgy-view input,
-  .light .liturgy-view textarea,
-  .light .liturgy-view select,
-  .light .calendar-view input,
-  .light .calendar-view textarea,
-  .light .calendar-view select {
-    background-color: #ffffff !important;
-    border-color: #94a3b8 !important;
-    color: #000000 !important;
-  }
-
-  .light .liturgy-view input::placeholder,
-  .light .liturgy-view textarea::placeholder,
-  .light .calendar-view input::placeholder,
-  .light .calendar-view textarea::placeholder {
-    color: #475569 !important;
-  }
-
-  /* Ensure options inside select tags are completely visible in light mode */
-  .light .liturgy-view select option,
-  .light .calendar-view select option {
-    background-color: #ffffff !important;
-    color: #000000 !important;
-  }
-}
-
-/* Allow customized projection text with text shadows/strokes for high visibility */
-.projector-display p,
-.projector-display h1,
-.projector-preview p {
-  text-shadow: 
-    -2px -2px 0 #000, 
-     2px -2px 0 #000, 
-    -2px  2px 0 #000, 
-     2px  2px 0 #000, 
-    -1px -1px 0 #000, 
-     1px -1px 0 #000, 
-    -1px  1px 0 #000, 
-     1px  1px 0 #000, 
-     0px  4px 16px rgba(0, 0, 0, 0.95), 
-     0px  0px 25px rgba(0, 0, 0, 0.9);
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.85);
-}
-
-.projector-display.bg-white p,
-.projector-display.bg-white h1 {
-  text-shadow: 
-    0 0 10px rgba(255, 255, 255, 0.9), 
-    0 0 20px rgba(255, 255, 255, 0.8), 
-    2px 2px 0px rgba(255, 255, 255, 0.95), 
-   -2px -2px 0px rgba(255, 255, 255, 0.95);
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.7);
-}
-
-.projector-display .text-white,
-.projector-preview .text-white {
-  color: #ffffff;
-}
-
-/* Force dark-mode styled high-contrast white text on BibleSearch component and its children even in global light mode */
-.light .bible-search-container,
-.light .bible-search-container *,
-.bible-search-container,
-.bible-search-container * {
-  color: #ffffff !important;
-}
-
-/* Indestructible overrides for all labels, headings, paragraphs, buttons and custom texts to prevent light-theme black text spillover */
-.light .bible-search-container label,
-.light .bible-search-container span,
-.light .bible-search-container p,
-.light .bible-search-container h4,
-.light .bible-search-container button,
-.light .bible-search-container div,
-.light .bible-search-container .text-text-muted,
-.light .bible-search-container [class*="text-zinc"],
-.light .bible-search-container [class*="text-slate"],
-.light .bible-search-container [class*="text-white"],
-.bible-search-container label,
-.bible-search-container span,
-.bible-search-container p,
-.bible-search-container h4,
-.bible-search-container button,
-.bible-search-container div,
-.bible-search-container .text-text-muted,
-.bible-search-container [class*="text-zinc"],
-.bible-search-container [class*="text-slate"],
-.bible-search-container [class*="text-white"] {
-  color: #ffffff !important;
-}
-
-/* Restore the cyan color for the brand theme elements and icons specifically */
-.light .bible-search-container .text-brand,
-.bible-search-container .text-brand {
-  color: var(--brand, #2ba9b8) !important;
-}
-
-.light .bible-search-container .bg-brand,
-.bible-search-container .bg-brand {
-  background-color: var(--brand, #2ba9b8) !important;
-  border-color: var(--brand, #2ba9b8) !important;
-  color: #ffffff !important;
-}
-
-/* Override input and select elements to ensure solid dark-slate backgrounds and clear white fonts in light mode */
-.light .bible-search-container input,
-.light .bible-search-container select,
-.bible-search-container input,
-.bible-search-container select {
-  background-color: #1e293b !important; /* solid dark background */
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  color: #ffffff !important;
-}
-
-.light .bible-search-container select option,
-.bible-search-container select option {
-  background-color: #0f172a !important; /* slate-900 background for dropdown options */
-  color: #ffffff !important;
-}
-
-.light .bible-search-container input::placeholder,
-.bible-search-container input::placeholder {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-.light .bible-search-container .text-white\/45,
-.bible-search-container .text-white\/45,
-.light .bible-search-container .text-white\/50,
-.bible-search-container .text-white\/50,
-.light .bible-search-container .text-white\/60,
-.bible-search-container .text-white\/60,
-.light .bible-search-container .text-white\/80,
-.bible-search-container .text-white\/80 {
-  color: rgba(255, 255, 255, 0.70) !important;
-}
-
-/* Elegant, slow ambient panning and zoom keyframes for realistic motion backgrounds */
-@keyframes slowAmbientMotion {
-  0% {
-    transform: scale(1.03) translate(0px, 0px);
-  }
-  33% {
-    transform: scale(1.11) translate(14px, -10px);
-  }
-  66% {
-    transform: scale(1.16) translate(-10px, 14px);
-  }
-  100% {
-    transform: scale(1.03) translate(0px, 0px);
-  }
-}
-
-.animate-slow-motion {
-  animation: slowAmbientMotion 50s ease-in-out infinite;
-}
-
-/* Increase padding-top and padding-bottom by 8px in liturgy action buttons to improve touch target size */
-.liturgy-view .button-container button {
-  padding-top: calc(0.25rem + 8px) !important; /* 4px + 8px = 12px */
-  padding-bottom: calc(0.25rem + 8px) !important;
-}
-
-@media (min-width: 640px) {
-  .liturgy-view .button-container button {
-    padding-top: calc(0.5rem + 8px) !important; /* 8px + 8px = 16px */
-    padding-bottom: calc(0.5rem + 8px) !important;
-  }
-}
-
-/* Visible thin scrollbar attached right under the header control buttons */
-.header-buttons-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.6) rgba(0, 0, 0, 0.08);
-}
-
-.dark .header-buttons-scroll {
-  scrollbar-color: rgba(255, 255, 255, 0.4) rgba(255, 255, 255, 0.08);
-}
-
-.header-buttons-scroll::-webkit-scrollbar {
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
   height: 6px;
-  display: block !important;
 }
 
-.header-buttons-scroll::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.08);
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
 }
 
-.dark .header-buttons-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 9999px;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
-.header-buttons-scroll::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.6);
-  border-radius: 9999px;
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
-
-.dark .header-buttons-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 9999px;
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-.header-buttons-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--brand, #3b82f6);
-}
-
-

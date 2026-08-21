@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Check, Crown, X, ArrowRight, ShieldCheck, Zap, Lock, Building2 } from 'lucide-react';
 import { LILOU_PLANS, ResourceCheckResult } from '../services/planService';
 
