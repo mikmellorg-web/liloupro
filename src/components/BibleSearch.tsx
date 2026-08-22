@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, BookOpen, Check, Copy, AlertCircle, RefreshCw, Sparkles, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Search, BookOpen, Check, Copy, AlertCircle, RefreshCw, Sparkles, ChevronDown } from 'lucide-react';
 import { getLocalBiblePassage, adaptToNAA } from '../localBibleDb';
 import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
@@ -109,7 +109,7 @@ export function parseBibleReference(userInput: string) {
 }
 
 interface BibleSearchProps {
-  onInsert?: (data: { title: string; text: string; version?: string }) => void;
+  onInsert: (data: { title: string; text: string; version?: string }) => void;
   onInsertDirect?: (data: { title: string; text: string; version: string }) => void;
   onClose?: () => void;
 }
@@ -145,25 +145,20 @@ const saveLocalCache = () => {
   }
 };
 
-function filterVersesByRange(verses: any[], rangeStr: string) {
-  if (!verses || !Array.isArray(verses)) return [];
-  const normalized = verses.map(v => ({
-    verse: v.verse !== undefined ? v.verse : v.number,
-    text: v.text
-  }));
-  if (!rangeStr) return normalized;
+function filterVersesByRange(verses: { verse: number; text: string }[], rangeStr: string) {
+  if (!rangeStr) return verses;
   const match = rangeStr.match(/^(\d+)(?:-(\d+))?$/);
-  if (!match) return normalized;
+  if (!match) return verses;
   const start = parseInt(match[1], 10);
   const end = match[2] ? parseInt(match[2], 10) : start;
-  return normalized.filter(v => v.verse >= start && v.verse <= end);
+  return verses.filter(v => v.verse >= start && v.verse <= end);
 }
 
 export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchProps) {
   const [searchTab, setSearchTab] = useState<'text' | 'select'>('text');
   const [searchText, setSearchText] = useState('');
   const { memberData } = useAuth();
-  const [bibleVersion, setBibleVersion] = useState<'BLIVRE'>('BLIVRE');
+  const [bibleVersion, setBibleVersion] = useState<'NAA' | 'NVI' | 'ARC'>('NAA');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   
   useEffect(() => {
@@ -179,7 +174,6 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [results, setResults] = useState<{ reference: string; text: string; verses: any[] } | null>(null);
-  const [insertFeedback, setInsertFeedback] = useState<'all' | 'title' | 'text' | 'direct' | null>(null);
 
   const handleTextSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,7 +282,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
     let data: any = null;
     let fallbackUsed = false;
 
-    // 1. Try our high-fidelity Bible API providing Bíblia Livre (BLIVRE - Domínio Público)
+    // 1. Try our high-fidelity Gemini-powered Bible API that respects the exact chosen version (NAA, ARA, ARC, NVI, NTLH, ACF)
     try {
       const response = await fetch("/api/bible/passage", {
         method: "POST",
@@ -297,7 +291,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
           book: portugueseName,
           chapter,
           verseRange,
-          version: 'BLIVRE'
+          version: bibleVersion
         })
       });
 
@@ -305,19 +299,19 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
         const jsonData = await response.json();
         const isDemoMessage = jsonData && !!jsonData.isDemo;
         if (isDemoMessage) {
-          console.warn("Local Bible API returned demo instructions. Forcing fallback.");
+          console.warn("Local Bible API returned demo instructions. Forcing bible-api.com fallback.");
         } else {
           data = jsonData;
           fallbackUsed = !!jsonData.isFallback;
         }
       } else {
-        console.warn(`Local Bible API returned status ${response.status}. Attempting fallback.`);
+        console.warn(`Local Bible API returned status ${response.status}. Attempting bible-api.com fallback.`);
       }
     } catch (err) {
-      console.warn("Error calling local Bible API, falling back:", err);
+      console.warn("Error calling local Bible API, falling back to bible-api.com:", err);
     }
 
-    // 2. Fallback to public domain translation
+    // 2. Fallback to the third-party bible-api.com (defaulting to Almeida)
     if (!data) {
       fallbackUsed = true;
       const bookNameOptions = [
@@ -350,7 +344,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
       if (!data) {
         console.warn("Could not fetch from any online APIs, utilizing safe local offline database.");
         try {
-          const offlineResult = getLocalBiblePassage(portugueseName, chapter, 'BLIVRE');
+          const offlineResult = getLocalBiblePassage(portugueseName, chapter, bibleVersion);
           const filteredVerses = filterVersesByRange(offlineResult.verses, verseRange);
           data = {
             verses: filteredVerses,
@@ -362,13 +356,20 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
         }
       }
     }
+
+    if (data && data.verses && bibleVersion === 'NAA') {
+      data.verses = data.verses.map((v: any) => ({
+        ...v,
+        text: adaptToNAA(v.text)
+      }));
+    }
     
     // Format the reference representation
     let finalRef = `${portugueseName} ${chapter}`;
     if (verseRange) {
       finalRef += `:${verseRange}`;
     }
-    finalRef += ` (Bíblia Livre)`;
+    finalRef += ` (${bibleVersion})`;
 
     // Format cleaner text
     let cleanText = '';
@@ -383,7 +384,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
     localBibleCache.set(cacheKeyToSave, {
       verses: data.verses || [],
       isFallback: fallbackUsed,
-      warning: fallbackUsed ? "Carregado via tradução livre como fallback." : null
+      warning: fallbackUsed ? "Carregado via tradução Almeida clássica como fallback." : null
     });
     saveLocalCache();
 
@@ -396,61 +397,29 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
 
   const handleInsertAll = () => {
     if (!results) return;
-    const textToInsert = results.text || (results.verses?.length ? results.verses.map((v: any) => `${v.verse}. ${v.text.trim()}`).join('\n\n') : '');
-    if (onInsert) {
-      onInsert({
-        title: results.reference,
-        text: textToInsert,
-        version: bibleVersion
-      });
-    } else {
-      try {
-        navigator.clipboard?.writeText(`${results.reference}\n\n${textToInsert}`);
-      } catch (e) {
-        console.warn("Clipboard access limited:", e);
-      }
-    }
-    setInsertFeedback('all');
-    setTimeout(() => setInsertFeedback(null), 3500);
+    onInsert({
+      title: results.reference,
+      text: results.text,
+      version: bibleVersion
+    });
   };
 
   const handleInsertTitle = () => {
     if (!results) return;
-    if (onInsert) {
-      onInsert({
-        title: results.reference,
-        text: '',
-        version: bibleVersion
-      });
-    } else {
-      try {
-        navigator.clipboard?.writeText(results.reference);
-      } catch (e) {
-        console.warn("Clipboard access limited:", e);
-      }
-    }
-    setInsertFeedback('title');
-    setTimeout(() => setInsertFeedback(null), 3500);
+    onInsert({
+      title: results.reference,
+      text: '',
+      version: bibleVersion
+    });
   };
 
   const handleInsertText = () => {
     if (!results) return;
-    const textToInsert = results.text || (results.verses?.length ? results.verses.map((v: any) => `${v.verse}. ${v.text.trim()}`).join('\n\n') : '');
-    if (onInsert) {
-      onInsert({
-        title: '',
-        text: textToInsert,
-        version: bibleVersion
-      });
-    } else {
-      try {
-        navigator.clipboard?.writeText(textToInsert);
-      } catch (e) {
-        console.warn("Clipboard access limited:", e);
-      }
-    }
-    setInsertFeedback('text');
-    setTimeout(() => setInsertFeedback(null), 3500);
+    onInsert({
+      title: '',
+      text: results.text,
+      version: bibleVersion
+    });
   };
 
   return (
@@ -460,7 +429,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
           <BookOpen size={18} className="text-brand" />
           <div>
             <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-brand">Assistente Bíblico Integrado</h4>
-            <p className="text-[9px] text-text-muted uppercase tracking-widest leading-none mt-1">Busca Rápida de Versículos (Bíblia Livre - Domínio Público)</p>
+            <p className="text-[9px] text-text-muted uppercase tracking-widest leading-none mt-1">Busca Rápida de Versículos (Filtros NAA, NVI, ARC)</p>
           </div>
         </div>
         {onClose && (
@@ -501,11 +470,46 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
           </button>
         </div>
         <div className="relative shrink-0 select-none">
-          <div className="flex items-center justify-center gap-1.5 bg-brand/15 border border-brand/30 rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-white h-10 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="flex items-center justify-between gap-1.5 bg-black/25 hover:bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-white transition-all cursor-pointer h-10 w-full sm:w-32"
+          >
             <span className="text-text-muted text-[9px] font-bold">Versão:</span>
-            <span className="text-brand font-black">Bíblia Livre</span>
-            <span className="text-[8px] bg-brand text-white px-1.5 py-0.5 rounded font-black tracking-tighter ml-1">LIVRE</span>
-          </div>
+            <span className="text-brand font-black">{bibleVersion}</span>
+            <ChevronDown size={12} className={`text-text-muted transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {dropdownOpen && (
+            <>
+              {/* Backdrop to close the dropdown */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setDropdownOpen(false)} 
+              />
+              <div className="absolute right-0 mt-1.5 w-full bg-zinc-950 border border-white/10 rounded-xl shadow-xl p-1.5 z-50 flex flex-col gap-1 min-w-[110px] animate-in fade-in slide-in-from-top-2 duration-150">
+                {(['NAA', 'NVI', 'ARC'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setBibleVersion(v);
+                      setResults(null);
+                      setDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-between cursor-pointer ${
+                      bibleVersion === v
+                        ? 'bg-brand text-white font-extrabold'
+                        : 'text-text-muted hover:text-text-main hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{v}</span>
+                    {bibleVersion === v && <Check size={11} strokeWidth={3} className="text-white shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -625,115 +629,43 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
               <button
                 type="button"
                 onClick={handleInsertAll}
-                className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded inline-flex items-center gap-1 cursor-pointer transition-all ${
-                  insertFeedback === 'all'
-                    ? 'bg-emerald-600 text-white shadow-md scale-105'
-                    : 'bg-brand hover:brightness-115 text-white/90 shadow-xs'
-                }`}
+                className="text-[9px] bg-brand hover:brightness-115 text-white/90 font-black uppercase tracking-wider px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer"
                 title="Insere o título (Ex: João 3:16) e o texto do versículo nos Detalhes"
               >
-                {insertFeedback === 'all' ? (
-                  <>
-                    <Check size={11} strokeWidth={3} className="text-white" />
-                    <span>Inserido!</span>
-                  </>
-                ) : (
-                  <span>Duplo</span>
-                )}
+                Duplo
               </button>
               <button
                 type="button"
                 onClick={handleInsertTitle}
-                className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded inline-flex items-center gap-1 cursor-pointer transition-all ${
-                  insertFeedback === 'title'
-                    ? 'bg-emerald-600 text-white shadow-md scale-105'
-                    : 'bg-white/10 hover:bg-white/20 text-white/90'
-                }`}
+                className="text-[9px] bg-white/10 hover:bg-white/20 text-white/90 font-black uppercase tracking-wider px-2 py-1 rounded cursor-pointer"
                 title="Insere apenas a referência no Título"
               >
-                {insertFeedback === 'title' ? (
-                  <>
-                    <Check size={11} strokeWidth={3} className="text-white" />
-                    <span>Título Inserido!</span>
-                  </>
-                ) : (
-                  <span>Título</span>
-                )}
+                Título
               </button>
               <button
                 type="button"
                 onClick={handleInsertText}
-                className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded inline-flex items-center gap-1 cursor-pointer transition-all ${
-                  insertFeedback === 'text'
-                    ? 'bg-emerald-600 text-white shadow-md scale-105'
-                    : 'bg-white/10 hover:bg-white/20 text-white/90'
-                }`}
+                className="text-[9px] bg-white/10 hover:bg-white/20 text-white/90 font-black uppercase tracking-wider px-2 py-1 rounded cursor-pointer"
                 title="Insere apenas o versículo nos Detalhes/Conteúdo"
               >
-                {insertFeedback === 'text' ? (
-                  <>
-                    <Check size={11} strokeWidth={3} className="text-white" />
-                    <span>Texto Inserido!</span>
-                  </>
-                ) : (
-                  <span>Texto</span>
-                )}
+                Texto
               </button>
               {onInsertDirect && (
                 <button
                   type="button"
-                  onClick={() => {
-                    onInsertDirect({
-                      title: results.reference,
-                      text: results.text,
-                      version: bibleVersion
-                    });
-                    setInsertFeedback('direct');
-                    setTimeout(() => setInsertFeedback(null), 3500);
-                  }}
-                  className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded inline-flex items-center gap-1 cursor-pointer transition-all ${
-                    insertFeedback === 'direct'
-                      ? 'bg-emerald-600 text-white scale-105'
-                      : 'bg-emerald-700 hover:bg-emerald-600 text-white'
-                  }`}
+                  onClick={() => onInsertDirect({
+                    title: results.reference,
+                    text: results.text,
+                    version: bibleVersion
+                  })}
+                  className="text-[9px] bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider px-2.5 py-1 rounded inline-flex items-center gap-1 cursor-pointer"
                   title="Inserir diretamente na liturgia selecionada"
                 >
-                  {insertFeedback === 'direct' ? (
-                    <>
-                      <Check size={11} strokeWidth={3} className="text-white" />
-                      <span>Enviado!</span>
-                    </>
-                  ) : (
-                    <span>Direto 🚀</span>
-                  )}
+                  Direto 🚀
                 </button>
               )}
             </div>
           </div>
-
-          {/* Feedback Notification Banner */}
-          {insertFeedback && (
-            <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-xl p-2.5 flex items-center justify-between gap-2 text-emerald-300 text-xs font-bold animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                <span>
-                  {insertFeedback === 'all' && '✓ Título e Versículos foram aplicados ao formulário abaixo!'}
-                  {insertFeedback === 'title' && `✓ Título (${results.reference}) foi preenchido no formulário!`}
-                  {insertFeedback === 'text' && '✓ Texto dos versículos foi inserido nas anotações do formulário!'}
-                  {insertFeedback === 'direct' && '✓ Inserido com sucesso na liturgia!'}
-                </span>
-              </div>
-              {onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all shrink-0 cursor-pointer shadow-sm"
-                >
-                  Fechar Assistente
-                </button>
-              )}
-            </div>
-          )}
           <div className="border-t border-white/5 pt-2 max-h-[160px] overflow-y-auto pr-1 no-scrollbar text-xs sm:text-xs leading-relaxed text-white/80 italic pl-2 border-l-2 border-white/25">
             {results.verses && results.verses.length > 0 ? (
               results.verses.map((v: any, i: number) => (

@@ -2039,13 +2039,13 @@ export default function DashboardView({
                   </div>
 
                   <div className="pt-2 sm:pt-4 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
-                    <Button onClick={() => onNavigate('calendar')} className="bg-white text-slate-900 hover:bg-slate-100 px-3 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in w-full sm:w-auto text-center justify-center border border-white/20 cursor-pointer">
+                    <Button onClick={() => onNavigate('calendar')} className="bg-white text-primary hover:bg-white/90 px-3 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in w-full sm:w-auto text-center justify-center">
                       Ver Escala
                     </Button>
-                    <Button onClick={() => onNavigate('liturgy')} className="bg-white text-slate-900 hover:bg-slate-100 px-3 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in w-full sm:w-auto text-center justify-center border border-white/20 cursor-pointer">
+                    <Button onClick={() => onNavigate('liturgy')} className="bg-white text-primary hover:bg-white/90 px-3 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in w-full sm:w-auto text-center justify-center">
                       Ver Liturgia
                     </Button>
-                    <Button onClick={() => { setShowLiturgySongs?.(true); onNavigate('songs'); }} className="bg-white text-slate-900 hover:bg-slate-100 px-4 sm:px-6 py-3 sm:py-3 text-xs sm:text-[13px] font-black uppercase tracking-tight shadow-xl animate-fade-in col-span-2 sm:col-span-auto w-full sm:w-auto text-center justify-center border border-white/20 cursor-pointer">
+                    <Button onClick={() => { setShowLiturgySongs?.(true); onNavigate('songs'); }} className="bg-white text-primary hover:bg-white/90 px-4 sm:px-6 py-3 sm:py-3 text-xs sm:text-[13px] font-black uppercase tracking-tight shadow-xl animate-fade-in col-span-2 sm:col-span-auto w-full sm:w-auto text-center justify-center">
                       MÚSICAS DO CULTO
                     </Button>
                   </div>

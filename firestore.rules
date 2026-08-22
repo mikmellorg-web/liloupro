@@ -196,10 +196,6 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
-    match /projection_sessions/{churchId} {
-      allow read, write: if true;
-    }
-
     // Admin List Rules
     match /admins/{userId} {
       allow get: if isSignedIn();

@@ -1,5 +1,4 @@
 import { LiturgyEditor } from "./SongsView";
-import { ConfirmButton } from "./ConfirmButton";
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { toPng } from 'html-to-image';
 import { 
@@ -835,6 +834,42 @@ const compressAndResizeImage = (file: File, maxWidth = 180, maxHeight = 180): Pr
   });
 };
 
+const ConfirmButton = ({ 
+  onConfirm, children, className, title 
+}: { 
+  onConfirm: () => void, children: React.ReactNode, className?: string, title?: string 
+}) => {
+  const [confirming, setConfirming] = useState(false);
+  
+  useEffect(() => {
+    if (confirming) {
+      const t = setTimeout(() => setConfirming(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [confirming]);
+  
+  return (
+    <button 
+      onClick={(e) => { 
+        e.stopPropagation(); 
+        if (confirming) { 
+          onConfirm(); 
+          setConfirming(false); 
+        } else {
+          setConfirming(true);
+        }
+      }}
+      title={title}
+      className={cn(
+        "transition-all duration-200",
+        confirming ? "bg-red-500 text-white scale-110 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg z-50 animate-pulse border-none ring-2 ring-white/20" : className
+      )}
+    >
+      {confirming ? "Tem certeza?" : children}
+    </button>
+  );
+};
+
 const formatDate = (date: any, options?: Intl.DateTimeFormatOptions) => {
   if (!date) return '';
   try {
@@ -1276,11 +1311,19 @@ export default function LiturgyView({
   const liturgyRef = useRef<HTMLDivElement>(null);
 
   const [members, setMembers] = useState<any[]>([]);
+  const [isMobileOptimized, setIsMobileOptimized] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [songFontSize, setSongFontSize] = useState<Record<string, number>>({});
+  const [songTranspositions, setSongTranspositions] = useState<Record<string, number>>({});
   const [isEditingKidsNotes, setIsEditingKidsNotes] = useState(false);
   const [isEditingBabiesNotes, setIsEditingBabiesNotes] = useState(false);
   const [tempKidsNotes, setTempKidsNotes] = useState('');
   const [tempBabiesNotes, setTempBabiesNotes] = useState('');
+
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    setIsMobileOptimized(isMobile);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -1441,7 +1484,7 @@ export default function LiturgyView({
       const typeMap: any = {
         reading: 'Leitura',
         song: 'Música',
-        speech: 'Pregação',
+        speech: 'Palavra',
         prayer: 'Oração',
         announcements: 'Avisos',
         offering: 'Ofertas',
@@ -1451,11 +1494,8 @@ export default function LiturgyView({
       const songDetails = item.type === 'song' ? (allSongs || []).find(s => s.id === item.songId) : null;
       const resolvedTitle = item.title || songDetails?.title || '';
       let titleWithDetails = smartCapitalize(resolvedTitle);
-      if (item.type === 'song' && item.songOrder) {
-        titleWithDetails = `[${item.songOrder}] ${titleWithDetails}`;
-      }
       if (item.type === 'song' && item.vocalist) {
-        titleWithDetails += ` - 🎤 ${item.vocalist}`;
+        titleWithDetails += ` - ${item.vocalist}`;
       }
       if (item.details && item.type !== 'reading') {
         titleWithDetails += `\n"${item.details}"`;
@@ -1654,7 +1694,7 @@ export default function LiturgyView({
     const typeMap: any = {
       reading: '📖 Leitura',
       song: '🎵 Música',
-      speech: '🗣️ Pregação',
+      speech: '🗣️ Palavra',
       prayer: '🙏 Oração',
       announcements: '📢 Avisos',
       offering: '💸 Ofertas',
@@ -1666,11 +1706,8 @@ export default function LiturgyView({
       const songDetails = item.type === 'song' ? (allSongs || []).find(s => s.id === item.songId) : null;
       const resolvedTitle = item.title || songDetails?.title || '';
       let titleStr = smartCapitalize(resolvedTitle);
-      if (item.type === 'song' && item.songOrder) {
-        titleStr = `[${item.songOrder}] ${titleStr}`;
-      }
       if (item.type === 'song' && item.vocalist) {
-        titleStr += ` - 🎤 ${item.vocalist}`;
+        titleStr += ` - ${item.vocalist}`;
       }
       message += `${titleStr}\n`;
       if (item.content) {
@@ -1806,7 +1843,668 @@ export default function LiturgyView({
         <div className="w-full">
           {selectedService ? (
             <div className="space-y-6">
-              /* Traditional clipboard card (original view) */
+              {/* Selector Mode Toggle */}
+              <div className="flex items-center justify-between bg-black/10 dark:bg-white/5 border border-border p-1.5 rounded-2xl max-w-md mx-auto w-full shadow-inner mb-2">
+                <button
+                  onClick={() => setIsMobileOptimized(false)}
+                  className={cn(
+                    "flex-1 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 border-none cursor-pointer",
+                    !isMobileOptimized 
+                      ? "bg-brand text-white shadow-md shadow-brand/10" 
+                      : "text-text-muted hover:text-text-main bg-transparent"
+                  )}
+                >
+                  <BookOpen size={14} />
+                  Modo Edição / Padrão
+                </button>
+                <button
+                  onClick={() => setIsMobileOptimized(true)}
+                  className={cn(
+                    "flex-1 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 border-none cursor-pointer",
+                    isMobileOptimized 
+                      ? "bg-brand text-white shadow-md shadow-brand/10" 
+                      : "text-text-muted hover:text-text-main bg-transparent"
+                  )}
+                >
+                  <Smartphone size={14} />
+                  Modo Mobile (Cifras e Kids)
+                </button>
+              </div>
+
+              {isMobileOptimized ? (
+                /* Mobile optimized expandable list format */
+                <div className="space-y-4 max-w-2xl mx-auto">
+                  {/* Elegant Card with Header info */}
+                  <Card className="p-5 bg-card border border-border rounded-3xl relative overflow-hidden shadow-xl">
+                    <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[radial-gradient(#888888_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                    <div className="relative z-10 flex flex-col items-center text-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-brand/15 flex items-center justify-center text-brand shrink-0 border border-brand/20 shadow-md">
+                        <BookOpen size={24} />
+                      </div>
+                      <div>
+                         <h2 className="text-xl sm:text-2xl font-black text-text-main tracking-tight uppercase leading-tight">{selectedService.title}</h2>
+                         <p className="text-text-muted text-[11px] font-black uppercase tracking-widest mt-1">
+                           {formatDate(selectedService.date, { weekday: 'long', day: 'numeric', month: 'long' })} às {formatTime(selectedService.date)}
+                         </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Quick summary badges */}
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    {playlistSongs.length > 0 && onStartPlaylist && (
+                      <Button 
+                        onClick={() => onStartPlaylist(playlistSongs)} 
+                        className="bg-red-600 hover:bg-red-700 text-white text-xs px-5 h-9 border-none shadow-md transition-all font-bold rounded-full"
+                      >
+                        <Play size={14} className="fill-white mr-1" />
+                        Tocar Setlist ({playlistSongs.length})
+                      </Button>
+                    )}
+                    {selectedService.playlistUrl && (
+                      <Button 
+                        onClick={() => { window.open(selectedService.playlistUrl, '_blank'); }} 
+                        className="bg-white text-[#E60000] hover:bg-white/90 text-xs px-5 h-9 border border-[#E60000]/20 shadow-sm transition-all font-bold rounded-full"
+                      >
+                        <Youtube size={14} fill="#E60000" className="mr-1" />
+                        YouTube
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Liturgy items in mobile list */}
+                  <div className="space-y-3">
+                    {(selectedService.liturgy || []).length === 0 ? (
+                      <div className="p-8 text-center border border-dashed border-border rounded-2xl bg-black/5 dark:bg-white/5">
+                        <p className="text-xs text-text-muted italic">Nenhum item adicionado na liturgia deste culto ainda.</p>
+                      </div>
+                    ) : (
+                      (selectedService.liturgy || []).map((item: any, idx: number) => {
+                        const isExpanded = !!expandedItems[item.id];
+                        const isSong = item.type === 'song';
+                        const songDetails = isSong ? (allSongs || []).find(s => s.id === item.songId) : null;
+                        
+                        // Transposition calculation
+                        const originalKey = songDetails?.key || songDetails?.baseKey || '';
+                        const semitones = songTranspositions[songDetails?.id] || 0;
+                        const currentKey = originalKey && semitones !== 0 
+                          ? transposeChord(originalKey, semitones)
+                          : originalKey;
+                        
+                        // Transposed chords sheet
+                        const chordsContent = songDetails?.chords 
+                          ? (semitones === 0 ? songDetails.chords : transposeLyricsAndChords(songDetails.chords, semitones))
+                          : '';
+
+                        const fontSize = songFontSize[songDetails?.id || ''] || 13;
+
+                        return (
+                          <div 
+                            key={item.id} 
+                            className={cn(
+                              "border rounded-2xl bg-card transition-all duration-300 overflow-hidden",
+                              isExpanded 
+                                ? "border-brand shadow-lg ring-1 ring-brand/20 scale-[1.01]" 
+                                : "border-border hover:border-brand/40 shadow-sm"
+                            )}
+                          >
+                            {/* Header / Clickable area */}
+                            <button
+                              onClick={() => {
+                                setExpandedItems(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                              }}
+                              className="w-full text-left p-4 flex items-center justify-between gap-3 cursor-pointer select-none bg-transparent border-none"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {/* Liturgy sequence badge */}
+                                <div className="w-6 h-6 rounded-full bg-brand/10 border border-brand/20 text-brand flex items-center justify-center text-[10px] font-black shrink-0">
+                                  {idx + 1}
+                                </div>
+                                
+                                <div className="min-w-0 text-left">
+                                  {isSong ? (
+                                    <>
+                                      {/* Song Title in primary position */}
+                                      <span className="text-sm sm:text-base font-black text-text-main block mb-1 notranslate" translate="no">
+                                        {item.title || songDetails?.title || ''}
+                                      </span>
+                                      
+                                      {/* Subline for Song: Icon, Label & Vocalist */}
+                                      <div className="flex items-center gap-2 text-[10px] font-bold text-text-muted leading-none">
+                                        <Music2 size={12} className="text-brand shrink-0"/>
+                                        <span className="uppercase tracking-wider">Música</span>
+                                        {item.vocalist && item.vocalist.split(',').map((v: string) => v.trim()).filter(Boolean).map((v: string, vIdx: number) => (
+                                          <span key={vIdx} className="text-[9px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-1">
+                                            🎤 {v}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {/* Category / Content subtitle */}
+                                      {item.content && (
+                                        <span className="text-[8px] font-black tracking-widest text-brand uppercase block mb-0.5">
+                                          {item.content}
+                                        </span>
+                                      )}
+                                      
+                                      <div className="flex items-center gap-2 text-sm sm:text-base font-black text-text-main leading-tight min-w-0 notranslate" translate="no">
+                                        {item.type === 'reading' && <BookOpen size={13} className="text-teal-500 shrink-0"/>}
+                                        {item.type === 'speech' && <Quote size={13} className="text-purple-500 shrink-0"/>}
+                                        {item.type === 'prayer' && <Check size={13} className="text-sky-500 shrink-0"/>}
+                                        {item.type === 'announcements' && <Volume2 size={13} className="text-amber-500 shrink-0"/>}
+                                        {item.type === 'offering' && <Gift size={13} className="text-emerald-500 shrink-0"/>}
+                                        {item.type === 'other' && <Activity size={13} className="text-emerald-500 shrink-0"/>}
+                                        <span className="truncate flex-1 min-w-0">{item.title || ''}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Badges on right side when collapsed */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {(item.type === 'reading' || item.bibleVersion) && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full shrink-0">
+                                    {item.bibleVersion || 'NAA'}
+                                  </span>
+                                )}
+                                {isSong && songDetails && (
+                                  <div className="flex items-center gap-1">
+                                    {currentKey && (
+                                      <span className="text-[10px] font-black bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full">
+                                        Tom: {currentKey}
+                                      </span>
+                                    )}
+
+                                  </div>
+                                )}
+                                {isExpanded ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
+                              </div>
+                            </button>
+
+                            {/* Expanded section */}
+                            <AnimatePresence initial={false}>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="border-t border-border bg-black/5 dark:bg-white/2"
+                                >
+                                  <div className="p-4 space-y-4">
+                                    {/* Song Details content */}
+                                    {isSong ? (
+                                      songDetails ? (
+                                        <div className="space-y-4">
+                                          {/* Song Toolbar (Key transpose, font size, YouTube button) */}
+                                          <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 dark:bg-black/40 p-3 rounded-xl border border-border">
+                                            {/* Transposition and Chords Key */}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Tom:</span>
+                                              <div className="flex items-center gap-1">
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) - 1 }));
+                                                  }}
+                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                  title="Meio tom abaixo"
+                                                >
+                                                  -
+                                                </button>
+                                                <span className="px-2 text-xs font-black text-brand min-w-[32px] text-center bg-brand/10 rounded border border-brand/20 py-0.5">
+                                                  {currentKey || '?'}
+                                                </span>
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) + 1 }));
+                                                  }}
+                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                  title="Meio tom acima"
+                                                >
+                                                  +
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            {/* Font Size Buttons */}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Fonte:</span>
+                                              <div className="flex items-center gap-1">
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSongFontSize(p => ({ ...p, [songDetails.id]: Math.max(10, (p[songDetails.id] || 13) - 1) }));
+                                                  }}
+                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                >
+                                                  A-
+                                                </button>
+                                                <span className="text-[10px] font-black text-text-muted min-w-[24px] text-center">
+                                                  {fontSize}px
+                                                </span>
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSongFontSize(p => ({ ...p, [songDetails.id]: Math.min(20, (p[songDetails.id] || 13) + 1) }));
+                                                  }}
+                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                >
+                                                  A+
+                                                </button>
+                                              </div>
+                                              {songDetails.bpm && (
+                                                <span className="text-[10px] font-black bg-black/10 dark:bg-white/10 border border-border text-text-muted px-2 py-0.5 rounded shrink-0 uppercase">
+                                                  {songDetails.bpm} BPM
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {/* YouTube play link */}
+                                            {songDetails.youtube && (
+                                              <Button
+                                                onClick={() => window.open(songDetails.youtube, '_blank')}
+                                                className="h-8 px-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] uppercase tracking-widest rounded flex items-center gap-1.5 shrink-0 border-none"
+                                              >
+                                                <Youtube size={12} fill="#ffffff" />
+                                                Ouvir
+                                              </Button>
+                                            )}
+                                          </div>
+
+                                          {/* Chords Block */}
+                                          {chordsContent ? (
+                                            <div className="relative">
+                                              <div className="absolute top-2 right-2 z-10 flex gap-1">
+                                                <button 
+                                                  onClick={() => {
+                                                    navigator.clipboard.writeText(chordsContent);
+                                                    alert("Cifra copiada para a área de transferência!");
+                                                  }}
+                                                  className="text-[9px] font-black uppercase bg-black/60 hover:bg-black/80 text-white px-2.5 py-1 rounded border border-white/10 shadow transition-colors cursor-pointer border-none"
+                                                >
+                                                  Copiar
+                                                </button>
+                                              </div>
+                                              <pre 
+                                                className="font-mono whitespace-pre bg-black/20 dark:bg-black/40 p-4 rounded-xl border border-border overflow-x-auto select-text leading-relaxed notranslate text-text-main"
+                                                translate="no"
+                                                style={{ fontSize: `${fontSize}px` }}
+                                              >
+                                                {chordsContent}
+                                              </pre>
+                                            </div>
+                                          ) : (
+                                            <div className="p-6 text-center border border-dashed border-border/60 rounded-xl bg-black/10 dark:bg-white/2">
+                                              <p className="text-xs text-text-muted italic">Cifra ou letra não configurada para esta música.</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-red-500 italic">Música não encontrada no catálogo geral.</p>
+                                      )
+                                    ) : (item.type === 'reading' || item.bibleVersion) ? (
+                                      /* Bible Reading Content details */
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-black text-brand uppercase tracking-widest bg-brand/10 border border-brand/20 px-2.5 py-0.5 rounded-full">
+                                            Texto Bíblico • {item.bibleVersion || 'NAA'}
+                                          </span>
+                                        </div>
+                                        {item.details ? (
+                                          <div className="bg-black/10 dark:bg-black/30 p-4 rounded-xl border border-border">
+                                            <p className="text-sm sm:text-base text-text-main leading-relaxed font-serif whitespace-pre-line select-text">
+                                              {item.details}
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-text-muted italic pl-3 border-l-2 border-brand">Nenhum texto bíblico inserido.</p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      /* Default content details (Speech, Prayer, etc) */
+                                      <div className="space-y-2">
+                                        {item.details ? (
+                                          <div className="bg-black/10 dark:bg-black/30 p-4 rounded-xl border border-border">
+                                            <p className="text-xs sm:text-sm text-text-main leading-relaxed whitespace-pre-line select-text italic text-left">
+                                              "{item.details}"
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-text-muted italic pl-3 border-l-2 border-brand/30 text-left">Nenhum detalhe adicional adicionado.</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Kids and Babies Teacher Notes */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="flex items-center gap-2 mb-2 px-1 text-left">
+                      <GraduationCap size={18} className="text-brand" />
+                      <h3 className="text-xs font-black uppercase tracking-widest text-text-main">Anotações do Ministério Infantil</h3>
+                    </div>
+
+                    {/* Class Kids Card */}
+                    {(() => {
+                      const isExpanded = !!expandedItems['class-kids'];
+                      const teacherId = selectedService.scales?.['Professor Kids']?.[0];
+                      const teacher = teacherId ? (members || []).find(m => m.id === teacherId) : null;
+                      const notes = selectedService.kidsNotes || '';
+
+                      return (
+                        <div 
+                          className={cn(
+                            "border rounded-2xl bg-card transition-all duration-300 overflow-hidden",
+                            isExpanded 
+                              ? "border-emerald-500/50 shadow-md ring-1 ring-emerald-500/10" 
+                              : "border-border hover:border-emerald-500/20"
+                          )}
+                        >
+                          <button
+                            onClick={() => setExpandedItems(prev => ({ ...prev, 'class-kids': !prev['class-kids'] }))}
+                            className="w-full text-left p-4 flex items-center justify-between gap-3 cursor-pointer bg-transparent border-none"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <Gift size={16} />
+                              </div>
+                              <div className="text-left">
+                                <span className="text-[8px] font-black tracking-widest text-emerald-500 uppercase block mb-0.5">
+                                  4 a 10 anos
+                                </span>
+                                <h4 className="text-sm font-black text-text-main">Classe das Crianças (Kids)</h4>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {teacher && (
+                                <span className="text-[10px] font-black bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full">
+                                  Prof: {teacher.name.split(' ')[0]}
+                                </span>
+                              )}
+                              {isExpanded ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
+                            </div>
+                          </button>
+
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="border-t border-border bg-emerald-500/[0.01]"
+                              >
+                                <div className="p-4 space-y-4">
+                                  {/* Teacher Schedule Info */}
+                                  {teacher ? (
+                                    <div className="flex items-center gap-3 bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl">
+                                      <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0 overflow-hidden">
+                                        <CachedAvatar photoUrl={teacher.photoUrl} alt={teacher.name} className="w-full h-full" fallbackText={teacher.name} />
+                                      </div>
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <p className="text-xs font-black text-text-main truncate">{teacher.name}</p>
+                                        <span className="text-[9px] font-bold text-emerald-500 uppercase">Professor(a) Escalado(a)</span>
+                                      </div>
+                                      {teacher.whatsapp && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const phone = teacher.whatsapp.replace(/\D/g, '');
+                                            window.open(`https://wa.me/${phone}`, '_blank');
+                                          }}
+                                          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 transition-colors h-8 w-8 flex items-center justify-center cursor-pointer"
+                                          title="Falar no WhatsApp"
+                                        >
+                                          <Share2 size={13} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs text-amber-500 flex items-center gap-2 font-bold uppercase tracking-tight text-left">
+                                      <AlertTriangle size={14} />
+                                      Nenhum professor escalado para Kids ainda
+                                    </div>
+                                  )}
+
+                                  {/* Notes Area */}
+                                  <div className="space-y-2 text-left">
+                                    <div className="flex items-center justify-between pl-1">
+                                      <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                                        Planejamento e Notas da Aula
+                                      </span>
+                                      {isAdmin && !isEditingKidsNotes && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsEditingKidsNotes(true);
+                                          }}
+                                          className="text-[9px] font-black uppercase text-brand flex items-center gap-1 hover:underline cursor-pointer bg-transparent border-none"
+                                        >
+                                          <Edit size={10} /> Editar
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {isEditingKidsNotes ? (
+                                      <div className="space-y-3">
+                                        <textarea
+                                          value={tempKidsNotes}
+                                          onChange={e => setTempKidsNotes(e.target.value)}
+                                          placeholder="Digite aqui o roteiro da aula, história bíblica, dinâmica, atividades, lanche..."
+                                          className="w-full min-h-[140px] bg-black/10 dark:bg-black/30 border border-border rounded-xl p-3 text-xs text-text-main leading-relaxed resize-y focus:ring-1 focus:ring-emerald-500/40"
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setIsEditingKidsNotes(false);
+                                              setTempKidsNotes(notes);
+                                            }}
+                                            className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-text-main bg-black/10 dark:bg-white/5 border border-border rounded-lg cursor-pointer"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSaveKidsNotes();
+                                            }}
+                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1 border-none shadow cursor-pointer"
+                                          >
+                                            <Save size={10} /> Salvar Notas
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-black/10 dark:bg-black/30 p-4 rounded-xl border border-border">
+                                        {notes ? (
+                                          <p className="text-xs sm:text-sm text-text-main whitespace-pre-line leading-relaxed select-text font-serif">
+                                            {notes}
+                                          </p>
+                                        ) : (
+                                          <div className="text-center py-4 text-text-muted italic text-xs">
+                                            Nenhuma nota ou planejamento cadastrado para a aula Kids ainda.
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Class Babies Card */}
+                    {(() => {
+                      const isExpanded = !!expandedItems['class-babies'];
+                      const teacherId = selectedService.scales?.['Professor Babies']?.[0];
+                      const teacher = teacherId ? (members || []).find(m => m.id === teacherId) : null;
+                      const notes = selectedService.babiesNotes || '';
+
+                      return (
+                        <div 
+                          className={cn(
+                            "border rounded-2xl bg-card transition-all duration-300 overflow-hidden",
+                            isExpanded 
+                              ? "border-rose-500/50 shadow-md ring-1 ring-rose-500/10" 
+                              : "border-border hover:border-rose-500/20"
+                          )}
+                        >
+                          <button
+                            onClick={() => setExpandedItems(prev => ({ ...prev, 'class-babies': !prev['class-babies'] }))}
+                            className="w-full text-left p-4 flex items-center justify-between gap-3 cursor-pointer bg-transparent border-none"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                <Baby size={16} />
+                              </div>
+                              <div className="text-left">
+                                <span className="text-[8px] font-black tracking-widest text-rose-500 uppercase block mb-0.5">
+                                  0 a 3 anos
+                                </span>
+                                <h4 className="text-sm font-black text-text-main">Classe dos Pequenos (Babies)</h4>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {teacher && (
+                                <span className="text-[10px] font-black bg-rose-500/10 border border-rose-500/20 text-rose-500 px-2 py-0.5 rounded-full">
+                                  Prof: {teacher.name.split(' ')[0]}
+                                </span>
+                              )}
+                              {isExpanded ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
+                            </div>
+                          </button>
+
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="border-t border-border bg-rose-500/[0.01]"
+                              >
+                                <div className="p-4 space-y-4">
+                                  {/* Teacher Schedule Info */}
+                                  {teacher ? (
+                                    <div className="flex items-center gap-3 bg-rose-500/5 border border-rose-500/10 p-3 rounded-xl">
+                                      <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20 shrink-0 overflow-hidden">
+                                        <CachedAvatar photoUrl={teacher.photoUrl} alt={teacher.name} className="w-full h-full" fallbackText={teacher.name} />
+                                      </div>
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <p className="text-xs font-black text-text-main truncate">{teacher.name}</p>
+                                        <span className="text-[9px] font-bold text-rose-500 uppercase">Professor(a) Escalado(a)</span>
+                                      </div>
+                                      {teacher.whatsapp && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const phone = teacher.whatsapp.replace(/\D/g, '');
+                                            window.open(`https://wa.me/${phone}`, '_blank');
+                                          }}
+                                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 transition-colors h-8 w-8 flex items-center justify-center cursor-pointer"
+                                          title="Falar no WhatsApp"
+                                        >
+                                          <Share2 size={13} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs text-amber-500 flex items-center gap-2 font-bold uppercase tracking-tight text-left">
+                                      <AlertTriangle size={14} />
+                                      Nenhum professor escalado para Babies ainda
+                                    </div>
+                                  )}
+
+                                  {/* Notes Area */}
+                                  <div className="space-y-2 text-left">
+                                    <div className="flex items-center justify-between pl-1">
+                                      <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">
+                                        Planejamento e Notas da Aula
+                                      </span>
+                                      {isAdmin && !isEditingBabiesNotes && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsEditingBabiesNotes(true);
+                                          }}
+                                          className="text-[9px] font-black uppercase text-brand flex items-center gap-1 hover:underline cursor-pointer bg-transparent border-none"
+                                        >
+                                          <Edit size={10} /> Editar
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {isEditingBabiesNotes ? (
+                                      <div className="space-y-3">
+                                        <textarea
+                                          value={tempBabiesNotes}
+                                          onChange={e => setTempBabiesNotes(e.target.value)}
+                                          placeholder="Digite aqui o roteiro da aula, história bíblica, dinâmica, atividades, lanche..."
+                                          className="w-full min-h-[140px] bg-black/10 dark:bg-black/30 border border-border rounded-xl p-3 text-xs text-text-main leading-relaxed resize-y focus:ring-1 focus:ring-rose-500/40"
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setIsEditingBabiesNotes(false);
+                                              setTempBabiesNotes(notes);
+                                            }}
+                                            className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-text-main bg-black/10 dark:bg-white/5 border border-border rounded-lg cursor-pointer"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSaveBabiesNotes();
+                                            }}
+                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 rounded-lg flex items-center gap-1 border-none shadow cursor-pointer"
+                                          >
+                                            <Save size={10} /> Salvar Notas
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-black/10 dark:bg-black/30 p-4 rounded-xl border border-border">
+                                        {notes ? (
+                                          <p className="text-xs sm:text-sm text-text-main whitespace-pre-line leading-relaxed select-text font-serif">
+                                            {notes}
+                                          </p>
+                                        ) : (
+                                          <div className="text-center py-4 text-text-muted italic text-xs">
+                                            Nenhuma nota ou planejamento cadastrado para a aula Babies ainda.
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                /* Traditional clipboard card (original view) */
                 <div ref={liturgyRef} className="relative pt-4 animate-in fade-in duration-300">
                   {/* Clipboard Clip */}
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 w-32 h-10 bg-brand rounded-t-xl border-x border-t border-brand/20 flex items-center justify-center shadow-lg">
@@ -1834,6 +2532,7 @@ export default function LiturgyView({
                     </div>
                   </Card>
                 </div>
+              )}
             </div>
           ) : (
             <div className="h-full min-h-[400px] flex items-center justify-center bg-black/5 dark:bg-white/5 border border-dashed border-border rounded-3xl p-10 text-center">
