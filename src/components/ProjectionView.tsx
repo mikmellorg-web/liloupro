@@ -3,8 +3,9 @@ import {
   Tv, Monitor, Search, ChevronRight, Play, Square, Settings as SettingsIcon, 
   HelpCircle, RefreshCw, Calendar, Music, Sparkles, BookOpen, ExternalLink, Trash2,
   Plus, UploadCloud, Check, Volume2, Megaphone, Gift, History as HistoryIcon,
-  Keyboard, Info, Sliders, LayoutGrid
+  Keyboard, Info, Sliders, LayoutGrid, Smartphone, Copy, QrCode, Wifi, X, Radio
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'motion/react';
 import { BibleSearch } from './BibleSearch';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -245,6 +246,9 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
   // Panel settings and details
   const [showLinkPanel, setShowLinkPanel] = useState<boolean>(false);
   const [showEditLyricsPanel, setShowEditLyricsPanel] = useState<boolean>(false);
+  const [showRemoteModal, setShowRemoteModal] = useState<boolean>(false);
+  const [remoteQrDataUrl, setRemoteQrDataUrl] = useState<string>('');
+  const [remoteCopied, setRemoteCopied] = useState<boolean>(false);
   const [manualLinkSelection, setManualLinkSelection] = useState<string>('');
   const [quickLyricsText, setQuickLyricsText] = useState<string>('');
   const [freeText, setFreeText] = useState<string>('');
@@ -256,6 +260,25 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
       return true;
     }
   });
+
+  // Generate pairing QR Code when Remote Modal opens
+  useEffect(() => {
+    if (showRemoteModal) {
+      const remoteUrl = `${window.location.origin}?remote=true&church=${userChurchId}&session=${userChurchId}`;
+      QRCode.toDataURL(remoteUrl, {
+        width: 320,
+        margin: 2,
+        color: {
+          dark: '#09090b',
+          light: '#ffffff'
+        }
+      }).then(url => {
+        setRemoteQrDataUrl(url);
+      }).catch(err => {
+        console.error("Error generating QR code:", err);
+      });
+    }
+  }, [showRemoteModal, userChurchId]);
 
   // Auto-sync showPracticalGuide to localStorage
   useEffect(() => {
@@ -840,6 +863,25 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
     } catch (e) {
       // Safe fallback
     }
+
+    // 3. Cloud Firestore session sync for smartphone remote control
+    try {
+      const docRef = doc(db, 'projection_sessions', userChurchId);
+      setDoc(docRef, {
+        ...config,
+        churchId: userChurchId,
+        activeSlideIdx,
+        activeSongId: activeSong?.id || null,
+        activeSongTitle: activeSong?.title || null,
+        activeSongArtist: activeSong?.artist || null,
+        slides: slides.map((s, idx) => typeof s === 'string' ? { type: 'text', text: s, index: idx } : s),
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch((err) => {
+        console.warn("Projection session Firestore sync notice:", err);
+      });
+    } catch (err) {
+      // Safe fallback
+    }
   };
 
   // Sync back to storage and trigger instant sync when setting values modify
@@ -1255,6 +1297,49 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
       });
   }, [selectedService, allSongs, manualLinkMap, sessionLyricsMap]);
 
+  // Listen to remote changes from smartphone / mobile remote
+  useEffect(() => {
+    const docRef = doc(db, 'projection_sessions', userChurchId);
+    const unsub = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.activeSlideIdx !== undefined && data.activeSlideIdx !== activeSlideIdx && data.activeSlideIdx >= 0) {
+          setActiveSlideIdx(data.activeSlideIdx);
+        }
+        if (data.blackout !== undefined && data.blackout !== blackout) {
+          setBlackout(data.blackout);
+        }
+        if (data.clearText !== undefined && data.clearText !== clearText) {
+          setClearText(data.clearText);
+        }
+        if (data.showLogo !== undefined && data.showLogo !== showLogo) {
+          setShowLogo(data.showLogo);
+        }
+        if (data.scrollingAlert !== undefined && data.scrollingAlert !== scrollingAlert) {
+          setScrollingAlert(data.scrollingAlert);
+        }
+        if (data.selectedLiturgyId && data.selectedLiturgyId !== selectedLiturgyId) {
+          setSelectedLiturgyId(data.selectedLiturgyId);
+        }
+        if (data.activeSongId && (!activeSong || (activeSong.id !== data.activeSongId && activeSong.liturgyItemId !== data.activeSongId))) {
+          const matchedFromService = serviceSongs.find(s => s.id === data.activeSongId || s.liturgyItemId === data.activeSongId);
+          if (matchedFromService) {
+            setActiveSong(matchedFromService);
+          } else {
+            const matchedFromRepertoire = allSongs.find(s => s.id === data.activeSongId);
+            if (matchedFromRepertoire) {
+              setActiveSong(matchedFromRepertoire);
+            }
+          }
+        }
+      }
+    }, (err) => {
+      console.warn("Remote sync listener notice:", err);
+    });
+
+    return () => unsub();
+  }, [userChurchId, activeSlideIdx, blackout, clearText, showLogo, scrollingAlert, selectedLiturgyId, activeSong, serviceSongs, allSongs]);
+
   // Easy control handlers for quicklist playlist
   const handleAddToPlaylist = (song: any) => {
     if (customPlaylist.some(s => s.id === song.id)) return;
@@ -1422,6 +1507,14 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
         </div>
 
         <div className="flex flex-wrap gap-2.5">
+          <Button 
+            onClick={() => setShowRemoteModal(true)} 
+            className="shadow-md shadow-amber-500/20 py-2 sm:py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-zinc-950 shrink-0 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5"
+          >
+            <Smartphone size={14} className="text-zinc-950" />
+            <span>📱 Controle pelo Celular</span>
+          </Button>
+
           <Button 
             onClick={() => setShowPracticalGuide(!showPracticalGuide)} 
             variant="secondary"
@@ -3467,6 +3560,115 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
 
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Conexão com o Celular (Controle Remoto Holyrics Mobile) */}
+      <AnimatePresence>
+        {showRemoteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-zinc-900 border border-zinc-700/80 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6 text-left relative overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                      Sincronização em Tempo Real
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-black text-zinc-100 flex items-center gap-2">
+                    <Smartphone className="text-amber-400" size={22} />
+                    Controle pelo Celular
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Controle a passagem de letras e slides no telão diretamente pelo celular, como no Holyrics!
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowRemoteModal(false)}
+                  className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="bg-zinc-950 p-5 rounded-3xl border border-zinc-800 flex flex-col items-center justify-center text-center shadow-inner">
+                {remoteQrDataUrl ? (
+                  <div className="p-3 bg-white rounded-2xl shadow-xl border border-zinc-300">
+                    <img 
+                      src={remoteQrDataUrl} 
+                      alt="QR Code do Controle Remoto" 
+                      className="w-56 h-56 object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-56 h-56 flex items-center justify-center bg-zinc-900 rounded-2xl animate-pulse">
+                    <QrCode size={48} className="text-zinc-600" />
+                  </div>
+                )}
+                <p className="text-xs font-bold text-zinc-300 mt-3.5">
+                  Aponte a câmera do seu celular para escanear o QR Code
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Funciona em qualquer iPhone ou Android sem precisar instalar nada!
+                </p>
+              </div>
+
+              {/* Direct link copy */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                  <span>Ou envie o link para a equipe</span>
+                  {remoteCopied && <span className="text-emerald-400 text-xs font-black">Copiado com sucesso! ✓</span>}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    type="text"
+                    value={`${window.location.origin}?remote=true&church=${userChurchId}&session=${userChurchId}`}
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono select-all focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}?remote=true&church=${userChurchId}&session=${userChurchId}`;
+                      navigator.clipboard.writeText(url);
+                      setRemoteCopied(true);
+                      setTimeout(() => setRemoteCopied(false), 2500);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shrink-0 active:scale-95 transition-all shadow-md"
+                  >
+                    {remoteCopied ? <Check size={15} /> : <Copy size={15} />}
+                    Copiar
+                  </button>
+                </div>
+              </div>
+
+              {/* Action buttons footer */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-zinc-800">
+                <a
+                  href={`${window.location.origin}?remote=true&church=${userChurchId}&session=${userChurchId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-center font-bold text-xs flex items-center justify-center gap-2 transition-all border border-zinc-700"
+                >
+                  <ExternalLink size={14} />
+                  Abrir Controle em Nova Aba
+                </a>
+                <button
+                  onClick={() => setShowRemoteModal(false)}
+                  className="py-3 px-6 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

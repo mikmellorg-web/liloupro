@@ -36,6 +36,7 @@ import { twMerge } from 'tailwind-merge';
 import { BibleSearch } from './components/BibleSearch';
 import { ProjectorDisplay } from './components/ProjectorDisplay';
 import { ProjectionView } from './components/ProjectionView';
+import { ProjectionRemoteView } from './components/ProjectionRemoteView';
 import { ChatView } from './components/ChatView';
 import { ChordDictionaryModal, ChordDictionaryCard } from './components/ChordDictionary';
 import CommercialLandingPage from './components/CommercialLandingPage';
@@ -1183,9 +1184,18 @@ function parseYoutubeVideoId(url: string): string | null {
 
 export default function App() {
   const isProjectionWindow = window.location.search.includes('projection=true');
+  const isRemoteWindow = window.location.search.includes('remote=true');
 
   if (isProjectionWindow) {
     return <ProjectorDisplay />;
+  }
+
+  if (isRemoteWindow) {
+    return (
+      <AuthProvider>
+        <ProjectionRemoteView />
+      </AuthProvider>
+    );
   }
 
   return (

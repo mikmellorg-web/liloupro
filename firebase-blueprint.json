@@ -166,6 +166,31 @@
       },
       "required": ["name", "url"]
     },
+    "ProjectionSession": {
+      "title": "Projection Session",
+      "description": "Real-time state and slide control for live projector screens and mobile remotes.",
+      "type": "object",
+      "properties": {
+        "churchId": { "type": "string" },
+        "text": { "type": "string" },
+        "theme": { "type": "string" },
+        "fontSize": { "type": "number" },
+        "activeSlideIdx": { "type": "number" },
+        "activeSongTitle": { "type": "string" },
+        "activeSongArtist": { "type": "string" },
+        "activeSongId": { "type": "string" },
+        "slides": { "type": "array" },
+        "blackout": { "type": "boolean" },
+        "clearText": { "type": "boolean" },
+        "showLogo": { "type": "boolean" },
+        "scrollingAlert": { "type": "string" },
+        "projectorOnlineAt": { "type": "string", "format": "date-time" },
+        "operatorOnlineAt": { "type": "string", "format": "date-time" },
+        "pingTimestamp": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["churchId"]
+    },
     "Church": {
       "title": "Church",
       "description": "A registered church congregation.",
@@ -235,6 +260,10 @@
     "/projection_presets/{presetId}": {
       "schema": "ProjectionPreset",
       "description": "Custom background presets for projection slides."
+    },
+    "/projection_sessions/{sessionId}": {
+      "schema": "ProjectionSession",
+      "description": "Real-time projection session state for mobile remote controls and projector displays."
     },
     "/presence/{userId}": {
       "schema": {

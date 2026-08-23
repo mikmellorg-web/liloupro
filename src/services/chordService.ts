@@ -1162,3 +1162,85 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+export function getCapoSemitonesFromText(capoStr: string | undefined | null): number {
+  if (!capoStr) return 0;
+  const cleanStr = capoStr.toLowerCase().trim();
+  if (cleanStr.includes('primeira') || cleanStr.includes('1ª') || cleanStr.includes('1a')) return 1;
+  if (cleanStr.includes('segunda') || cleanStr.includes('2ª') || cleanStr.includes('2a')) return 2;
+  if (cleanStr.includes('terceira') || cleanStr.includes('3ª') || cleanStr.includes('3a')) return 3;
+  if (cleanStr.includes('quarta') || cleanStr.includes('4ª') || cleanStr.includes('4a')) return 4;
+  if (cleanStr.includes('quinta') || cleanStr.includes('5ª') || cleanStr.includes('5a')) return 5;
+  if (cleanStr.includes('sexta') || cleanStr.includes('6ª') || cleanStr.includes('6a')) return 6;
+  if (cleanStr.includes('sétima') || cleanStr.includes('setima') || cleanStr.includes('7ª') || cleanStr.includes('7a')) return 7;
+  if (cleanStr.includes('oitava') || cleanStr.includes('8ª') || cleanStr.includes('8a')) return 8;
+  if (cleanStr.includes('nona') || cleanStr.includes('9ª') || cleanStr.includes('9a')) return 9;
+  if (cleanStr.includes('décima') || cleanStr.includes('decima') || cleanStr.includes('10ª') || cleanStr.includes('10a')) return 10;
+  if (cleanStr.includes('décima primeira') || cleanStr.includes('decima primeira') || cleanStr.includes('11ª') || cleanStr.includes('11a')) return 11;
+  if (cleanStr.includes('décima segunda') || cleanStr.includes('decima segunda') || cleanStr.includes('12ª') || cleanStr.includes('12a')) return 12;
+  const match = cleanStr.match(/(\d+)/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) return num;
+  }
+  return 0;
+}
+
+export function areChordsInCapoShape(chordsText: string, baseKey: string, capoSemitones: number): boolean {
+  if (!chordsText || !baseKey || capoSemitones <= 0) return false;
+
+  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const flats: Record<string, string> = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
+
+  const normalizeNote = (n: string) => {
+    const root = n.match(/^([A-G][#b]?)/i)?.[1] || '';
+    if (!root) return '';
+    const cap = root.charAt(0).toUpperCase() + root.slice(1);
+    return flats[cap] || cap;
+  };
+
+  const realRoot = normalizeNote(baseKey);
+  const shapeRoot = normalizeNote(transposeChord(baseKey, -capoSemitones));
+
+  if (!realRoot || !shapeRoot || realRoot === shapeRoot) return false;
+
+  const chordRegex = /[A-G][#b]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][#b]?)?/g;
+  const found = chordsText.match(chordRegex) || [];
+  if (found.length === 0) return false;
+
+  let realScore = 0;
+  let shapeScore = 0;
+
+  const diatonicOffsets = [0, 2, 3, 4, 5, 7, 8, 9, 10, 11];
+
+  const realIdx = notes.indexOf(realRoot);
+  const shapeIdx = notes.indexOf(shapeRoot);
+
+  for (const c of found) {
+    const root = normalizeNote(c);
+    const rootIdx = notes.indexOf(root);
+    if (rootIdx === -1) continue;
+
+    const diffFromReal = (rootIdx - realIdx + 12) % 12;
+    const diffFromShape = (rootIdx - shapeIdx + 12) % 12;
+
+    if (diffFromReal === 0) realScore += 4;
+    else if (diffFromReal === 5 || diffFromReal === 7) realScore += 2;
+    else if (diatonicOffsets.includes(diffFromReal)) realScore += 1;
+
+    if (diffFromShape === 0) shapeScore += 4;
+    else if (diffFromShape === 5 || diffFromShape === 7) shapeScore += 2;
+    else if (diatonicOffsets.includes(diffFromShape)) shapeScore += 1;
+  }
+
+  // Check first chord in song as extra heuristic
+  const firstChord = found[0];
+  if (firstChord) {
+    const firstRoot = normalizeNote(firstChord);
+    if (firstRoot === shapeRoot) shapeScore += 3;
+    if (firstRoot === realRoot) realScore += 3;
+  }
+
+  return shapeScore >= realScore;
+}
+

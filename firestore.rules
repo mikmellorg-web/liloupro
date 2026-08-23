@@ -154,6 +154,26 @@ service cloud.firestore {
         && (data.get('createdAt', null) == null || data.createdAt is timestamp);
     }
 
+    function isValidProjectionSession(data) {
+      return (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
+        && (data.get('text', null) == null || (data.text is string && data.text.size() <= 20000))
+        && (data.get('theme', null) == null || data.theme is string)
+        && (data.get('fontSize', null) == null || data.fontSize is number)
+        && (data.get('activeSlideIdx', null) == null || data.activeSlideIdx is number)
+        && (data.get('activeSongTitle', null) == null || data.activeSongTitle is string)
+        && (data.get('activeSongArtist', null) == null || data.activeSongArtist is string)
+        && (data.get('activeSongId', null) == null || data.activeSongId is string)
+        && (data.get('slides', null) == null || data.slides is list)
+        && (data.get('blackout', null) == null || data.blackout is bool)
+        && (data.get('clearText', null) == null || data.clearText is bool)
+        && (data.get('showLogo', null) == null || data.showLogo is bool)
+        && (data.get('scrollingAlert', null) == null || (data.scrollingAlert is string && data.scrollingAlert.size() <= 1000))
+        && (data.get('projectorOnlineAt', null) == null || data.projectorOnlineAt is timestamp || data.projectorOnlineAt is string)
+        && (data.get('operatorOnlineAt', null) == null || data.operatorOnlineAt is timestamp || data.operatorOnlineAt is string)
+        && (data.get('pingTimestamp', null) == null || data.pingTimestamp is number)
+        && (data.get('updatedAt', null) == null || data.updatedAt is timestamp || data.updatedAt is string);
+    }
+
     function isValidPresence(data) {
       return data.name is string && data.name.size() <= 200
         && (data.get('lastActive', null) == null || data.lastActive is timestamp);
@@ -193,6 +213,12 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if isSignedIn() && incoming().keys().hasAll(['name', 'url']) && isValidProjectionPreset(incoming());
       allow update: if isSignedIn() && isValidProjectionPreset(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /projection_sessions/{sessionId} {
+      allow get, list: if true;
+      allow create, update: if true;
       allow delete: if isSignedIn();
     }
 

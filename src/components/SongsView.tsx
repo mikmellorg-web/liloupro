@@ -29,7 +29,7 @@ import {
   collection, query, onSnapshot, addDoc, deleteDoc, getDocs,
   doc, updateDoc, setDoc, getDoc, orderBy, Timestamp, where, serverTimestamp, deleteField 
 } from 'firebase/firestore';
-import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken } from '../services/chordService';
+import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, areChordsInCapoShape, getCapoSemitonesFromText } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { exportJsonToExcel } from '../utils/excelExport';
@@ -3819,6 +3819,7 @@ export function SongDetailView({
 
   const [transpose, setTranspose] = useState(0);
   const [isCapoEnabled, setIsCapoEnabled] = useState(true);
+  const [selectedCapoFret, setSelectedCapoFret] = useState<number | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(initialFocusMode);
 
   useEffect(() => {
@@ -4052,6 +4053,7 @@ export function SongDetailView({
     });
     setTranspose(0);
     setIsCapoEnabled(true);
+    setSelectedCapoFret(null);
     setIsEditing(false); // Sair do modo edição ao trocar de música
   }, [song.id]); 
 
@@ -4172,71 +4174,48 @@ export function SongDetailView({
   const [popoverChord, setPopoverChord] = useState<string | null>(null);
 
   const getCapoSemitones = (capoStr: string | undefined | null): number => {
-    if (!capoStr) return 0;
-    const cleanStr = capoStr.toLowerCase().trim();
-    if (cleanStr.includes('primeira') || cleanStr.includes('1ª') || cleanStr.includes('1a')) return 1;
-    if (cleanStr.includes('segunda') || cleanStr.includes('2ª') || cleanStr.includes('2a')) return 2;
-    if (cleanStr.includes('terceira') || cleanStr.includes('3ª') || cleanStr.includes('3a')) return 3;
-    if (cleanStr.includes('quarta') || cleanStr.includes('4ª') || cleanStr.includes('4a')) return 4;
-    if (cleanStr.includes('quinta') || cleanStr.includes('5ª') || cleanStr.includes('5a')) return 5;
-    if (cleanStr.includes('sexta') || cleanStr.includes('6ª') || cleanStr.includes('6a')) return 6;
-    if (cleanStr.includes('sétima') || cleanStr.includes('setima') || cleanStr.includes('7ª') || cleanStr.includes('7a')) return 7;
-    if (cleanStr.includes('oitava') || cleanStr.includes('8ª') || cleanStr.includes('8a')) return 8;
-    if (cleanStr.includes('nona') || cleanStr.includes('9ª') || cleanStr.includes('9a')) return 9;
-    if (cleanStr.includes('décima') || cleanStr.includes('decima') || cleanStr.includes('10ª') || cleanStr.includes('10a')) return 10;
-    const match = cleanStr.match(/(\d+)/);
-    if (match) {
-      return parseInt(match[1], 10);
-    }
-    return 0;
+    return getCapoSemitonesFromText(capoStr);
   };
 
-  const capoSemitones = getCapoSemitones(editedSong.capo);
+  const originalCapoSemitones = useMemo(() => {
+    return getCapoSemitonesFromText(editedSong.capo);
+  }, [editedSong.capo]);
+
+  const activeCapoFret = useMemo(() => {
+    if (!isCapoEnabled) return 0;
+    if (selectedCapoFret !== null) return selectedCapoFret;
+    return originalCapoSemitones;
+  }, [isCapoEnabled, selectedCapoFret, originalCapoSemitones]);
+
+  const capoSemitones = activeCapoFret;
+
+  const effectiveBaseKey = useMemo(() => {
+    return editedSong.baseKey || detectKey(editedSong.chords || '') || 'C';
+  }, [editedSong.baseKey, editedSong.chords]);
 
   const dbChordsAreInCapoShape = useMemo(() => {
-    if (!editedSong.chords || !editedSong.baseKey || capoSemitones === 0) return false;
-    const detected = detectKey(editedSong.chords);
-    if (!detected) return false;
-
-    const notes_local = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const flats_local: Record<string, string> = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
-
-    const getBaseNote = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
-    const baseNorm = flats_local[getBaseNote(editedSong.baseKey)] || getBaseNote(editedSong.baseKey);
-    const detectedNorm = flats_local[getBaseNote(detected)] || getBaseNote(detected);
-
-    const baseIdx = notes_local.indexOf(baseNorm);
-    const detectedIdx = notes_local.indexOf(detectedNorm);
-
-    if (baseIdx === -1 || detectedIdx === -1) return false;
-
-    const diff = (baseIdx - detectedIdx + 12) % 12;
-    return diff === (capoSemitones % 12);
-  }, [editedSong.chords, editedSong.baseKey, capoSemitones]);
+    if (!editedSong.chords || originalCapoSemitones === 0) return false;
+    return areChordsInCapoShape(editedSong.chords, effectiveBaseKey, originalCapoSemitones);
+  }, [editedSong.chords, effectiveBaseKey, originalCapoSemitones]);
 
   const netTranspose = useMemo(() => {
     if (dbChordsAreInCapoShape) {
-      return isCapoEnabled ? transpose : (transpose + capoSemitones);
+      return transpose + (originalCapoSemitones - activeCapoFret);
     } else {
-      return isCapoEnabled ? (transpose - capoSemitones) : transpose;
+      return transpose - activeCapoFret;
     }
-  }, [dbChordsAreInCapoShape, isCapoEnabled, transpose, capoSemitones]);
+  }, [dbChordsAreInCapoShape, transpose, originalCapoSemitones, activeCapoFret]);
 
   const currentKey = useMemo(() => {
-    let base = editedSong.baseKey;
-    if (!base) {
-      base = detectKey(editedSong.chords || '') || 'C';
-    }
-    if (transpose === 0) return base;
-    return transposeChord(base, transpose);
-  }, [editedSong.baseKey, editedSong.chords, transpose]);
+    if (transpose === 0) return effectiveBaseKey;
+    return transposeChord(effectiveBaseKey, transpose);
+  }, [effectiveBaseKey, transpose]);
 
   const shapeKey = useMemo(() => {
     if (!currentKey) return '';
-    const semitones = getCapoSemitones(editedSong.capo);
-    if (!isCapoEnabled || semitones === 0) return currentKey;
-    return transposeChord(currentKey, -semitones);
-  }, [currentKey, editedSong.capo, isCapoEnabled]);
+    if (activeCapoFret === 0) return currentKey;
+    return transposeChord(currentKey, -activeCapoFret);
+  }, [currentKey, activeCapoFret]);
 
   const setActiveChordInDict = useCallback((chord: string, openPopover = true) => {
     if (!chord) {
@@ -9512,7 +9491,33 @@ export function SongDetailView({
                 Mude a tonalidade da cifra automaticamente escolhendo um dos tons abaixo:
               </p>
 
-              <div className="grid grid-cols-4 gap-2 py-2">
+              {/* Stepper rápido de 1/2 Tom */}
+              <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => setTranspose(t => t - 1)}
+                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
+                  title="Diminuir meio tom"
+                >
+                  - 1/2 Tom
+                </button>
+                <div className="text-center">
+                  <span className="text-base font-black text-brand">{currentKey}</span>
+                  {isCapoEnabled && shapeKey && shapeKey !== currentKey && (
+                    <span className="block text-[10px] text-text-muted font-bold leading-none mt-0.5">Shape: {shapeKey}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTranspose(t => t + 1)}
+                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
+                  title="Aumentar meio tom"
+                >
+                  + 1/2 Tom
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 py-1">
                 {['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].map((note) => {
                   const getBaseNote = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
                   const currentBase = getBaseNote(currentKey);
@@ -9528,7 +9533,7 @@ export function SongDetailView({
                         setShowKeyMenu(false);
                       }}
                       className={cn(
-                        "py-3 rounded-xl text-xs font-black transition-all border",
+                        "py-2.5 sm:py-3 rounded-xl text-xs font-black transition-all border cursor-pointer select-none",
                         isActive 
                           ? "bg-brand text-white border-brand shadow-lg scale-105" 
                           : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-border"
@@ -9540,15 +9545,15 @@ export function SongDetailView({
                 })}
               </div>
 
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-border pt-3">
                 <button 
                   onClick={() => {
                     setTranspose(0);
                     setShowKeyMenu(false);
                   }}
-                  className="w-full py-2.5 bg-black/5 dark:bg-white/5 border border-border rounded-xl text-xs font-black uppercase text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-all cursor-pointer"
+                  className="w-full py-2.5 bg-black/5 dark:bg-white/5 border border-border rounded-xl text-xs font-black uppercase text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-all cursor-pointer select-none"
                 >
-                  Tom Original ({editedSong.baseKey})
+                  Tom Original ({effectiveBaseKey})
                 </button>
               </div>
             </motion.div>
@@ -9606,13 +9611,13 @@ export function SongDetailView({
                 <button
                   type="button"
                   onClick={() => {
-                    setEditedSong(prev => ({ ...prev, capo: '' }));
                     setIsCapoEnabled(false);
+                    setSelectedCapoFret(0);
                     setShowCapoMenu(false);
                   }}
                   className={cn(
-                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer",
-                    !isCapoEnabled || capoSemitones === 0
+                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer select-none",
+                    !isCapoEnabled || activeCapoFret === 0
                       ? "bg-brand text-white border-brand shadow-md"
                       : "bg-black/5 dark:bg-white/5 text-text-muted border-border hover:bg-black/10 dark:hover:bg-white/10"
                   )}
@@ -9626,7 +9631,7 @@ export function SongDetailView({
               <div className="overflow-y-auto custom-scrollbar pr-1 space-y-1.5 max-h-[320px]">
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((fret) => {
                   const calculatedShape = transposeChord(currentKey, -fret);
-                  const isSelected = isCapoEnabled && capoSemitones === fret;
+                  const isSelected = isCapoEnabled && activeCapoFret === fret;
                   const cleanShapeRoot = calculatedShape.replace(/[^A-G#b]/g, '');
                   const isCaged = ['C', 'A', 'G', 'E', 'D'].includes(cleanShapeRoot);
 
@@ -9635,12 +9640,12 @@ export function SongDetailView({
                       key={fret}
                       type="button"
                       onClick={() => {
-                        setEditedSong(prev => ({ ...prev, capo: `${fret}ª casa` }));
+                        setSelectedCapoFret(fret);
                         setIsCapoEnabled(true);
                         setShowCapoMenu(false);
                       }}
                       className={cn(
-                        "w-full p-2.5 sm:p-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between cursor-pointer group text-left",
+                        "w-full p-2.5 sm:p-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between cursor-pointer group text-left select-none",
                         isSelected
                           ? "bg-amber-500 text-black border-amber-400 font-black shadow-lg shadow-amber-500/20 scale-[1.01]"
                           : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-amber-500/40"
@@ -13082,6 +13087,33 @@ function MultiVocalistSelector({
   );
 }
 
+const LITURGY_SONG_CATEGORIES = [
+  "ABERTURA",
+  "CRIAÇÃO/ADORAÇÃO",
+  "QUEDA/CONFISSÃO",
+  "REDENÇÃO/AÇÃO DE GRAÇAS",
+  "CONSUMAÇÃO/RESPOSTA",
+  "DÍZIMOS/OFERTAS",
+  "ORAÇÃO/INTERCESSÃO",
+  "APELO/DECISÃO",
+  "JÚBILO/CELEBRAÇÃO",
+  "CEIA/COMUNHÃO",
+  "ADORAÇÃO",
+  "ENCERRAMENTO",
+  "PERSONALIZAR"
+];
+
+const LITURGY_NON_SONG_CATEGORIES = [
+  "CHAMADO À ADORAÇÃO",
+  "EXPLICAÇÃO DO EVANGELHO",
+  "ORAÇÃO PASTORAL",
+  "DÍZIMOS/OFERTAS",
+  "AVISOS DO CULTO",
+  "PREGAÇÃO",
+  "BÊNÇÃO FINAL",
+  "OUTRO"
+];
+
 export function LiturgyEditor({ 
   service, 
   onOpenSong, 
@@ -13147,14 +13179,34 @@ export function LiturgyEditor({
     );
   }, [members]);
 
+  const normalizedLiturgy = useMemo(() => {
+    if (!service?.liturgy || !Array.isArray(service.liturgy)) return [];
+    const seenIds = new Set<string>();
+    return service.liturgy.map((item: any, index: number) => {
+      let itemId = item?.id && typeof item.id === 'string' && item.id.trim() !== ''
+        ? item.id
+        : (item?.songId ? `song-${item.songId}-${index}` : `liturgy-item-${index}-${item?.type || 'item'}`);
+      
+      if (seenIds.has(itemId)) {
+        itemId = `${itemId}-dup-${index}`;
+      }
+      seenIds.add(itemId);
+
+      return {
+        ...item,
+        id: itemId
+      };
+    });
+  }, [service?.liturgy]);
+
   const timelineTimes = useMemo(() => {
-    if (!service || !service.liturgy) return {} as Record<string, string>;
+    if (!service || !normalizedLiturgy) return {} as Record<string, string>;
     let currentTime = new Date(service.date);
     if (isNaN(currentTime.getTime())) {
       currentTime = new Date();
     }
     const timeline: Record<string, string> = {};
-    (service.liturgy || []).forEach((item: any) => {
+    normalizedLiturgy.forEach((item: any) => {
       const hrs = String(currentTime.getHours()).padStart(2, '0');
       const mins = String(currentTime.getMinutes()).padStart(2, '0');
       timeline[item.id] = `${hrs}:${mins}`;
@@ -13165,12 +13217,14 @@ export function LiturgyEditor({
       }
     });
     return timeline;
-  }, [service?.date, service?.liturgy]);
+  }, [service?.date, normalizedLiturgy]);
   const [showBibleSearch, setShowBibleSearch] = useState(false);
   const [showEditBibleSearch, setShowEditBibleSearch] = useState(false);
   const [isGroupedByMoments, setIsGroupedByMoments] = useState(true);
   const [showCustomMomentInput, setShowCustomMomentInput] = useState(false);
   const [showCustomMomentInputEdit, setShowCustomMomentInputEdit] = useState(false);
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
+  const [showCustomCategoryInputEdit, setShowCustomCategoryInputEdit] = useState(false);
 
   useEffect(() => {
     if (!service) return;
@@ -13376,6 +13430,8 @@ export function LiturgyEditor({
     const standardMoments = ["", "Palavra Inicial", "Louvor Inicial", "Oração", "Pregação", "Avisos", "Louvor Final", "Palavra Final", "Ofertório", "Palavra Auxiliar"];
     const isCustom = item.moment && !standardMoments.includes(item.moment);
     setShowCustomMomentInputEdit(!!isCustom);
+    const isCustomCat = item.type === 'song' && item.content && !LITURGY_SONG_CATEGORIES.includes(item.content);
+    setShowCustomCategoryInputEdit(!!isCustomCat);
     setShowEditBibleSearch(false);
   };
 
@@ -13749,29 +13805,50 @@ export function LiturgyEditor({
                    )}
 
                    <div className={cn(newItem.type === 'song' ? "sm:col-span-2" : "sm:col-span-3", "space-y-1.5")}>
-                      <label className="text-[9px] font-black text-text-main uppercase pl-1 opacity-70">CATEGORIA</label>
-                      <select 
-                        className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand cursor-pointer"
-                        value={newItem.content}
-                        onChange={e => setNewItem({...newItem, content: e.target.value})}
-                      >
-                        <option value="">Opcional</option>
-                        {[
-                          "CRIAÇÃO/ADORAÇÃO",
-                          "CHAMADO À ADORAÇÃO",
-                          "QUEDA/CONFISSÃO",
-                          "EXPLICAÇÃO DO EVANGELHO",
-                          "REDENÇÃO/AÇÃO DE GRAÇAS",
-                          "CONSUMAÇÃO/RESPOSTA",
-                          "ORAÇÃO PASTORAL",
-                          "DÍZIMOS/OFERTAS",
-                          "AVISOS DO CULTO",
-                          "PREGAÇÃO",
-                          "LOUVOR ENCERRAMENTO",
-                          "BENÇÃO FINAL",
-                          "OUTRO"
-                        ].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
+                      <label className="text-[9px] font-black text-text-main uppercase pl-1 opacity-70">
+                        {newItem.type === 'song' ? 'CATEGORIA DA MÚSICA' : 'CATEGORIA'}
+                      </label>
+                      {newItem.type === 'song' ? (
+                        <div className="space-y-2">
+                          <select 
+                            className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand cursor-pointer"
+                            value={showCustomCategoryInput ? 'custom' : (newItem.content || '')}
+                            onChange={e => {
+                              if (e.target.value === 'custom') {
+                                setShowCustomCategoryInput(true);
+                                setNewItem({ ...newItem, content: '' });
+                              } else {
+                                setShowCustomCategoryInput(false);
+                                setNewItem({ ...newItem, content: e.target.value });
+                              }
+                            }}
+                          >
+                            <option value="">Opcional</option>
+                            {LITURGY_SONG_CATEGORIES.map((opt, oIdx) => (
+                              <option key={opt} value={opt === 'PERSONALIZAR' ? 'custom' : opt}>
+                                {`${oIdx + 1} - ${opt}`}
+                              </option>
+                            ))}
+                          </select>
+                          {showCustomCategoryInput && (
+                            <Input 
+                              placeholder="Digite a categoria personalizada..."
+                              value={newItem.content}
+                              onChange={e => setNewItem({ ...newItem, content: e.target.value })}
+                              className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-10 text-xs py-0"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <select 
+                          className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand cursor-pointer"
+                          value={newItem.content}
+                          onChange={e => setNewItem({...newItem, content: e.target.value})}
+                        >
+                          <option value="">Opcional</option>
+                          {LITURGY_NON_SONG_CATEGORIES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      )}
                    </div>
                    <div className="sm:col-span-2">
                       <Button 
@@ -14001,29 +14078,56 @@ export function LiturgyEditor({
                           )}
 
                           <div className={cn(editItem.type === 'song' ? "sm:col-span-2" : "sm:col-span-3", "space-y-1.5")}>
-                            <label className="text-[9px] font-black text-text-main uppercase pl-1 opacity-70">CATEGORIA</label>
-                            <select 
-                              className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand appearance-none cursor-pointer"
-                              value={editItem.content}
-                              onChange={e => setEditItem({...editItem, content: e.target.value})}
-                            >
-                              <option value="">Opcional</option>
-                              {[
-                                "CRIAÇÃO/ADORAÇÃO",
-                                "CHAMADO À ADORAÇÃO",
-                                "QUEDA/CONFISSÃO",
-                                "EXPLICAÇÃO DO EVANGELHO",
-                                "REDENÇÃO/AÇÃO DE GRAÇAS",
-                                "CONSUMAÇÃO/RESPOSTA",
-                                "ORAÇÃO PASTORAL",
-                                "DÍZIMOS/OFERTAS",
-                                "AVISOS DO CULTO",
-                                "PREGAÇÃO",
-                                "LOUVOR ENCERRAMENTO",
-                                "BENÇÃO FINAL",
-                                "OUTRO"
-                              ].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
+                            <label className="text-[9px] font-black text-text-main uppercase pl-1 opacity-70">
+                              {editItem.type === 'song' ? 'CATEGORIA DA MÚSICA' : 'CATEGORIA'}
+                            </label>
+                            {editItem.type === 'song' ? (
+                              <div className="space-y-2">
+                                <select 
+                                  className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand appearance-none cursor-pointer"
+                                  value={showCustomCategoryInputEdit ? 'custom' : (editItem.content || '')}
+                                  onChange={e => {
+                                    if (e.target.value === 'custom') {
+                                      setShowCustomCategoryInputEdit(true);
+                                      setEditItem({ ...editItem, content: '' });
+                                    } else {
+                                      setShowCustomCategoryInputEdit(false);
+                                      setEditItem({ ...editItem, content: e.target.value });
+                                    }
+                                  }}
+                                >
+                                  <option value="">Opcional</option>
+                                  {LITURGY_SONG_CATEGORIES.map((opt, oIdx) => (
+                                    <option key={opt} value={opt === 'PERSONALIZAR' ? 'custom' : opt}>
+                                      {`${oIdx + 1} - ${opt}`}
+                                    </option>
+                                  ))}
+                                  {editItem.content && !LITURGY_SONG_CATEGORIES.includes(editItem.content) && !showCustomCategoryInputEdit && (
+                                    <option value={editItem.content}>{editItem.content}</option>
+                                  )}
+                                </select>
+                                {showCustomCategoryInputEdit && (
+                                  <Input 
+                                    placeholder="Digite a categoria personalizada..."
+                                    value={editItem.content}
+                                    onChange={e => setEditItem({ ...editItem, content: e.target.value })}
+                                    className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-10 text-xs py-0"
+                                  />
+                                )}
+                              </div>
+                            ) : (
+                              <select 
+                                className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand appearance-none cursor-pointer"
+                                value={editItem.content}
+                                onChange={e => setEditItem({...editItem, content: e.target.value})}
+                              >
+                                <option value="">Opcional</option>
+                                {LITURGY_NON_SONG_CATEGORIES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                {editItem.content && !LITURGY_NON_SONG_CATEGORIES.includes(editItem.content) && (
+                                  <option value={editItem.content}>{editItem.content}</option>
+                                )}
+                              </select>
+                            )}
                           </div>
                           <div className="sm:col-span-2 flex gap-2">
                             <Button 
@@ -14285,13 +14389,13 @@ export function LiturgyEditor({
               };
 
               if (isGroupedByMoments) {
-                const groups = getMomentGroups(service.liturgy || []);
+                const groups = getMomentGroups(normalizedLiturgy);
                 return (
                   <div className="space-y-6">
                     {groups.map((group, gIdx) => {
                       const style = getMomentStyles(group.moment);
                       return (
-                        <div key={`${group.moment}-${gIdx}`} className={cn("rounded-2xl border p-4 sm:p-5 transition-all space-y-3", style.bg, style.border)}>
+                        <div key={`moment-group-${group.moment}-${gIdx}`} className={cn("rounded-2xl border p-4 sm:p-5 transition-all space-y-3", style.bg, style.border)}>
                           <div className="flex items-center justify-between mb-2 pb-2 border-b border-black/10 dark:border-white/10 gap-2">
                             <div className="flex items-center gap-2">
                               <span className={cn("w-2 h-2 rounded-full", style.dot)} />
@@ -14328,45 +14432,70 @@ export function LiturgyEditor({
                               </div>
                             )}
                           </div>
-                          <Reorder.Group
-                            values={group.items.map(gi => gi.item)}
-                            onReorder={(newItemsOrder) => {
-                              const updatedLiturgy = [...(service.liturgy || [])];
-                              const originalIndices = group.items.map(gi => gi.originalIndex);
-                              originalIndices.forEach((origIdx, oIdx) => {
-                                updatedLiturgy[origIdx] = newItemsOrder[oIdx];
-                              });
-                              handleReorder(updatedLiturgy);
-                            }}
-                            axis="y"
-                            className="space-y-3"
-                          >
-                            {group.items.map(({ item, originalIndex }) => {
-                              const isItemEditing = editingId === item.id;
-                              if (isItemEditing) {
+                          {isAdmin ? (
+                            <Reorder.Group
+                              values={group.items.map(gi => gi.item)}
+                              onReorder={(newItemsOrder) => {
+                                const updatedLiturgy = [...normalizedLiturgy];
+                                const originalIndices = group.items.map(gi => gi.originalIndex);
+                                originalIndices.forEach((origIdx, oIdx) => {
+                                  updatedLiturgy[origIdx] = newItemsOrder[oIdx];
+                                });
+                                handleReorder(updatedLiturgy);
+                              }}
+                              axis="y"
+                              className="space-y-3"
+                            >
+                              {group.items.map(({ item, originalIndex }) => {
+                                const isItemEditing = editingId === item.id;
+                                if (isItemEditing) {
+                                  return (
+                                    <Reorder.Item
+                                      key={item.id}
+                                      value={item}
+                                      dragListener={false}
+                                      className="w-full"
+                                    >
+                                      {renderItem(item, originalIndex)}
+                                    </Reorder.Item>
+                                  );
+                                }
                                 return (
-                                  <div key={item.id}>
-                                    {renderItem(item, originalIndex)}
-                                  </div>
+                                  <LiturgyItemCard
+                                    key={item.id}
+                                    item={item}
+                                    idx={originalIndex}
+                                    isAdmin={isAdmin}
+                                    onOpenSong={onOpenSong}
+                                    startEditing={startEditing}
+                                    handleMove={handleMove}
+                                    handleRemoveItem={handleRemoveItem}
+                                    serviceLiturgyLength={normalizedLiturgy.length}
+                                    dragControlsEnabled={isAdmin}
+                                    calculatedTime={timelineTimes[item.id]}
+                                  />
                                 );
-                              }
-                              return (
+                              })}
+                            </Reorder.Group>
+                          ) : (
+                            <div className="space-y-3">
+                              {group.items.map(({ item, originalIndex }) => (
                                 <LiturgyItemCard
                                   key={item.id}
                                   item={item}
                                   idx={originalIndex}
-                                  isAdmin={isAdmin}
+                                  isAdmin={false}
                                   onOpenSong={onOpenSong}
                                   startEditing={startEditing}
                                   handleMove={handleMove}
                                   handleRemoveItem={handleRemoveItem}
-                                  serviceLiturgyLength={service.liturgy?.length || 0}
-                                  dragControlsEnabled={isAdmin}
+                                  serviceLiturgyLength={normalizedLiturgy.length}
+                                  dragControlsEnabled={false}
                                   calculatedTime={timelineTimes[item.id]}
                                 />
-                              );
-                            })}
-                          </Reorder.Group>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -14374,20 +14503,25 @@ export function LiturgyEditor({
                 );
               }
 
-              return (
+              return isAdmin ? (
                 <Reorder.Group 
-                  values={service.liturgy || []} 
+                  values={normalizedLiturgy} 
                   onReorder={handleReorder} 
                   axis="y" 
                   className="space-y-4"
                 >
-                  {(service.liturgy || []).map((item: any, idx: number) => {
+                  {normalizedLiturgy.map((item: any, idx: number) => {
                     const isItemEditing = editingId === item.id;
                     if (isItemEditing) {
                       return (
-                        <div key={item.id}>
+                        <Reorder.Item
+                          key={item.id}
+                          value={item}
+                          dragListener={false}
+                          className="w-full"
+                        >
                           {renderItem(item, idx)}
-                        </div>
+                        </Reorder.Item>
                       );
                     }
                     return (
@@ -14400,13 +14534,31 @@ export function LiturgyEditor({
                         startEditing={startEditing}
                         handleMove={handleMove}
                         handleRemoveItem={handleRemoveItem}
-                        serviceLiturgyLength={service.liturgy?.length || 0}
+                        serviceLiturgyLength={normalizedLiturgy.length}
                         dragControlsEnabled={isAdmin}
                         calculatedTime={timelineTimes[item.id]}
                       />
                     );
                   })}
                 </Reorder.Group>
+              ) : (
+                <div className="space-y-4">
+                  {normalizedLiturgy.map((item: any, idx: number) => (
+                    <LiturgyItemCard
+                      key={item.id}
+                      item={item}
+                      idx={idx}
+                      isAdmin={false}
+                      onOpenSong={onOpenSong}
+                      startEditing={startEditing}
+                      handleMove={handleMove}
+                      handleRemoveItem={handleRemoveItem}
+                      serviceLiturgyLength={normalizedLiturgy.length}
+                      dragControlsEnabled={false}
+                      calculatedTime={timelineTimes[item.id]}
+                    />
+                  ))}
+                </div>
               );
             })()
           ) : (

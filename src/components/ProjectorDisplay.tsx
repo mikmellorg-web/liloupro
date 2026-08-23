@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Maximize2, Minimize2, Monitor } from 'lucide-react';
 import { cleanLyricsForProjection } from '../services/chordService';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 interface ProjectorState {
   text: string;
@@ -115,6 +117,8 @@ export function ProjectorDisplay() {
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [showPingNotice, setShowPingNotice] = useState(false);
+  const lastPingRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     if (!state.countdownUntil) {
@@ -244,16 +248,63 @@ export function ProjectorDisplay() {
       channel.onmessage = (event) => {
         if (event.data) {
           setState(prev => ({ ...prev, ...event.data }));
+          if (event.data.pingTimestamp && event.data.pingTimestamp !== lastPingRef.current) {
+            lastPingRef.current = event.data.pingTimestamp;
+            setShowPingNotice(true);
+            setTimeout(() => setShowPingNotice(false), 3000);
+          }
         }
       };
     } catch (e) {
       console.warn('BroadcastChannel not supported or limited in this context:', e);
     }
 
+    // 3. Listen via Firestore for cross-device / mobile remote control
+    let unsubFirestore: (() => void) | null = null;
+    let heartbeatInterval: any = null;
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || 'semente';
+      const sessionId = searchParams.get('session') || churchId;
+
+      const docRef = doc(db, 'projection_sessions', sessionId);
+      
+      // Heartbeat updater
+      const sendHeartbeat = () => {
+        setDoc(docRef, {
+          projectorOnlineAt: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+      };
+      sendHeartbeat();
+      heartbeatInterval = setInterval(sendHeartbeat, 15000);
+
+      unsubFirestore = onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setState(prev => ({ ...prev, ...data }));
+          if (data.pingTimestamp && data.pingTimestamp !== lastPingRef.current) {
+            lastPingRef.current = data.pingTimestamp;
+            setShowPingNotice(true);
+            setTimeout(() => setShowPingNotice(false), 3000);
+          }
+        }
+      }, (err) => {
+        console.warn("ProjectorDisplay Firestore sync notice:", err);
+      });
+    } catch (err) {
+      console.warn("Error setting up Firestore listener in ProjectorDisplay:", err);
+    }
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       if (channel) {
         channel.close();
+      }
+      if (unsubFirestore) {
+        unsubFirestore();
+      }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
       }
     };
   }, []);
@@ -714,6 +765,21 @@ export function ProjectorDisplay() {
           </div>
         </div>
       )}
+
+      {/* Ping Sync Confirmation Toast */}
+      <AnimatePresence>
+        {showPingNotice && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="absolute top-6 right-6 z-50 bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl backdrop-blur-md text-xs font-mono font-bold"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>📱 Controle Remoto Conectado</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating small technical status for setup indicator, hides after some hover-out */}
       <div className={`absolute bottom-5 right-5 pointer-events-none opacity-30 hover:opacity-100 transition-opacity flex items-center gap-1.5 text-[9px] font-mono font-black uppercase ${state.theme === 'white' ? 'text-black/60' : 'text-white/60'} tracking-widest z-10`}>
