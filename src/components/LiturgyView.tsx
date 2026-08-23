@@ -27,7 +27,7 @@ import {
   collection, query, onSnapshot, addDoc, deleteDoc, getDocs,
   doc, updateDoc, setDoc, getDoc, orderBy, Timestamp, where, serverTimestamp, deleteField 
 } from 'firebase/firestore';
-import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures } from '../services/chordService';
+import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, getEffectiveLyrics, cleanLyricsForDisplay } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { clsx, type ClassValue } from 'clsx';
@@ -1315,6 +1315,7 @@ export default function LiturgyView({
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [songFontSize, setSongFontSize] = useState<Record<string, number>>({});
   const [songTranspositions, setSongTranspositions] = useState<Record<string, number>>({});
+  const [songTabs, setSongTabs] = useState<Record<string, 'chords' | 'lyrics'>>({});
   const [isEditingKidsNotes, setIsEditingKidsNotes] = useState(false);
   const [isEditingBabiesNotes, setIsEditingBabiesNotes] = useState(false);
   const [tempKidsNotes, setTempKidsNotes] = useState('');
@@ -2039,69 +2040,109 @@ export default function LiturgyView({
                                     {isSong ? (
                                       songDetails ? (
                                         <div className="space-y-4">
-                                          {/* Song Toolbar (Key transpose, font size, YouTube button) */}
+                                          {/* Song Toolbar (Tab switch, Key transpose, font size, YouTube button) */}
                                           <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 dark:bg-black/40 p-3 rounded-xl border border-border">
-                                            {/* Transposition and Chords Key */}
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Tom:</span>
-                                              <div className="flex items-center gap-1">
-                                                <button 
+                                            <div className="flex flex-wrap items-center gap-3">
+                                              {/* Tab Switcher: Cifra / Letra */}
+                                              <div className="flex items-center p-0.5 rounded-lg border border-border/80 bg-black/20 dark:bg-white/10 shrink-0">
+                                                <button
+                                                  type="button"
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) - 1 }));
+                                                    setSongTabs(p => ({ ...p, [item.id]: 'chords' }));
                                                   }}
-                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
-                                                  title="Meio tom abaixo"
+                                                  className={cn(
+                                                    "h-7 px-2.5 flex items-center gap-1 rounded-md font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer",
+                                                    (songTabs[item.id] || 'chords') === 'chords'
+                                                      ? "bg-brand text-white shadow-xs font-black"
+                                                      : "text-text-muted hover:text-text-main"
+                                                  )}
                                                 >
-                                                  -
+                                                  <Music size={11} />
+                                                  <span>Cifra</span>
                                                 </button>
-                                                <span className="px-2 text-xs font-black text-brand min-w-[32px] text-center bg-brand/10 rounded border border-brand/20 py-0.5">
-                                                  {currentKey || '?'}
-                                                </span>
-                                                <button 
+                                                <button
+                                                  type="button"
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) + 1 }));
+                                                    setSongTabs(p => ({ ...p, [item.id]: 'lyrics' }));
                                                   }}
-                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
-                                                  title="Meio tom acima"
+                                                  className={cn(
+                                                    "h-7 px-2.5 flex items-center gap-1 rounded-md font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer",
+                                                    (songTabs[item.id] || 'chords') === 'lyrics'
+                                                      ? "bg-brand text-white shadow-xs font-black"
+                                                      : "text-text-muted hover:text-text-main"
+                                                  )}
                                                 >
-                                                  +
+                                                  <FileText size={11} />
+                                                  <span>Letra</span>
                                                 </button>
                                               </div>
-                                            </div>
 
-                                            {/* Font Size Buttons */}
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Fonte:</span>
-                                              <div className="flex items-center gap-1">
-                                                <button 
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSongFontSize(p => ({ ...p, [songDetails.id]: Math.max(10, (p[songDetails.id] || 13) - 1) }));
-                                                  }}
-                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
-                                                >
-                                                  A-
-                                                </button>
-                                                <span className="text-[10px] font-black text-text-muted min-w-[24px] text-center">
-                                                  {fontSize}px
-                                                </span>
-                                                <button 
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSongFontSize(p => ({ ...p, [songDetails.id]: Math.min(20, (p[songDetails.id] || 13) + 1) }));
-                                                  }}
-                                                  className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
-                                                >
-                                                  A+
-                                                </button>
-                                              </div>
-                                              {songDetails.bpm && (
-                                                <span className="text-[10px] font-black bg-black/10 dark:bg-white/10 border border-border text-text-muted px-2 py-0.5 rounded shrink-0 uppercase">
-                                                  {songDetails.bpm} BPM
-                                                </span>
+                                              {/* Transposition and Chords Key (visível na aba Cifra) */}
+                                              {(songTabs[item.id] || 'chords') === 'chords' && (
+                                                <div className="flex items-center gap-1.5">
+                                                  <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Tom:</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <button 
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) - 1 }));
+                                                      }}
+                                                      className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                      title="Meio tom abaixo"
+                                                    >
+                                                      -
+                                                    </button>
+                                                    <span className="px-2 text-xs font-black text-brand min-w-[32px] text-center bg-brand/10 rounded border border-brand/20 py-0.5">
+                                                      {currentKey || '?'}
+                                                    </span>
+                                                    <button 
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) + 1 }));
+                                                      }}
+                                                      className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                      title="Meio tom acima"
+                                                    >
+                                                      +
+                                                    </button>
+                                                  </div>
+                                                </div>
                                               )}
+
+                                              {/* Font Size Buttons */}
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Fonte:</span>
+                                                <div className="flex items-center gap-1">
+                                                  <button 
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSongFontSize(p => ({ ...p, [songDetails.id]: Math.max(10, (p[songDetails.id] || 13) - 1) }));
+                                                    }}
+                                                    className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                  >
+                                                    A-
+                                                  </button>
+                                                  <span className="text-[10px] font-black text-text-muted min-w-[24px] text-center">
+                                                    {fontSize}px
+                                                  </span>
+                                                  <button 
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSongFontSize(p => ({ ...p, [songDetails.id]: Math.min(20, (p[songDetails.id] || 13) + 1) }));
+                                                    }}
+                                                    className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
+                                                  >
+                                                    A+
+                                                  </button>
+                                                </div>
+                                                {songDetails.bpm && (
+                                                  <span className="text-[10px] font-black bg-black/10 dark:bg-white/10 border border-border text-text-muted px-2 py-0.5 rounded shrink-0 uppercase">
+                                                    {songDetails.bpm} BPM
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
 
                                             {/* YouTube play link */}
@@ -2116,33 +2157,55 @@ export default function LiturgyView({
                                             )}
                                           </div>
 
-                                          {/* Chords Block */}
-                                          {chordsContent ? (
-                                            <div className="relative">
-                                              <div className="absolute top-2 right-2 z-10 flex gap-1">
-                                                <button 
-                                                  onClick={() => {
-                                                    navigator.clipboard.writeText(chordsContent);
-                                                    alert("Cifra copiada para a área de transferência!");
-                                                  }}
-                                                  className="text-[9px] font-black uppercase bg-black/60 hover:bg-black/80 text-white px-2.5 py-1 rounded border border-white/10 shadow transition-colors cursor-pointer border-none"
-                                                >
-                                                  Copiar
-                                                </button>
+                                          {/* Content Block (Chords or Clean Lyrics) */}
+                                          {(() => {
+                                            const currentTab = songTabs[item.id] || 'chords';
+                                            const effectiveLyricsContent = getEffectiveLyrics(songDetails?.lyrics, songDetails?.chords);
+                                            const activeContent = currentTab === 'lyrics' ? effectiveLyricsContent : chordsContent;
+
+                                            if (!activeContent) {
+                                              return (
+                                                <div className="p-6 text-center border border-dashed border-border/60 rounded-xl bg-black/10 dark:bg-white/2">
+                                                  <p className="text-xs text-text-muted italic">
+                                                    {currentTab === 'lyrics' ? 'Nenhuma letra cadastrada para esta música.' : 'Nenhuma cifra cadastrada para esta música.'}
+                                                  </p>
+                                                </div>
+                                              );
+                                            }
+
+                                            return (
+                                              <div className="relative">
+                                                <div className="absolute top-2 right-2 z-10 flex gap-1">
+                                                  <button 
+                                                    onClick={() => {
+                                                      navigator.clipboard.writeText(activeContent);
+                                                      alert(`${currentTab === 'lyrics' ? 'Letra' : 'Cifra'} copiada para a área de transferência!`);
+                                                    }}
+                                                    className="text-[9px] font-black uppercase bg-black/60 hover:bg-black/80 text-white px-2.5 py-1 rounded border border-white/10 shadow transition-colors cursor-pointer border-none"
+                                                  >
+                                                    Copiar
+                                                  </button>
+                                                </div>
+                                                {currentTab === 'lyrics' ? (
+                                                  <div 
+                                                    className="font-sans whitespace-pre-line bg-black/10 dark:bg-black/30 p-4 rounded-xl border border-border overflow-x-auto select-text leading-loose notranslate text-text-main"
+                                                    translate="no"
+                                                    style={{ fontSize: `${fontSize}px` }}
+                                                  >
+                                                    {activeContent}
+                                                  </div>
+                                                ) : (
+                                                  <pre 
+                                                    className="font-mono whitespace-pre bg-black/20 dark:bg-black/40 p-4 rounded-xl border border-border overflow-x-auto select-text leading-relaxed notranslate text-text-main"
+                                                    translate="no"
+                                                    style={{ fontSize: `${fontSize}px` }}
+                                                  >
+                                                    {activeContent}
+                                                  </pre>
+                                                )}
                                               </div>
-                                              <pre 
-                                                className="font-mono whitespace-pre bg-black/20 dark:bg-black/40 p-4 rounded-xl border border-border overflow-x-auto select-text leading-relaxed notranslate text-text-main"
-                                                translate="no"
-                                                style={{ fontSize: `${fontSize}px` }}
-                                              >
-                                                {chordsContent}
-                                              </pre>
-                                            </div>
-                                          ) : (
-                                            <div className="p-6 text-center border border-dashed border-border/60 rounded-xl bg-black/10 dark:bg-white/2">
-                                              <p className="text-xs text-text-muted italic">Cifra ou letra não configurada para esta música.</p>
-                                            </div>
-                                          )}
+                                            );
+                                          })()}
                                         </div>
                                       ) : (
                                         <p className="text-xs text-red-500 italic">Música não encontrada no catálogo geral.</p>

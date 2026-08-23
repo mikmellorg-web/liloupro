@@ -56,7 +56,7 @@ import { TrialBanner } from './components/TrialBanner';
 import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
-import luxuryAppIcon from './assets/images/luxury_app_icon_1786273418814.jpg';
+import luxuryAppIcon from './assets/images/luxury_app_icon_1787495429884.jpg';
 
 // Lazy-loaded components for code-splitting
 const DashboardView = lazy(() => import('./components/DashboardView'));
@@ -18420,7 +18420,14 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                       <Sparkles size={14} />
                       Ver em Tela Cheia
                     </a>
-
+                    <a 
+                      href="/pwa-512x512.png?v=6.0" 
+                      download="liloupro_icone_luxo_512x512.png"
+                      className="flex-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <Download size={14} />
+                      Baixar Ícone HD (PNG)
+                    </a>
                   </div>
                 </div>
               </div>

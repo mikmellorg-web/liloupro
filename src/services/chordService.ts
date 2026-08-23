@@ -1244,3 +1244,177 @@ export function areChordsInCapoShape(chordsText: string, baseKey: string, capoSe
   return shapeScore >= realScore;
 }
 
+/**
+ * Strips dynamic markings and instrument directives (e.g. [bem suave], [só violão], (só guita), [N2 🌘 Bem Suave], [Pausa 🛑])
+ * from lyrics text, ensuring the "Letra" tab contains only clean lyrics and section headers.
+ */
+export function stripDynamicsFromText(text: string): string {
+  if (!text) return '';
+
+  let cleaned = text;
+
+  // 1. Remove bracketed, parenthesized or braced dynamic / arrangement directives
+  // e.g. [bem suave], [só violão], (só guita), {N1 🌑 Sutil}, [bem suave, só violão], [toda a banda], [crescendo ↗]
+  cleaned = cleaned.replace(
+    /[\[\(\{][^\]\)\}]*(?:n[1-7]\b|sutil|sil[eê]ncio|suave|moderado|forte|fort[ií]ssimo|pian[ií]ssimo|cl[ií]max|crescendo|decrescendo|diminuendo|pausa|parada|\bstop\b|acapell?a|sobe\s+(?:o\s+)?tom|modula[cç][aã]o|viol[aã]o|guita|bateria|teclado|piano|baixo\b|vozes|banda\b|tutti|instrumentos|🌑|🌘|🌗|🌖|🌕|🔥|⚡|🛑|↗|↘|🎤|🥁|🎸|📈|🎹|🎻|🎺|🎷)[^\]\)\}]*[\]\)\}]/gi,
+    ''
+  );
+
+  // 2. Remove standalone unbracketed dynamic phrases
+  cleaned = cleaned.replace(
+    /\b(?:N[1-7]\b\s*(?:🌑|🌘|🌗|🌖|🌕|🔥|⚡)?\s*(?:sutil|quase sil[eê]ncio|bem suave|suave|moderado|meio forte|forte|cl[ií]max)?|crescendo\s*↗?|decrescendo\s*↘?|pausa\s*🛑?|acapell?a\s*🎤?|s[oó] bateria\s*🥁?|viol[aã]o marcando\s*🎸?|sobe\s+(?:o\s+)?tom\s*📈?|modula[cç][aã]o\s*📈?|s[oó] viol[aã]o|s[oó] guita(?:rra)?|bem suave|quase sil[eê]ncio)\b/gi,
+    ''
+  );
+
+  // 3. Remove standalone dynamic-associated emojis
+  cleaned = cleaned.replace(/(?:🌑|🌘|🌗|🌖|🌕|🔥|⚡|🛑|↗|↘|🎤|🥁|🎸|📈|🎹|🎻|🎺|🎷)/g, '');
+
+  return cleaned;
+}
+
+/**
+ * Cleans a lyrics string for display in the "Letra" tab or singer view.
+ * Removes chord lines, tablatures, inline chord brackets, and all dynamic tags,
+ * keeping only clean lyrics, section headers, and font formatting.
+ */
+export function cleanLyricsForDisplay(rawLyrics: string): string {
+  if (!rawLyrics) return '';
+
+  const cleanText = cleanCifraHtml(rawLyrics);
+  const lines = cleanText.split(/\r?\n/);
+  const processedLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '') {
+        processedLines.push('');
+      }
+      continue;
+    }
+
+    // Skip chord lines
+    if (isChordLine(trimmed)) {
+      continue;
+    }
+
+    // Skip tablatures
+    if (isTablatureLine(line)) {
+      continue;
+    }
+
+    // Remove inline chord tags like [G], [C9], [D/F#], [Am7], [F#m], [C#m7(b5)]
+    let lineClean = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][b#]?)?\]/g, '');
+
+    // Strip dynamics and instrument instructions from the line
+    lineClean = stripDynamicsFromText(lineClean);
+
+    // Clean up extra double spaces created by removals
+    lineClean = lineClean.replace(/\s{2,}/g, ' ').trim();
+
+    // If after cleaning it becomes empty, continue
+    if (!lineClean) continue;
+
+    // Reject standalone chord, tab or punctuation artifacts like "| |" or "---" or "[]"
+    if (/^[\|\-\:\s\.\,\/\[\]\(\)\{\}]+$/.test(lineClean)) {
+      continue;
+    }
+
+    processedLines.push(lineClean);
+  }
+
+  return processedLines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Extracts pure clean lyrics and song structure from a full chord sheet (chords + lyrics + tabs),
+ * stripping out chords and all dynamic tags.
+ */
+export function extractLyricsFromChords(chordsText: string): string {
+  if (!chordsText) return '';
+
+  const cleanedChords = cleanTablatures(cleanCifraHtml(chordsText));
+  const lines = cleanedChords.split(/\r?\n/);
+  const lyricLines: string[] = [];
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+
+    if (!trimmed) {
+      if (lyricLines.length > 0 && lyricLines[lyricLines.length - 1] !== '') {
+        lyricLines.push('');
+      }
+      continue;
+    }
+
+    // Skip chord lines
+    if (isChordLine(trimmed)) {
+      continue;
+    }
+
+    // Skip tablatures
+    if (isTablatureLine(rawLine)) {
+      continue;
+    }
+
+    // Check if it's a section header like [Verso 1], [Refrão], [Ponte], [Intro], etc.
+    const isSectionHeader = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed);
+
+    // Remove inline chord tags like [G], [C9], [D/F#]
+    let lineWithoutChords = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][b#]?)?\]/g, '');
+    
+    // Strip dynamics tags
+    lineWithoutChords = stripDynamicsFromText(lineWithoutChords);
+    lineWithoutChords = lineWithoutChords.replace(/\s{2,}/g, ' ').trim();
+
+    if (!lineWithoutChords) continue;
+
+    if (isSectionHeader) {
+      // Format section header nicely if not already bracketed
+      const cleanHeader = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed : `[${trimmed.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '')}]`;
+      // Also strip dynamics that might be attached inside section header
+      const pureHeader = stripDynamicsFromText(cleanHeader).trim();
+      if (pureHeader) {
+        lyricLines.push(pureHeader);
+      }
+      continue;
+    }
+
+    // A valid lyric line should have some alphabetic word content (length >= 2)
+    const hasLyricsContent = /[a-zA-ZÀ-ÿ]{2,}/.test(lineWithoutChords);
+    if (hasLyricsContent) {
+      lyricLines.push(lineWithoutChords);
+    }
+  }
+
+  return lyricLines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Returns effective clean lyrics for a song, safely extracting from chords if lyrics are missing
+ * or if the lyrics field was accidentally filled with chord lines or dynamics.
+ */
+export function getEffectiveLyrics(lyrics?: string | null, chords?: string | null): string {
+  const cleanedLyrics = cleanLyricsForDisplay(lyrics || '');
+  if (cleanedLyrics && cleanedLyrics.length > 0) {
+    // Verify if cleanedLyrics actually contains some lyric text
+    if (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanedLyrics)) {
+      return cleanedLyrics;
+    }
+  }
+
+  // Fallback: Extract directly from chords
+  if (chords) {
+    return extractLyricsFromChords(chords);
+  }
+
+  return '';
+}
+
+

@@ -45,9 +45,9 @@ import {
   Instagram,
   Camera
 } from 'lucide-react';
-import kiwifyBannerImg from '../assets/images/liloupro_kiwify_banner_1785284387740.jpg';
-import kiwifyBannerLifetimeImg from '../assets/images/kiwify_banner_lifetime_launch_1785518386491.jpg';
-import luxuryAppIcon from '../assets/images/luxury_app_icon_1786273418814.jpg';
+import kiwifyBannerImg from '../assets/images/kiwify_banner_standard_1787495484627.jpg';
+import kiwifyBannerLifetimeImg from '../assets/images/kiwify_banner_vitalicio_1787495475538.jpg';
+import luxuryAppIcon from '../assets/images/luxury_app_icon_1787495429884.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ChurchItem {

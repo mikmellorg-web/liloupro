@@ -29,7 +29,14 @@ import {
   collection, query, onSnapshot, addDoc, deleteDoc, getDocs,
   doc, updateDoc, setDoc, getDoc, orderBy, Timestamp, where, serverTimestamp, deleteField 
 } from 'firebase/firestore';
-import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, areChordsInCapoShape, getCapoSemitonesFromText } from '../services/chordService';
+import { 
+  transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, 
+  isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, 
+  cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
+  convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
+  areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
+  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText 
+} from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { exportJsonToExcel } from '../utils/excelExport';
@@ -3478,7 +3485,24 @@ export default function SongsView({
 
                 {modalTab === 'lyrics' && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <label className="text-xs font-bold text-text-muted uppercase tracking-widest">Apenas Letra</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-text-muted uppercase tracking-widest">Apenas Letra</label>
+                      {newSong.chords && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const extracted = extractLyricsFromChords(newSong.chords || '');
+                            if (extracted) {
+                              setNewSong(prev => ({ ...prev, lyrics: extracted }));
+                            }
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-400/40 rounded-lg text-xs font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1.5"
+                          title="Gerar letra limpa automaticamente a partir da cifra"
+                        >
+                          <Sparkles size={12} /> ✨ Extrair da Cifra
+                        </button>
+                      )}
+                    </div>
                     <textarea 
                       className="w-full h-64 border border-border bg-black/5 dark:bg-white/5 rounded-lg p-3 focus:ring-2 focus:ring-brand/20 focus:border-brand text-text-main text-sm leading-relaxed"
                       placeholder="Cole apenas a letra da canção aqui..."
@@ -4014,15 +4038,16 @@ export function SongDetailView({
   const [editedSong, setEditedSong] = useState(() => {
     const initialBpm = Number(song?.bpm);
     const safeBpm = !isNaN(initialBpm) && initialBpm > 0 ? initialBpm : 80;
-    const initialContent = song?.chords || song?.lyrics || (song as any)?.content || (song as any)?.cifra || '';
+    const initialChords = song?.chords || (song as any)?.cifra || (song as any)?.content || '';
+    const initialLyrics = song?.lyrics || '';
     return {
       ...song,
       bpm: safeBpm,
       audio: song.audio || [],
       files: song.files || [],
-      chords: initialContent,
-      lyrics: initialContent,
-      baseKey: song.baseKey || detectKey(initialContent) || '',
+      chords: initialChords,
+      lyrics: initialLyrics,
+      baseKey: song.baseKey || detectKey(initialChords) || '',
       driveAudioLink: song.driveAudioLink || '',
       driveFilesLink: song.driveFilesLink || '',
       capo: song.capo || ''
@@ -4037,16 +4062,17 @@ export function SongDetailView({
   useEffect(() => {
     const val = Number(song?.bpm);
     const parsedBpm = !isNaN(val) && val > 0 ? val : 80;
-    const content = song?.chords || song?.lyrics || (song as any)?.content || (song as any)?.cifra || '';
+    const chordsData = song?.chords || (song as any)?.cifra || (song as any)?.content || '';
+    const lyricsData = song?.lyrics || '';
     setReferenceBpm(parsedBpm);
     setEditedSong({
       ...song,
       bpm: parsedBpm,
       audio: song.audio || [],
       files: song.files || [],
-      chords: content,
-      lyrics: content,
-      baseKey: song.baseKey || detectKey(content) || '',
+      chords: chordsData,
+      lyrics: lyricsData,
+      baseKey: song.baseKey || detectKey(chordsData) || '',
       driveAudioLink: song.driveAudioLink || '',
       driveFilesLink: song.driveFilesLink || '',
       capo: song.capo || ''
@@ -4069,14 +4095,15 @@ export function SongDetailView({
         
         // Only update editedSong if not currently editing to avoid overwriting user input
         if (!isEditing) {
-          const content = data.chords || data.lyrics || data.content || data.cifra || '';
+          const chordsData = data.chords || data.cifra || data.content || '';
+          const lyricsData = data.lyrics || '';
           setEditedSong({
             ...data,
             audio: data.audio || [],
             files: data.files || [],
-            chords: content,
-            lyrics: content,
-            baseKey: data.baseKey || detectKey(content) || '',
+            chords: chordsData,
+            lyrics: lyricsData,
+            baseKey: data.baseKey || detectKey(chordsData) || '',
             driveAudioLink: data.driveAudioLink || '',
             driveFilesLink: data.driveFilesLink || '',
             capo: data.capo || ''
@@ -4232,9 +4259,13 @@ export function SongDetailView({
     }
   }, [currentKey, editedSong.chords]);
 
+  const effectiveLyrics = useMemo(() => {
+    return getEffectiveLyrics(editedSong.lyrics, editedSong.chords);
+  }, [editedSong.lyrics, editedSong.chords]);
+
   const displayedContent = useMemo(() => {
     if (detailTab === 'lyrics') {
-      return editedSong.lyrics || '';
+      return effectiveLyrics;
     }
     const transposedText = netTranspose === 0 
       ? (editedSong.chords || '') 
@@ -4244,7 +4275,7 @@ export function SongDetailView({
       return convertLyricsAndChordsToHarmonicMode(transposedText, currentKey, harmonicDisplayMode);
     }
     return transposedText;
-  }, [detailTab, editedSong.lyrics, editedSong.chords, netTranspose, harmonicDisplayMode, currentKey]);
+  }, [detailTab, effectiveLyrics, editedSong.chords, netTranspose, harmonicDisplayMode, currentKey]);
 
   const availableChordsInSong = useMemo(() => {
     const rawChords = detailTab === 'lyrics' 
@@ -5943,10 +5974,40 @@ export function SongDetailView({
           {/* Informações da Música */}
           <div className="min-w-0 flex items-center gap-2 shrink truncate">
             <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-brand/10 text-brand px-1.5 py-0.5 rounded border border-brand/20 uppercase shrink-0">MODO CULTO</span>
-            <h2 className={cn("text-xs sm:text-sm font-black truncate max-w-[120px] sm:max-w-[220px]", isStageMode ? "text-white" : "text-text-main")} title={editedSong.title}>{editedSong.title}</h2>
-            <span className={cn("text-[10px] hidden md:inline truncate", isStageMode ? "text-amber-300 font-bold" : "text-text-muted")}>
+            <h2 className={cn("text-xs sm:text-sm font-black truncate max-w-[120px] sm:max-w-[200px]", isStageMode ? "text-white" : "text-text-main")} title={editedSong.title}>{editedSong.title}</h2>
+            <span className={cn("text-[10px] hidden lg:inline truncate", isStageMode ? "text-amber-300 font-bold" : "text-text-muted")}>
               • Tom: <span className="font-bold text-brand">{currentKey}{isCapoEnabled && shapeKey && shapeKey !== currentKey ? ` (${shapeKey})` : ''}</span> • BPM: {editedSong.bpm || 'Orig'}
             </span>
+          </div>
+
+          {/* Alternância Cifra / Letra no Modo Foco */}
+          <div className={cn("flex items-center p-0.5 rounded-lg border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
+            <button
+              onClick={() => setDetailTab('chords')}
+              className={cn(
+                "h-7 px-2 sm:px-3 flex items-center gap-1 rounded-md font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer",
+                detailTab === 'chords'
+                  ? isStageMode ? "bg-amber-500 text-black font-black shadow-xs" : "bg-brand text-white shadow-xs font-black"
+                  : isStageMode ? "text-zinc-400 hover:text-white" : "text-text-muted hover:text-text-main"
+              )}
+              title="Exibir Cifra com Acordes"
+            >
+              <Music size={11} />
+              <span>Cifra</span>
+            </button>
+            <button
+              onClick={() => setDetailTab('lyrics')}
+              className={cn(
+                "h-7 px-2 sm:px-3 flex items-center gap-1 rounded-md font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer",
+                detailTab === 'lyrics'
+                  ? isStageMode ? "bg-amber-500 text-black font-black shadow-xs" : "bg-brand text-white shadow-xs font-black"
+                  : isStageMode ? "text-zinc-400 hover:text-white" : "text-text-muted hover:text-text-main"
+              )}
+              title="Exibir Letra Limpa da Música"
+            >
+              <FileText size={11} />
+              <span>Letra</span>
+            </button>
           </div>
 
           {/* Botões de Ação e Visualização Alinhados numa Única Linha */}
@@ -6411,8 +6472,8 @@ export function SongDetailView({
                   columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none'
                 }}
               >
-                {editedSong.lyrics ? (
-                  getSongBlocks(editedSong.lyrics).map((block, bIdx) => {
+                {effectiveLyrics ? (
+                  getSongBlocks(effectiveLyrics).map((block, bIdx) => {
                     if (block.length === 1 && block[0] === '') {
                       return <div key={`spacer-${bIdx}`} className="h-2 sm:h-2.5 break-inside-avoid block" />;
                     }
@@ -6420,6 +6481,7 @@ export function SongDetailView({
                     return (
                       <div key={`block-${bIdx}`} className="break-inside-avoid mb-3 sm:mb-4 block">
                         {block.map((line, lIdx) => {
+                          if (isChordLine(line)) return null;
                           const elements: React.ReactNode[] = [];
                           let isBold = false;
                           let isItalic = false;
@@ -8240,145 +8302,48 @@ export function SongDetailView({
                           ))}
                         </div>
 
-                        {/* Dinâmicas */}
-                        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar py-0.5 border-t border-border/30 pt-1">
-                          <span className="text-[10px] font-bold text-text-muted uppercase shrink-0 flex items-center gap-1">
-                            <Flame size={12} className="text-rose-500" /> Dinâmicas:
-                          </span>
+                        {/* Ações de Letra (Extrair, Limpar Dinâmicas e Limpar) */}
+                        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar py-0.5 border-t border-border/30 pt-1.5">
                           <button
                             type="button"
-                            onClick={() => setShowDynamicsGuideModal(true)}
-                            className="px-2.5 py-1 bg-gradient-to-r from-rose-500/25 via-orange-500/25 to-amber-500/25 hover:from-rose-500/35 hover:to-amber-500/35 text-rose-400 dark:text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-500/20 ring-1 ring-rose-500/30 rounded-lg text-[10px] font-extrabold uppercase tracking-wider shrink-0 cursor-pointer flex items-center gap-1 transition-all mr-1.5"
-                            title="Abrir Guia de Dinâmica e Expressão de Louvor"
+                            onClick={() => {
+                              const extracted = extractLyricsFromChords(editedSong.chords || '');
+                              if (extracted) {
+                                setEditedSong(prev => ({ ...prev, lyrics: extracted }));
+                              }
+                            }}
+                            className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400/40 rounded-lg transition-all text-[11px] font-mono font-black shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1.5"
+                            title="Extrair e formatar letra limpa (sem cifras e sem dinâmicas) automaticamente a partir da cifra"
                           >
-                            <HelpCircle size={11} className="animate-pulse text-amber-400" />
-                            <span>Guia</span>
+                            <Sparkles size={12} /> ✨ Extrair da Cifra
                           </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N1 🌑 Sutil', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white border border-indigo-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N1 🌑 Sutil"
-                        >
-                          + N1 🌑 Sutil
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N2 🌘 Bem Suave', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N2 🌘 Bem Suave"
-                        >
-                          + N2 🌘 Bem Suave
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N3 🌗 Suave', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-teal-600 to-cyan-600 text-white border border-teal-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N3 🌗 Suave"
-                        >
-                          + N3 🌗 Suave
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N4 🌖 Moderado', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-blue-600 text-white border border-sky-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N4 🌖 Moderado"
-                        >
-                          + N4 🌖 Moderado
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N5 🌕 Meio Forte', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white border border-amber-300/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N5 🌕 Meio Forte"
-                        >
-                          + N5 🌕 Meio Forte
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N6 🔥 Forte', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-orange-600 to-red-500 text-white border border-orange-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N6 🔥 Forte"
-                        >
-                          + N6 🔥 Forte
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('N7 ⚡ Clímax', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 text-white border border-rose-300/50 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="N7 ⚡ Clímax"
-                        >
-                          + N7 ⚡ Clímax
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Crescendo ↗', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-violet-600 to-purple-600 text-white border border-violet-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                        >
-                          + Crescendo ↗
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Decrescendo ↘', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-yellow-600 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                        >
-                          + Decrescendo ↘
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Pausa 🛑', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-red-600 text-white border border-rose-400/50 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="Pausa / Interrupção (🛑)"
-                        >
-                          + Pausa 🛑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Acapella 🎤', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-teal-600 text-white border border-cyan-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                        >
-                          + Acapella 🎤
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Só Bateria 🥁', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-orange-600 to-amber-600 text-white border border-orange-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                        >
-                          + Só Bateria 🥁
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Violão Marcando 🎸', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-amber-700 via-yellow-600 to-amber-500 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                        >
-                          + Violão Marcando 🎸
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('Sobe o Tom 📈', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-500 text-white border border-fuchsia-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="Sobe o Tom / Modulação (📈)"
-                        >
-                          + Sobe o Tom 📈
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertDynamicsTag('só guita', 'lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
-                          title="Inserir tag [só guita]"
-                        >
-                          + [só guita] 🎸
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInsertCustomDynamicsTag('lyrics')}
-                          className="px-2.5 py-1 bg-gradient-to-r from-brand via-indigo-600 to-purple-600 text-white border border-brand/40 rounded-lg transition-all text-[10px] font-mono font-black shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1"
-                          title="Inserir tag de dinâmica customizada em colchetes [...]"
-                        >
-                          <Plus size={10} /> [Customizar...]
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editedSong.lyrics) {
+                                const cleaned = stripDynamicsFromText(cleanLyricsForDisplay(editedSong.lyrics));
+                                setEditedSong(prev => ({ ...prev, lyrics: cleaned }));
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1"
+                            title="Remover qualquer marcação de dinâmica (ex: bem suave, só violão) do texto atual da letra"
+                          >
+                            🧹 Remover Dinâmicas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm("Deseja realmente limpar o texto da letra?")) {
+                                setEditedSong(prev => ({ ...prev, lyrics: '' }));
+                              }
+                            }}
+                            className="px-2 py-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer ml-auto"
+                            title="Limpar texto da letra"
+                          >
+                            Limpar Letra
+                          </button>
+                        </div>
                       </div>
-                    </div>
                     </div>
                   </div>
                   <textarea 
@@ -8404,7 +8369,7 @@ export function SongDetailView({
                   )}
                   translate="no"
                 >
-                  {editedSong.lyrics ? (
+                  {effectiveLyrics ? (
                     <>
                       <div 
                         className={cn(
@@ -8419,7 +8384,7 @@ export function SongDetailView({
                           columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none'
                         }}
                       >
-                        {getSongBlocks(editedSong.lyrics).map((block, bIdx) => {
+                        {getSongBlocks(effectiveLyrics).map((block, bIdx) => {
                           if (block.length === 1 && block[0] === '') {
                             return <div key={`spacer-${bIdx}`} className="h-1.5 sm:h-2 break-inside-avoid block" />;
                           }
@@ -8427,6 +8392,7 @@ export function SongDetailView({
                           return (
                             <div key={`block-${bIdx}`} className="break-inside-avoid mb-2 sm:mb-3 block">
                               {block.map((line, lIdx) => {
+                                if (isChordLine(line)) return null;
                                 const elements: React.ReactNode[] = [];
                                 let isBold = false;
                                 let isItalic = false;
