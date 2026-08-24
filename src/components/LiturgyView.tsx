@@ -1345,27 +1345,40 @@ export default function LiturgyView({
     }
   }, [selectedServiceId, selectedService?.kidsNotes, selectedService?.babiesNotes]);
 
+  const [isSavingKidsNotes, setIsSavingKidsNotes] = useState(false);
+  const [isSavingBabiesNotes, setIsSavingBabiesNotes] = useState(false);
+
   const handleSaveKidsNotes = async () => {
     if (!selectedService) return;
+    setIsSavingKidsNotes(true);
     try {
       await updateDoc(doc(db, 'services', selectedService.id), {
-        kidsNotes: tempKidsNotes
+        kidsNotes: tempKidsNotes,
+        updatedAt: new Date().toISOString()
       });
       setIsEditingKidsNotes(false);
     } catch (e) {
       console.error("Error saving kids notes:", e);
+      alert("Erro ao salvar notas das crianças no Firebase.");
+    } finally {
+      setIsSavingKidsNotes(false);
     }
   };
 
   const handleSaveBabiesNotes = async () => {
     if (!selectedService) return;
+    setIsSavingBabiesNotes(true);
     try {
       await updateDoc(doc(db, 'services', selectedService.id), {
-        babiesNotes: tempBabiesNotes
+        babiesNotes: tempBabiesNotes,
+        updatedAt: new Date().toISOString()
       });
       setIsEditingBabiesNotes(false);
     } catch (e) {
       console.error("Error saving babies notes:", e);
+      alert("Erro ao salvar notas do berçário no Firebase.");
+    } finally {
+      setIsSavingBabiesNotes(false);
     }
   };
 
@@ -1965,6 +1978,13 @@ export default function LiturgyView({
                                 <div className="min-w-0 text-left">
                                   {isSong ? (
                                     <>
+                                      {/* Ordem da Música / Momento acima do título */}
+                                      {item.moment && (
+                                        <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-brand uppercase block mb-0.5">
+                                          {item.moment}
+                                        </span>
+                                      )}
+
                                       {/* Song Title in primary position */}
                                       <span className="text-sm sm:text-base font-black text-text-main block mb-1 notranslate" translate="no">
                                         {item.title || songDetails?.title || ''}
@@ -2384,9 +2404,11 @@ export default function LiturgyView({
                                               e.stopPropagation();
                                               handleSaveKidsNotes();
                                             }}
-                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1 border-none shadow cursor-pointer"
+                                            disabled={isSavingKidsNotes}
+                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg flex items-center gap-1.5 border-none shadow cursor-pointer transition-all"
                                           >
-                                            <Save size={10} /> Salvar Notas
+                                            {isSavingKidsNotes ? <Loader2 size={11} className="animate-spin" /> : <Save size={10} />}
+                                            {isSavingKidsNotes ? 'Salvando...' : 'Salvar Notas'}
                                           </button>
                                         </div>
                                       </div>
@@ -2537,9 +2559,11 @@ export default function LiturgyView({
                                               e.stopPropagation();
                                               handleSaveBabiesNotes();
                                             }}
-                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 rounded-lg flex items-center gap-1 border-none shadow cursor-pointer"
+                                            disabled={isSavingBabiesNotes}
+                                            className="px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg flex items-center gap-1.5 border-none shadow cursor-pointer transition-all"
                                           >
-                                            <Save size={10} /> Salvar Notas
+                                            {isSavingBabiesNotes ? <Loader2 size={11} className="animate-spin" /> : <Save size={10} />}
+                                            {isSavingBabiesNotes ? 'Salvando...' : 'Salvar Notas'}
                                           </button>
                                         </div>
                                       </div>

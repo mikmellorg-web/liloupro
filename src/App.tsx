@@ -55,6 +55,7 @@ import MasterAdminView from './components/MasterAdminView';
 import { TrialBanner } from './components/TrialBanner';
 import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
+import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import luxuryAppIcon from './assets/images/luxury_app_icon_1787495429884.jpg';
 
@@ -1221,6 +1222,25 @@ function AuthView({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+
+  // Check if opened after logout or first time to show install prompt automatically
+  useEffect(() => {
+    try {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const justLoggedOut = sessionStorage.getItem('liloupro_just_logged_out') === 'true';
+      const promptHidden = localStorage.getItem('liloupro_hide_install_prompt') === 'true';
+
+      if (!isStandalone && (justLoggedOut || !promptHidden)) {
+        setShowInstallModal(true);
+        if (justLoggedOut) {
+          sessionStorage.removeItem('liloupro_just_logged_out');
+        }
+      }
+    } catch (e) {
+      console.warn("Could not check install prompt state:", e);
+    }
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1274,8 +1294,15 @@ function AuthView({
       )}
       <Card className="max-w-md w-full p-8 space-y-6 bg-white/5 border-white/10 backdrop-blur-xl">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-brand/20 rounded-full flex items-center justify-center mx-auto text-brand mb-4 border border-brand/20">
-            <Music2 size={32} />
+          <div className="relative inline-block mx-auto cursor-pointer group" onClick={() => setShowInstallModal(true)} title="Instalar aplicativo oficial no celular">
+            <img 
+              src={luxuryAppIcon} 
+              alt="LiLouPro" 
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg shadow-black/60 group-hover:scale-105 transition-transform" 
+            />
+            <div className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 p-1 rounded-full border border-amber-200 shadow-md">
+              <Sparkles size={10} className="fill-slate-950 stroke-slate-950" />
+            </div>
           </div>
           <h1 className="text-2xl font-bold text-white leading-tight tracking-tight">LiLouPro</h1>
           <p className="text-white/90 text-sm font-medium">
@@ -1283,6 +1310,16 @@ function AuthView({
             {mode === 'signup' && 'Crie sua conta para começar.'}
             {mode === 'forgot' && 'Recupere o acesso à sua conta.'}
           </p>
+
+          <button
+            type="button"
+            onClick={() => setShowInstallModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:scale-105 mt-1"
+          >
+            <Smartphone size={12} className="text-amber-400" />
+            <span>Já baixou o app no celular?</span>
+            <ChevronRight size={12} />
+          </button>
           
           {error && error.includes('auth/network-request-failed') && (
             <div className="p-4 mt-4 bg-orange-500/20 border border-orange-500/40 rounded-xl text-xs text-orange-200 leading-relaxed text-left">
@@ -1396,6 +1433,13 @@ function AuthView({
           </div>
         </div>
       </Card>
+
+      {/* Luxury App PWA Install Prompt Modal */}
+      <LuxuryAppInstallModal 
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        userName="Ministro"
+      />
     </div>
   );
 }
@@ -1717,6 +1761,28 @@ function MainContent() {
   const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState<number>(0);
   const [isPlaylistPlayerOpen, setIsPlaylistPlayerOpen] = useState<boolean>(false);
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
+  const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
+
+  // Auto-check if logged-in user hasn't installed PWA and hasn't dismissed the prompt
+  useEffect(() => {
+    if (!user || loading) return;
+    try {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const isPromptDismissed = localStorage.getItem('liloupro_hide_install_prompt') === 'true';
+      const promptShownInSession = sessionStorage.getItem('liloupro_install_prompt_shown') === 'true';
+
+      if (!isStandalone && !isPromptDismissed && !promptShownInSession) {
+        // Show after a pleasant short delay on first login
+        const timer = setTimeout(() => {
+          setShowInstallPromptModal(true);
+          sessionStorage.setItem('liloupro_install_prompt_shown', 'true');
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch (e) {
+      console.warn("Could not check standalone or install prompt status:", e);
+    }
+  }, [user, loading]);
 
   const alertedNotificationsRef = useRef<Set<string>>(new Set());
   const isFirstLoadNotificationsRef = useRef(true);
@@ -3080,6 +3146,13 @@ function MainContent() {
         isOpen={!!upgradeModalResult} 
         onClose={() => setUpgradeModalResult(null)} 
         resourceCheck={upgradeModalResult} 
+      />
+
+      {/* Luxury PWA Install Modal for Logged-in Users */}
+      <LuxuryAppInstallModal
+        isOpen={showInstallPromptModal}
+        onClose={() => setShowInstallPromptModal(false)}
+        userName={memberData?.name ? memberData.name.split(' ')[0] : (user?.displayName ? user.displayName.split(' ')[0] : 'Ministro')}
       />
     </div>
   );
@@ -16731,6 +16804,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [isSavingBranding, setIsSavingBranding] = useState(false);
   const [previewDeviceMode, setPreviewDeviceMode] = useState<'mobile' | 'web'>('mobile');
   const [unreadBadgeCount, setUnreadBadgeCount] = useState<number>(1);
+  const [showSettingsInstallModal, setShowSettingsInstallModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (churchData) {
@@ -18411,11 +18485,19 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => setShowSettingsInstallModal(true)}
+                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-95"
+                    >
+                      <Smartphone size={14} className="stroke-[2.5]" />
+                      Instalar no Celular
+                    </button>
                     <a 
                       href={luxuryAppIcon} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/10 transition-colors cursor-pointer"
+                      className="flex-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
                     >
                       <Sparkles size={14} />
                       Ver em Tela Cheia
@@ -18426,7 +18508,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                       className="flex-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
                     >
                       <Download size={14} />
-                      Baixar Ícone HD (PNG)
+                      Baixar Ícone (PNG)
                     </a>
                   </div>
                 </div>
@@ -18911,6 +18993,13 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
        ) : (
          <AdminDashboardView />
        )}
+
+      {/* Settings On-Demand PWA Luxury Install Modal */}
+      <LuxuryAppInstallModal 
+        isOpen={showSettingsInstallModal}
+        onClose={() => setShowSettingsInstallModal(false)}
+        userName={memberData?.name ? memberData.name.split(' ')[0] : 'Ministro'}
+      />
     </motion.div>
   );
 }

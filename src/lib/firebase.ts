@@ -34,7 +34,14 @@ export const db = initializeFirestore(
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
-export const logout = () => signOut(auth);
+export const logout = async () => {
+  try {
+    sessionStorage.setItem('liloupro_just_logged_out', 'true');
+    // Also remove the permanent hide flag on manual logout so next login asks again
+    localStorage.removeItem('liloupro_hide_install_prompt');
+  } catch (e) {}
+  return signOut(auth);
+};
 
 export { 
   createUserWithEmailAndPassword, 

@@ -18,6 +18,7 @@ import {
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
 import { ChromaticTunerModal } from './ChromaticTunerModal';
+import { StudyMetronomeModal } from './StudyMetronomeModal';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { 
@@ -2136,13 +2137,13 @@ function getContrastColor(hex: string) {
 
 
 function TimeSignatureDisplay({ value, className }: { value: string, className?: string }) {
-  if (!value || !value.includes('/')) return <span className={className}>{value}</span>;
+  if (!value || !value.includes('/')) return <span className={cn("font-black leading-none", className)}>{value}</span>;
   const [num, den] = value.split('/');
   return (
     <div className={cn("inline-flex flex-col items-center leading-[0.7] text-center", className)}>
-      <span className="text-[15px] font-black">{num}</span>
-      <div className="w-3 h-[1.5px] bg-current opacity-40 my-[2px]" />
-      <span className="text-[15px] font-black">{den}</span>
+      <span className="text-[15px] font-black leading-none">{num}</span>
+      <div className="w-3 h-[1.5px] bg-current opacity-60 my-[2px]" />
+      <span className="text-[15px] font-black leading-none">{den}</span>
     </div>
   );
 }
@@ -4129,6 +4130,14 @@ export function SongDetailView({
   const [showDynamicsGuideModal, setShowDynamicsGuideModal] = useState(false);
   const [showFootswitchModal, setShowFootswitchModal] = useState(false);
   const [showTunerModal, setShowTunerModal] = useState(false);
+  const [showMetronomeModal, setShowMetronomeModal] = useState(false);
+  const [showTimeSignatureMenu, setShowTimeSignatureMenu] = useState(false);
+  const [customTimeSigInput, setCustomTimeSigInput] = useState('');
+  const [savingTimeSig, setSavingTimeSig] = useState(false);
+  const [timeSigFeedback, setTimeSigFeedback] = useState<string | null>(null);
+  const [showBpmMenu, setShowBpmMenu] = useState(false);
+  const [savingBpm, setSavingBpm] = useState(false);
+  const [bpmFeedback, setBpmFeedback] = useState<string | null>(null);
   const [footswitchConfig, setFootswitchConfig] = useState<FootswitchConfig>(() => {
     try {
       const saved = localStorage.getItem('lilo-footswitch-config');
@@ -4340,392 +4349,6 @@ export function SongDetailView({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPracticePlayer, setShowPracticePlayer] = useState(false);
   const [isPracticePlayerMinimized, setIsPracticePlayerMinimized] = useState(false);
-  const [showYoutubeAuditModal, setShowYoutubeAuditModal] = useState(false);
-  const [isAuditingYoutube, setIsAuditingYoutube] = useState(false);
-  const [auditResult, setAuditResult] = useState<any>(null);
-  const [auditApplied, setAuditApplied] = useState(false);
-  const [appliedAuditSections, setAppliedAuditSections] = useState<Record<number, boolean>>({});
-
-  const ensureIntroFirstClient = (divergences: any[], songText: string) => {
-    const list = Array.isArray(divergences) ? [...divergences] : [];
-    const chordRegex = /\b[a-gA-G][#b]?(?:m|maj|min|dim|aug|sus|add|alt|omit|no|M|[0-9]|\(|\)|\+|\-|\#|b|Δ|ø|°|º|ª)*(?:\/(?:[a-gA-G][#b]?|[0-9]+))?\b/gi;
-    const foundChords = Array.from(new Set((songText.match(chordRegex) || [])));
-    
-    const introIndex = list.findIndex(item => 
-      item && item.section && (
-        item.section.toLowerCase().includes('intro') ||
-        item.section.toLowerCase().includes('introdução')
-      )
-    );
-
-    if (introIndex > 0) {
-      const [introItem] = list.splice(introIndex, 1);
-      list.unshift(introItem);
-    } else if (introIndex === -1) {
-      const introChords = foundChords.slice(0, 3).join('  ') || 'G  C/G  C9';
-      list.unshift({
-        section: 'Introdução (Intro)',
-        orig: introChords,
-        audio: introChords.replace(/\bC\b/g, 'C9').replace(/\bD\b/g, 'D/F#').replace(/\bG\b/g, 'G/B') + ' (C9)',
-        note: 'Análise da Introdução (Intro): Dedilhado do violão e fraseado de piano sustentando a nota pedal no tom da gravação oficial do YouTube.'
-      });
-    }
-
-    return list.map((item, idx) => {
-      let rawSec = (item.section || `Seção ${idx + 1}`).replace(/^[0-9]+\.\s*/, '');
-      return {
-        ...item,
-        section: `${idx + 1}. ${rawSec}`
-      };
-    });
-  };
-
-  const handleRunAudit = async () => {
-    setIsAuditingYoutube(true);
-    setAuditApplied(false);
-    setAppliedAuditSections({});
-    const targetTitle = editedSong?.title || song?.title || "";
-    const targetArtist = editedSong?.artist || song?.artist || "";
-    const targetContent = editedSong?.chords || song?.chords || editedSong?.lyrics || song?.lyrics || "";
-    const targetBaseKey = editedSong?.baseKey || song?.baseKey || "C";
-    const targetYoutube = editedSong?.youtube || song?.youtubeUrl || "";
-
-    try {
-      const response = await fetch("/api/songs/audit-youtube-chords", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: targetTitle,
-          artist: targetArtist,
-          content: targetContent,
-          baseKey: targetBaseKey,
-          youtubeUrl: targetYoutube
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const formattedDivergences = ensureIntroFirstClient(data.divergences || data.diffItems || [], targetContent);
-        setAuditResult({
-          score: data.matchPercent || data.accuracyScore || 88,
-          matchPercent: data.matchPercent || data.accuracyScore || 88,
-          detectedChordsInOriginal: data.detectedChordsInOriginal || [],
-          divergences: formattedDivergences,
-          diffItems: formattedDivergences,
-          suggestedChords: data.suggestedChords || data.auditedChords || targetContent
-        });
-      } else {
-        throw new Error('Audit API request failed');
-      }
-    } catch (e) {
-      console.error("Erro na auditoria:", e);
-      const chordRegex = /\b[a-gA-G][#b]?(?:m|maj|min|dim|aug|sus|add|alt|omit|no|M|[0-9]|\(|\)|\+|\-|\#|b|Δ|ø|°|º|ª)*(?:\/(?:[a-gA-G][#b]?|[0-9]+))?\b/gi;
-      const foundChordsInText = Array.from(new Set((targetContent.match(chordRegex) || [])));
-      const sampleChords = foundChordsInText.slice(0, 4).join('  ') || 'G  C/G  C9';
-
-      const fallbackDivs = [
-        { 
-          section: 'Introdução (Intro)', 
-          orig: foundChordsInText.slice(0, 2).join('  ') || 'G  C/G', 
-          audio: (foundChordsInText.slice(0, 2).join('  ') || 'G  C/G') + '  C9', 
-          note: 'Análise da Introdução (Intro): Dedilhado do violão e teclado abrindo com nota pedal sustentada em Sol (C/G e C9).' 
-        },
-        { 
-          section: 'Verso 1 / Primeira Parte', 
-          orig: sampleChords, 
-          audio: sampleChords.replace(/\bC\b/g, 'C9').replace(/\bD\b/g, 'D/F#').replace(/\bG\b/g, 'G/B'), 
-          note: `Lidos diretamente da cifra de "${targetTitle}": [${foundChordsInText.join(', ')}]. A gravação no YouTube utiliza condução por baixos invertidos.` 
-        },
-        { 
-          section: 'Refrão / Condução Harmônica', 
-          orig: foundChordsInText.slice(0, 3).join(' | ') || 'G | C/G | C9', 
-          audio: (foundChordsInText.slice(0, 3).join(' | ') || 'G | C/G | C9') + ' | D9/G', 
-          note: 'No áudio oficial do YouTube, o piano e o baixo elétrico mantêm a nota pedal com extensão de nona.' 
-        }
-      ];
-
-      const formattedFallback = ensureIntroFirstClient(fallbackDivs, targetContent);
-
-      setAuditResult({
-        score: 86,
-        matchPercent: 86,
-        detectedChordsInOriginal: foundChordsInText,
-        divergences: formattedFallback,
-        diffItems: formattedFallback,
-        suggestedChords: targetContent
-          .replace(/\bC\b/g, 'C9')
-          .replace(/\bD\b/g, 'D/F#')
-          .replace(/\bEm\b/g, 'Em7')
-      });
-    } finally {
-      setIsAuditingYoutube(false);
-    }
-  };
-
-  /**
-   * Helper to clean and format chord strings from audit divergence into clean chord lines
-   */
-  const formatAudioChordsForCifra = (audioStr: string): string => {
-    if (!audioStr) return '';
-    // Remove verbose conversational phrases in parentheses e.g. "(com dedilhado e nota pedal)", "(inversão no baixo)"
-    // while keeping repetitions like "(2x)", "(3x)", "(4x)" or dynamic/musical notes like "(suave)", "(pausa)", "(9)"
-    let clean = audioStr.replace(/\((?![0-9]x|suave|forte|pausa|rápido|lento|[0-9\+\-b#]+)[^)]+\)/gi, '').trim();
-
-    // If there are pipes '|', split into multiple lines or clean spaced segments
-    const segments = clean.split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean);
-    if (segments.length > 1) {
-      return segments.map(seg => seg.replace(/\s+/g, '  ')).join('\n');
-    }
-
-    return clean.replace(/\s+/g, '  ');
-  };
-
-  /**
-   * Normalizes section titles for comparison
-   */
-  const normalizeSectionKey = (name: string): string => {
-    return (name || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/^[0-9]+\.\s*/, '')
-      .trim();
-  };
-
-  /**
-   * Extracts a specific section from full suggestedChords if present
-   */
-  const extractSectionFromSuggested = (suggestedChords: string, targetSectionName: string): string | null => {
-    if (!suggestedChords) return null;
-    const targetKey = normalizeSectionKey(targetSectionName);
-    
-    // Split suggested chords by section headers [Section]
-    const sectionRegex = /(?:^|\n)\s*(\[[^\]]+\])/g;
-    const matches = Array.from(suggestedChords.matchAll(sectionRegex));
-    if (matches.length === 0) return null;
-
-    for (let i = 0; i < matches.length; i++) {
-      const header = matches[i][1];
-      const headerKey = normalizeSectionKey(header.replace(/[\[\]]/g, ''));
-      
-      // Check if section matches
-      const isMatch = 
-        (targetKey.includes('intro') && headerKey.includes('intro')) ||
-        (targetKey.includes('refr') && headerKey.includes('refr')) ||
-        (targetKey.includes('ponte') && (headerKey.includes('ponte') || headerKey.includes('bridge'))) ||
-        (targetKey.includes('pre') && headerKey.includes('pre')) ||
-        (targetKey.includes('verso 1') && (headerKey.includes('verso 1') || headerKey === 'verso' || headerKey.includes('primeira parte'))) ||
-        (targetKey.includes('verso 2') && (headerKey.includes('verso 2') || headerKey.includes('segunda parte'))) ||
-        (targetKey.includes('solo') && headerKey.includes('solo')) ||
-        (targetKey.includes('final') && (headerKey.includes('final') || headerKey.includes('outro'))) ||
-        headerKey === targetKey;
-
-      if (isMatch) {
-        const startIdx = matches[i].index! + (matches[i][0].startsWith('\n') ? 1 : 0);
-        const nextMatch = matches[i + 1];
-        const endIdx = nextMatch ? nextMatch.index! : suggestedChords.length;
-        return suggestedChords.slice(startIdx, endIdx).trim();
-      }
-    }
-
-    return null;
-  };
-
-  /**
-   * Robust replacement of a section in the song's current chord text
-   */
-  const applySectionCorrectionToSong = (
-    currentText: string,
-    div: { section: string; orig: string; audio: string; note?: string },
-    suggestedChords?: string
-  ): string => {
-    const current = currentText || '';
-    const targetSectionName = div.section || 'Introdução';
-    const targetKey = normalizeSectionKey(targetSectionName);
-
-    // 1. Try to get pristine audited section from suggestedChords
-    const auditedBlock = suggestedChords ? extractSectionFromSuggested(suggestedChords, targetSectionName) : null;
-    const formattedAudioChords = formatAudioChordsForCifra(div.audio);
-
-    // Determine standard bracket tag for this section
-    let targetTag = '[Intro]';
-    if (targetKey.includes('intro')) {
-      targetTag = '[Intro]';
-    } else if (targetKey.includes('refr') || targetKey.includes('chorus')) {
-      targetTag = '[Refrão]';
-    } else if (targetKey.includes('ponte') || targetKey.includes('bridge')) {
-      targetTag = '[Ponte]';
-    } else if (targetKey.includes('pre')) {
-      targetTag = '[Pré-Refrão]';
-    } else if (targetKey.includes('verso 2') || targetKey.includes('segunda')) {
-      targetTag = '[Verso 2]';
-    } else if (targetKey.includes('verso') || targetKey.includes('primeira') || targetKey.includes('estrofe')) {
-      targetTag = '[Verso 1]';
-    } else if (targetKey.includes('solo') || targetKey.includes('interludio')) {
-      targetTag = '[Solo]';
-    } else if (targetKey.includes('final') || targetKey.includes('outro')) {
-      targetTag = '[Final]';
-    } else {
-      const rawClean = targetSectionName.replace(/^[0-9]+\.\s*/, '').split('/')[0].trim();
-      targetTag = `[${rawClean}]`;
-    }
-
-    const replacementBlock = auditedBlock || `${targetTag}\n${formattedAudioChords}`;
-
-    // Find all existing section markers in current text
-    const sectionHeaderRegex = /(?:^|\n)\s*(\[[^\]]+\])/g;
-    const matches = Array.from(current.matchAll(sectionHeaderRegex));
-
-    let matchedSectionIdx = -1;
-    for (let i = 0; i < matches.length; i++) {
-      const header = matches[i][1];
-      const headerKey = normalizeSectionKey(header.replace(/[\[\]]/g, ''));
-      
-      const isMatch = 
-        (targetKey.includes('intro') && headerKey.includes('intro')) ||
-        (targetKey.includes('refr') && headerKey.includes('refr')) ||
-        (targetKey.includes('ponte') && (headerKey.includes('ponte') || headerKey.includes('bridge'))) ||
-        (targetKey.includes('pre') && headerKey.includes('pre')) ||
-        (targetKey.includes('verso 1') && (headerKey.includes('verso 1') || headerKey === 'verso' || headerKey.includes('primeira parte'))) ||
-        (targetKey.includes('verso 2') && (headerKey.includes('verso 2') || headerKey.includes('segunda parte'))) ||
-        (targetKey.includes('solo') && headerKey.includes('solo')) ||
-        (targetKey.includes('final') && (headerKey.includes('final') || headerKey.includes('outro'))) ||
-        headerKey === targetKey;
-
-      if (isMatch) {
-        matchedSectionIdx = i;
-        break;
-      }
-    }
-
-    // CASE 1: Section tag exists in the song
-    if (matchedSectionIdx !== -1) {
-      const match = matches[matchedSectionIdx];
-      const startIdx = match.index! + (match[0].startsWith('\n') ? 1 : 0);
-      const nextMatch = matches[matchedSectionIdx + 1];
-      const endIdx = nextMatch ? nextMatch.index! : current.length;
-
-      const before = current.slice(0, startIdx).trimEnd();
-      const after = current.slice(endIdx).trimStart();
-
-      return (before ? before + '\n\n' : '') + replacementBlock.trim() + (after ? '\n\n' + after : '');
-    }
-
-    // CASE 2: Section tag does NOT exist, but it's Intro
-    if (targetKey.includes('intro')) {
-      // Check if the current song has intro chord lines before any lyrics or section header
-      const lines = current.split(/\r?\n/);
-      let leadingChordLinesCount = 0;
-      for (let i = 0; i < lines.length && i < 4; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        if (line.startsWith('[')) break;
-        if (isChordLine(line)) {
-          leadingChordLinesCount = i + 1;
-        } else {
-          break;
-        }
-      }
-
-      if (leadingChordLinesCount > 0) {
-        const rest = lines.slice(leadingChordLinesCount).join('\n').trimStart();
-        return replacementBlock.trim() + (rest ? '\n\n' + rest : '');
-      }
-
-      // Prepend intro at the very beginning of the song
-      return replacementBlock.trim() + '\n\n' + current.trimStart();
-    }
-
-    // CASE 3: Direct matching of orig chords
-    const origTrimmed = (div.orig || '').trim();
-    if (origTrimmed && current.includes(origTrimmed)) {
-      return current.replace(origTrimmed, formattedAudioChords);
-    }
-
-    // CASE 4: Section tag doesn't exist, append to song or insert logically
-    return current.trimEnd() + '\n\n' + replacementBlock.trim();
-  };
-
-  const handleApplySectionCorrection = async (idx: number) => {
-    if (!auditResult || !auditResult.divergences || !auditResult.divergences[idx]) return;
-    const div = auditResult.divergences[idx];
-    const currentChords = editedSong?.chords || song?.chords || editedSong?.lyrics || song?.lyrics || "";
-
-    const newChords = applySectionCorrectionToSong(currentChords, div, auditResult.suggestedChords);
-    
-    // Update local state for both chords and lyrics
-    setEditedSong(prev => ({ 
-      ...prev, 
-      chords: newChords,
-      lyrics: newChords
-    }));
-
-    const updatedMap = { ...appliedAuditSections, [idx]: true };
-    setAppliedAuditSections(updatedMap);
-
-    const totalSections = auditResult.divergences?.length || 0;
-    if (Object.keys(updatedMap).length >= totalSections) {
-      setAuditApplied(true);
-    }
-
-    const sectionCleanName = (div.section || `Seção ${idx + 1}`)
-      .replace(/^[0-9]+\.\s*/, '')
-      .split('/')[0]
-      .trim();
-
-    setFootswitchToast(`✨ ${sectionCleanName} corrigida com sucesso na cifra!`);
-    setTimeout(() => {
-      setFootswitchToast(null);
-    }, 3500);
-
-    if (song?.id) {
-      try {
-        await updateDoc(doc(db, 'songs', song.id), { 
-          chords: newChords,
-          lyrics: newChords,
-          updatedAt: new Date().toISOString()
-        });
-      } catch (e) {
-        console.error("Erro ao salvar correção de seção da cifra:", e);
-      }
-    }
-  };
-
-  const handleApplyAuditCorrections = async () => {
-    if (!auditResult || !auditResult.suggestedChords) return;
-    const newChords = auditResult.suggestedChords;
-    setEditedSong(prev => ({ 
-      ...prev, 
-      chords: newChords,
-      lyrics: newChords
-    }));
-    setAuditApplied(true);
-
-    const allApplied: Record<number, boolean> = {};
-    if (auditResult.divergences && Array.isArray(auditResult.divergences)) {
-      auditResult.divergences.forEach((_: any, i: number) => {
-        allApplied[i] = true;
-      });
-    }
-    setAppliedAuditSections(allApplied);
-
-    setFootswitchToast(`✨ Toda a cifra foi atualizada com a harmonia do YouTube!`);
-    setTimeout(() => {
-      setFootswitchToast(null);
-    }, 3500);
-
-    if (song?.id) {
-      try {
-        await updateDoc(doc(db, 'songs', song.id), { 
-          chords: newChords,
-          lyrics: newChords,
-          updatedAt: new Date().toISOString()
-        });
-      } catch (e) {
-        console.error("Erro ao salvar cifra auditada:", e);
-      }
-    }
-  };
   const [tempLink, setTempLink] = useState({ name: '', url: '' });
   const [playingAudioIndex, setPlayingAudioIndex] = useState<number | null>(null);
   const [isAnalyzingAudioBpm, setIsAnalyzingAudioBpm] = useState(false);
@@ -4991,30 +4614,9 @@ export function SongDetailView({
     const saved = localStorage.getItem('metronome-volume');
     return saved !== null ? Number(saved) : 80;
   });
-  const metronomeVolumeRef = useRef<number>(80);
-
   useEffect(() => {
-    metronomeVolumeRef.current = metronomeVolume;
     localStorage.setItem('metronome-volume', String(metronomeVolume));
   }, [metronomeVolume]);
-
-  const metronomeRef = useRef<{ 
-    timer: number | null, 
-    audioCtx: AudioContext | null,
-    nextNoteTime: number,
-    bpm: number,
-    currentNote: number
-  }>({ 
-    timer: null, 
-    audioCtx: null,
-    nextNoteTime: 0,
-    bpm: editedSong.bpm,
-    currentNote: 0
-  });
-
-  useEffect(() => {
-    metronomeRef.current.bpm = editedSong.bpm;
-  }, [editedSong.bpm]);
   
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [showSpeedSelector, setShowSpeedSelector] = useState(false);
@@ -5513,78 +5115,8 @@ export function SongDetailView({
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  useEffect(() => {
-    if (isMetronomeActive) {
-      if (metronomeRef.current.timer) clearInterval(metronomeRef.current.timer);
-      
-      const ctx = metronomeRef.current.audioCtx;
-      if (!ctx) return;
-
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      // Lookahead scheduling pattern
-      const lookahead = 25.0;
-      const scheduleAheadTime = 0.1;
-      metronomeRef.current.nextNoteTime = ctx.currentTime + 0.05;
-
-      const [numerator, denominator] = (editedSong.timeSignature || "4/4").split("/").map(Number);
-
-      const scheduler = () => {
-        const currentBpm = metronomeRef.current.bpm;
-        while (metronomeRef.current.nextNoteTime < ctx.currentTime + scheduleAheadTime) {
-          const is68 = editedSong.timeSignature === "6/8";
-          const isAccented = is68 
-            ? (metronomeRef.current.currentNote === 0 || metronomeRef.current.currentNote === 3)
-            : (metronomeRef.current.currentNote === 0);
-
-          const scheduleNote = (time: number, freq: number) => {
-            const osc = ctx.createOscillator();
-            const envelope = ctx.createGain();
-            osc.frequency.setValueAtTime(freq, time);
-            const baseGain = isAccented ? 0.7 : 0.4;
-            const volumeMultiplier = metronomeVolumeRef.current / 100;
-            envelope.gain.setValueAtTime(baseGain * volumeMultiplier, time);
-            envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-            osc.connect(envelope);
-            envelope.connect(ctx.destination);
-            osc.start(time);
-            osc.stop(time + 0.05);
-          };
-
-          scheduleNote(metronomeRef.current.nextNoteTime, isAccented ? 1200 : 800);
-          
-          let beatInterval = 60.0 / currentBpm;
-          if (denominator === 8) {
-            beatInterval = beatInterval / 3;
-          }
-          
-          metronomeRef.current.nextNoteTime += beatInterval;
-          metronomeRef.current.currentNote = (metronomeRef.current.currentNote + 1) % numerator;
-        }
-      };
-
-      metronomeRef.current.timer = window.setInterval(scheduler, lookahead);
-    } else {
-      if (metronomeRef.current.timer) clearInterval(metronomeRef.current.timer);
-    }
-
-    return () => {
-      if (metronomeRef.current.timer) clearInterval(metronomeRef.current.timer);
-    };
-  }, [isMetronomeActive, editedSong.timeSignature]);
-
   const toggleMetronome = () => {
-    if (isMetronomeActive) {
-      setIsMetronomeActive(false);
-    } else {
-      if (!metronomeRef.current.audioCtx) {
-        metronomeRef.current.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      metronomeRef.current.currentNote = 0;
-      setIsMetronomeActive(true);
-    }
+    setIsMetronomeActive(prev => !prev);
   };
 
   // Split song text into blocks of lines separated by empty lines (verses/choruses/stanzas)
@@ -5658,6 +5190,77 @@ export function SongDetailView({
       setEditedSong({ ...editedSong, files: [...editedSong.files, { name, url: tempLink.url, type: 'link' }] });
     }
     setTempLink({ name: '', url: '' });
+  };
+
+  const originalTimeSignature = useMemo(() => {
+    return song?.timeSignature || '4/4';
+  }, [song?.timeSignature]);
+
+  const originalBpmValue = useMemo(() => {
+    const val = Number(song?.bpm);
+    return !isNaN(val) && val > 0 ? val : (referenceBpm || 80);
+  }, [song?.bpm, referenceBpm]);
+
+  const handleSelectTimeSignature = (sig: string) => {
+    setEditedSong(prev => ({ ...prev, timeSignature: sig }));
+    setTimeSigFeedback(`Compasso alterado para ${sig}`);
+    setTimeout(() => setTimeSigFeedback(null), 2000);
+  };
+
+  const handleResetTimeSignature = () => {
+    setEditedSong(prev => ({ ...prev, timeSignature: originalTimeSignature }));
+    setTimeSigFeedback(`Voltou ao Compasso Original (${originalTimeSignature})`);
+    setTimeout(() => setTimeSigFeedback(null), 2500);
+  };
+
+  const handleSaveTimeSignatureToFirebase = async () => {
+    if (!song?.id) return;
+    setSavingTimeSig(true);
+    const servicePath = `songs/${song.id}`;
+    try {
+      const sigToSave = editedSong.timeSignature || originalTimeSignature || '4/4';
+      await updateDoc(doc(db, 'songs', song.id), {
+        timeSignature: sigToSave,
+        updatedAt: new Date().toISOString()
+      });
+      setTimeSigFeedback('Compasso salvo no Firebase como padrão!');
+      setTimeout(() => setTimeSigFeedback(null), 2500);
+    } catch (err) {
+      console.error('Erro ao salvar compasso:', err);
+      setTimeSigFeedback('Erro ao salvar no banco de dados.');
+      handleFirestoreError(err, OperationType.UPDATE, servicePath);
+      setTimeout(() => setTimeSigFeedback(null), 3000);
+    } finally {
+      setSavingTimeSig(false);
+    }
+  };
+
+  const handleResetBpm = () => {
+    updateBPM(originalBpmValue);
+    setBpmFeedback(`Voltou ao BPM Original (${originalBpmValue} BPM)`);
+    setTimeout(() => setBpmFeedback(null), 2500);
+  };
+
+  const handleSaveBpmToFirebase = async () => {
+    if (!song?.id) return;
+    setSavingBpm(true);
+    const servicePath = `songs/${song.id}`;
+    try {
+      const bpmToSave = editedSong.bpm || originalBpmValue || 80;
+      await updateDoc(doc(db, 'songs', song.id), {
+        bpm: bpmToSave,
+        updatedAt: new Date().toISOString()
+      });
+      setBpmFeedback('BPM salvo no Firebase como padrão!');
+      setTimeout(() => setBpmFeedback(null), 2500);
+    } catch (err) {
+      console.error('Erro ao salvar BPM:', err);
+      setBpmFeedback('Erro ao salvar no banco de dados.');
+      handleFirestoreError(err, OperationType.UPDATE, servicePath);
+      setTimeout(() => setBpmFeedback(null), 3000);
+    } finally {
+      setSavingBpm(false);
+    }
   };
 
   const updateBPM = (valueOrFn: number | ((prev: number) => number)) => {
@@ -6601,6 +6204,22 @@ export function SongDetailView({
           onClose={() => setShowTunerModal(false)}
         />
 
+        {/* Study Metronome Modal no Modo Foco */}
+        <StudyMetronomeModal
+          isOpen={showMetronomeModal}
+          onClose={() => setShowMetronomeModal(false)}
+          bpm={editedSong.bpm || 80}
+          timeSignature={editedSong.timeSignature || '4/4'}
+          onUpdateBpm={updateBPM}
+          originalBpm={referenceBpm}
+          originalTimeSignature={originalTimeSignature}
+          isMetronomeActive={isMetronomeActive}
+          onToggleMetronome={toggleMetronome}
+          metronomeVolume={metronomeVolume}
+          onUpdateVolume={setMetronomeVolume}
+          onTapTempo={handleTapTempo}
+        />
+
         {/* Footswitch Visual Feedback Toast no Modo Foco */}
         <AnimatePresence>
           {footswitchToast && (
@@ -6944,33 +6563,50 @@ export function SongDetailView({
              </div>
 
              {/* Compasso (posicionado à direita, após Visão Harmônica) */}
-             {editedSong.timeSignature && (
-               <div className="flex flex-col items-center min-w-[42px] sm:min-w-[55px]">
-                 <span className="text-[9px] sm:text-[11px] text-text-muted font-black uppercase tracking-widest mb-1">Comp.</span>
-                 <div className="bg-brand px-1.5 sm:px-2.5 py-1.5 rounded-lg border border-brand/20 flex items-center justify-center min-h-[38px] sm:min-h-[46px] w-full shadow-lg">
-                   <TimeSignatureDisplay value={editedSong.timeSignature} className="text-white scale-75 sm:scale-100" />
-                 </div>
-               </div>
-             )}
+             <div className="flex flex-col items-center min-w-[44px] sm:min-w-[58px]">
+               <span className="text-[9px] sm:text-[11px] text-text-muted font-black uppercase tracking-widest mb-1">Comp.</span>
+               <button
+                 type="button"
+                 onClick={() => setShowTimeSignatureMenu(true)}
+                 className={cn(
+                   "px-1.5 sm:px-2.5 py-1.5 rounded-lg border leading-tight min-h-[38px] sm:min-h-[46px] flex flex-col items-center justify-center text-center shadow-lg w-full transition-all active:scale-95 cursor-pointer outline-none select-none group",
+                   (editedSong.timeSignature || '4/4') !== originalTimeSignature
+                     ? "bg-amber-500 text-black border-amber-400 hover:bg-amber-400 shadow-amber-500/20"
+                     : "bg-brand hover:bg-brand/90 text-white border-brand/30 shadow-brand/10 hover:brightness-110"
+                 )}
+                 title="Métrica / Compasso (Toque para alterar entre 3/4, 6/8, 6/9 ou voltar ao original)"
+               >
+                 <TimeSignatureDisplay 
+                   value={editedSong.timeSignature || song?.timeSignature || '4/4'} 
+                   className={cn(
+                     "scale-75 sm:scale-100 group-hover:scale-105 transition-transform",
+                     (editedSong.timeSignature || '4/4') !== originalTimeSignature ? "text-black font-black" : "text-white font-black"
+                   )} 
+                 />
+               </button>
+             </div>
 
              {/* BPM (posicionado à direita, após Visão Harmônica) */}
-             <div className="flex flex-col items-center min-w-[42px] sm:min-w-[55px]">
+             <div className="flex flex-col items-center min-w-[44px] sm:min-w-[58px]">
                 <span className="text-[9px] sm:text-[11px] text-text-muted font-black uppercase tracking-widest mb-1">BPM</span>
-                {isEditing ? (
-                  <Input 
-                    type="number"
-                    value={editedSong.bpm || 0}
-                    onChange={e => {
-                      const val = parseInt(e.target.value) || 0;
-                      setEditedSong(prev => ({ ...prev, bpm: val }));
-                    }}
-                    className="w-full bg-black/5 dark:bg-white/10 border border-border text-text-main h-[38px] sm:h-[46px] text-center font-mono font-bold text-xs sm:text-lg p-0 rounded-lg"
-                  />
-                ) : (
-                  <div className="bg-brand px-1.5 sm:px-2.5 py-1.5 rounded-lg border border-brand/20 leading-none min-h-[38px] sm:min-h-[46px] flex items-center justify-center w-full shadow-lg">
-                    <span className="text-base sm:text-2xl font-black text-white">{editedSong.bpm}</span>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowBpmMenu(true)}
+                  className={cn(
+                    "px-1.5 sm:px-2.5 py-1.5 rounded-lg border leading-none min-h-[38px] sm:min-h-[46px] flex flex-col items-center justify-center w-full shadow-lg transition-all active:scale-95 cursor-pointer outline-none select-none group",
+                    (editedSong.bpm || 80) !== originalBpmValue
+                      ? "bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/30 shadow-amber-500/10"
+                      : "bg-brand hover:bg-brand/90 text-white border-brand/30 shadow-brand/10 hover:brightness-110"
+                  )}
+                  title="Andamento / BPM (Toque para ajuste rápido, Tap Tempo ou voltar ao original)"
+                >
+                  <span className={cn(
+                    "text-base sm:text-2xl font-black group-hover:scale-105 transition-transform",
+                    (editedSong.bpm || 80) !== originalBpmValue ? "text-amber-500 dark:text-amber-400" : "text-white"
+                  )}>
+                    {editedSong.bpm || originalBpmValue}
+                  </span>
+                </button>
              </div>
 
              {/* Dividir Colunas (Layout) */}
@@ -6992,26 +6628,7 @@ export function SongDetailView({
                  <Columns size={16} className="sm:w-5 sm:h-5" />
                </button>
              </div>
-
-             {/* Auditar Cifra via IA (YouTube) */}
-             <div className="flex flex-col items-center">
-               <span className="text-[9px] sm:text-[11px] text-purple-400 font-black uppercase tracking-widest mb-1">Auditoria</span>
-               <button
-                 type="button"
-                 onClick={() => {
-                   setShowYoutubeAuditModal(true);
-                   if (!auditResult) handleRunAudit();
-                 }}
-                 className="px-2.5 sm:px-3.5 rounded-lg bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-black text-xs min-h-[38px] sm:min-h-[46px] flex items-center gap-1.5 shadow-lg shadow-purple-950/40 border border-purple-400/40 active:scale-95 transition-all outline-none shrink-0 cursor-pointer"
-                 title="Auditar os acordes da cifra contra o áudio real do YouTube usando IA"
-               >
-                 <Sparkles size={14} className="text-amber-300 animate-pulse shrink-0" />
-                 <span className="hidden xs:inline sm:inline">Auditar Cifra</span>
-               </button>
-             </div>
-          </div>
- 
-          {/* Ações: Expandir Tela (anteriormente Youtube), Editar, Lixeira */}
+          </div>{/* Ações: Expandir Tela (anteriormente Youtube), Editar, Lixeira */}
            <div className="flex items-center gap-3">
              {!isEditing && (
                <>
@@ -7073,7 +6690,7 @@ export function SongDetailView({
             "VISÃO HARMÔNICA: Toque para abrir a caixa de opções e escolher entre Cifra tradicional, Graus do Campo Harmônico (I, V, VIm) ou Funções Harmônicas (Tôn, Dom, Rel). Clique no botão (?) ao lado para ver o quadro explicativo.",
             "DINÂMICA & EXPRESSÃO: Marcadores visuais de intensidade (Sutil, Clímax, Crescendo ↗, Acapella 🎤, etc.) guiam a intenção da banda durante o louvor. Clique no botão de atalho (🔥) para abrir o guia completo.",
             "PEDAL BLUETOOTH & MIDI: Toque no botão PEDAL na barra superior para conectar e configurar pedais Bluetooth (PageTurner, AirTurn, Boss) e footswitches MIDI para avançar estrofes ou controlar a rolagem sem usar as mãos.",
-            "COMPASSO & BPM: Exibe a métrica de tempo e andamento da música. No modo de edição, permite ajustar a velocidade do BPM.",
+            "COMPASSO & BPM: Toque no Compasso para escolher entre métricas (4/4, 3/4, 6/8, 6/9 etc.) ou voltar ao original. Toque no BPM para ajustar a velocidade, usar o Tap Tempo ou resetar para o BPM original da música.",
             "DIVIDIR COLUNAS (LAYOUT): Alterne a exibição entre 1 ou 2 colunas para melhor aproveitamento da tela em tablets, celulares e notebooks.",
             "ROLAGEM AUTOMÁTICA: Ative o scroll automático com ajuste de velocidade para acompanhar a cifra sem precisar tocar na tela enquanto toca.",
             "TAMANHO DO TEXTO: Utilize os botões de ajuste de fonte (A- e A+) para aumentar ou diminuir o tamanho dos acordes e da letra para facilitar a leitura à distância.",
@@ -8643,97 +8260,88 @@ export function SongDetailView({
               </div>
             )}
 
-            {/* 3. METRÔNOMO (AJUSTE DE TEMPO) */}
-            <div className="p-3.5 bg-black/5 dark:bg-white/5 border border-border/60 rounded-2xl space-y-3.5 notranslate" translate="no">
-              <div className="flex flex-col items-center justify-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-text-main flex items-center justify-center gap-1 mb-1">
-                  <Timer size={12} className="text-brand" /> Metrônomo / Tempo
-                </span>
-                <p className="text-[11px] font-semibold text-text-muted text-center">
-                  Pratique o BPM da música com andamento preciso.
-                </p>
-              </div>
-
-              {/* Ligar Metrônomo */}
-              <button 
-                onClick={toggleMetronome}
-                className={cn(
-                  "w-full h-12 py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-95 font-black uppercase tracking-widest text-xs shadow-lg cursor-pointer",
-                  isMetronomeActive 
-                    ? "bg-red-500 border border-red-400 text-white animate-pulse shadow-red-500/20" 
-                    : "bg-brand border border-brand/20 text-white hover:brightness-110 shadow-brand/20"
-                )}
-              >
-                <Timer size={18} />
-                <span>{isMetronomeActive ? "Metrônomo Ligado" : "Ligar Metrônomo"}</span>
-              </button>
-
-              {/* Tap Tempo & Controls */}
-              <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-border text-text-main group/bpm relative transition-all">
-                <button 
-                  onClick={handleTapTempo}
-                  className="flex flex-col items-start hover:bg-brand/5 active:scale-95 transition-all outline-none p-1.5 -m-1.5 rounded-xl group/tap"
-                  title="Toque no ritmo (TAP) para definir o BPM"
-                >
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl sm:text-3xl font-black font-mono group-active/tap:text-brand">{editedSong.bpm}</span>
-                    <span className="text-[10px] font-black text-text-muted uppercase">BPM</span>
+            {/* 3. LILOUPRO METRONOME (PEDAL DE RITMO & ESTUDO PRO) */}
+            {!isEditing && (
+              <div className="p-3.5 bg-gradient-to-br from-cyan-500/10 via-sky-500/5 to-transparent border border-cyan-500/20 rounded-2xl relative overflow-hidden group space-y-2.5">
+                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
+                  <Activity size={50} className="text-cyan-500 dark:text-cyan-400" />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-center mb-1">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-600 dark:text-cyan-400 flex items-center justify-center gap-1">
+                        <Activity size={12} /> LiLouPro Metronome
+                      </span>
+                      <span className="text-[8px] uppercase font-mono px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-500 dark:text-cyan-400 font-black">
+                        PRO
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-brand animate-pulse opacity-100 sm:opacity-0 sm:group-hover/bpm:opacity-100 transition-opacity">Tap Tempo</span>
-                </button>
-                <div className="flex gap-2 relative z-50">
-                  <button 
-                    type="button"
-                    onClick={() => updateBPM(prev => prev - 1)} 
-                    className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/20 rounded-lg text-text-main text-xl font-black active:scale-95 transition-all outline-none"
+                  <p className="text-[11px] font-semibold text-text-muted mb-2.5 text-center">
+                    Boutique Stompbox com subdivisões, speed trainer, e time selector
+                  </p>
+
+                  {/* Mini Quick Bar */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 mb-2.5">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => updateBPM(prev => Math.max(20, prev - 1))}
+                        className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center font-bold text-xs hover:bg-muted text-text-main active:scale-95 cursor-pointer"
+                        title="Diminuir 1 BPM"
+                      >
+                        -
+                      </button>
+                      <div className="px-2 text-center">
+                        <span className="text-sm font-black font-mono text-cyan-600 dark:text-cyan-400">{editedSong.bpm || 80}</span>
+                        <span className="text-[9px] font-bold text-text-muted ml-0.5">BPM</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateBPM(prev => Math.min(300, prev + 1))}
+                        className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center font-bold text-xs hover:bg-muted text-text-main active:scale-95 cursor-pointer"
+                        title="Aumentar 1 BPM"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleTapTempo}
+                        className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-black uppercase flex items-center gap-1 active:scale-95 cursor-pointer"
+                        title="Tap Tempo"
+                      >
+                        <Flame size={12} /> TAP
+                      </button>
+                      <button
+                        type="button"
+                        onClick={toggleMetronome}
+                        className={cn(
+                          "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95 cursor-pointer",
+                          isMetronomeActive
+                            ? "bg-rose-500 text-white shadow-sm"
+                            : "bg-cyan-500 text-slate-950 font-black shadow-sm"
+                        )}
+                        title={isMetronomeActive ? "Parar" : "Tocar"}
+                      >
+                        {isMetronomeActive ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Big Pedal Launch Button */}
+                  <button
+                    onClick={() => setShowMetronomeModal(true)}
+                    className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-95 font-black uppercase tracking-widest text-xs shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-cyan-500/20 cursor-pointer"
                   >
-                    -
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => updateBPM(prev => prev + 1)} 
-                    className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/20 rounded-lg text-text-main text-xl font-black active:scale-95 transition-all outline-none"
-                  >
-                    +
+                    <Activity size={18} />
+                    <span>Abrir LiLouPro Metronome</span>
                   </button>
                 </div>
               </div>
-
-              {/* Volume Controls */}
-              <div className="space-y-1.5">
-                <div className="text-center text-[10px] font-black uppercase tracking-widest text-text-muted">
-                  Volume do Metrônomo: <span className="text-brand font-mono">{metronomeVolume}%</span>
-                </div>
-                <div className="flex gap-2 relative z-50">
-                  <button 
-                    type="button" 
-                    onClick={() => setMetronomeVolume(prev => Math.max(0, prev - 10))} 
-                    className="flex-1 py-2.5 px-2 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/20 rounded-lg text-xs font-black text-text-main transition-all active:scale-95 shadow-sm flex items-center justify-center gap-1 cursor-pointer"
-                    title="Diminuir Volume do Metrônomo"
-                  >
-                    <Volume2 size={13} /> -10%
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setMetronomeVolume(prev => Math.min(100, prev + 10))} 
-                    className="flex-1 py-2.5 px-2 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/20 rounded-lg text-xs font-black text-text-main transition-all active:scale-95 shadow-sm flex items-center justify-center gap-1 cursor-pointer"
-                    title="Aumentar Volume do Metrônomo"
-                  >
-                    <Volume2 size={13} /> +10%
-                  </button>
-                </div>
-              </div>
-
-              {editedSong.bpm !== referenceBpm && (
-                <Button 
-                  variant="primary" 
-                  onClick={() => updateBPM(referenceBpm)} 
-                  className="w-full text-xs py-2 bg-brand text-white shadow-lg shadow-brand/20 transition-all font-bold uppercase tracking-wide h-auto"
-                >
-                  Resetar BPM Original
-                </Button>
-              )}
-            </div>
+            )}
             
             {/* 4. ARQUIVOS & AUDIOS */}
             <div className="pt-3 border-t border-border/60">
@@ -10036,240 +9644,493 @@ export function SongDetailView({
         onUpdateConfig={setFootswitchConfig}
         activePedalButton={activePedalButton}
       />
+      {/* Chromatic Tuner Modal */}
+      <ChromaticTunerModal
+        isOpen={showTunerModal}
+        onClose={() => setShowTunerModal(false)}
+      />
 
-      {/* Modal de Auditoria Harmônica com IA (YouTube) */}
+      {/* Study Metronome Modal */}
+      <StudyMetronomeModal
+        isOpen={showMetronomeModal}
+        onClose={() => setShowMetronomeModal(false)}
+        bpm={editedSong.bpm || 80}
+        timeSignature={editedSong.timeSignature || '4/4'}
+        onUpdateBpm={updateBPM}
+        originalBpm={referenceBpm}
+        originalTimeSignature={originalTimeSignature}
+        isMetronomeActive={isMetronomeActive}
+        onToggleMetronome={toggleMetronome}
+        metronomeVolume={metronomeVolume}
+        onUpdateVolume={setMetronomeVolume}
+        onTapTempo={handleTapTempo}
+      />
+
+      {/* Modal de Métrica & Compasso Musical */}
       <AnimatePresence>
-        {showYoutubeAuditModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[280] flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+        {showTimeSignatureMenu && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[250] flex items-center justify-center p-3 sm:p-4">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface border border-border rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl flex flex-col space-y-4 relative max-h-[90vh] overflow-hidden notranslate"
+              translate="no"
             >
-              {/* Header do Modal */}
-              <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-purple-950/40 via-indigo-950/40 to-slate-900 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                    <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-brand/10 text-brand rounded-xl border border-brand/20">
+                    <Timer size={20} />
                   </div>
                   <div>
-                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      Auditor Harmônico da Gravação (IA)
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        YouTube Áudio
-                      </span>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
+                      Métrica & Compasso Musical
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      Comparação em tempo real da cifra contra o áudio gravado do YouTube
+                    <p className="text-[10px] text-text-muted font-bold flex items-center gap-1.5 mt-0.5">
+                      <span>Compasso Atual:</span>
+                      <span className="px-2 py-0.5 rounded bg-brand/15 text-brand font-black text-xs font-mono">
+                        {editedSong.timeSignature || originalTimeSignature || '4/4'}
+                      </span>
+                      <span>• Original:</span>
+                      <span className="font-bold text-text-main font-mono">
+                        {originalTimeSignature}
+                      </span>
                     </p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setShowYoutubeAuditModal(false)}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                  type="button"
+                  onClick={() => setShowTimeSignatureMenu(false)}
+                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all cursor-pointer"
+                  title="Fechar"
                 >
-                  <X className="w-5 h-5" />
+                  <X size={18} />
                 </button>
               </div>
 
-              {/* Corpo do Modal */}
-              <div className="p-4 sm:p-6 overflow-y-auto space-y-5 custom-scrollbar">
-                {/* Embed do Vídeo do YouTube */}
-                {editedSong.youtube ? (
-                  <div className="bg-black/60 rounded-xl border border-slate-800 p-2 overflow-hidden shadow-lg">
-                    <div className="aspect-video w-full rounded-lg overflow-hidden">
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        src={`https://www.youtube.com/embed/${getYoutubeId(editedSong.youtube)}?autoplay=0`}
-                        title="YouTube video player"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-800/40 border border-dashed border-slate-700/60 p-4 rounded-xl flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-2 text-slate-300 text-xs">
-                      <Youtube className="w-4 h-4 text-red-500 shrink-0" />
-                      <span>Sem link do YouTube. A IA pesquisará pelo áudio de <strong>"{editedSong.title}"</strong> ({editedSong.artist}).</span>
-                    </div>
-                  </div>
+              {/* Feedback Alert */}
+              <AnimatePresence>
+                {timeSigFeedback && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 shrink-0"
+                  >
+                    <Check size={14} className="shrink-0" />
+                    <span>{timeSigFeedback}</span>
+                  </motion.div>
                 )}
+              </AnimatePresence>
 
-                {/* Status de Análise */}
-                {isAuditingYoutube ? (
-                  <div className="p-8 text-center bg-purple-950/20 border border-purple-500/20 rounded-2xl space-y-3">
-                    <Activity className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
-                    <p className="text-sm font-bold text-slate-200">
-                      Auditando frequência de áudio e condução do baixo...
-                    </p>
-                    <p className="text-xs text-slate-400 max-w-md mx-auto">
-                      Identificando baixos invertidos (D/F#, G/B), extensões (C9, Em7) e passagens cromáticas no áudio da gravação.
-                    </p>
-                  </div>
-                ) : auditResult ? (
-                  <div className="space-y-4">
-                    {/* Score Card */}
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/30 via-indigo-900/30 to-slate-900 border border-purple-500/30 flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <span className="text-xs font-bold text-purple-300 uppercase tracking-widest block">Precisão da Cifra Atual</span>
-                        <div className="flex items-baseline gap-2 mt-0.5">
-                          <span className="text-3xl font-extrabold text-white">{auditResult.matchPercent}%</span>
-                          <span className="text-xs text-amber-300 font-medium">Divergências de Baixo e Extensão Encontradas</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleRunAudit}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Reanalisar Áudio</span>
-                      </button>
-                    </div>
-
-                    {/* Acordes Lidos na Cifra Atual */}
-                    {auditResult.detectedChordsInOriginal && auditResult.detectedChordsInOriginal.length > 0 && (
-                      <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
-                          🔍 Acordes Lidos Diretamente da Sua Cifra Cadastrada:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {auditResult.detectedChordsInOriginal.map((chord: string, idx: number) => (
-                            <span key={idx} className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono text-xs font-bold">
-                              {chord}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Lista de Divergências */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                          Divergências por Seção (Internet vs. Áudio do YouTube):
-                        </h4>
-                        <span className="text-[11px] text-purple-300 font-medium">
-                          💡 Escolha corrigir por seção individual ou aplicar em toda a cifra.
-                        </span>
-                      </div>
-                      <div className="space-y-2.5">
-                        {auditResult.divergences.map((div: any, idx: number) => {
-                          const isSecApplied = !!appliedAuditSections[idx];
-                          const sectionCleanName = (div.section || `Seção ${idx + 1}`)
-                            .replace(/^[0-9]+\.\s*/, '')
-                            .split('/')[0]
-                            .trim();
-
-                          return (
-                            <div 
-                              key={idx} 
-                              className={`p-3.5 rounded-xl border transition-all ${
-                                isSecApplied 
-                                  ? 'bg-emerald-950/20 border-emerald-500/40' 
-                                  : 'bg-slate-800/60 border-slate-700/60'
-                              } space-y-2`}
-                            >
-                              <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-purple-300 pb-1.5 border-b border-slate-700/50">
-                                <span className="flex items-center gap-1.5">
-                                  <span>📍</span>
-                                  <span className="text-purple-200">{div.section}</span>
-                                </span>
-
-                                {isSecApplied ? (
-                                  <span className="px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[11px] font-extrabold flex items-center gap-1 shrink-0 shadow-sm">
-                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Seção Corrigida</span>
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplySectionCorrection(idx)}
-                                    className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-extrabold flex items-center gap-1.5 border border-purple-400/40 shadow-md shadow-purple-950/50 transition-all active:scale-95 cursor-pointer shrink-0"
-                                    title={`Corrigir somente a seção ${sectionCleanName}`}
-                                  >
-                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                    <span>Corrigir {sectionCleanName}</span>
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                <div className="p-2 rounded-lg bg-red-950/30 border border-red-500/20 text-red-300">
-                                  <span className="text-[10px] uppercase font-bold text-red-400 block mb-0.5">Cifra Atual</span>
-                                  <code className="font-mono font-bold text-sm">{div.orig}</code>
-                                </div>
-                                <div className="p-2 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-emerald-300">
-                                  <span className="text-[10px] uppercase font-bold text-emerald-400 block mb-0.5">Gravação do YouTube (Real)</span>
-                                  <code className="font-mono font-bold text-sm">{div.audio}</code>
-                                </div>
-                              </div>
-                              <p className="text-[11px] text-slate-400 italic pt-0.5">
-                                💡 {div.note}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Feedback de Aplicação Geral */}
-                    {auditApplied ? (
-                      <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 shadow-lg">
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>Cifra atualizada com sucesso! Baixos invertidos e extensões aplicados a todas as seções.</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleApplyAuditCorrections}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white text-xs font-extrabold shadow-lg shadow-purple-950/50 border border-purple-400/30 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                        <span>Aplicar Correção Completa (Corrigir Toda a Cifra de Uma Vez)</span>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-6 text-center bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-3">
-                    <p className="text-xs text-slate-300">
-                      Clique no botão abaixo para analisar o áudio da gravação e verificar a precisão dos acordes.
-                    </p>
-                    <button
-                      onClick={handleRunAudit}
-                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md inline-flex items-center gap-2 cursor-pointer"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Iniciar Auditoria de Harmonia</span>
-                    </button>
-                  </div>
-                )}
+              {/* Informação / Dica */}
+              <div className="bg-brand/5 border border-brand/20 rounded-2xl p-3 text-xs text-text-main space-y-1 shrink-0">
+                <p className="font-bold flex items-center gap-1.5 text-brand">
+                  <Sparkles size={14} /> Seleção Rápida de Compasso
+                </p>
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  Alterne a contagem e a métrica de tempo da música. O metrônomo do Liloupro acentuará o primeiro tempo automaticamente de acordo com o compasso escolhido!
+                </p>
               </div>
 
-              {/* Rodapé do Modal */}
-              <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex justify-end shrink-0">
+              {/* Botão de Restaurar para Original */}
+              <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => setShowYoutubeAuditModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors border border-slate-700 cursor-pointer"
+                  type="button"
+                  onClick={handleResetTimeSignature}
+                  disabled={(editedSong.timeSignature || '4/4') === originalTimeSignature}
+                  className={cn(
+                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer select-none",
+                    (editedSong.timeSignature || '4/4') !== originalTimeSignature
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md hover:bg-amber-400 active:scale-95"
+                      : "bg-black/5 dark:bg-white/5 text-text-muted border-border opacity-60 cursor-not-allowed"
+                  )}
                 >
-                  Fechar
+                  <RefreshCcw size={14} />
+                  <span>Voltar ao Compasso Original ({originalTimeSignature})</span>
                 </button>
+              </div>
+
+              {/* Grid de Opções de Compassos Comuns & Especiais */}
+              <div className="overflow-y-auto custom-scrollbar pr-1 space-y-1.5 max-h-[280px]">
+                {[
+                  { value: '4/4', name: 'Quaternário Simples', desc: '4 tempos. O mais comum na música pop e louvor moderno.', badge: 'Mais Comum' },
+                  { value: '3/4', name: 'Ternário Simples', desc: '3 tempos (Valsa). Hinos congregacionais tradicionais e canções ternárias.', badge: 'Valsa / Clássico' },
+                  { value: '6/8', name: 'Binário Composto', desc: '2 pulsos ternários (1-2-3, 4-5-6). Baladas fluidas, worship contemporâneo e dedilhados.', badge: 'Worship / Balada' },
+                  { value: '2/4', name: 'Binário Simples', desc: '2 tempos. Marchas, ritmos rápidos e hinos solenes.', badge: 'Marcha / Rápido' },
+                  { value: '12/8', name: 'Quaternário Composto', desc: '4 pulsos ternários. Baladas lentas, blues e louvor intimista profundo.', badge: 'Blues / Balada Lenta' },
+                  { value: '6/9', name: 'Métrica Especial (6/9)', desc: 'Compasso e métrica composta com subdivisão estendida.', badge: 'Métrica Especial' },
+                  { value: '6/4', name: 'Sêxtuplo Simples', desc: '6 tempos por compasso. Andamentos lentos, reflexivos e espaçosos.', badge: 'Solene' },
+                  { value: '9/8', name: 'Ternário Composto', desc: '3 pulsos ternários (1-2-3, 4-5-6, 7-8-9). Dinâmica rica e expressiva.', badge: 'Ternário Composto' },
+                  { value: '2/2', name: 'Alla Breve', desc: '2 tempos em mínima. Andamentos ágeis com pulsação ampla.', badge: 'Alla Breve' },
+                  { value: '5/4', name: 'Assimétrico (5 Tempos)', desc: 'Métrica irregular (3+2 ou 2+3) para arranjos criativos.', badge: 'Assimétrico' },
+                  { value: '7/8', name: 'Progressivo (7 Tempos)', desc: 'Métrica quebrada e moderna (3+2+2 ou 2+2+3).', badge: 'Progressivo' },
+                ].map((item) => {
+                  const isSelected = (editedSong.timeSignature || '4/4') === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => handleSelectTimeSignature(item.value)}
+                      className={cn(
+                        "w-full p-2.5 sm:p-3 rounded-2xl text-xs font-medium transition-all border flex items-center justify-between cursor-pointer group text-left select-none",
+                        isSelected
+                          ? "bg-brand text-white border-brand shadow-lg shadow-brand/20 scale-[1.01]"
+                          : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-brand/40"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-11 h-11 rounded-xl font-black text-sm flex items-center justify-center shrink-0 border transition-all",
+                          isSelected
+                            ? "bg-white/20 text-white border-white/30 shadow-inner"
+                            : "bg-brand/10 text-brand border-brand/20 group-hover:bg-brand group-hover:text-white"
+                        )}>
+                          <TimeSignatureDisplay value={item.value} className={isSelected ? "text-white scale-90" : "text-brand group-hover:text-white scale-90"} />
+                        </div>
+                        <div>
+                          <div className="font-black text-xs sm:text-sm flex items-center gap-2">
+                            <span>{item.name}</span>
+                            <span className={cn(
+                              "text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider",
+                              isSelected ? "bg-white/20 text-white" : "bg-brand/15 text-brand"
+                            )}>
+                              {item.badge}
+                            </span>
+                          </div>
+                          <p className={cn("text-[11px] mt-0.5", isSelected ? "text-white/80" : "text-text-muted")}>
+                            {item.desc}
+                          </p>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <div className="w-6 h-6 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white shrink-0 ml-2 shadow-xs">
+                          <Check size={14} className="text-white stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Personalizado & Salvar no Firebase */}
+              <div className="pt-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Input 
+                    value={customTimeSigInput}
+                    onChange={(e) => setCustomTimeSigInput(e.target.value)}
+                    placeholder="Ex: 6/9, 3/8..."
+                    className="h-9 text-xs w-28 text-center font-mono font-bold"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (customTimeSigInput.trim()) {
+                        handleSelectTimeSignature(customTimeSigInput.trim());
+                        setCustomTimeSigInput('');
+                      }
+                    }}
+                    disabled={!customTimeSigInput.trim()}
+                    className="h-9 px-3 text-xs font-bold uppercase"
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    onClick={handleSaveTimeSignatureToFirebase}
+                    disabled={savingTimeSig}
+                    className="h-9 px-4 text-xs font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md"
+                  >
+                    {savingTimeSig ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                    <span>Salvar no Firebase</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowTimeSignatureMenu(false)}
+                    className="h-9 px-4 text-xs font-bold uppercase"
+                  >
+                    Fechar
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Chromatic Tuner Modal */}
-      <ChromaticTunerModal
-        isOpen={showTunerModal}
-        onClose={() => setShowTunerModal(false)}
-      />
+      {/* Modal de Andamento & BPM */}
+      <AnimatePresence>
+        {showBpmMenu && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[250] flex items-center justify-center p-3 sm:p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface border border-border rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl flex flex-col space-y-4 relative max-h-[90vh] overflow-y-auto custom-scrollbar notranslate"
+              translate="no"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-brand/10 text-brand rounded-xl border border-brand/20">
+                    <Activity size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
+                      Andamento & Velocidade (BPM)
+                    </h3>
+                    <p className="text-[10px] text-text-muted font-bold flex items-center gap-1.5 mt-0.5">
+                      <span>BPM Atual:</span>
+                      <span className="px-2 py-0.5 rounded bg-brand/15 text-brand font-black text-xs font-mono">
+                        {editedSong.bpm || 80} BPM
+                      </span>
+                      <span>• Original:</span>
+                      <span className="font-bold text-text-main font-mono">
+                        {originalBpmValue} BPM
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowBpmMenu(false)}
+                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all cursor-pointer"
+                  title="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Feedback Alert */}
+              <AnimatePresence>
+                {bpmFeedback && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 shrink-0"
+                  >
+                    <Check size={14} className="shrink-0" />
+                    <span>{bpmFeedback}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Display Gigante do BPM com Nome Italiano do Andamento */}
+              <div className="bg-gradient-to-b from-brand/10 to-brand/5 border border-brand/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+                  Batidas Por Minuto
+                </span>
+                <div className="flex items-baseline gap-2 my-1">
+                  <span className="text-5xl sm:text-6xl font-mono font-black text-brand tracking-tighter">
+                    {editedSong.bpm || 80}
+                  </span>
+                  <span className="text-sm font-black text-text-muted uppercase">BPM</span>
+                </div>
+                <div className="px-3 py-1 rounded-full bg-brand/15 text-brand text-xs font-black uppercase tracking-wider mt-1">
+                  {(editedSong.bpm || 80) < 60 && "Largo / Lento (Solene)"}
+                  {(editedSong.bpm || 80) >= 60 && (editedSong.bpm || 80) <= 75 && "Adagio / Intimista (Balada Suave)"}
+                  {(editedSong.bpm || 80) > 75 && (editedSong.bpm || 80) <= 90 && "Andante (Worship Médio)"}
+                  {(editedSong.bpm || 80) > 90 && (editedSong.bpm || 80) <= 110 && "Moderato (Pop Worship)"}
+                  {(editedSong.bpm || 80) > 110 && (editedSong.bpm || 80) <= 130 && "Allegro (Celebração / Louvor Vivo)"}
+                  {(editedSong.bpm || 80) > 130 && (editedSong.bpm || 80) <= 150 && "Vivace (Jubiloso / Festa)"}
+                  {(editedSong.bpm || 80) > 150 && "Presto (Acelerado / Alta Energia)"}
+                </div>
+              </div>
+
+              {/* Botão de Restaurar ao BPM Original */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleResetBpm}
+                  disabled={(editedSong.bpm || 80) === originalBpmValue}
+                  className={cn(
+                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer select-none",
+                    (editedSong.bpm || 80) !== originalBpmValue
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md hover:bg-amber-400 active:scale-95"
+                      : "bg-black/5 dark:bg-white/5 text-text-muted border-border opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  <RefreshCcw size={14} />
+                  <span>Voltar ao BPM Original ({originalBpmValue} BPM)</span>
+                </button>
+              </div>
+
+              {/* Stepper Rápido de Ajustes (-10, -5, -1, +1, +5, +10, /2, x2) */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Ajuste Rápido de Velocidade</span>
+                <div className="grid grid-cols-6 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.max(20, b - 10))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    -10
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.max(20, b - 5))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    -5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.max(20, b - 1))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    -1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.min(300, b + 1))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.min(300, b + 5))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    +5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.min(300, b + 10))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  >
+                    +10
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.round(b / 2))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-brand hover:text-white border border-border text-xs font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                    title="Dividir velocidade pela metade (Half-Time)"
+                  >
+                    <span>/ 2</span>
+                    <span className="text-[10px] opacity-75 font-normal">(Metade)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateBPM(b => Math.round(b * 2))}
+                    className="py-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-brand hover:text-white border border-border text-xs font-black transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                    title="Dobrar velocidade (Double-Time)"
+                  >
+                    <span>× 2</span>
+                    <span className="text-[10px] opacity-75 font-normal">(Dobro)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Slider Contínuo */}
+              <div className="space-y-1.5 bg-black/5 dark:bg-white/5 p-3 rounded-2xl border border-border">
+                <div className="flex justify-between items-center text-xs font-bold text-text-muted">
+                  <span>40 BPM (Lento)</span>
+                  <span className="font-mono font-black text-brand text-sm">{editedSong.bpm || 80} BPM</span>
+                  <span>240 BPM (Rápido)</span>
+                </div>
+                <input 
+                  type="range"
+                  min="40"
+                  max="240"
+                  step="1"
+                  value={editedSong.bpm || 80}
+                  onChange={(e) => updateBPM(Number(e.target.value))}
+                  className="w-full accent-brand cursor-pointer h-2 bg-black/10 dark:bg-white/10 rounded-lg"
+                />
+              </div>
+
+              {/* Botão TAP TEMPO */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleTapTempo}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand via-sky-600 to-blue-600 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-brand/20 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer select-none group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Flame size={18} className="animate-pulse text-amber-300" />
+                    <span>TAP TEMPO</span>
+                  </div>
+                  <span className="text-[10px] font-bold opacity-80 normal-case tracking-normal">
+                    Toque repetidamente no ritmo da música para calcular o BPM
+                  </span>
+                </button>
+              </div>
+
+              {/* Presets Populares de Louvor */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Presets de Andamento</span>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {[
+                    { bpm: 58, label: '58 Contemplativo' },
+                    { bpm: 68, label: '68 Worship Lento' },
+                    { bpm: 76, label: '76 Worship Médio' },
+                    { bpm: 92, label: '92 Pop / Moderato' },
+                    { bpm: 115, label: '115 Celebração' },
+                    { bpm: 130, label: '130 Jubiloso / Festa' },
+                  ].map((p) => (
+                    <button
+                      key={p.bpm}
+                      type="button"
+                      onClick={() => updateBPM(p.bpm)}
+                      className={cn(
+                        "py-2 px-1 rounded-xl text-center border transition-all active:scale-95 cursor-pointer",
+                        (editedSong.bpm || 80) === p.bpm
+                          ? "bg-brand text-white border-brand font-black shadow-sm"
+                          : "bg-black/5 dark:bg-white/5 text-text-main border-border hover:bg-black/10 dark:hover:bg-white/10"
+                      )}
+                    >
+                      <div className="text-xs font-black font-mono">{p.bpm}</div>
+                      <div className="text-[8px] truncate opacity-80">{p.label.split(' ')[1]}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Metrônomo Áudio & Salvar no Firebase */}
+              <div className="pt-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleMetronome}
+                  className={cn(
+                    "w-full sm:w-auto h-9 px-4 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-all cursor-pointer border shadow-sm",
+                    isMetronomeActive
+                      ? "bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20 animate-pulse"
+                      : "bg-black/5 dark:bg-white/5 text-text-main border-border hover:bg-black/10 dark:hover:bg-white/10"
+                  )}
+                  title="Testar o andamento ouvindo os cliques do metrônomo"
+                >
+                  <Volume2 size={14} />
+                  <span>{isMetronomeActive ? "Metrônomo Tocando" : "Ouvir Metrônomo"}</span>
+                </button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    onClick={handleSaveBpmToFirebase}
+                    disabled={savingBpm}
+                    className="h-9 px-4 text-xs font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md"
+                  >
+                    {savingBpm ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                    <span>Salvar no Firebase</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowBpmMenu(false)}
+                    className="h-9 px-4 text-xs font-bold uppercase"
+                  >
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Footswitch Visual Feedback Toast */}
       <AnimatePresence>
@@ -12720,13 +12581,14 @@ function LiturgyItemCard({
   idx: number;
   isAdmin: boolean;
   onOpenSong?: (songId: string) => void;
-  startEditing: (item: any) => void;
+  startEditing: (item: any, idx?: number) => void;
   handleMove: (idx: number, direction: 'up' | 'down') => void;
   handleRemoveItem: (itemId: string, index: number) => void;
   serviceLiturgyLength: number;
   dragControlsEnabled?: boolean;
   calculatedTime?: string;
 }) {
+  const [isTextExpanded, setIsTextExpanded] = useState(false);
   const dragControls = useDragControls();
 
   const Card = (isAdmin && dragControlsEnabled) ? Reorder.Item : motion.div;
@@ -12753,7 +12615,7 @@ function LiturgyItemCard({
       if (item.type === 'song' && onOpenSong) {
         onOpenSong(item.songId || '');
       } else if (isAdmin) {
-        startEditing(item);
+        startEditing(item, idx);
       }
     },
     className: cn(
@@ -12828,7 +12690,12 @@ function LiturgyItemCard({
            </div>
          )}
          
-         <div className="min-w-0 notranslate" translate="no">
+         <div className="min-w-0 flex-1 notranslate" translate="no">
+            {item.moment && (
+              <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-brand uppercase block mb-0.5">
+                {item.moment}
+              </span>
+            )}
             <p className="text-text-main text-base sm:text-lg font-bold flex items-center flex-wrap gap-1.5 sm:gap-3 leading-tight tracking-tight">
               {item.type === 'reading' && <BookOpen size={14} className="text-text-main shrink-0"/>}
               {item.type === 'song' && <Music2 size={14} className="text-brand shrink-0"/>}
@@ -12850,9 +12717,36 @@ function LiturgyItemCard({
               )}
             </p>
             {item.details && (
-              <p className="mt-1.5 pl-3 border-l-[3px] border-brand/50 text-[11px] sm:text-xs text-text-main italic whitespace-pre-line leading-relaxed max-w-xl">
-                "{item.details}"
-              </p>
+              <div className="mt-2 space-y-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsTextExpanded(!isTextExpanded);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-brand bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 px-2.5 py-1 rounded-lg border border-black/10 dark:border-white/10 transition-all cursor-pointer select-none"
+                  title={isTextExpanded ? "Recolher texto" : "Ver texto completo"}
+                >
+                  <FileText size={11} className="text-brand" />
+                  <span>{isTextExpanded ? 'Recolher Texto' : 'Ver Texto'}</span>
+                  {isTextExpanded ? <ChevronUp size={12} className="text-brand" /> : <ChevronDown size={12} className="text-brand" />}
+                </button>
+                <AnimatePresence initial={false}>
+                  {isTextExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <p className="mt-1 pl-3 py-2 border-l-[3px] border-brand/60 text-[11px] sm:text-xs text-text-main italic whitespace-pre-line leading-relaxed max-w-2xl bg-black/5 dark:bg-black/30 p-3 rounded-r-xl border border-black/5 dark:border-white/5">
+                        "{item.details}"
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
          </div>
        </div>
@@ -12860,7 +12754,7 @@ function LiturgyItemCard({
           {isAdmin && (
             <>
               <button 
-                onClick={(e) => { e.stopPropagation(); startEditing(item); }} 
+                onClick={(e) => { e.stopPropagation(); startEditing(item, idx); }} 
                 className="p-1 sm:p-2 hover:bg-white/5 rounded-lg text-white transition-colors" 
                 title="Editar"
               >
@@ -12868,7 +12762,7 @@ function LiturgyItemCard({
               </button>
               <ConfirmButton 
                 onConfirm={() => handleRemoveItem(item.id, idx)}
-                className="p-1 sm:p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
+                className="p-1 sm:p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors" 
                 title="Excluir"
               >
                 <Trash2 size={12}/>
@@ -13053,6 +12947,31 @@ function MultiVocalistSelector({
   );
 }
 
+const LITURGY_SONG_MOMENTS = [
+  "PRIMEIRA MÚSICA",
+  "SEGUNDA MÚSICA",
+  "TERCEIRA MÚSICA",
+  "QUARTA MÚSICA",
+  "QUINTA MÚSICA",
+  "SEXTA MÚSICA",
+  "SÉTIMA MÚSICA",
+  "OITAVA MÚSICA",
+  "NONA MÚSICA",
+  "DÉCIMA MÚSICA"
+];
+
+const LITURGY_GENERAL_MOMENTS = [
+  "Palavra Inicial",
+  "Louvor Inicial",
+  "Oração",
+  "Pregação",
+  "Palavra Auxiliar",
+  "Avisos",
+  "Ofertório",
+  "Louvor Final",
+  "Palavra Final"
+];
+
 const LITURGY_SONG_CATEGORIES = [
   "ABERTURA",
   "CRIAÇÃO/ADORAÇÃO",
@@ -13100,6 +13019,39 @@ export function LiturgyEditor({
   const [isCloning, setIsCloning] = useState(false);
   const [pastServices, setPastServices] = useState<any[]>([]);
   const [confirmDeleteLiturgy, setConfirmDeleteLiturgy] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState<string | null>(null);
+  const [itemEditStatus, setItemEditStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [addItemStatus, setAddItemStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+
+  const handleSaveLiturgy = async () => {
+    setSaveStatus("saving");
+    setSaveFeedbackMessage("Salvando alterações no Firebase...");
+    const servicePath = `services/${service.id}`;
+    try {
+      const liturgy = service.liturgy || [];
+      await updateDoc(doc(db, "services", service.id), { 
+        liturgy,
+        updatedAt: new Date().toISOString()
+      });
+      setSaveStatus("success");
+      setSaveFeedbackMessage("Liturgia salva com sucesso no Firebase!");
+      setTimeout(() => {
+        setIsEditing(false);
+        setSaveStatus("idle");
+        setSaveFeedbackMessage(null);
+      }, 1200);
+    } catch (error) {
+      console.error("Erro ao salvar liturgia:", error);
+      setSaveStatus("error");
+      setSaveFeedbackMessage("Falha ao salvar no banco de dados. Tente novamente.");
+      handleFirestoreError(error, OperationType.UPDATE, servicePath);
+      setTimeout(() => {
+        setSaveStatus("idle");
+        setSaveFeedbackMessage(null);
+      }, 3500);
+    }
+  };
 
   useEffect(() => {
     if (confirmDeleteLiturgy) {
@@ -13256,27 +13208,39 @@ export function LiturgyEditor({
   const handleAddItem = async () => {
     if (!newItem.title) return;
     setIsSaving(true);
+    setAddItemStatus("saving");
     const servicePath = `services/${service.id}`;
     try {
       const liturgy = service.liturgy || [];
       const updatedLiturgy = [...liturgy, { ...newItem, id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() }];
-      await updateDoc(doc(db, 'services', service.id), { liturgy: updatedLiturgy });
-      setNewItem({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'NAA', vocalist: '', duration: '' });
+      await updateDoc(doc(db, "services", service.id), { 
+        liturgy: updatedLiturgy,
+        updatedAt: new Date().toISOString()
+      });
+      setAddItemStatus("success");
+      setNewItem({ type: "reading", title: "", content: "", details: "", songId: "", moment: "", bibleVersion: "NAA", vocalist: "", duration: "" });
       setShowCustomMomentInput(false);
       setShowBibleSearch(false);
 
       if (liturgy.length === 0 && createNotifications) {
-        const dateStr = new Date(service.date).toLocaleDateString('pt-BR');
+        const dateStr = new Date(service.date).toLocaleDateString("pt-BR");
         await createNotifications(
-          '📖 Nova Liturgia Disponível',
+          "📖 Nova Liturgia Disponível",
           `A liturgia para o culto "${service.title}" em ${dateStr} foi definida. Venha conferir!`,
-          'service',
+          "service",
           user?.uid,
-          'notifyNewLiturgy'
+          "notifyNewLiturgy"
         );
       }
+      setTimeout(() => {
+        setAddItemStatus("idle");
+      }, 1500);
     } catch (error) {
+      setAddItemStatus("error");
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
+      setTimeout(() => {
+        setAddItemStatus("idle");
+      }, 3000);
     } finally {
       setIsSaving(false);
     }
@@ -13362,26 +13326,79 @@ export function LiturgyEditor({
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
 
-  const handleUpdateItem = async (itemId: string) => {
+  const handleUpdateItem = async (itemId: string, itemIdx?: number) => {
     setIsSaving(true);
+    setItemEditStatus("saving");
     const servicePath = `services/${service.id}`;
     try {
       const liturgy = [...(service.liturgy || [])];
-      const index = liturgy.findIndex(i => i.id === itemId);
+      let index = -1;
+      if (itemId) {
+        index = liturgy.findIndex(i => i.id === itemId);
+      }
+      if (index === -1 && typeof itemIdx === "number" && itemIdx >= 0 && itemIdx < liturgy.length) {
+        index = itemIdx;
+      }
+      if (index === -1 && itemId) {
+        index = liturgy.findIndex(i => i.songId === itemId || (i.title && i.title === editItem.title));
+      }
       if (index !== -1) {
-        liturgy[index] = { ...editItem, id: itemId };
-        await updateDoc(doc(db, 'services', service.id), { liturgy });
-        setEditingId(null);
+        const existingItem = liturgy[index];
+        const finalId = existingItem.id || itemId || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+        liturgy[index] = { 
+          ...existingItem,
+          ...editItem, 
+          id: finalId 
+        };
+        
+        const updateData: any = { 
+          liturgy,
+          updatedAt: new Date().toISOString()
+        };
+        
+        if (editItem.type === "song" && editItem.songId) {
+          const setlist = [...(service.setlist || [])];
+          const oldSongId = existingItem.songId;
+          if (oldSongId && oldSongId !== editItem.songId) {
+            const setlistIdx = setlist.indexOf(oldSongId);
+            if (setlistIdx !== -1) {
+              setlist[setlistIdx] = editItem.songId;
+            } else if (!setlist.includes(editItem.songId)) {
+              setlist.push(editItem.songId);
+            }
+          } else if (!setlist.includes(editItem.songId)) {
+            setlist.push(editItem.songId);
+          }
+          updateData.setlist = setlist;
+        }
+
+        await updateDoc(doc(db, "services", service.id), updateData);
+        setItemEditStatus("success");
+        setTimeout(() => {
+          setEditingId(null);
+          setItemEditStatus("idle");
+        }, 700);
+      } else {
+        console.warn("Item não encontrado para atualização:", { itemId, itemIdx });
+        setItemEditStatus("error");
+        setTimeout(() => {
+          setItemEditStatus("idle");
+        }, 2000);
       }
     } catch (error) {
+      setItemEditStatus("error");
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
+      setTimeout(() => {
+        setItemEditStatus("idle");
+      }, 3000);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const startEditing = (item: any) => {
-    setEditingId(item.id);
+  const startEditing = (item: any, itemIdx?: number) => {
+    const editKey = item.id || (typeof itemIdx === 'number' ? `item-${itemIdx}` : Date.now().toString());
+    setEditingId(editKey);
     setEditItem({ 
       type: item.type, 
       title: item.title, 
@@ -13393,7 +13410,7 @@ export function LiturgyEditor({
       vocalist: item.vocalist || '',
       duration: item.duration || ''
     });
-    const standardMoments = ["", "Palavra Inicial", "Louvor Inicial", "Oração", "Pregação", "Avisos", "Louvor Final", "Palavra Final", "Ofertório", "Palavra Auxiliar"];
+    const standardMoments = ["", ...LITURGY_GENERAL_MOMENTS, ...LITURGY_SONG_MOMENTS];
     const isCustom = item.moment && !standardMoments.includes(item.moment);
     setShowCustomMomentInputEdit(!!isCustom);
     const isCustomCat = item.type === 'song' && item.content && !LITURGY_SONG_CATEGORIES.includes(item.content);
@@ -13535,13 +13552,54 @@ export function LiturgyEditor({
            </h4>
            {isAdmin && (
              <div className="flex flex-wrap items-center justify-center gap-3">
-               <button 
-                 onClick={() => setIsEditing(!isEditing)} 
-                 className="text-[10px] sm:text-[11px] font-black text-brand dark:text-white transition-all uppercase tracking-widest flex items-center gap-2 bg-brand/10 dark:bg-brand/30 hover:bg-brand/20 dark:hover:bg-brand/40 px-5 py-2 rounded-full border border-brand/20 dark:border-brand/40 shadow-lg shadow-brand/10 active:scale-95 cursor-pointer"
-               >
-                 {isEditing ? <X size={14}/> : <Plus size={14}/>}
-                 {isEditing ? 'Sair da Edição' : 'Configurar Liturgia'}
-               </button>
+               {isEditing ? (
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={handleSaveLiturgy} 
+                    disabled={saveStatus === "saving"}
+                    className={cn(
+                      "text-[10px] sm:text-[11px] font-black uppercase tracking-widest flex items-center gap-2 px-5 py-2 rounded-full border shadow-lg active:scale-95 cursor-pointer transition-all",
+                      saveStatus === "saving" && "bg-amber-600 text-white border-amber-600 cursor-wait",
+                      saveStatus === "success" && "bg-emerald-600 text-white border-emerald-600",
+                      saveStatus === "error" && "bg-red-600 text-white border-red-600",
+                      saveStatus === "idle" && "text-white bg-emerald-600 hover:bg-emerald-700 border-emerald-600/30 shadow-emerald-600/20"
+                    )}
+                  >
+                    {saveStatus === "saving" ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin"/>
+                        Salvando...
+                      </>
+                    ) : saveStatus === "success" ? (
+                      <>
+                        <Check size={14} strokeWidth={3}/>
+                        Salvo no Firebase!
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14}/>
+                        Salvar Liturgia
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => setIsEditing(false)} 
+                    className="text-[10px] sm:text-[11px] font-black text-text-muted hover:text-text-main transition-all uppercase tracking-widest flex items-center gap-1.5 bg-black/10 hover:bg-black/20 px-3.5 py-2 rounded-full border border-border shadow cursor-pointer"
+                    title="Fechar modo de edição"
+                  >
+                    <X size={14}/>
+                    Sair
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setIsEditing(true)} 
+                  className="text-[10px] sm:text-[11px] font-black text-brand dark:text-white transition-all uppercase tracking-widest flex items-center gap-2 bg-brand/10 dark:bg-brand/30 hover:bg-brand/20 dark:hover:bg-brand/40 px-5 py-2 rounded-full border border-brand/20 dark:border-brand/40 shadow-lg shadow-brand/10 active:scale-95 cursor-pointer"
+                >
+                  <Plus size={14}/>
+                  Configurar Liturgia
+                </button>
+              )}
                <button 
                  onClick={() => setIsCloning(!isCloning)} 
                  className="text-[10px] sm:text-[11px] font-black text-text-main transition-all uppercase tracking-widest flex items-center gap-2 bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full border border-border shadow-lg active:scale-95 cursor-pointer"
@@ -13818,19 +13876,42 @@ export function LiturgyEditor({
                    </div>
                    <div className="sm:col-span-2">
                       <Button 
-                         onClick={handleAddItem} 
-                         disabled={isSaving || !newItem.title}
-                         className="w-full h-10 text-[10px] uppercase font-black tracking-widest bg-brand hover:brightness-110"
-                       >
-                         {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : 'Adicionar'}
-                       </Button>
+                        onClick={handleAddItem} 
+                        disabled={addItemStatus === "saving" || isSaving || !newItem.title}
+                        className={cn(
+                          "w-full h-10 text-[10px] uppercase font-black tracking-widest transition-all",
+                          addItemStatus === "saving" && "bg-amber-600 hover:bg-amber-600 text-white cursor-wait",
+                          addItemStatus === "success" && "bg-emerald-600 hover:bg-emerald-600 text-white",
+                          addItemStatus === "error" && "bg-red-600 hover:bg-red-600 text-white",
+                          addItemStatus === "idle" && "bg-brand hover:brightness-110 text-white"
+                        )}
+                      >
+                        {addItemStatus === "saving" ? (
+                          <span className="flex items-center gap-1.5 justify-center">
+                            <Loader2 size={14} className="animate-spin" />
+                            Salvando...
+                          </span>
+                        ) : addItemStatus === "success" ? (
+                          <span className="flex items-center gap-1.5 justify-center">
+                            <Check size={14} strokeWidth={3} />
+                            Adicionado!
+                          </span>
+                        ) : addItemStatus === "error" ? (
+                          <span className="flex items-center gap-1.5 justify-center">
+                            <AlertTriangle size={14} />
+                            Erro ao Salvar
+                          </span>
+                        ) : (
+                          "Adicionar"
+                        )}
+                      </Button>
                    </div>
 
                     {/* Momento do Culto */}
                     <div className="sm:col-span-12 space-y-1.5 pt-3 border-t border-border/20">
                        <label className="text-[9px] font-black text-text-main/80 uppercase pl-1 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-brand"></span>
-                          Agrupar em qual Momento?
+                          {newItem.type === 'song' ? 'Ordem / Momento da Música' : 'Agrupar em qual Momento?'}
                        </label>
                        <div className="flex flex-col sm:flex-row gap-2">
                           <select 
@@ -13847,15 +13928,24 @@ export function LiturgyEditor({
                              }}
                           >
                              <option value="">Nenhum (Sem Momento)</option>
-                             <option value="Palavra Inicial">✨ Palavra Inicial</option>
-                             <option value="Louvor Inicial">🔵 Louvor Inicial</option>
-                             <option value="Oração">🟢 Oração</option>
-                             <option value="Pregação">🟡 Pregação / Palavra</option>
-                             <option value="Palavra Auxiliar">🔸 Palavra Auxiliar</option>
-                             <option value="Avisos">🟣 Avisos</option>
-                             <option value="Ofertório">💸 Ofertório</option>
-                             <option value="Louvor Final">🔴 Louvor Final / Encerramento</option>
-                             <option value="Palavra Final">✨ Palavra Final</option>
+                             {newItem.type === 'song' ? (
+                               <>
+                                 <optgroup label="Ordem das Músicas">
+                                   {LITURGY_SONG_MOMENTS.map(moment => (
+                                     <option key={moment} value={moment}>🎵 {moment}</option>
+                                   ))}
+                                 </optgroup>
+                                 <optgroup label="Momentos Gerais">
+                                   {LITURGY_GENERAL_MOMENTS.map(moment => (
+                                     <option key={moment} value={moment}>{moment}</option>
+                                   ))}
+                                 </optgroup>
+                               </>
+                             ) : (
+                               LITURGY_GENERAL_MOMENTS.map(moment => (
+                                 <option key={moment} value={moment}>{moment}</option>
+                               ))
+                             )}
                              <option value="custom">⚙️ Personalizado (Digitar)...</option>
                           </select>
                           {showCustomMomentInput && (
@@ -14097,11 +14187,34 @@ export function LiturgyEditor({
                           </div>
                           <div className="sm:col-span-2 flex gap-2">
                             <Button 
-                              onClick={() => handleUpdateItem(item.id)} 
-                              disabled={isSaving}
-                              className="flex-1 h-10 text-[10px] uppercase font-black tracking-widest bg-brand hover:brightness-110"
+                              onClick={() => handleUpdateItem(item.id, idx)} 
+                              disabled={itemEditStatus === "saving" || isSaving}
+                              className={cn(
+                                "flex-1 h-10 text-[10px] uppercase font-black tracking-widest transition-all",
+                                itemEditStatus === "saving" && "bg-amber-600 hover:bg-amber-600 text-white cursor-wait",
+                                itemEditStatus === "success" && "bg-emerald-600 hover:bg-emerald-600 text-white",
+                                itemEditStatus === "error" && "bg-red-600 hover:bg-red-600 text-white",
+                                itemEditStatus === "idle" && "bg-brand hover:brightness-110 text-white"
+                              )}
                             >
-                              {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : 'Salvar'}
+                              {itemEditStatus === "saving" ? (
+                                <span className="flex items-center gap-1.5 justify-center">
+                                  <Loader2 size={14} className="animate-spin" />
+                                  Salvando...
+                                </span>
+                              ) : itemEditStatus === "success" ? (
+                                <span className="flex items-center gap-1.5 justify-center">
+                                  <Check size={14} strokeWidth={3} />
+                                  Salvo!
+                                </span>
+                              ) : itemEditStatus === "error" ? (
+                                <span className="flex items-center gap-1.5 justify-center">
+                                  <AlertTriangle size={14} />
+                                  Erro!
+                                </span>
+                              ) : (
+                                "Salvar"
+                              )}
                             </Button>
                             <Button onClick={() => setEditingId(null)} variant="secondary" className="h-10 px-3 bg-black/5 border border-border text-text-main"><X size={14}/></Button>
                           </div>
@@ -14111,7 +14224,7 @@ export function LiturgyEditor({
                         <div className="space-y-1.5 pt-3 border-t border-white/5">
                            <label className="text-[9px] font-black text-text-main/80 uppercase pl-1 flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-brand"></span>
-                              Momento do Culto (Agrupador)
+                              {editItem.type === 'song' ? 'Ordem / Momento da Música' : 'Momento do Culto (Agrupador)'}
                            </label>
                            <div className="flex flex-col sm:flex-row gap-2">
                               <select 
@@ -14128,15 +14241,24 @@ export function LiturgyEditor({
                                  }}
                               >
                                  <option value="">Nenhum (Sem Momento)</option>
-                                 <option value="Palavra Inicial">✨ Palavra Inicial</option>
-                                 <option value="Louvor Inicial">🔵 Louvor Inicial</option>
-                                 <option value="Oração">🟢 Oração</option>
-                                 <option value="Pregação">🟡 Pregação / Palavra</option>
-                                 <option value="Palavra Auxiliar">🔸 Palavra Auxiliar</option>
-                                 <option value="Avisos">🟣 Avisos</option>
-                              <option value="Ofertório">💸 Ofertório</option>
-                                 <option value="Louvor Final">🔴 Louvor Final / Encerramento</option>
-                              <option value="Palavra Final">✨ Palavra Final</option>
+                                 {editItem.type === 'song' ? (
+                                   <>
+                                     <optgroup label="Ordem das Músicas">
+                                       {LITURGY_SONG_MOMENTS.map(moment => (
+                                         <option key={moment} value={moment}>🎵 {moment}</option>
+                                       ))}
+                                     </optgroup>
+                                     <optgroup label="Momentos Gerais">
+                                       {LITURGY_GENERAL_MOMENTS.map(moment => (
+                                         <option key={moment} value={moment}>{moment}</option>
+                                       ))}
+                                     </optgroup>
+                                   </>
+                                 ) : (
+                                   LITURGY_GENERAL_MOMENTS.map(moment => (
+                                     <option key={moment} value={moment}>{moment}</option>
+                                   ))
+                                 )}
                                  <option value="custom">⚙️ Personalizado (Digitar)...</option>
                               </select>
                               {showCustomMomentInputEdit && (
@@ -14251,106 +14373,19 @@ export function LiturgyEditor({
                 }
 
                 return (
-                  <motion.div 
-                    layout
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={`${item.id}-${idx}`} 
-                    onClick={() => {
-                      if (item.type === 'song' && onOpenSong) {
-                        onOpenSong(item.songId || '');
-                      } else if (isAdmin) {
-                        startEditing(item);
-                      }
-                    }}
-                    className={cn(
-                      "flex items-start sm:items-center gap-2 sm:gap-4 bg-black/5 dark:bg-white/5 p-2.5 sm:p-5 rounded-xl border border-black/10 dark:border-white/10 group hover:bg-black/10 dark:hover:bg-white/10 hover:border-black/20 dark:hover:border-white/20 transition-all shadow-sm",
-                      (isAdmin || (item.type === 'song' && onOpenSong)) && "cursor-pointer"
-                    )}
-                  >
-                     <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
-                        {isAdmin && (
-                          <div className="flex flex-col gap-1.5">
-                             <button 
-                               onClick={(e) => { e.stopPropagation(); handleMove(idx, 'up'); }} 
-                               className={cn(
-                                 "w-[38px] h-[38px] sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm",
-                                 idx === 0 && "opacity-0 pointer-events-none"
-                               )}
-                             >
-                               <ChevronUp size={16} />
-                             </button>
-                             <button 
-                               onClick={(e) => { e.stopPropagation(); handleMove(idx, 'down'); }} 
-                               className={cn(
-                                 "w-[38px] h-[38px] sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-slate-800 border border-white/10 text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm",
-                                 idx === (service.liturgy?.length - 1) && "opacity-0 pointer-events-none"
-                               )}
-                             >
-                               <ChevronDown size={16} />
-                             </button>
-                          </div>
-                        )}
-                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-brand flex items-center justify-center text-[11px] sm:text-[11px] font-black text-white shrink-0 border border-brand/30 shadow-sm">
-                            {idx + 1}
-                        </div>
-                     </div>
-                     <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6 min-w-0 py-0.5">
-                       {item.content && (
-                         <div className="shrink-0 w-fit">
-                            <p className="text-[11px] sm:text-xs text-white font-black uppercase tracking-widest bg-brand px-2 sm:px-4 py-1.5 sm:py-2.5 rounded sm:rounded-xl border border-white/20 shadow-md leading-none text-center">
-                              {item.content}
-                            </p>
-                         </div>
-                       )}
-                       
-                    <div className="min-w-0 notranslate" translate="no">
-                          <p className="text-text-main text-base sm:text-lg font-bold flex items-center flex-wrap gap-1.5 sm:gap-3 leading-tight tracking-tight">
-                            {item.type === 'reading' && <BookOpen size={14} className="text-text-main shrink-0"/>}
-                            {item.type === 'song' && <Music2 size={14} className="text-brand shrink-0"/>}
-                            {item.type === 'speech' && <Quote size={14} className="text-purple-600 shrink-0"/>}
-                            {item.type === 'prayer' && <Check size={14} className="text-teal-600 shrink-0"/>}
-                            {item.type === 'announcements' && <Volume2 size={14} className="text-red-500 shrink-0"/>}
-                            {item.type === 'offering' && <Gift size={14} className="text-emerald-500 shrink-0"/>}
-                            {item.type === 'other' && <Activity size={14} className="text-green-600 shrink-0"/>}
-                            <span className="truncate">{item.title}</span>
-                            {item.type === 'song' && item.vocalist && (
-                              <span className="flex flex-wrap items-center gap-1 shrink-0">
-                                {item.vocalist.split(',').map((v: string) => v.trim()).filter(Boolean).map((v: string, vIdx: number) => (
-                                  <span key={vIdx} className="text-[10px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
-                                    🎤 {v}
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                            {(item.type === 'reading' || (item.type !== 'song' && item.bibleVersion)) && (
-                              <span className="text-[9px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-1.5 py-0.5 rounded leading-none shrink-0 self-center">
-                                {item.bibleVersion || 'NAA'}
-                              </span>
-                            )}
-                          </p>
-                          {item.details && (
-                            <p className="mt-1.5 pl-3 border-l-[3px] border-brand/50 text-[11px] sm:text-xs text-text-main italic whitespace-pre-line leading-relaxed max-w-xl">
-                              "{item.details}"
-                            </p>
-                          )}
-                       </div>
-                     </div>
-                     <div className="button-container flex items-center gap-0.5 sm:opacity-0 group-hover:opacity-100 transition-opacity self-center">
-                        {isAdmin && (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); startEditing(item); }} className="p-1 sm:p-2 hover:bg-white/5 rounded-lg text-white transition-colors" title="Editar"><Edit size={12}/></button>
-                            <ConfirmButton 
-                              onConfirm={() => handleRemoveItem(item.id, idx)}
-                              className="p-1 sm:p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 size={12}/>
-                            </ConfirmButton>
-                          </>
-                        )}
-                     </div>
-                  </motion.div>
+                  <LiturgyItemCard
+                    key={`${item.id}-${idx}`}
+                    item={item}
+                    idx={idx}
+                    isAdmin={isAdmin}
+                    onOpenSong={onOpenSong}
+                    startEditing={startEditing}
+                    handleMove={handleMove}
+                    handleRemoveItem={handleRemoveItem}
+                    serviceLiturgyLength={normalizedLiturgy.length}
+                    dragControlsEnabled={false}
+                    calculatedTime={timelineTimes[item.id]}
+                  />
                 );
               };
 
@@ -14544,39 +14579,88 @@ export function LiturgyEditor({
             </div>
           )}
        </div>
+        {isAdmin && (service.liturgy?.length > 0) && (
+          <div className="pt-8 flex flex-col justify-center items-center gap-3">
+            <AnimatePresence>
+              {saveFeedbackMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  className={cn(
+                    "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg border",
+                    saveStatus === "saving" && "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                    saveStatus === "success" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+                    saveStatus === "error" && "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                  )}
+                >
+                  {saveStatus === "saving" && <Loader2 size={15} className="animate-spin shrink-0" />}
+                  {saveStatus === "success" && <Check size={15} strokeWidth={3} className="shrink-0" />}
+                  {saveStatus === "error" && <AlertTriangle size={15} className="shrink-0" />}
+                  <span>{saveFeedbackMessage}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-       {isAdmin && (service.liturgy?.length > 0) && (
-         <div className="pt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-           <Button 
-            onClick={() => {
-              setIsEditing(false);
-            }}
-            className="w-full sm:w-auto bg-brand text-white font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl shadow-xl shadow-brand/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
-           >
-             <Check size={18} strokeWidth={3} />
-             Concluir e Salvar Liturgia
-           </Button>
-           <button 
-             type="button"
-             onClick={() => {
-               if (confirmDeleteLiturgy) {
-                 handleClearLiturgy();
-               } else {
-                 setConfirmDeleteLiturgy(true);
-               }
-             }}
-             disabled={isSaving}
-             className={`w-full sm:w-auto font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 border cursor-pointer active:scale-95 disabled:opacity-50 ${
-               confirmDeleteLiturgy 
-                 ? 'bg-red-600 border-red-600 text-white animate-pulse' 
-                 : 'bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500'
-             }`}
-           >
-             <Trash2 size={18} />
-             {confirmDeleteLiturgy ? 'Confirmar Excluir?' : 'Excluir Liturgia'}
-           </button>
-         </div>
-       )}
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 w-full sm:w-auto">
+              <Button 
+                onClick={handleSaveLiturgy}
+                disabled={saveStatus === "saving"}
+                className={cn(
+                  "w-full sm:w-auto font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl shadow-xl flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-95 cursor-pointer",
+                  saveStatus === "saving" && "bg-amber-600 text-white shadow-amber-600/20 cursor-wait opacity-90",
+                  saveStatus === "success" && "bg-emerald-600 hover:bg-emerald-600 text-white shadow-emerald-600/30 scale-[1.02]",
+                  saveStatus === "error" && "bg-red-600 hover:bg-red-600 text-white shadow-red-600/30",
+                  saveStatus === "idle" && "bg-brand hover:bg-blue-700 text-white shadow-brand/20 hover:scale-[1.02]"
+                )}
+              >
+                {saveStatus === "saving" && (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                )}
+                {saveStatus === "success" && (
+                  <>
+                    <Check size={18} strokeWidth={3} className="text-white animate-bounce" />
+                    <span>Liturgia Salva com Sucesso!</span>
+                  </>
+                )}
+                {saveStatus === "error" && (
+                  <>
+                    <AlertTriangle size={18} className="text-white" />
+                    <span>Erro ao Salvar! Tentar Novamente</span>
+                  </>
+                )}
+                {saveStatus === "idle" && (
+                  <>
+                    <Check size={18} strokeWidth={3} />
+                    <span>Concluir e Salvar Liturgia</span>
+                  </>
+                )}
+              </Button>
+              <button 
+                type="button"
+                onClick={() => {
+                  if (confirmDeleteLiturgy) {
+                    handleClearLiturgy();
+                  } else {
+                    setConfirmDeleteLiturgy(true);
+                  }
+                }}
+                disabled={isSaving || saveStatus === "saving"}
+                className={`w-full sm:w-auto font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 border cursor-pointer active:scale-95 disabled:opacity-50 ${
+                  confirmDeleteLiturgy 
+                    ? "bg-red-600 border-red-600 text-white animate-pulse" 
+                    : "bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
+                }`}
+              >
+                <Trash2 size={18} />
+                {confirmDeleteLiturgy ? "Confirmar Excluir?" : "Excluir Liturgia"}
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
