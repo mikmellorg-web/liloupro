@@ -234,53 +234,58 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
                   Passo a passo no Chrome / Edge (Android):
                 </div>
 
-                {deferredPrompt ? (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center space-y-2">
-                    <p className="text-xs font-medium text-emerald-300">
-                      Seu celular suporta instalação instantânea com 1 clique!
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleInstallPwa}
-                      className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                    >
-                      <Download size={14} className="stroke-[3]" />
-                      Instalar Aplicativo com 1 Toque
-                    </button>
+                {/* Prominent 1-Click Install Button for Android */}
+                <div className="p-3.5 bg-gradient-to-br from-amber-500/10 via-amber-400/5 to-slate-900 border border-amber-500/30 rounded-xl space-y-2 text-center">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-amber-300">
+                    <Zap size={14} className="fill-amber-400 text-amber-400" />
+                    <span>Instalação Direta no Celular</span>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
-                        1
-                      </div>
-                      <div className="text-xs text-slate-200 leading-snug">
-                        Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do seu navegador Chrome.
-                      </div>
-                    </div>
+                  <p className="text-[11px] text-slate-300 leading-snug">
+                    Toque no botão abaixo para adicionar o app oficial com o logo 3D de luxo à sua tela inicial:
+                  </p>
+                  <button
+                    id="btn-modal-install-1-click"
+                    type="button"
+                    onClick={handleInstallPwa}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-950/40 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <Download size={16} className="stroke-[3]" />
+                    Instalar LiLouPro com 1 Toque
+                  </button>
+                </div>
 
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
-                        2
-                      </div>
-                      <div className="text-xs text-slate-200 leading-snug">
-                        Toque na opção <strong className="text-amber-300">"Instalar aplicativo"</strong> (ou <em>"Instalar LiLouPro"</em>).
-                        <p className="text-[11px] text-amber-400/90 mt-1 font-normal">
-                          ⚠️ Se aparecer apenas <em>"Criar atalho"</em>, aguarde 2 segundos na página inicial para o navegador carregar o instalador oficial.
-                        </p>
-                      </div>
-                    </div>
+                <div className="pt-2 border-t border-white/5 space-y-2.5">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Ou instale pelo menu do Chrome:
+                  </div>
 
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
-                        3
-                      </div>
-                      <div className="text-xs text-slate-200 leading-snug">
-                        Toque em <strong>"Instalar"</strong>. O ícone de luxo oficial em 3D será adicionado ao menu de aplicativos e à tela inicial!
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
+                      1
                     </div>
-                  </>
-                )}
+                    <div className="text-xs text-slate-200 leading-snug">
+                      Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do Chrome.
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
+                      2
+                    </div>
+                    <div className="text-xs text-slate-200 leading-snug">
+                      Toque em <strong className="text-amber-300">"Instalar aplicativo"</strong> (ou <em>"Instalar LiLouPro"</em>).
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center text-xs font-black shrink-0">
+                      3
+                    </div>
+                    <div className="text-xs text-slate-200 leading-snug">
+                      Toque em <strong>"Instalar"</strong> para fixar o ícone oficial em alta definição!
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -312,7 +317,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
             <div className="pt-2 border-t border-white/5 text-center">
               <a
                 id="link-download-luxury-logo-hd"
-                href="/luxury_app_icon.jpg"
+                href={luxuryAppIcon}
                 download="LiLouPro-Logo-Oficial-Luxo-HD.jpg"
                 className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-4 decoration-amber-400/40 hover:decoration-amber-300 transition-colors"
               >
