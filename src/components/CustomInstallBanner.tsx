@@ -41,13 +41,13 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
     const isIosDevice = /iphone|ipad|ipod/.test(ua);
     setIsIos(isIosDevice);
 
-    // 3. Check dismissal in localStorage (dismiss for 48 hours if explicitly closed)
+    // 3. Check dismissal in localStorage
     try {
-      const dismissedAt = localStorage.getItem('liloupro_install_banner_dismissed_v7');
+      const dismissedAt = localStorage.getItem('liloupro_install_banner_dismissed_v10');
       if (dismissedAt) {
         const timeSince = Date.now() - parseInt(dismissedAt, 10);
-        // If dismissed less than 48 hours ago, keep hidden
-        if (timeSince < 48 * 60 * 60 * 1000) {
+        // If dismissed less than 4 hours ago, keep hidden
+        if (timeSince < 4 * 60 * 60 * 1000) {
           setIsDismissed(true);
         } else {
           setIsDismissed(false);
@@ -91,7 +91,7 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
           setIsInstalled(true);
           setIsDismissed(true);
           try {
-            localStorage.setItem('liloupro_install_banner_dismissed_v7', Date.now().toString());
+            localStorage.setItem('liloupro_install_banner_dismissed_v10', Date.now().toString());
           } catch {}
         }
         setDeferredPrompt(null);
@@ -110,7 +110,7 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
   const handleDismiss = useCallback(() => {
     setIsDismissed(true);
     try {
-      localStorage.setItem('liloupro_install_banner_dismissed_v7', Date.now().toString());
+      localStorage.setItem('liloupro_install_banner_dismissed_v10', Date.now().toString());
     } catch (e) {
       console.warn('LocalStorage error:', e);
     }

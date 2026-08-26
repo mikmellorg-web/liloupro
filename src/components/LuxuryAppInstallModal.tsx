@@ -240,7 +240,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
                         1
                       </div>
                       <div className="text-xs text-slate-200 leading-snug">
-                        Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do seu navegador.
+                        Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do seu navegador Chrome.
                       </div>
                     </div>
 
@@ -249,7 +249,10 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
                         2
                       </div>
                       <div className="text-xs text-slate-200 leading-snug">
-                        Selecione <strong className="text-amber-300">"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+                        Toque na opção <strong className="text-amber-300">"Instalar aplicativo"</strong> (ou <em>"Instalar LiLouPro"</em>).
+                        <p className="text-[11px] text-amber-400/90 mt-1 font-normal">
+                          ⚠️ Se aparecer apenas <em>"Criar atalho"</em>, aguarde 2 segundos na página inicial para o navegador carregar o instalador oficial.
+                        </p>
                       </div>
                     </div>
 
@@ -258,7 +261,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
                         3
                       </div>
                       <div className="text-xs text-slate-200 leading-snug">
-                        Confirme a instalação. O app abrirá em tela cheia com o <strong>ícone de luxo oficial</strong>!
+                        Toque em <strong>"Instalar"</strong>. O ícone de luxo oficial em 3D será adicionado ao menu de aplicativos e à tela inicial!
                       </div>
                     </div>
                   </>
@@ -268,25 +271,40 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
           </div>
 
           {/* Action Buttons Footer */}
-          <div className="mt-5 flex flex-col sm:flex-row items-center gap-2.5">
-            <button
-              id="btn-confirm-already-installed"
-              type="button"
-              onClick={handleDontShowAgain}
-              className="w-full sm:flex-1 py-3 px-4 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-950/50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-            >
-              <Check size={16} className="stroke-[3]" />
-              Já baixei no celular
-            </button>
+          <div className="mt-5 space-y-2.5">
+            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <button
+                id="btn-confirm-already-installed"
+                type="button"
+                onClick={handleDontShowAgain}
+                className="w-full sm:flex-1 py-3 px-4 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-950/50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Check size={16} className="stroke-[3]" />
+                Já baixei no celular
+              </button>
 
-            <button
-              id="btn-remind-later"
-              type="button"
-              onClick={onClose}
-              className="w-full sm:w-auto py-3 px-4 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-colors border border-white/10 cursor-pointer"
-            >
-              Lembrar mais tarde
-            </button>
+              <button
+                id="btn-remind-later"
+                type="button"
+                onClick={onClose}
+                className="w-full sm:w-auto py-3 px-4 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-colors border border-white/10 cursor-pointer"
+              >
+                Lembrar mais tarde
+              </button>
+            </div>
+
+            {/* Direct HD Image Download Option */}
+            <div className="pt-2 border-t border-white/5 text-center">
+              <a
+                id="link-download-luxury-logo-hd"
+                href="/luxury_app_icon.jpg"
+                download="LiLouPro-Logo-Oficial-Luxo-HD.jpg"
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-4 decoration-amber-400/40 hover:decoration-amber-300 transition-colors"
+              >
+                <Download size={12} />
+                Baixar imagem do Logo Oficial em HD para a galeria (JPG 1024x1024)
+              </a>
+            </div>
           </div>
         </motion.div>
       </div>
