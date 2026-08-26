@@ -1,6 +1,7 @@
 {
   "name": "LiLouPro - Gestão de Louvor",
   "short_name": "LiLouPro",
+  "id": "/",
   "description": "Sistema completo de gestão para ministérios de louvor e grupos de música.",
   "start_url": "/",
   "scope": "/",
@@ -8,34 +9,41 @@
   "orientation": "portrait-primary",
   "background_color": "#070b14",
   "theme_color": "#070b14",
+  "categories": ["music", "lifestyle", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/pwa-192x192.png?v=7.0",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-maskable-192x192.png?v=7.0",
+      "src": "/pwa-maskable-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-512x512.png?v=7.0",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-maskable-512x512.png?v=7.0",
+      "src": "/pwa-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/luxury_app_icon.jpg?v=7.0",
-      "sizes": "512x512",
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/luxury_app_icon.jpg",
+      "sizes": "1024x1024",
       "type": "image/jpeg",
       "purpose": "any"
     }

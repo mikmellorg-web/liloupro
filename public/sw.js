@@ -1,11 +1,31 @@
-// Service Worker with support for background Web Push Notifications, Badging, Luxury Icon & Automatic Seamless Update - v7.0
-const CACHE_NAME = 'liloupro-v7.0-gold-luxury';
+// Service Worker with support for background Web Push Notifications, Badging, Luxury Icon & Automatic Seamless Update - v8.0
+const CACHE_NAME = 'liloupro-v8.0-gold-luxury';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';
 
+const CORE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-192x192.png',
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-180x180.png',
+  '/luxury_app_icon.jpg',
+  '/favicon.png',
+  '/favicon-32x32.png'
+];
+
 self.addEventListener('install', (event) => {
-  // Force active immediately without waiting for existing clients to close
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(CORE_ASSETS).catch((err) => {
+        console.warn('Pre-cache partial fallback:', err);
+      });
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
