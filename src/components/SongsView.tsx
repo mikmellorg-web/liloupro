@@ -3710,6 +3710,7 @@ export function SongDetailView({
   onBack,
   theme,
   liturgySongs = [],
+  allSongs = [],
   onSelectSong,
   activeLiturgyService,
   onFocusModeChange,
@@ -3719,6 +3720,7 @@ export function SongDetailView({
   onBack: () => void,
   theme: 'dark' | 'light',
   liturgySongs?: any[],
+  allSongs?: any[],
   onSelectSong?: (song: any) => void,
   activeLiturgyService?: any,
   onFocusModeChange?: (active: boolean) => void,
@@ -3744,44 +3746,91 @@ export function SongDetailView({
     }
   };
 
-  const songIndexInLiturgy = useMemo(() => {
-    if (!liturgySongs || liturgySongs.length === 0) return -1;
-    return liturgySongs.findIndex((s: any) => s.id === song.id);
-  }, [liturgySongs, song.id]);
+  const effectiveSongList = useMemo(() => {
+    if (liturgySongs && liturgySongs.length > 1) return liturgySongs;
+    if (allSongs && allSongs.length > 1) return allSongs;
+    return liturgySongs || [];
+  }, [liturgySongs, allSongs]);
 
-  const hasNextSong = songIndexInLiturgy !== -1 && songIndexInLiturgy + 1 < liturgySongs.length;
-  const hasPrevSong = songIndexInLiturgy !== -1 && songIndexInLiturgy - 1 >= 0;
+  const isFromLiturgy = Boolean(liturgySongs && liturgySongs.length > 1);
+
+  const songIndexInList = useMemo(() => {
+    if (!effectiveSongList || effectiveSongList.length === 0) return -1;
+    return effectiveSongList.findIndex((s: any) => s.id === song.id);
+  }, [effectiveSongList, song.id]);
+
+  const hasNextSong = songIndexInList !== -1 && songIndexInList + 1 < effectiveSongList.length;
+  const hasPrevSong = songIndexInList !== -1 && songIndexInList - 1 >= 0;
   
-  const nextSong = hasNextSong ? liturgySongs[songIndexInLiturgy + 1] : null;
-  const prevSong = hasPrevSong ? liturgySongs[songIndexInLiturgy - 1] : null;
+  const nextSong = hasNextSong ? effectiveSongList[songIndexInList + 1] : null;
+  const prevSong = hasPrevSong ? effectiveSongList[songIndexInList - 1] : null;
+
+  const handleSongSwitch = useCallback((targetSong: any) => {
+    if (onSelectSong && targetSong) {
+      onSelectSong(targetSong);
+      // Scroll back to top smoothly
+      setTimeout(() => {
+        const container = document.getElementById('song-scroll-container');
+        if (container) {
+          container.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 80);
+    }
+  }, [onSelectSong]);
+
+  // Gestos de Deslize (Swipe) para avançar/voltar cifras no Modo Foco
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleFocusTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+      time: Date.now()
+    };
+  };
+
+  const handleFocusTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touchEnd = e.changedTouches[0];
+    const deltaX = touchEnd.clientX - touchStartRef.current.x;
+    const deltaY = touchEnd.clientY - touchStartRef.current.y;
+    const deltaTime = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    // Reconhecer deslize horizontal nítido:
+    // - Deslocamento horizontal mínimo de 50px
+    // - Movimento predominantemente horizontal (deltaX > 1.4x deltaY para não conflitar com rolagem vertical)
+    // - Concluído em menos de 800ms
+    if (Math.abs(deltaX) >= 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4 && deltaTime < 800) {
+      if (deltaX < 0) {
+        // Deslizar para a Esquerda -> Avançar para a Próxima Música
+        if (hasNextSong && nextSong) {
+          handleSongSwitch(nextSong);
+        }
+      } else {
+        // Deslizar para a Direita -> Voltar para a Música Anterior
+        if (hasPrevSong && prevSong) {
+          handleSongSwitch(prevSong);
+        }
+      }
+    }
+  };
 
   const renderLiturgyNavigation = () => {
-    if (!liturgySongs || liturgySongs.length <= 1 || songIndexInLiturgy === -1) return null;
+    if (!effectiveSongList || effectiveSongList.length <= 1 || songIndexInList === -1) return null;
 
-    const currentNum = songIndexInLiturgy + 1;
-    const totalNum = liturgySongs.length;
-
-    const handleSongSwitch = (targetSong: any) => {
-      if (onSelectSong) {
-        onSelectSong(targetSong);
-        // Scroll back to top smoothly
-        setTimeout(() => {
-          const container = document.getElementById('song-scroll-container');
-          if (container) {
-            container.scrollTo({ top: 0, behavior: 'smooth' });
-          } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-        }, 80);
-      }
-    };
+    const currentNum = songIndexInList + 1;
+    const totalNum = effectiveSongList.length;
 
     return (
-      <div className="mt-12 pt-6 border-t border-dashed border-border/40 select-none notranslate" translate="no">
+      <div className="mt-10 pt-6 border-t border-dashed border-border/40 select-none notranslate" translate="no">
         <div className={cn("rounded-xl p-3.5 border space-y-3 transition-all", isStageMode ? "bg-zinc-950 border-amber-500/40 text-white shadow-lg shadow-black/50" : "bg-gradient-to-br from-brand/5 to-cyan-500/5 dark:from-white/0.5 dark:to-white/0 border-border/40")}>
           <div className="flex items-center justify-between gap-2 flex-wrap text-text-muted">
             <span className={cn("text-[9px] font-black uppercase tracking-widest flex items-center gap-1", isStageMode ? "text-amber-400" : "text-text-muted")}>
-              <Zap size={10} className="text-yellow-500 animate-pulse" /> Roteiro do Culto
+              <Zap size={10} className="text-yellow-500 animate-pulse" /> {isFromLiturgy ? "Roteiro do Culto" : "Repertório"}
             </span>
             <span className={cn("font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded", isStageMode ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-black/10 dark:bg-white/10 text-text-main dark:text-zinc-200")}>
               Música {currentNum} de {totalNum}
@@ -5563,6 +5612,8 @@ export function SongDetailView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        onTouchStart={handleFocusTouchStart}
+        onTouchEnd={handleFocusTouchEnd}
         className={cn(
           "fixed inset-0 z-[200] overflow-hidden flex flex-col notranslate",
           isStageMode ? "bg-black text-white" : "bg-background"
@@ -5581,36 +5632,6 @@ export function SongDetailView({
             <span className={cn("text-[10px] hidden lg:inline truncate", isStageMode ? "text-amber-300 font-bold" : "text-text-muted")}>
               • Tom: <span className="font-bold text-brand">{currentKey}{isCapoEnabled && shapeKey && shapeKey !== currentKey ? ` (${shapeKey})` : ''}</span> • BPM: {editedSong.bpm || 'Orig'}
             </span>
-          </div>
-
-          {/* Alternância Cifra / Letra no Modo Foco */}
-          <div className={cn("flex items-center p-0.5 rounded-lg border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
-            <button
-              onClick={() => setDetailTab('chords')}
-              className={cn(
-                "h-7 px-2 sm:px-3 flex items-center gap-1 rounded-md font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer",
-                detailTab === 'chords'
-                  ? isStageMode ? "bg-amber-500 text-black font-black shadow-xs" : "bg-brand text-white shadow-xs font-black"
-                  : isStageMode ? "text-zinc-400 hover:text-white" : "text-text-muted hover:text-text-main"
-              )}
-              title="Exibir Cifra com Acordes"
-            >
-              <Music size={11} />
-              <span>Cifra</span>
-            </button>
-            <button
-              onClick={() => setDetailTab('lyrics')}
-              className={cn(
-                "h-7 px-2 sm:px-3 flex items-center gap-1 rounded-md font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer",
-                detailTab === 'lyrics'
-                  ? isStageMode ? "bg-amber-500 text-black font-black shadow-xs" : "bg-brand text-white shadow-xs font-black"
-                  : isStageMode ? "text-zinc-400 hover:text-white" : "text-text-muted hover:text-text-main"
-              )}
-              title="Exibir Letra Limpa da Música"
-            >
-              <FileText size={11} />
-              <span>Letra</span>
-            </button>
           </div>
 
           {/* Botões de Ação e Visualização Alinhados numa Única Linha */}
@@ -6163,6 +6184,26 @@ export function SongDetailView({
               </div>
             )}
             {renderLiturgyNavigation()}
+
+            {/* Botão de Sair no final da Cifra / Modo Foco */}
+            <div className="mt-8 mb-6 flex justify-center">
+              <button
+                onClick={() => {
+                  setIsFocusMode(false);
+                  setSongFontSize(14);
+                }}
+                className={cn(
+                  "px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-2 active:scale-95 shadow-md",
+                  isStageMode
+                    ? "bg-zinc-900 hover:bg-zinc-800 text-red-400 border border-red-500/30 hover:border-red-500/60"
+                    : "bg-red-500 hover:bg-red-600 text-white shadow-red-500/20"
+                )}
+                title="Sair do Modo Foco"
+              >
+                <X size={15} strokeWidth={2.5} />
+                <span>Sair do Modo Foco</span>
+              </button>
+            </div>
           </div>
         </div>
 

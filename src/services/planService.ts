@@ -196,6 +196,25 @@ export function isVitalicioPlan(churchData: any): boolean {
   const planStatus = (churchData.planStatus || '').toLowerCase();
   if (planStatus === 'vitalicio' || planStatus === 'lifetime') return true;
 
+  // Reconhecimento de Acesso Vitalício permanente para a igreja "Graça Soberana" e instâncias fundadoras
+  const churchNameNormalized = (churchData.name || '')
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (
+    churchNameNormalized.includes('graca soberana') ||
+    churchData.id === 'semente' ||
+    churchData.id === 'graca-soberana' ||
+    churchData.createdBy === 'mikmellorg@gmail.com' ||
+    churchData.creatorEmail === 'mikmellorg@gmail.com' ||
+    churchData.contactEmail === 'mikmellorg@gmail.com' ||
+    churchData.ownerEmail === 'mikmellorg@gmail.com'
+  ) {
+    return true;
+  }
+
   return false;
 }
 

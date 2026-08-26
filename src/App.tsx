@@ -3060,6 +3060,7 @@ function MainContent() {
               onBack={() => { setSelectedSong(null); setIsSongFocusMode(false); }} 
               theme={theme}
               liturgySongs={activeLiturgySongs}
+              allSongs={allSongs}
               onSelectSong={setSelectedSong}
               activeLiturgyService={activeLiturgyService}
               onFocusModeChange={setIsSongFocusMode}
