@@ -48,22 +48,36 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
     }
 
     // Capture beforeinstallprompt event for Chromium / Android 1-click install
+    if ((window as any).__deferredPwaPrompt) {
+      setDeferredPrompt((window as any).__deferredPwaPrompt);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      (window as any).__deferredPwaPrompt = e;
       setDeferredPrompt(e);
     };
 
+    const handlePromptReady = () => {
+      if ((window as any).__deferredPwaPrompt) {
+        setDeferredPrompt((window as any).__deferredPwaPrompt);
+      }
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwa-prompt-ready', handlePromptReady);
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-prompt-ready', handlePromptReady);
     };
   }, []);
 
   const handleInstallPwa = async () => {
-    if (deferredPrompt) {
+    const promptEvent = deferredPrompt || (window as any).__deferredPwaPrompt;
+    if (promptEvent) {
       try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
         if (outcome === 'accepted') {
           setInstalledSuccess(true);
           setTimeout(() => {
@@ -71,6 +85,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
           }, 2000);
         }
         setDeferredPrompt(null);
+        (window as any).__deferredPwaPrompt = null;
       } catch (err) {
         console.warn('Install prompt error:', err);
       }

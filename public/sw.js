@@ -1,5 +1,5 @@
-// Service Worker with support for background Web Push Notifications, Badging, Luxury Icon & Automatic Seamless Update - v8.0
-const CACHE_NAME = 'liloupro-v8.0-gold-luxury';
+// Service Worker with support for background Web Push Notifications, Badging, Luxury Icon & Automatic Seamless Update - v9.0
+const CACHE_NAME = 'liloupro-v9.0-gold-official-pwa';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';
 

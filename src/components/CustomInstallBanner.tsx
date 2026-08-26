@@ -59,34 +59,53 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
       setIsDismissed(false);
     }
 
-    // 4. Capture beforeinstallprompt event
+    // 4. Capture beforeinstallprompt event & check existing window.__deferredPwaPrompt
+    if ((window as any).__deferredPwaPrompt) {
+      setDeferredPrompt((window as any).__deferredPwaPrompt);
+      setSupportsBeforeInstallPrompt(true);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      (window as any).__deferredPwaPrompt = e;
       setDeferredPrompt(e);
       setSupportsBeforeInstallPrompt(true);
-      setIsDismissed(false); // Make sure banner shows if browser supports it
+      setIsDismissed(false);
+    };
+
+    const handlePromptReady = () => {
+      if ((window as any).__deferredPwaPrompt) {
+        setDeferredPrompt((window as any).__deferredPwaPrompt);
+        setSupportsBeforeInstallPrompt(true);
+      }
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setIsDismissed(true);
       setDeferredPrompt(null);
+      (window as any).__deferredPwaPrompt = null;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwa-prompt-ready', handlePromptReady);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('pwa-app-installed', handleAppInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-prompt-ready', handlePromptReady);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('pwa-app-installed', handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = useCallback(async () => {
-    if (deferredPrompt) {
+    const promptEvent = deferredPrompt || (window as any).__deferredPwaPrompt;
+    if (promptEvent) {
       try {
-        deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
+        promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
         if (choiceResult && choiceResult.outcome === 'accepted') {
           setIsInstalled(true);
           setIsDismissed(true);
@@ -95,12 +114,13 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
           } catch {}
         }
         setDeferredPrompt(null);
+        (window as any).__deferredPwaPrompt = null;
       } catch (err) {
         console.warn('Install prompt failed, opening guide modal:', err);
         if (onOpenGuideModal) onOpenGuideModal();
       }
     } else {
-      // If beforeinstallprompt is not directly available (e.g. iOS or desktop browser), open the interactive guide
+      // If beforeinstallprompt is not directly available (e.g. iOS or manual mode), open the interactive guide
       if (onOpenGuideModal) {
         onOpenGuideModal();
       }
