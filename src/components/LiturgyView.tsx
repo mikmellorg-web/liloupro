@@ -1,4 +1,5 @@
 import { LiturgyEditor } from "./SongsView";
+import { getServicePlaylistSongs, getServiceSongs } from "../utils/servicePlaylistUtils";
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { toPng } from 'html-to-image';
 import { 
@@ -1151,6 +1152,30 @@ export function findBestSongMatch<T extends { title: string }>(songs: T[], rawSe
   return bestSong;
 }
 
+export function resolveSongForLiturgyItem(item: any, allSongs: any[] = []): any | null {
+  if (!item) return null;
+  if (typeof item === 'string') {
+    return (allSongs || []).find(s => s.id === item) || findBestSongMatch(allSongs || [], item) || null;
+  }
+  if (item.songId) {
+    const direct = (allSongs || []).find(s => s.id === item.songId);
+    if (direct) return direct;
+  }
+  if (item.id) {
+    const directById = (allSongs || []).find(s => s.id === item.id);
+    if (directById) return directById;
+  }
+  if (item.title) {
+    const matchByTitle = findBestSongMatch(allSongs || [], item.title);
+    if (matchByTitle) return matchByTitle;
+  }
+  if (item.content && (item.type === 'song' || !item.type)) {
+    const matchByContent = findBestSongMatch(allSongs || [], item.content);
+    if (matchByContent) return matchByContent;
+  }
+  return null;
+}
+
 function parseYoutubeVideoId(url: string): string | null {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
@@ -1438,11 +1463,7 @@ export default function LiturgyView({
   }, [user, userChurchId, selectedServiceId]);
 
   const playlistSongs = useMemo(() => {
-    if (!selectedService || !selectedService.liturgy || !allSongs.length) return [];
-    const songItems = selectedService.liturgy.filter((item: any) => item.type === 'song');
-    return songItems
-      .map((item: any) => allSongs.find(s => s.id === item.songId))
-      .filter((song: any) => song && song.youtube && parseYoutubeVideoId(song.youtube));
+    return getServicePlaylistSongs(selectedService, allSongs);
   }, [selectedService, allSongs]);
 
   const handleExportPDF = () => {
@@ -1505,10 +1526,10 @@ export default function LiturgyView({
         other: 'Outro'
       };
       
-      const songDetails = item.type === 'song' ? (allSongs || []).find(s => s.id === item.songId) : null;
+      const songDetails = resolveSongForLiturgyItem(item, allSongs);
       const resolvedTitle = item.title || songDetails?.title || '';
       let titleWithDetails = smartCapitalize(resolvedTitle);
-      if (item.type === 'song' && item.vocalist) {
+      if ((item.type === 'song' || !!songDetails) && item.vocalist) {
         titleWithDetails += ` - ${item.vocalist}`;
       }
       if (item.details && item.type !== 'reading') {
@@ -1717,10 +1738,10 @@ export default function LiturgyView({
 
     selectedService.liturgy.forEach((item: any, idx: number) => {
       message += `${idx + 1}. *${typeMap[item.type] || smartCapitalize(item.type)}*\n`;
-      const songDetails = item.type === 'song' ? (allSongs || []).find(s => s.id === item.songId) : null;
+      const songDetails = resolveSongForLiturgyItem(item, allSongs);
       const resolvedTitle = item.title || songDetails?.title || '';
       let titleStr = smartCapitalize(resolvedTitle);
-      if (item.type === 'song' && item.vocalist) {
+      if ((item.type === 'song' || !!songDetails) && item.vocalist) {
         titleStr += ` - ${item.vocalist}`;
       }
       message += `${titleStr}\n`;
@@ -1762,7 +1783,7 @@ export default function LiturgyView({
             />
           </div>
         </div>
-        {selectedService && (selectedService.liturgy?.length > 0 || selectedService.playlistUrl) && (
+        {selectedService && (selectedService.liturgy?.length > 0 || selectedService.playlistUrl || (selectedService.setlist?.length > 0) || playlistSongs.length > 0) && (
           <div className="flex flex-wrap items-center justify-center gap-3">
             {playlistSongs.length > 0 && onStartPlaylist && (
               <Button 
@@ -1935,26 +1956,38 @@ export default function LiturgyView({
                     ) : (
                       (selectedService.liturgy || []).map((item: any, idx: number) => {
                         const isExpanded = !!expandedItems[item.id];
-                        const isSong = item.type === 'song';
-                        const songDetails = isSong ? (allSongs || []).find(s => s.id === item.songId) : null;
+                        const songDetails = resolveSongForLiturgyItem(item, allSongs);
+                        const isSong = item.type === 'song' || !!item.songId || !!songDetails;
                         
-                        // Transposition calculation
-                        const originalKey = songDetails?.key || songDetails?.baseKey || '';
-                        const semitones = songTranspositions[songDetails?.id] || 0;
+                        // Transposition & Key calculation
+                        const songKeyId = songDetails?.id || item.songId || item.id || item.title || `song-${idx}`;
+                        const originalKey = songDetails?.baseKey 
+                          || songDetails?.key 
+                          || songDetails?.tom 
+                          || item.baseKey 
+                          || item.key 
+                          || item.tom 
+                          || (songDetails?.chords ? detectKey(songDetails.chords) : null) 
+                          || (item.chords ? detectKey(item.chords) : null) 
+                          || (item.details ? detectKey(item.details) : null)
+                          || '';
+                        
+                        const semitones = songTranspositions[songKeyId] || (songDetails?.id ? songTranspositions[songDetails.id] : 0) || 0;
                         const currentKey = originalKey && semitones !== 0 
                           ? transposeChord(originalKey, semitones)
                           : originalKey;
                         
                         // Transposed chords sheet
-                        const chordsContent = songDetails?.chords 
-                          ? (semitones === 0 ? songDetails.chords : transposeLyricsAndChords(songDetails.chords, semitones))
-                          : '';
+                        const rawChords = songDetails?.chords || item.chords || '';
+                        const chordsContent = rawChords 
+                          ? (semitones === 0 ? rawChords : transposeLyricsAndChords(rawChords, semitones))
+                          : (item.details && !item.lyrics ? item.details : '');
 
-                        const fontSize = songFontSize[songDetails?.id || ''] || 13;
+                        const fontSize = songFontSize[songKeyId] || (songDetails?.id ? songFontSize[songDetails.id] : 0) || 13;
 
                         return (
                           <div 
-                            key={item.id} 
+                            key={item.id || idx} 
                             className={cn(
                               "border rounded-2xl bg-card transition-all duration-300 overflow-hidden",
                               isExpanded 
@@ -1971,7 +2004,7 @@ export default function LiturgyView({
                             >
                               <div className="flex items-center gap-3 min-w-0">
                                 {/* Liturgy sequence badge */}
-                                <div className="w-6 h-6 rounded-full bg-brand/10 border border-brand/20 text-brand flex items-center justify-center text-[10px] font-black shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-brand text-white flex items-center justify-center text-[10px] font-black shrink-0 shadow-xs">
                                   {idx + 1}
                                 </div>
                                 
@@ -2026,19 +2059,19 @@ export default function LiturgyView({
 
                               {/* Badges on right side when collapsed */}
                               <div className="flex items-center gap-2 shrink-0">
-                                {(item.type === 'reading' || item.bibleVersion) && (
-                                  <span className="text-[9px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full shrink-0">
-                                    {item.bibleVersion || 'NAA'}
-                                  </span>
-                                )}
-                                {isSong && songDetails && (
+                                {isSong && (
                                   <div className="flex items-center gap-1">
-                                    {currentKey && (
+                                    {currentKey ? (
                                       <span className="text-[10px] font-black bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full">
                                         Tom: {currentKey}
                                       </span>
+                                    ) : (
+                                      (songDetails?.chords || item.chords) ? (
+                                        <span className="text-[10px] font-black bg-brand/10 border border-brand/20 text-brand px-2 py-0.5 rounded-full">
+                                          Tom: {detectKey(songDetails?.chords || item.chords || '') || 'C'}
+                                        </span>
+                                      ) : null
                                     )}
-
                                   </div>
                                 )}
                                 {isExpanded ? <ChevronUp size={16} className="text-text-muted" /> : <ChevronDown size={16} className="text-text-muted" />}
@@ -2058,7 +2091,7 @@ export default function LiturgyView({
                                   <div className="p-4 space-y-4">
                                     {/* Song Details content */}
                                     {isSong ? (
-                                      songDetails ? (
+                                      (songDetails || chordsContent || item.details) ? (
                                         <div className="space-y-4">
                                           {/* Song Toolbar (Tab switch, Key transpose, font size, YouTube button) */}
                                           <div className="flex flex-wrap items-center justify-between gap-3 bg-black/20 dark:bg-black/40 p-3 rounded-xl border border-border">
@@ -2107,7 +2140,7 @@ export default function LiturgyView({
                                                     <button 
                                                       onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) - 1 }));
+                                                        setSongTranspositions(p => ({ ...p, [songKeyId]: (p[songKeyId] || 0) - 1 }));
                                                       }}
                                                       className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
                                                       title="Meio tom abaixo"
@@ -2115,12 +2148,12 @@ export default function LiturgyView({
                                                       -
                                                     </button>
                                                     <span className="px-2 text-xs font-black text-brand min-w-[32px] text-center bg-brand/10 rounded border border-brand/20 py-0.5">
-                                                      {currentKey || '?'}
+                                                      {currentKey || detectKey(songDetails?.chords || item.chords || '') || '?'}
                                                     </span>
                                                     <button 
                                                       onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setSongTranspositions(p => ({ ...p, [songDetails.id]: (p[songDetails.id] || 0) + 1 }));
+                                                        setSongTranspositions(p => ({ ...p, [songKeyId]: (p[songKeyId] || 0) + 1 }));
                                                       }}
                                                       className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-black text-text-main active:scale-90 transition-transform cursor-pointer"
                                                       title="Meio tom acima"
@@ -2138,7 +2171,7 @@ export default function LiturgyView({
                                                   <button 
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      setSongFontSize(p => ({ ...p, [songDetails.id]: Math.max(10, (p[songDetails.id] || 13) - 1) }));
+                                                      setSongFontSize(p => ({ ...p, [songKeyId]: Math.max(10, (p[songKeyId] || fontSize) - 1) }));
                                                     }}
                                                     className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
                                                   >
@@ -2150,25 +2183,25 @@ export default function LiturgyView({
                                                   <button 
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      setSongFontSize(p => ({ ...p, [songDetails.id]: Math.min(20, (p[songDetails.id] || 13) + 1) }));
+                                                      setSongFontSize(p => ({ ...p, [songKeyId]: Math.min(20, (p[songKeyId] || fontSize) + 1) }));
                                                     }}
                                                     className="w-7 h-7 flex items-center justify-center rounded bg-black/20 hover:bg-black/35 border border-border text-xs font-bold text-text-main active:scale-90 transition-transform cursor-pointer"
                                                   >
                                                     A+
                                                   </button>
                                                 </div>
-                                                {songDetails.bpm && (
+                                                {(songDetails?.bpm || item.bpm) && (
                                                   <span className="text-[10px] font-black bg-black/10 dark:bg-white/10 border border-border text-text-muted px-2 py-0.5 rounded shrink-0 uppercase">
-                                                    {songDetails.bpm} BPM
+                                                    {songDetails?.bpm || item.bpm} BPM
                                                   </span>
                                                 )}
                                               </div>
                                             </div>
 
                                             {/* YouTube play link */}
-                                            {songDetails.youtube && (
+                                            {(songDetails?.youtube || item.youtube) && (
                                               <Button
-                                                onClick={() => window.open(songDetails.youtube, '_blank')}
+                                                onClick={() => window.open(songDetails?.youtube || item.youtube, '_blank')}
                                                 className="h-8 px-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] uppercase tracking-widest rounded flex items-center gap-1.5 shrink-0 border-none"
                                               >
                                                 <Youtube size={12} fill="#ffffff" />
@@ -2180,7 +2213,7 @@ export default function LiturgyView({
                                           {/* Content Block (Chords or Clean Lyrics) */}
                                           {(() => {
                                             const currentTab = songTabs[item.id] || 'chords';
-                                            const effectiveLyricsContent = getEffectiveLyrics(songDetails?.lyrics, songDetails?.chords);
+                                            const effectiveLyricsContent = getEffectiveLyrics(songDetails?.lyrics || item.lyrics, songDetails?.chords || item.chords);
                                             const activeContent = currentTab === 'lyrics' ? effectiveLyricsContent : chordsContent;
 
                                             if (!activeContent) {
@@ -2235,7 +2268,7 @@ export default function LiturgyView({
                                       <div className="space-y-3">
                                         <div className="flex items-center justify-between">
                                           <span className="text-[10px] font-black text-brand uppercase tracking-widest bg-brand/10 border border-brand/20 px-2.5 py-0.5 rounded-full">
-                                            Texto Bíblico • {item.bibleVersion || 'NAA'}
+                                            Texto Bíblico
                                           </span>
                                         </div>
                                         {item.details ? (

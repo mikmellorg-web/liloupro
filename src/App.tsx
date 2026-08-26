@@ -56,8 +56,10 @@ import { TrialBanner } from './components/TrialBanner';
 import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
 import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
+import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
-import luxuryAppIcon from './assets/images/luxury_app_icon_1787495429884.jpg';
+import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
+import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Lazy-loaded components for code-splitting
 const DashboardView = lazy(() => import('./components/DashboardView'));
@@ -1434,11 +1436,14 @@ function AuthView({
         </div>
       </Card>
 
-      {/* Luxury App PWA Install Prompt Modal */}
+      {/* Luxury App PWA Install Prompt Modal & Floating Banner */}
       <LuxuryAppInstallModal 
         isOpen={showInstallModal}
         onClose={() => setShowInstallModal(false)}
         userName="Ministro"
+      />
+      <CustomInstallBanner 
+        onOpenGuideModal={() => setShowInstallModal(true)}
       />
     </div>
   );
@@ -2172,49 +2177,7 @@ function MainContent() {
   }, [allServices]);
 
   const activeLiturgySongs = useMemo(() => {
-    if (!activeLiturgyService) return [];
-    
-    const items = [
-      ...(activeLiturgyService.setlist || []),
-      ...(activeLiturgyService.liturgy || [])
-    ];
-
-    if (items.length === 0) return [];
-
-    const songIds = items
-      .filter((item: any) => {
-        if (typeof item === 'string') return true;
-        const type = String(item.type || '').toLowerCase();
-        return type === 'song' || !!item.songId || !!item.title || !!item.content;
-      })
-      .map((item: any) => {
-        if (item.songId) return item.songId;
-
-        // Extract search strings from item
-        const searchStrings: string[] = [];
-        if (typeof item === 'string') {
-          searchStrings.push(item);
-        } else {
-          if (item.title) searchStrings.push(item.title);
-          if (item.content && item.type === 'song') searchStrings.push(item.content);
-        }
-
-        if (searchStrings.length === 0) return null;
-
-        for (const rawSearch of searchStrings) {
-          const match = findBestSongMatch(allSongs, rawSearch);
-          if (match) return match.id;
-        }
-
-        return null;
-      })
-      .filter(Boolean);
-
-    // Map IDs to actual song objects
-    const uniqueSongIds = Array.from(new Set(songIds));
-    return uniqueSongIds
-      .map((id: string) => allSongs.find(s => s.id === id))
-      .filter(Boolean);
+    return getServiceSongs(activeLiturgyService, allSongs);
   }, [activeLiturgyService, allSongs]);
 
   useEffect(() => {
@@ -3149,11 +3112,14 @@ function MainContent() {
         resourceCheck={upgradeModalResult} 
       />
 
-      {/* Luxury PWA Install Modal for Logged-in Users */}
+      {/* Luxury PWA Install Modal & Floating Banner for Logged-in Users */}
       <LuxuryAppInstallModal
         isOpen={showInstallPromptModal}
         onClose={() => setShowInstallPromptModal(false)}
         userName={memberData?.name ? memberData.name.split(' ')[0] : (user?.displayName ? user.displayName.split(' ')[0] : 'Ministro')}
+      />
+      <CustomInstallBanner 
+        onOpenGuideModal={() => setShowInstallPromptModal(true)}
       />
     </div>
   );

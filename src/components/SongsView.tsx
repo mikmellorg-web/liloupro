@@ -60,6 +60,7 @@ import { BibleVersionProvider } from '../contexts/BibleVersionContext';
 import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { FootswitchModal, FootswitchConfig, MVAVE_CHOCOLATE_DEFAULT_MAPPINGS } from './FootswitchModal';
+import { getServicePlaylistSongs, getServiceSongs, getServiceSongIds, updateServicePlaylistUrl } from '../utils/servicePlaylistUtils';
 
 
 function cn(...inputs: ClassValue[]) {
@@ -2259,6 +2260,9 @@ export default function SongsView({
   const [isAddingLiturgySong, setIsAddingLiturgySong] = useState(false);
   const [liturgySongSearch, setLiturgySongSearch] = useState('');
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
+  const [isEditingTargetPlaylist, setIsEditingTargetPlaylist] = useState(false);
+  const [targetPlaylistUrl, setTargetPlaylistUrl] = useState('');
+  const [isSavingTargetPlaylist, setIsSavingTargetPlaylist] = useState(false);
 
   useEffect(() => {
     if (initialAdd && isAdmin) {
@@ -2442,12 +2446,16 @@ export default function SongsView({
     };
 
     const updatedLiturgy = [...liturgy, newItem];
-    const updatedSetlist = [...setlist, song.id];
+    const updatedSetlist = updatedLiturgy
+      .filter((item: any) => item && (item.type === 'song' || item.songId))
+      .map((item: any) => item.songId || item.id)
+      .filter(Boolean);
 
     try {
       await updateDoc(doc(db, 'services', targetService.id), {
         liturgy: updatedLiturgy,
-        setlist: updatedSetlist
+        setlist: updatedSetlist,
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error("Erro ao adicionar música ao culto:", error);
@@ -2459,10 +2467,8 @@ export default function SongsView({
     if (!targetService) return;
     
     const song = songs.find(s => s.id === songId);
-    const songTitleNorm = song ? normalize(song.title) : '';
     
     const liturgy = [...(targetService.liturgy || [])];
-    const setlist = [...(targetService.setlist || [])];
 
     const updatedLiturgy = liturgy.filter((item: any) => {
       if (!item) return false;
@@ -2472,19 +2478,23 @@ export default function SongsView({
       if (item.id === songId) return false;
       
       // If the liturgy item matches the removed song via findBestSongMatch
-      if (item.title) {
+      if (item.title && item.type === 'song') {
         const matchedSong = findBestSongMatch(songs, item.title);
         if (matchedSong && matchedSong.id === songId) return false;
       }
       return true;
     });
 
-    const updatedSetlist = setlist.filter((id: string) => id !== songId);
+    const updatedSetlist = updatedLiturgy
+      .filter((item: any) => item && (item.type === 'song' || item.songId))
+      .map((item: any) => item.songId || item.id)
+      .filter(Boolean);
 
     try {
       await updateDoc(doc(db, 'services', targetService.id), {
         liturgy: updatedLiturgy,
-        setlist: updatedSetlist
+        setlist: updatedSetlist,
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error("Erro ao remover música do culto:", error);
@@ -2496,7 +2506,6 @@ export default function SongsView({
     if (!targetService) return;
 
     const liturgy = [...(targetService.liturgy || [])];
-    const setlist = [...(targetService.setlist || [])];
 
     // Swap in liturgy
     const itemIndex = liturgy.findIndex(item => item.songId === songId);
@@ -2522,27 +2531,16 @@ export default function SongsView({
       }
     }
 
-    // Swap in setlist (if exists)
-    const setlistIndex = setlist.indexOf(songId);
-    if (setlistIndex !== -1) {
-      let targetSetlistIndex = -1;
-      if (direction === 'up' && setlistIndex > 0) {
-        targetSetlistIndex = setlistIndex - 1;
-      } else if (direction === 'down' && setlistIndex < setlist.length - 1) {
-        targetSetlistIndex = setlistIndex + 1;
-      }
-
-      if (targetSetlistIndex !== -1) {
-        const temp = setlist[setlistIndex];
-        setlist[setlistIndex] = setlist[targetSetlistIndex];
-        setlist[targetSetlistIndex] = temp;
-      }
-    }
+    const updatedSetlist = liturgy
+      .filter((item: any) => item && (item.type === 'song' || item.songId))
+      .map((item: any) => item.songId || item.id)
+      .filter(Boolean);
 
     try {
       await updateDoc(doc(db, 'services', targetService.id), { 
         liturgy,
-        setlist
+        setlist: updatedSetlist,
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error("Erro ao ordenar músicas:", error);
@@ -2551,45 +2549,7 @@ export default function SongsView({
   };
 
   const liturgySongIds = useMemo(() => {
-    if (!targetService) return [];
-    
-    const items = [
-      ...(targetService.setlist || []),
-      ...(targetService.liturgy || [])
-    ];
-
-    if (items.length === 0) return [];
-
-    const songIds = items
-      .filter((item: any) => {
-        if (typeof item === 'string') return true;
-        const type = String(item.type || '').toLowerCase();
-        return type === 'song' || !!item.songId || !!item.title || !!item.content;
-      })
-      .map((item: any) => {
-        if (item.songId) return item.songId;
-
-        // Extract search strings from item
-        const searchStrings: string[] = [];
-        if (typeof item === 'string') {
-          searchStrings.push(item);
-        } else {
-          if (item.title) searchStrings.push(item.title);
-          if (item.content && item.type === 'song') searchStrings.push(item.content);
-        }
-
-        if (searchStrings.length === 0) return null;
-
-        for (const rawSearch of searchStrings) {
-          const match = findBestSongMatch(songs, rawSearch);
-          if (match) return match.id;
-        }
-
-        return null;
-      })
-      .filter(Boolean);
-
-    return Array.from(new Set(songIds)) as string[];
+    return getServiceSongIds(targetService, songs);
   }, [targetService, songs]);
 
   const filteredSongs = useMemo(() => {
@@ -2629,9 +2589,23 @@ export default function SongsView({
   }, [songs, showLiturgySongs, liturgySongIds, searchTerm, selectedCategory, selectedArtist, showOnlyFavorites, memberData]);
 
   const liturgyPlaylistSongs = useMemo(() => {
-    if (!showLiturgySongs) return [];
-    return filteredSongs.filter((s: any) => s.youtube && parseYoutubeVideoId(s.youtube));
-  }, [filteredSongs, showLiturgySongs]);
+    if (!showLiturgySongs || !targetService) return [];
+    return getServicePlaylistSongs(targetService, songs);
+  }, [targetService, songs, showLiturgySongs]);
+
+  const handleSaveTargetPlaylist = async () => {
+    if (!targetService) return;
+    setIsSavingTargetPlaylist(true);
+    try {
+      await updateServicePlaylistUrl(targetService.id, targetPlaylistUrl);
+      setIsEditingTargetPlaylist(false);
+    } catch (e) {
+      console.error("Error updating target playlist URL:", e);
+      alert("Erro ao atualizar playlist do culto no Firebase.");
+    } finally {
+      setIsSavingTargetPlaylist(false);
+    }
+  };
 
   const artists = Array.from(new Set(songs.map(s => s.artist).filter(Boolean))).sort();
 
@@ -2669,7 +2643,7 @@ export default function SongsView({
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || errData.details || "Não foi possível importar a cifra de Cifra Club.");
+        throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
       }
 
       const data = await response.json();
@@ -2891,6 +2865,32 @@ export default function SongsView({
                  <p className="text-[9px] sm:text-[10px] text-text-muted italic flex-1 min-w-[200px]">Cadastre links do YouTube nas músicas para liberar a playlist do culto.</p>
                )}
 
+               {targetService.playlistUrl && !isEditingTargetPlaylist && (
+                 <button
+                   type="button"
+                   onClick={() => { window.open(targetService.playlistUrl, '_blank'); }}
+                   className="flex items-center justify-center gap-1.5 h-8 px-3 bg-white text-[#E60000] border border-[#E60000]/20 rounded-lg font-bold uppercase text-[9px] sm:text-[10px] tracking-wider transition-all hover:scale-105 active:scale-95 shadow-md shadow-red-600/5 cursor-pointer shrink-0"
+                 >
+                   <Youtube size={12} fill="#E60000" />
+                   Playlist Externa
+                 </button>
+               )}
+
+               {isAdmin && !isEditingTargetPlaylist && (
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setTargetPlaylistUrl(targetService.playlistUrl || '');
+                     setIsEditingTargetPlaylist(true);
+                   }}
+                   className="flex items-center justify-center gap-1.5 h-8 px-3 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-main border border-border rounded-lg font-bold uppercase text-[9px] sm:text-[10px] tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                   title="Configurar Link da Playlist do Culto"
+                 >
+                   <Youtube size={12} className="text-[#E60000]" />
+                   {targetService.playlistUrl ? "Alterar Link Playlist" : "+ Vincular Playlist"}
+                 </button>
+               )}
+
                {isAdmin && (
                  <button
                    type="button"
@@ -2901,6 +2901,38 @@ export default function SongsView({
                  </button>
                )}
              </div>
+
+             {isEditingTargetPlaylist && (
+               <div className="mt-3 pt-3 border-t border-brand/10 flex flex-col sm:flex-row items-center gap-2 animate-in fade-in duration-200">
+                 <div className="relative flex-1 w-full">
+                   <Input
+                     placeholder="Cole o link da Playlist no YouTube ou Spotify..."
+                     value={targetPlaylistUrl}
+                     onChange={e => setTargetPlaylistUrl(e.target.value)}
+                     className="bg-black/5 dark:bg-white/5 border-border text-text-main text-xs h-9 w-full rounded-lg"
+                     autoFocus
+                   />
+                 </div>
+                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                   <button
+                     type="button"
+                     disabled={isSavingTargetPlaylist}
+                     onClick={handleSaveTargetPlaylist}
+                     className="h-9 px-4 bg-brand text-brand-text font-bold text-xs rounded-lg uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1 shrink-0"
+                   >
+                     {isSavingTargetPlaylist ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                     Salvar Link
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => setIsEditingTargetPlaylist(false)}
+                     className="h-9 px-3 bg-black/5 dark:bg-white/5 text-text-muted hover:text-text-main font-bold text-xs rounded-lg transition-all"
+                   >
+                     Cancelar
+                   </button>
+                 </div>
+               </div>
+             )}
           </div>
         )}
 
@@ -4059,7 +4091,7 @@ export function SongDetailView({
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || errData.details || "Não foi possível importar a cifra de Cifra Club.");
+        throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
       }
 
       const data = await response.json();
@@ -12746,11 +12778,6 @@ function LiturgyItemCard({
               {item.type === 'offering' && <Gift size={14} className="text-emerald-500 shrink-0"/>}
               {item.type === 'other' && <Activity size={14} className="text-green-600 shrink-0"/>}
               <span className="truncate">{item.title}</span>
-              {(item.type === 'reading' || (item.type !== 'song' && item.bibleVersion)) && (
-                <span className="text-[9px] font-black uppercase tracking-widest bg-brand/10 border border-brand/20 text-brand px-1.5 py-0.5 rounded leading-none shrink-0 self-center">
-                  {item.bibleVersion || 'NAA'}
-                </span>
-              )}
               {item.duration && (
                 <span className="text-[8px] font-black uppercase tracking-widest bg-[#E60000]/10 border border-[#E60000]/25 text-[#E60000] dark:text-red-400 px-1.5 py-0.5 rounded leading-none shrink-0 flex items-center gap-1 self-center">
                   <Clock size={9} /> {item.duration}m
@@ -13254,8 +13281,14 @@ export function LiturgyEditor({
     try {
       const liturgy = service.liturgy || [];
       const updatedLiturgy = [...liturgy, { ...newItem, id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() }];
+      const songIds = updatedLiturgy
+        .filter((item: any) => item && (item.type === 'song' || item.songId))
+        .map((item: any) => item.songId || item.id)
+        .filter(Boolean);
+
       await updateDoc(doc(db, "services", service.id), { 
         liturgy: updatedLiturgy,
+        setlist: songIds,
         updatedAt: new Date().toISOString()
       });
       setAddItemStatus("success");
@@ -13463,14 +13496,17 @@ export function LiturgyEditor({
     const servicePath = `services/${service.id}`;
     try {
       const liturgy = service.liturgy || [];
-      const itemToRemove = liturgy[index] || liturgy.find((i: any) => i.id === itemId);
       const updatedLiturgy = liturgy.filter((_: any, i: number) => i !== index);
-      const updateData: any = { liturgy: updatedLiturgy };
-      
-      if (itemToRemove && itemToRemove.type === 'song' && itemToRemove.songId) {
-        const setlist = [...(service.setlist || [])];
-        updateData.setlist = setlist.filter((id: string) => id !== itemToRemove.songId);
-      }
+      const songIds = updatedLiturgy
+        .filter((item: any) => item && (item.type === 'song' || item.songId))
+        .map((item: any) => item.songId || item.id)
+        .filter(Boolean);
+
+      const updateData: any = { 
+        liturgy: updatedLiturgy,
+        setlist: songIds,
+        updatedAt: new Date().toISOString()
+      };
       
       await updateDoc(doc(db, 'services', service.id), updateData);
     } catch (error) {
@@ -13481,7 +13517,16 @@ export function LiturgyEditor({
   const handleReorder = async (newOrder: any[]) => {
     const servicePath = `services/${service.id}`;
     try {
-      await updateDoc(doc(db, 'services', service.id), { liturgy: newOrder });
+      const songIds = newOrder
+        .filter((item: any) => item && (item.type === 'song' || item.songId))
+        .map((item: any) => item.songId || item.id)
+        .filter(Boolean);
+
+      await updateDoc(doc(db, 'services', service.id), { 
+        liturgy: newOrder,
+        setlist: songIds,
+        updatedAt: new Date().toISOString()
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
     }
@@ -13490,7 +13535,7 @@ export function LiturgyEditor({
   const handlePlaylistUpdate = async (url: string) => {
     const servicePath = `services/${service.id}`;
     try {
-      await updateDoc(doc(db, 'services', service.id), { playlistUrl: url });
+      await updateServicePlaylistUrl(service.id, url);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
     }
@@ -13507,9 +13552,18 @@ export function LiturgyEditor({
     liturgy[index] = liturgy[newIndex];
     liturgy[newIndex] = temp;
     
+    const songIds = liturgy
+      .filter((item: any) => item && (item.type === 'song' || item.songId))
+      .map((item: any) => item.songId || item.id)
+      .filter(Boolean);
+
     const servicePath = `services/${service.id}`;
     try {
-      await updateDoc(doc(db, 'services', service.id), { liturgy });
+      await updateDoc(doc(db, 'services', service.id), { 
+        liturgy,
+        setlist: songIds,
+        updatedAt: new Date().toISOString()
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
     }
@@ -13530,10 +13584,18 @@ export function LiturgyEditor({
     reorderedGroups[targetGroupIndex] = temp;
 
     const updatedLiturgy = reorderedGroups.flatMap(g => g.items.map(gi => gi.item));
+    const songIds = updatedLiturgy
+      .filter((item: any) => item && (item.type === 'song' || item.songId))
+      .map((item: any) => item.songId || item.id)
+      .filter(Boolean);
     
     const servicePath = `services/${service.id}`;
     try {
-      await updateDoc(doc(db, 'services', service.id), { liturgy: updatedLiturgy });
+      await updateDoc(doc(db, 'services', service.id), { 
+        liturgy: updatedLiturgy,
+        setlist: songIds,
+        updatedAt: new Date().toISOString()
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
     }
@@ -13754,57 +13816,7 @@ export function LiturgyEditor({
           </motion.div>
        )}
 
-        {/* Playlist do Culto (Sempre visível para administradores para edição, e visível para todos os membros caso exista link) */}
-        {(isAdmin || service.playlistUrl) && (
-          <div className="w-full mb-6 max-w-2xl mx-auto">
-            <div className="bg-brand/10 p-5 rounded-2xl border border-brand/20 shadow-md">
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="w-11 h-11 rounded-full bg-[#E60000]/10 flex items-center justify-center text-[#E60000] shrink-0 border border-[#E60000]/20">
-                  <Youtube size={22} fill="#E60000" />
-                </div>
-                <div className="flex-1 w-full space-y-1">
-                  <label className="text-[10px] font-black text-text-main uppercase tracking-widest pl-1 flex items-center gap-2">
-                    Playlist do Culto (YouTube / Link de Áudio)
-                  </label>
-                  {isAdmin ? (
-                    <div className="flex items-center gap-2">
-                      <Input 
-                        placeholder="Adicione o link da playlist (Ex: https://youtube.com/...)" 
-                        value={service.playlistUrl || ''} 
-                        onChange={e => handlePlaylistUpdate(e.target.value)}
-                        className="bg-black/10 dark:bg-white/5 border border-border text-text-main h-10 text-xs py-0 w-full"
-                      />
-                      {service.playlistUrl && (
-                        <Button 
-                          onClick={() => { window.open(service.playlistUrl, '_blank'); }}
-                          className="h-10 px-4 bg-white border border-[#E60000]/30 text-[#E60000] hover:bg-white/90 shrink-0 shadow-sm flex items-center gap-2 font-bold text-xs rounded-xl"
-                        >
-                          <Youtube size={15} fill="#E60000" />
-                          Ouvir
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    service.playlistUrl && (
-                      <div className="flex items-center justify-between gap-4 py-1">
-                        <span className="text-xs text-text-muted italic truncate max-w-[200px] sm:max-w-[300px]">
-                          {service.playlistUrl}
-                        </span>
-                        <Button 
-                          onClick={() => { window.open(service.playlistUrl, '_blank'); }}
-                          className="h-9 px-5 bg-[#E60000] text-white hover:bg-[#E60000]/90 shrink-0 shadow-md flex items-center gap-2 font-bold text-xs rounded-full border-none"
-                        >
-                          <Youtube size={14} fill="#ffffff" />
-                          Ouvir Playlist Completa
-                        </Button>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Visualização limpa da Liturgia sem campo redundante de playlist */}
 
        {isEditing && (
           <div className="space-y-4 mb-6 animate-in slide-in-from-top duration-300">

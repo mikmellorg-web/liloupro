@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Zap
 } from 'lucide-react';
-import luxuryAppIcon from '../assets/images/luxury_app_icon_1787495429884.jpg';
+import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 export interface LuxuryAppInstallModalProps {
   isOpen: boolean;

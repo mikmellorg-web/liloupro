@@ -1649,8 +1649,23 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     }
   });
 
+  // Helper to format hyphenated slugs into human readable words (e.g. diante-do-trono -> Diante do Trono)
+  function formatCifraClubSlug(slug: string): string {
+    return (slug || "")
+      .split("-")
+      .filter(Boolean)
+      .map(w => {
+        const lower = w.toLowerCase();
+        if (["de", "da", "do", "das", "dos", "e", "em", "o", "a", "os", "as", "pra", "para"].includes(lower)) {
+          return lower;
+        }
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      })
+      .join(" ");
+  }
+
   // Helper function to crawl and scrape details from a Cifra Club URL deterministically (with no tablatures)
-  async function scrapeCifraClub(url: string): Promise<{
+  async function scrapeCifraClub(inputUrl: string): Promise<{
     title: string;
     artist: string;
     key: string;
@@ -1661,27 +1676,44 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     capo: string;
     artistImageUrl?: string;
   }> {
-    const lowerUrl = url.trim().toLowerCase();
-    if (!lowerUrl.includes("cifraclub.com.br")) {
+    let cleanUrl = (inputUrl || "").trim();
+    if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+      cleanUrl = "https://" + cleanUrl;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(cleanUrl);
+    } catch {
+      throw new Error("URL inválida. Por favor, insira um link válido do Cifra Club.");
+    }
+
+    if (!parsedUrl.hostname.includes("cifraclub.com.br")) {
       throw new Error("URL inválida. Por favor, insira uma URL válida do site cifraclub.com.br.");
     }
 
-    console.log(`scrapeCifraClub: Iniciando raspagem nativa para URL [${url}]...`);
+    // Normalize hostname and strip hash/query
+    parsedUrl.hostname = "www.cifraclub.com.br";
+    const targetUrl = parsedUrl.origin + parsedUrl.pathname;
+    const pathSegments = parsedUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
 
-    // 1. Fetch HTML with custom headers to prevent blocking
-    const responseHtml = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      }
-    });
-
-    if (!responseHtml.ok) {
-      throw new Error(`O site Cifra Club retornou o status HTTP ${responseHtml.status}. Verifique se o link está correto.`);
+    if (pathSegments.length === 0) {
+      throw new Error("Por favor, insira o link de uma música específica do Cifra Club.");
     }
 
-    const html = await responseHtml.text();
+    const artistSlug = pathSegments[0] || "";
+    const songSlug = pathSegments[1] || "";
+    const artistGuess = formatCifraClubSlug(artistSlug);
+    const songGuess = formatCifraClubSlug(songSlug);
+
+    // If only artist slug is present (e.g. https://www.cifraclub.com.br/diante-do-trono/)
+    if (pathSegments.length === 1 && !artistSlug.includes(".html")) {
+      throw new Error(
+        `O link inserido é a página do artista/banda ("${artistGuess}"). Por favor, clique na música desejada no Cifra Club e copie o link direto da canção (Ex: https://www.cifraclub.com.br/${artistSlug}/aguas-purificadoras/).`
+      );
+    }
+
+    console.log(`scrapeCifraClub: Iniciando raspagem para URL [${targetUrl}] (Artista: ${artistGuess}, Música: ${songGuess})...`);
 
     // Helper to decode basic HTML entities
     const htmlDecode = (str: string) => {
@@ -1695,303 +1727,377 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         .replace(/&#x27;/g, "'");
     };
 
-    // 2. Extract Title and Artist from <title> tag
-    const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
-    let extractedTitle = "Música Importada";
-    let extractedArtist = "Artista Desconhecido";
-    if (titleMatch) {
-      const fullTitle = htmlDecode(titleMatch[1].trim());
-      const parts = fullTitle.split(" - ");
-      if (parts.length >= 2) {
-        extractedTitle = parts[0].trim();
-        // Remove suffix like "Cifra Club" if present in artist
-        extractedArtist = parts[1].replace(/\s*-\s*Cifra Club/i, "").trim();
-      } else {
-        extractedTitle = fullTitle.replace(/\s*-\s*Cifra Club/i, "").trim();
+    let html = "";
+    let fetchOk = false;
+
+    try {
+      const responseHtml = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://www.cifraclub.com.br/'
+        }
+      });
+
+      if (responseHtml.ok) {
+        html = await responseHtml.text();
+        fetchOk = true;
       }
+    } catch (netErr: any) {
+      console.log(`scrapeCifraClub: Erro de rede no fetch direto: ${netErr?.message || netErr}`);
     }
 
-    // 3. Extract original key (Tom) from the HTML
-    const tomMatch = html.match(/id="cifra_tom"[^>]*>[\s\S]*?>([^<]+)<\/a>/i);
-    let key = tomMatch ? htmlDecode(tomMatch[1].trim()) : "C";
-
-    // Normalize key format under Liloupro regulations
-    key = key
-      .replace("m7m", "m7")
-      .replace("min7", "m7")
-      .replace("7+", "7M")
-      .replace("maj7", "7M")
-      .replace("M7", "7M")
-      .trim();
-
-    // 3.5 Extract capo (capotraste) information from "id=cifra_capo"
-    let capo = "";
-    const capoMatch = html.match(/id="cifra_capo"[^>]*>([\s\S]*?)<\/span>/i);
-    if (capoMatch) {
-      capo = htmlDecode(capoMatch[1].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim());
-    } else {
-      const textCapoMatch = html.match(/(?:Capotraste\s+na\s+\d+\s*ª?\s*casa|Capo\s+na\s+\d+\s*ª?\s*casa)/i);
-      if (textCapoMatch) {
-        capo = htmlDecode(textCapoMatch[0].trim());
-      }
-    }
-
-    // 3.7 Scrape artist or band picture dynamically from Cifra Club page content
-    let artistImageUrl = "";
-    
-    // Check for high-res artist picture paths (e.g., in Cifra Club's CDN) first
-    const artistImageCdns = [
-      /https:\/\/images\.cifraclub\.com\.br\/artist\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i,
-      /https:\/\/studiosol-a\.akamaihd\.net\/tb\/artist\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i,
-      /https:\/\/images\.cifraclub\.com\.br\/contrib\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i
-    ];
-
-    for (const regex of artistImageCdns) {
-      const match = html.match(regex);
-      if (match) {
-        artistImageUrl = match[0];
-        break;
-      }
-    }
-
-    // Fallback to standard og:image if no specific artist CDN URL found
-    if (!artistImageUrl) {
-      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) || 
-                           html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
-      if (ogImageMatch) {
-        artistImageUrl = htmlDecode(ogImageMatch[1].trim());
-      }
-    }
-
-
-    // 4. Extract PRE tag (chords and lyrics layout)
-    const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
-    if (!preMatch) {
-       throw new Error("Não foi possível localizar o bloco estrutural com a letra e os acordes nesta página do Cifra Club.");
-    }
-
-    const preHtml = preMatch[1];
-
-    // Clean chords and extract lyrics, ignoring all tablatures/ASCII guitar finger grids line-by-line
-    const rawLines = preHtml.split(/\r?\n/);
-    const cleanedChordsLines: string[] = [];
-    const lyricLines: string[] = [];
-
-    // Walk through lines and create metadata for stateful checking
-    const linesMetadata = rawLines.map((rawLine) => {
-      const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, "")).trim();
-      const isEmpty = stripped === "";
-      const isSection = stripped.startsWith("[") && stripped.endsWith("]");
-      const isTab = (
-        /^[a-gA-G1-9]#?[b]?\s*[\|:]/.test(stripped) && stripped.includes("-")
-      ) || (
-        stripped.includes("|") && (stripped.match(/-{1,}/) !== null)
-      ) || (
-        /^-{3,}$/.test(stripped)
-      ) || (
-        rawLine.includes('class="tablatura"') || rawLine.includes("class='tablatura'") ||
-        rawLine.includes('class="tab"') || rawLine.includes("class='tab'")
-      ) || (
-        /\[Tab\b/i.test(stripped)
-      ) || (
-        /Parte\s*\d+/i.test(stripped)
-      );
-
-      const hasChords = /<b\b[^>]*>/i.test(rawLine) || /<span\b[^>]*class=["']?(?:cifra|chord)["']?/i.test(rawLine);
-
-      return {
-        rawLine,
-        stripped,
-        isEmpty,
-        isSection,
-        isTab,
-        hasChords,
-      };
-    });
-
-    // Process and filter lines
-    let currentSection = "";
-    for (let i = 0; i < linesMetadata.length; i++) {
-      const curr = linesMetadata[i];
-
-      // Update the current section
-      const sectionMatch = curr.stripped.match(/\[([^\]]+)\]/);
-      if (sectionMatch) {
-        currentSection = sectionMatch[1].trim().toLowerCase();
-      }
-
-      if (curr.isTab) {
-        continue;
-      }
-
-      // Check if current line contains chords but actually belongs to a tablature (followed by a tab line)
-      if (curr.hasChords) {
-        const isIntroOrSoloSection = currentSection === "" || 
-          currentSection.includes("intro") || 
-          currentSection.includes("solo") || 
-          currentSection.includes("instrumental") || 
-          currentSection.includes("interludio") || 
-          currentSection.includes("interlúdio") || 
-          currentSection.includes("outro") || 
-          currentSection.includes("fim") || 
-          currentSection.includes("dedilhado") || 
-          currentSection.includes("riff");
-
-        if (!isIntroOrSoloSection) {
-          let isTabChord = false;
-          for (let j = i + 1; j < linesMetadata.length; j++) {
-            const next = linesMetadata[j];
-            if (next.isEmpty) {
-              continue;
-            }
-            if (next.isTab) {
-              isTabChord = true;
-              break;
-            }
-            if (next.hasChords) {
-              continue;
-            }
-            break;
-          }
-          if (isTabChord) {
-            continue;
-          }
+    // If direct HTML fetch succeeded and has content
+    if (fetchOk && html) {
+      // 2. Extract Title and Artist from <title> tag or <h1>
+      const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
+      let extractedTitle = songGuess || "Música Importada";
+      let extractedArtist = artistGuess || "Artista Desconhecido";
+      if (titleMatch) {
+        const fullTitle = htmlDecode(titleMatch[1].trim());
+        const parts = fullTitle.split(" - ");
+        if (parts.length >= 2) {
+          extractedTitle = parts[0].trim();
+          extractedArtist = parts[1].replace(/\s*-\s*Cifra Club/i, "").trim();
+        } else {
+          extractedTitle = fullTitle.replace(/\s*-\s*Cifra Club/i, "").trim();
         }
       }
 
-      // Clean chords formatting tags and clean chords representation according to Liloupro rules
-      let cleanedChordLine = htmlDecode(
-        curr.rawLine
-          .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "$1")
-          .replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, "$1")
-          .replace(/<[^>]*>/g, "")
-      );
-      cleanedChordLine = cleanedChordLine
-        .replace(/m7m/g, "m7")
-        .replace(/min7/g, "m7")
-        .replace(/7\+/g, "7M")
-        .replace(/maj7/g, "7M")
-        .replace(/M7/g, "7M");
+      // 3. Extract original key (Tom) from the HTML
+      const tomMatch = html.match(/id="cifra_tom"[^>]*>[\s\S]*?>([^<]+)<\/a>/i) ||
+                       html.match(/data-key=["']([^"']+)["']/i) ||
+                       html.match(/class=["']js-tom["'][^>]*>([^<]+)</i);
+      let key = tomMatch ? htmlDecode(tomMatch[1].trim()) : "C";
 
-      cleanedChordsLines.push(cleanedChordLine);
-
-      // Extract clean lyric line by removing all chord tags AND their inner chord content
-      // e.g. "Tua beleza <b data-chord-name="G">G</b> me atrai" -> "Tua beleza me atrai"
-      const lineWithoutChords = curr.rawLine
-        .replace(/<b\b[^>]*>[\s\S]*?<\/b>/gi, "")
-        .replace(/<span\b[^>]*class=["']?(?:cifra|tab|tablatura|chord)["']?[^>]*>[\s\S]*?<\/span>/gi, "");
-
-      const cleanLine = htmlDecode(lineWithoutChords.replace(/<[^>]*>/g, ""))
-        .replace(/\s+/g, " ")
+      key = key
+        .replace("m7m", "m7")
+        .replace("min7", "m7")
+        .replace("7+", "7M")
+        .replace("maj7", "7M")
+        .replace("M7", "7M")
         .trim();
 
-      // Check if this line is a tab header or section header
-      const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Parte\s*\d+/i.test(cleanLine) || /^Riff/i.test(cleanLine);
-      const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
-
-      // Determine if this line actually contains text/lyrics
-      // A valid lyric line should contain at least one word character with length >= 2 and not be a tab header, or be a section header
-      const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
-
-      if (hasContent) {
-        lyricLines.push(cleanLine);
-      } else if (curr.isEmpty) {
-        if (lyricLines.length > 0 && lyricLines[lyricLines.length - 1] !== "") {
-          lyricLines.push("");
-        }
-      }
-    }
-
-    // Render clean texts, suppressing consecutive empty lines that might have occurred from stripped blocks
-    const cleanChordsArray: string[] = [];
-    for (const line of cleanedChordsLines) {
-      if (line.trim() === "") {
-        if (cleanChordsArray.length > 0 && cleanChordsArray[cleanChordsArray.length - 1].trim() !== "") {
-          cleanChordsArray.push("");
-        }
+      // 3.5 Extract capo (capotraste) information from "id=cifra_capo"
+      let capo = "";
+      const capoMatch = html.match(/id="cifra_capo"[^>]*>([\s\S]*?)<\/span>/i);
+      if (capoMatch) {
+        capo = htmlDecode(capoMatch[1].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim());
       } else {
-        cleanChordsArray.push(line);
-      }
-    }
-
-    const cleanLyricsArray: string[] = [];
-    for (const line of lyricLines) {
-      if (line.trim() === "") {
-        if (cleanLyricsArray.length > 0 && cleanLyricsArray[cleanLyricsArray.length - 1].trim() !== "") {
-          cleanLyricsArray.push("");
+        const textCapoMatch = html.match(/(?:Capotraste\s+na\s+\d+\s*ª?\s*casa|Capo\s+na\s+\d+\s*ª?\s*casa)/i);
+        if (textCapoMatch) {
+          capo = htmlDecode(textCapoMatch[0].trim());
         }
-      } else {
-        cleanLyricsArray.push(line);
       }
-    }
 
-    const chordsClean = cleanChordsArray.join("\n").trim();
-    const lyricsClean = cleanLyricsArray.join("\n").trim();
+      // 3.7 Scrape artist or band picture dynamically from Cifra Club page content
+      let artistImageUrl = "";
+      const artistImageCdns = [
+        /https:\/\/images\.cifraclub\.com\.br\/artist\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i,
+        /https:\/\/studiosol-a\.akamaihd\.net\/tb\/artist\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i,
+        /https:\/\/images\.cifraclub\.com\.br\/contrib\/[a-zA-Z0-9_\-\/.]+(?:\.jpg|\.png|\.jpeg)/i
+      ];
 
-    // Ask Gemini to fetch ONLY BPM and Time Signature (extremely lightweight, avoids 429 quota block completely)
-    let bpm = 120;
-    let timeSignature = "4/4";
+      for (const regex of artistImageCdns) {
+        const match = html.match(regex);
+        if (match) {
+          artistImageUrl = match[0];
+          break;
+        }
+      }
 
-    const apiKey = getGeminiApiKey();
-    if (apiKey) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: { 'User-Agent': 'aistudio-build' }
-          }
+      if (!artistImageUrl) {
+        const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) || 
+                             html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+        if (ogImageMatch) {
+          artistImageUrl = htmlDecode(ogImageMatch[1].trim());
+        }
+      }
+
+      // 4. Extract PRE tag (chords and lyrics layout) or cifra container
+      const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i) ||
+                       html.match(/<div[^>]*class=["'][^"']*cifra_cnt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+
+      if (preMatch) {
+        const preHtml = preMatch[1];
+        const rawLines = preHtml.split(/\r?\n/);
+        const cleanedChordsLines: string[] = [];
+        const lyricLines: string[] = [];
+
+        const linesMetadata = rawLines.map((rawLine) => {
+          const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, "")).trim();
+          const isEmpty = stripped === "";
+          const isSection = stripped.startsWith("[") && stripped.endsWith("]");
+          const isTab = (
+            /^[a-gA-G1-9]#?[b]?\s*[\|:]/.test(stripped) && stripped.includes("-")
+          ) || (
+            stripped.includes("|") && (stripped.match(/-{1,}/) !== null)
+          ) || (
+            /^-{3,}$/.test(stripped)
+          ) || (
+            rawLine.includes('class="tablatura"') || rawLine.includes("class='tablatura'") ||
+            rawLine.includes('class="tab"') || rawLine.includes("class='tab'")
+          ) || (
+            /\[Tab\b/i.test(stripped)
+          ) || (
+            /Parte\s*\d+/i.test(stripped)
+          );
+
+          const hasChords = /<b\b[^>]*>/i.test(rawLine) || /<span\b[^>]*class=["']?(?:cifra|chord)["']?/i.test(rawLine);
+
+          return {
+            rawLine,
+            stripped,
+            isEmpty,
+            isSection,
+            isTab,
+            hasChords,
+          };
         });
 
-        console.log(`scrapeCifraClub: Buscando BPM e Compasso para "${extractedTitle}" via micro-request Gemini...`);
-        for (const modelName of GEMINI_FALLBACK_MODELS) {
-          try {
-            const response = await ai.models.generateContent({
-              model: modelName,
-              contents: `Forneça a estimativa de BPM (andamento, número inteiro) e compasso musical oficial para a canção "${extractedTitle}" do artista "${extractedArtist}".
-Retorne estritamente em JSON:
-{
-  "bpm": número inteiro (ex: 78, 120, 130),
-  "timeSignature": string (ex: "4/4", "3/4", "6/8")
-}`,
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    bpm: { type: Type.INTEGER },
-                    timeSignature: { type: Type.STRING }
-                  },
-                  required: ["bpm", "timeSignature"]
-                }
-              }
-            });
+        let currentSection = "";
+        for (let i = 0; i < linesMetadata.length; i++) {
+          const curr = linesMetadata[i];
 
-            if (response && response.text) {
-              const parsedMeta = JSON.parse(response.text.trim());
-              if (typeof parsedMeta.bpm === "number") bpm = parsedMeta.bpm;
-              if (parsedMeta.timeSignature) timeSignature = parsedMeta.timeSignature.trim();
-              break;
+          const sectionMatch = curr.stripped.match(/\[([^\]]+)\]/);
+          if (sectionMatch) {
+            currentSection = sectionMatch[1].trim().toLowerCase();
+          }
+
+          if (curr.isTab) {
+            continue;
+          }
+
+          if (curr.hasChords) {
+            const isIntroOrSoloSection = currentSection === "" || 
+              currentSection.includes("intro") || 
+              currentSection.includes("solo") || 
+              currentSection.includes("instrumental") || 
+              currentSection.includes("interludio") || 
+              currentSection.includes("interlúdio") || 
+              currentSection.includes("outro") || 
+              currentSection.includes("fim") || 
+              currentSection.includes("dedilhado") || 
+              currentSection.includes("riff");
+
+            if (!isIntroOrSoloSection) {
+              let isTabChord = false;
+              for (let j = i + 1; j < linesMetadata.length; j++) {
+                const next = linesMetadata[j];
+                if (next.isEmpty) continue;
+                if (next.isTab) {
+                  isTabChord = true;
+                  break;
+                }
+                if (next.hasChords) continue;
+                break;
+              }
+              if (isTabChord) continue;
             }
-          } catch (mErr) {
-            // continue to next model
+          }
+
+          let cleanedChordLine = htmlDecode(
+            curr.rawLine
+              .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "$1")
+              .replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, "$1")
+              .replace(/<[^>]*>/g, "")
+          );
+          cleanedChordLine = cleanedChordLine
+            .replace(/m7m/g, "m7")
+            .replace(/min7/g, "m7")
+            .replace(/7\+/g, "7M")
+            .replace(/maj7/g, "7M")
+            .replace(/M7/g, "7M");
+
+          cleanedChordsLines.push(cleanedChordLine);
+
+          const lineWithoutChords = curr.rawLine
+            .replace(/<b\b[^>]*>[\s\S]*?<\/b>/gi, "")
+            .replace(/<span\b[^>]*class=["']?(?:cifra|tab|tablatura|chord)["']?[^>]*>[\s\S]*?<\/span>/gi, "");
+
+          const cleanLine = htmlDecode(lineWithoutChords.replace(/<[^>]*>/g, ""))
+            .replace(/\s+/g, " ")
+            .trim();
+
+          const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Parte\s*\d+/i.test(cleanLine) || /^Riff/i.test(cleanLine);
+          const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
+          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
+
+          if (hasContent) {
+            lyricLines.push(cleanLine);
+          } else if (curr.isEmpty) {
+            if (lyricLines.length > 0 && lyricLines[lyricLines.length - 1] !== "") {
+              lyricLines.push("");
+            }
           }
         }
-      } catch (geminiError) {
-        console.log("scrapeCifraClub: Note - metadados adicionais via Gemini indisponíveis (cota ou rede), usando defaults.");
+
+        const cleanChordsArray: string[] = [];
+        for (const line of cleanedChordsLines) {
+          if (line.trim() === "") {
+            if (cleanChordsArray.length > 0 && cleanChordsArray[cleanChordsArray.length - 1].trim() !== "") {
+              cleanChordsArray.push("");
+            }
+          } else {
+            cleanChordsArray.push(line);
+          }
+        }
+
+        const cleanLyricsArray: string[] = [];
+        for (const line of lyricLines) {
+          if (line.trim() === "") {
+            if (cleanLyricsArray.length > 0 && cleanLyricsArray[cleanLyricsArray.length - 1].trim() !== "") {
+              cleanLyricsArray.push("");
+            }
+          } else {
+            cleanLyricsArray.push(line);
+          }
+        }
+
+        const chordsClean = cleanChordsArray.join("\n").trim();
+        const lyricsClean = cleanLyricsArray.join("\n").trim();
+
+        if (chordsClean.length > 20) {
+          // Micro-fetch for BPM with strict 2.5s timeout
+          let bpm = 120;
+          let timeSignature = "4/4";
+
+          const apiKey = getGeminiApiKey();
+          if (apiKey) {
+            try {
+              const ai = new GoogleGenAI({
+                apiKey,
+                httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+              });
+
+              const bpmPromise = (async () => {
+                const response = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: `Estimativa de BPM e compasso para "${extractedTitle}" de "${extractedArtist}". Retorne JSON: {"bpm": número, "timeSignature": "string"}`,
+                  config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                      type: Type.OBJECT,
+                      properties: {
+                        bpm: { type: Type.INTEGER },
+                        timeSignature: { type: Type.STRING }
+                      },
+                      required: ["bpm", "timeSignature"]
+                    }
+                  }
+                });
+                if (response?.text) {
+                  const parsed = JSON.parse(response.text.trim());
+                  if (typeof parsed.bpm === "number") bpm = parsed.bpm;
+                  if (parsed.timeSignature) timeSignature = parsed.timeSignature.trim();
+                }
+              })();
+
+              const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
+              await Promise.race([bpmPromise, timeoutPromise]);
+            } catch {
+              // Ignore BPM timeout/error
+            }
+          }
+
+          return {
+            title: extractedTitle,
+            artist: extractedArtist,
+            key,
+            bpm,
+            timeSignature,
+            chords: chordsClean,
+            lyrics: lyricsClean,
+            capo: capo || "",
+            artistImageUrl: artistImageUrl || ""
+          };
+        }
       }
     }
 
-    return {
-      title: extractedTitle,
-      artist: extractedArtist,
-      key,
-      bpm,
-      timeSignature,
-      chords: chordsClean,
-      lyrics: lyricsClean,
-      capo: capo || "",
-      artistImageUrl: artistImageUrl || ""
-    };
+    // ==========================================
+    // MULTI-TIER RESILIENT FALLBACK PIPELINE
+    // If direct HTML scrape failed or returned no chords:
+    // ==========================================
+    console.log(`scrapeCifraClub: Raspagem direta não obteve a cifra. Ativando pipeline de contingência para "${songGuess}" / "${artistGuess}"...`);
+
+    // Tier 1: Local popular songs database
+    const localHit = findLocalPopularSong(songGuess, artistGuess) || findLocalPopularSong(songSlug, artistSlug);
+    if (localHit) {
+      console.log(`scrapeCifraClub: Hit na base local de músicas para "${songGuess}"`);
+      return {
+        ...localHit,
+        capo: ""
+      };
+    }
+
+    // Tier 2: AI Generation with Search / Knowledge
+    const apiKey = getGeminiApiKey();
+    if (apiKey) {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const systemInstruction = `Você é um curador e mapeador de cifras musicais gospel profissional para o Liloupro. Reproduza com precisão matemática as cifras e letras de referência do Cifra Club.
+Regras:
+1. Preserve o tom correto original.
+2. Formate as seções entre colchetes ([Intro], [Verso 1], [Refrão], [Ponte]).
+3. Na cifra, posicione os acordes (especificados em tags HTML bold '<b>A</b>') na linha superior exatamente sobre a sílaba correspondente de forma monoespaçada.
+4. Represente sétimas menores como '7m' e sétimas maiores como '7M'.
+5. O campo 'lyrics' deve conter estritamente a letra completa sem acordes.`;
+
+      const prompt = `Traga a cifra completa e letra de "${songGuess}" do artista/banda "${artistGuess}" conforme o padrão do Cifra Club.`;
+
+      for (const model of GEMINI_FALLBACK_MODELS) {
+        try {
+          const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  artist: { type: Type.STRING },
+                  key: { type: Type.STRING },
+                  bpm: { type: Type.INTEGER },
+                  timeSignature: { type: Type.STRING },
+                  chords: { type: Type.STRING },
+                  lyrics: { type: Type.STRING }
+                },
+                required: ["title", "artist", "key", "bpm", "timeSignature", "chords", "lyrics"]
+              }
+            }
+          });
+
+          if (response?.text) {
+            const parsed = JSON.parse(response.text.trim());
+            if (parsed.chords && parsed.lyrics) {
+              return {
+                title: parsed.title || songGuess,
+                artist: parsed.artist || artistGuess,
+                key: parsed.key || "C",
+                bpm: Number(parsed.bpm) || 80,
+                timeSignature: parsed.timeSignature || "4/4",
+                chords: parsed.chords,
+                lyrics: parsed.lyrics,
+                capo: ""
+              };
+            }
+          }
+        } catch {
+          // Try next model
+        }
+      }
+    }
+
+    throw new Error(
+      `Não foi possível importar a música "${songGuess}" do Cifra Club. Verifique o link e certifique-se de que é a página de uma cifra com acordes.`
+    );
   }
 
   // POST endpoint to import chords & lyrics directly from a Cifra Club URL (Approach A)

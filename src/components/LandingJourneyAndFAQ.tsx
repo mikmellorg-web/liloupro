@@ -123,7 +123,11 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
     },
     {
       q: "Quantos voluntários posso convidar no Plano Completo?",
-      a: "Membros, músicos, vocais e técnicos de mídia são ilimitados no Plano Completo e no Acesso Vitalício. No Plano Semeadora (gratuito para sempre), você pode gerenciar até 15 membros ativos."
+      a: "Membros, músicos, vocais e técnicos de mídia são ilimitados no Plano Completo e no Acesso Vitalício. No Plano Semeadora (gratuito para sempre), você pode gerenciar até 12 membros ativos."
+    },
+    {
+      q: "O que acontece com as minhas músicas e cadastros após os 30 dias de teste?",
+      a: "Nenhum dado é perdido! Todas as suas músicas, cifras cadastradas, membros da equipe e histórico de escalas continuam 100% salvos e protegidos na nuvem. Sua igreja continua no Plano Semeadora (gratuito), e basta fazer o upgrade para o Plano Completo ou Vitalício para voltar a cadastrar e utilizar todos os recursos ilimitados sem qualquer complicação."
     },
     {
       q: "Posso importar cifras e repertórios já existentes da nossa igreja?",
@@ -577,6 +581,10 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-sky-400" />
             <span>Garantia incondicional de 7 dias</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span className="text-slate-300 font-medium">Seus dados e músicas nunca são perdidos</span>
           </div>
         </div>
       </section>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
+import { getServicePlaylistSongs } from '../utils/servicePlaylistUtils';
 import { COLOR_PRESETS } from '../App';
 import { toPng } from 'html-to-image';
 import { 
@@ -1360,11 +1361,7 @@ export default function DashboardView({
   }, [nextService]);
 
   const homeServicePlaylistSongs = useMemo(() => {
-    if (!nextService || !nextService.liturgy || !allSongs.length) return [];
-    const songItems = nextService.liturgy.filter((item: any) => item.type === 'song');
-    return songItems
-      .map((item: any) => allSongs.find(s => s.id === item.songId))
-      .filter((song: any) => song && song.youtube && parseYoutubeVideoId(song.youtube));
+    return getServicePlaylistSongs(nextService, allSongs);
   }, [nextService, allSongs]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [isEditingAnnouncements, setIsEditingAnnouncements] = useState(false);

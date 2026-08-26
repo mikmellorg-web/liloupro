@@ -30,8 +30,8 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
     priceMonthly: 0,
     description: 'Plano gratuito permanente. Ideal para manter sua igreja funcionando após o período de avaliação.',
     limits: {
-      maxActiveMembers: 15,
-      maxSongs: 20,
+      maxActiveMembers: 12,
+      maxSongs: 15,
       maxScalesPerMonth: 5,
       maxLiturgiesPerMonth: 3,
       maxAiUsesPerMonth: 5,
@@ -41,8 +41,8 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
       hasAutomations: false
     },
     features: [
-      'Até 15 membros ativos',
-      'Até 20 músicas/cifras cadastradas',
+      'Até 12 membros ativos',
+      'Até 15 músicas/cifras cadastradas',
       'Até 5 escalas por mês',
       'Até 3 liturgias por mês',
       'Projeção básica no navegador',
