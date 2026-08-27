@@ -31,6 +31,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [installedSuccess, setInstalledSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'guide' | 'download'>('guide');
+  const [showManualTip, setShowManualTip] = useState(false);
 
   // Detect iOS vs Android vs Desktop
   useEffect(() => {
@@ -56,11 +57,13 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
       e.preventDefault();
       (window as any).__deferredPwaPrompt = e;
       setDeferredPrompt(e);
+      setShowManualTip(false);
     };
 
     const handlePromptReady = () => {
       if ((window as any).__deferredPwaPrompt) {
         setDeferredPrompt((window as any).__deferredPwaPrompt);
+        setShowManualTip(false);
       }
     };
 
@@ -88,9 +91,10 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
         (window as any).__deferredPwaPrompt = null;
       } catch (err) {
         console.warn('Install prompt error:', err);
+        setShowManualTip(true);
       }
     } else {
-      setActiveTab('guide');
+      setShowManualTip(true);
     }
   };
 
@@ -252,6 +256,22 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
                     <Download size={16} className="stroke-[3]" />
                     Instalar LiLouPro com 1 Toque
                   </button>
+
+                  {showManualTip && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-lg text-[11px] text-amber-200 text-left space-y-1"
+                    >
+                      <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                        <Sparkles size={13} />
+                        <span>Dica de Instalação:</span>
+                      </div>
+                      <p>
+                        Se o diálogo automático não abrir de imediato, toque nos <strong>3 pontinhos (⋮)</strong> no canto superior do Chrome ➔ selecione <strong>"Instalar aplicativo"</strong>.
+                      </p>
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-white/5 space-y-2.5">
