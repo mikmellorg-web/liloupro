@@ -1,4 +1,4 @@
-import { LiturgyEditor } from "./SongsView";
+import { LiturgyEditor } from "./AvailabilityAndLiturgy";
 import { getServicePlaylistSongs, getServiceSongs } from "../utils/servicePlaylistUtils";
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { toPng } from 'html-to-image';
@@ -1726,38 +1726,78 @@ export default function LiturgyView({
       return result;
     };
 
-    const typeMap: any = {
-      reading: '📖 Leitura',
-      song: '🎵 Música',
-      speech: '🗣️ Palavra',
-      prayer: '🙏 Oração',
-      announcements: '📢 Avisos',
-      offering: '💸 Ofertas',
-      other: '✨ Outro'
+    const typeEmojiMap: Record<string, string> = {
+      reading: '📖',
+      song: '🎵',
+      speech: '🗣️',
+      prayer: '🙏',
+      announcements: '📢',
+      offering: '💸',
+      other: '✨'
+    };
+
+    const typeLabelMap: Record<string, string> = {
+      reading: 'Leitura Bíblica',
+      song: 'Música',
+      speech: 'Palavra',
+      prayer: 'Oração',
+      announcements: 'Avisos',
+      offering: 'Ofertas',
+      other: 'Momento'
     };
 
     selectedService.liturgy.forEach((item: any, idx: number) => {
-      message += `${idx + 1}. *${typeMap[item.type] || smartCapitalize(item.type)}*\n`;
       const songDetails = resolveSongForLiturgyItem(item, allSongs);
       const resolvedTitle = item.title || songDetails?.title || '';
       let titleStr = smartCapitalize(resolvedTitle);
+      
       if ((item.type === 'song' || !!songDetails) && item.vocalist) {
-        titleStr += ` - ${item.vocalist}`;
+        titleStr += ` (🎤 ${item.vocalist})`;
       }
-      message += `${titleStr}\n`;
-      if (item.content) {
-        message += `_${smartCapitalize(item.content)}_\n`;
+
+      const emoji = typeEmojiMap[item.type] || (item.type === 'reading' ? '📖' : item.type === 'song' ? '🎵' : '✨');
+      const label = typeLabelMap[item.type] || smartCapitalize(item.type);
+
+      // 1. Linha do cabeçalho da atividade (Emoji + Número + Tipo + Momento)
+      let itemHeader = `${idx + 1}. ${emoji} *${label}*`;
+      if (item.moment && item.moment.trim()) {
+        itemHeader += ` - _${smartCapitalize(item.moment)}_`;
       }
-      if (item.details && item.type !== 'reading') {
-        message += `_"${item.details}"_\n`;
+      message += `${itemHeader}\n`;
+
+      // 2. Título / Referência Bíblica (apenas Livro Capítulo:Versículo)
+      if (titleStr) {
+        message += `${titleStr}\n`;
       }
+
+      // 3. Subtítulo/Conteúdo curto (apenas se for um rótulo curto e não for texto bíblico corrido)
+      if (item.content && item.content.trim()) {
+        const cleanContent = item.content.trim();
+        const isLongText = cleanContent.length > 70 || cleanContent.includes('\n');
+        const isDuplicate = cleanContent.toLowerCase() === resolvedTitle.toLowerCase() || 
+                            cleanContent.toLowerCase() === (item.moment || '').toLowerCase();
+        
+        if (!isLongText && !isDuplicate) {
+          message += `_${smartCapitalize(cleanContent)}_\n`;
+        }
+      }
+
+      // 4. Detalhes adicionais apenas se for nota curta (ex: nome do pregador), NUNCA texto bíblico completo
+      if (item.details && item.type !== 'reading' && !item.bibleVersion) {
+        const cleanDetails = item.details.trim();
+        const isLongScripture = cleanDetails.length > 60 || cleanDetails.includes('\n');
+        if (!isLongScripture) {
+          message += `_"${cleanDetails}"_\n`;
+        }
+      }
+
       message += `\n`;
     });
 
     message += `_Gerado por LiLouPro_`;
 
     const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
   };
 
   return (

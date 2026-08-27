@@ -107,8 +107,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Body parser for api requests
-  app.use(express.json());
+  // Body parser for api requests (supporting high-resolution image uploads)
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // Prevent browser caching of Service Worker script and web app manifest
   app.get(['/sw.js', '/manifest.json'], (req, res, next) => {
@@ -121,6 +122,41 @@ async function startServer() {
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Endpoint to save 100% original hero image directly into public and dist folders
+  app.post("/api/upload-hero-image", (req, res) => {
+    try {
+      const { imageBase64, filename } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ error: "Missing imageBase64" });
+      }
+      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(cleanBase64, "base64");
+
+      const publicDir = path.join(process.cwd(), "public");
+      const distDir = path.join(process.cwd(), "dist");
+
+      const names = [
+        "capa da landin page.png",
+        "capa_landing_page.png",
+        "capa_da_landin_page.png"
+      ];
+      if (filename) names.push(filename);
+
+      for (const name of names) {
+        fs.writeFileSync(path.join(publicDir, name), buffer);
+        if (fs.existsSync(distDir)) {
+          fs.writeFileSync(path.join(distDir, name), buffer);
+        }
+      }
+
+      console.log(`[Upload] Hero image saved successfully (${buffer.length} bytes) as:`, names);
+      return res.json({ success: true, url: "/capa da landin page.png" });
+    } catch (err: any) {
+      console.error("[Upload error]:", err);
+      return res.status(500).json({ error: err?.message || "Failed to save image" });
+    }
   });
 
   // GET endpoint to search real artist images from Deezer / iTunes APIs dynamically
