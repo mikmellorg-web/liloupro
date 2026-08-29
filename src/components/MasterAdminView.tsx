@@ -46,7 +46,6 @@ import {
   Camera
 } from 'lucide-react';
 import kiwifyBannerImg from '../assets/images/kiwify_banner_standard_1787495484627.jpg';
-import kiwifyBannerLifetimeImg from '../assets/images/kiwify_banner_vitalicio_1787495475538.jpg';
 import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -1099,7 +1098,7 @@ Conte conosco para servir seu ministério com excelência!`
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Completo Mensal */}
               <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 space-y-2.5 flex flex-col justify-between">
                 <div>
@@ -1255,49 +1254,10 @@ Conte conosco para servir seu ministério com excelência!`
                   </a>
                 </div>
               </div>
-
-              {/* Acesso Vitalício */}
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 space-y-2.5 sm:col-span-2 lg:col-span-1 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-amber-300">Acesso Vitalício Lançamento</span>
-                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold">R$ 697,90 único</span>
-                  </div>
-                  <a
-                    href="https://pay.kiwify.com.br/hzdGE1G"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-mono text-amber-400 hover:underline block truncate"
-                  >
-                    https://pay.kiwify.com.br/hzdGE1G
-                  </a>
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText('https://pay.kiwify.com.br/hzdGE1G');
-                      showToast('Link do Acesso Vitalício copiado!');
-                    }}
-                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Copy size={13} /> Copiar Link
-                  </button>
-                  <a
-                    href="https://pay.kiwify.com.br/hzdGE1G"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold transition-all flex items-center gap-1"
-                    title="Abrir no navegador"
-                  >
-                    <ExternalLink size={13} />
-                  </a>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Banners do Produto LiLouPro para Kiwify (300x250) - Duas Opções */}
+          {/* Banners do Produto LiLouPro para Kiwify (300x250) */}
           <div className="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-black border border-indigo-500/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/10 pb-4">
               <div className="space-y-1">
@@ -1305,10 +1265,10 @@ Conte conosco para servir seu ministério com excelência!`
                   <Sparkles size={14} className="text-amber-300" /> Material Promocional e Capas de Venda
                 </div>
                 <h3 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-                  Banners Oficiais para Kiwify (300x250 px)
+                  Banner Oficial para Kiwify (300x250 px)
                 </h3>
                 <p className="text-xs text-slate-300 max-w-2xl">
-                  Escolha e baixe entre o Banner Padrão do LiLouPro ou a nova Edição Exclusiva de Lançamento com destaque para Acesso Vitalício.
+                  Baixe o Banner Oficial Padrão do LiLouPro com design institucional de palco e identidade visual limpa.
                 </p>
               </div>
             </div>
@@ -1360,61 +1320,7 @@ Conte conosco para servir seu ministério com excelência!`
                   className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download size={16} />
-                  Baixar Opção 1 (Padrão)
-                </a>
-              </div>
-
-              {/* Opção 2: Banner Lançamento - Acesso Vitalício */}
-              <div className="bg-black/40 border-2 border-amber-500/40 rounded-2xl p-5 space-y-4 flex flex-col justify-between hover:border-amber-400 transition-all relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-amber-600 text-black text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider shadow-md">
-                  ⭐ Lançamento Exclusivo
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-400">
-                      Opção 2 • Acesso Vitalício
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">300x250 px</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    Condição Exclusiva de Lançamento
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Destaque para <strong className="text-amber-300">Acesso Vitalício</strong>, ideal para gerar alta conversão e escassez em campanhas de lançamento na Kiwify.
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-2">
-                  <div className="relative group rounded-xl overflow-hidden border-2 border-amber-500/40 shadow-xl shadow-amber-500/10 bg-black w-[280px] sm:w-[300px] h-[230px] sm:h-[250px] flex items-center justify-center">
-                    <img
-                      src={kiwifyBannerLifetimeImg}
-                      alt="Banner LiLouPro Kiwify Acesso Vitalicio"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <a
-                        href={kiwifyBannerLifetimeImg}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-2 rounded-xl bg-white/20 backdrop-blur-md text-white text-xs font-bold hover:bg-white/30 transition-all flex items-center gap-1.5"
-                      >
-                        <Eye size={14} /> Ampliar
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                <a
-                  href={kiwifyBannerLifetimeImg}
-                  download="LiLouPro_Banner_Kiwify_Vitalicio_300x250.jpg"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Download size={16} />
-                  Baixar Opção 2 (Vitalício)
+                  Baixar Banner Oficial (300x250 px)
                 </a>
               </div>
             </div>
