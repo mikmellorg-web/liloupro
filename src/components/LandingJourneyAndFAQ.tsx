@@ -64,86 +64,67 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
   const timelineSteps = [
     {
-      day: "Dia 1",
-      title: "Cadastro e configuração inicial",
-      description: "Sua igreja cria a conta em 2 minutos (sem cartão de crédito) e cadastra os primeiros membros."
+      day: "Primeiros minutos",
+      title: "Conta criada, igreja configurada",
+      description: "Cadastro em 2 minutos, sem cartão de crédito. Defina os horários de culto do seu jeito — um ou vários por semana."
     },
     {
-      day: "Dia 3",
-      title: "Primeira escala montada",
-      description: "O líder de louvor monta a primeira escala do domingo e a equipe recebe o convite no smartphone."
+      day: "Primeira semana",
+      title: "Escala montada e equipe confirmando",
+      description: "O líder monta a primeira escala, a equipe recebe o convite no celular e confirma presença com 1 toque — chega de cobrança no grupo do WhatsApp."
     },
     {
-      day: "Dia 5",
-      title: "Equipe confirmando com 1 toque",
-      description: "Os músicos confirmam presença automaticamente, eliminando a cobrança no WhatsApp da liderança."
+      day: "Primeiro culto no app",
+      title: "Ensaio, liturgia e projeção juntos",
+      description: "Repertório no tom certo, ordem litúrgica alinhada com o pastor e projeção direto do navegador — tudo já em uso no seu primeiro culto com o LiLouPro."
     },
     {
-      day: "Dia 10",
-      title: "Repertório na tonalidade correta",
-      description: "As músicas são cadastradas no tom ideal da igreja com áudios para o estudo individual em casa."
-    },
-    {
-      day: "Dia 15",
-      title: "Primeiro culto integrado",
-      description: "A liturgia é montada pelo pastor e líder de louvor, enquanto a mídia acompanha no navegador."
-    },
-    {
-      day: "Dia 20",
-      title: "Comunicação sem ruídos",
-      description: "Avisos sobre horários de ensaio e trajes chegam aos escalados sem conversas paralelas."
-    },
-    {
-      day: "Dia 30",
-      title: "Tranquilidade como hábito",
-      description: "O ministério inteiro utiliza o sistema com fluidez, ganhando mais tempo e foco para servir."
+      day: "Até o dia 30",
+      title: "Uso natural, sem esforço",
+      description: "Sua equipe já incorporou o app na rotina. Os 30 dias servem pra você confirmar com calma que faz sentido continuar — sem nenhuma obrigação."
     }
   ];
 
   const faqs = [
     {
-      q: "Como funciona o pagamento e liberação de acesso via Kiwify?",
-      a: "O pagamento é processado de forma 100% segura através da Kiwify via PIX, Cartão de Crédito (em até 12x) ou Boleto. Assim que o pagamento é confirmado, você recebe o acesso imediato à plataforma com todos os recursos liberados."
+      q: "Preciso de cartão de crédito para iniciar o teste de 30 dias?",
+      a: "Não, absolutamente nenhum cartão de crédito ou dado de pagamento é solicitado para criar a conta da sua igreja. O teste de 30 dias é 100% gratuito e livre de qualquer compromisso financeiro. Você só decide sobre um plano se e quando a plataforma fizer sentido real para o seu ministério."
     },
     {
-      q: "Como funciona a garantia de 7 dias na Kiwify?",
-      a: "Você tem 7 dias de garantia incondicional assegurada pela Kiwify. Se por qualquer motivo achar que a plataforma não atendeu as expectativas do seu ministério, basta solicitar o reembolso na Kiwify para receber 100% do seu dinheiro de volta sem burocracia."
+      q: "O que acontece quando os 30 dias de teste terminarem?",
+      a: "Como não pedimos cartão de crédito, você nunca será cobrado de forma automática ou inesperada. Ao final dos 30 dias, todas as suas músicas, cifras cadastradas, voluntários e histórico de escalas continuam 100% salvos e protegidos na nuvem. Sua igreja poderá assinar o Plano Completo ou Premium para continuar aproveitando os recursos ilimitados, sem risco de perder o trabalho feito."
     },
     {
-      q: "Preciso de cartão de crédito para iniciar o período de teste?",
-      a: "Não. Você pode iniciar os 30 dias grátis de avaliação diretamente no app sem preencher nenhum dado bancário ou cartão de crédito. Queremos que você sinta o valor na rotina da igreja primeiro."
+      q: "Existe algum contrato de fidelidade ou multa se decidirmos cancelar?",
+      a: "Não existe qualquer tipo de contrato de fidelidade, carência ou multa. As assinaturas funcionam mês a mês (ou anual com desconto), e você pode pausar ou cancelar a renovação a qualquer momento com apenas 1 clique no painel da igreja, sem burocracia nem telefonemas."
     },
     {
-      q: "Existe contrato de fidelidade ou multa?",
-      a: "Não. O LiLouPro não prende igrejas com contratos ou multas. Caso decida cancelar sua assinatura, basta um único clique no painel de configurações sem burocracia."
-    },
-    {
-      q: "Como funciona no smartphone dos voluntários?",
-      a: "O LiLouPro é um Progressive Web App (PWA) construído com filosofia Mobile-First. Pode ser usado pelo navegador de qualquer aparelho ou instalado na tela inicial do iPhone/Android em segundos."
+      q: "Como o sistema funciona no smartphone dos voluntários e músicos?",
+      a: "O LiLouPro foi construído com arquitetura Mobile-First via Progressive Web App (PWA). Os voluntários não precisam ocupar memória baixando aplicativos pesados da loja: basta abrir o link da igreja no navegador do iPhone ou Android e, se preferirem, fixar o ícone na tela inicial em 2 segundos. Pelo celular, eles confirmam escalas, visualizam cifras com transposição de tom e ouvem os áudios de ensaio."
     },
     {
       q: "Quantos voluntários posso convidar no Plano Completo?",
-      a: "Membros, músicos, vocais e técnicos de mídia são ilimitados no Plano Completo e no Acesso Vitalício. No Plano Semeadora (gratuito para sempre), você pode gerenciar até 12 membros ativos."
+      a: "No Plano Completo e no Plano Premium, o número de voluntários, músicos, vocais, pastores e operadores de mídia é totalmente ilimitado. Entendemos que o ministério da igreja cresce e novos irmãos se juntam ao serviço, por isso você nunca é cobrado ou limitado por pessoa adicional."
     },
     {
-      q: "O que acontece com as minhas músicas e cadastros após os 30 dias de teste?",
-      a: "Nenhum dado é perdido! Todas as suas músicas, cifras cadastradas, membros da equipe e histórico de escalas continuam 100% salvos e protegidos na nuvem. Sua igreja continua no Plano Semeadora (gratuito), e basta fazer o upgrade para o Plano Completo ou Vitalício para voltar a cadastrar e utilizar todos os recursos ilimitados sem qualquer complicação."
+      q: "Posso importar cifras e repertórios que nossa igreja já utiliza?",
+      a: "Sim! Você pode cadastrar facilmente suas canções colando letras e cifras no formato tradicional, definir o tom ideal da igreja, indicar o andamento (BPM) e anexar links de áudio de referência (YouTube, Spotify ou gravações do ensaio). As cifras contam com transposição instantânea para qualquer tom e diagramas automáticos para violão e teclado."
     },
     {
-      q: "Posso importar cifras e repertórios já existentes da nossa igreja?",
-      a: "Sim. Você pode cadastrar suas cifras, letras, tons originais de referência e links de áudio para que todos os músicos tenham acesso imediato e padronizado."
+      q: "Como funciona o suporte para a nossa liderança e equipe?",
+      a: "Nosso suporte é 100% humanizado e em português, realizado diretamente pelo WhatsApp e por e-mail por pessoas que conhecem de perto a rotina de ministérios de louvor e igrejas. Ajudamos na configuração inicial, cadastro de membros e qualquer alinhamento técnico ou litúrgico."
     },
     {
-      q: "Como funciona o suporte para dúvidas da nossa liderança?",
-      a: "Oferecemos suporte humanizado em português para auxiliar pastores, ministros e líderes de louvor em qualquer dúvida de uso ou configuração."
+      q: "Como funciona a garantia caso decidamos assinar após o teste?",
+      a: "Além de experimentar livremente durante os 30 dias de teste sem cartão, caso sua igreja decida contratar um plano pago via Kiwify, você conta com 7 dias de garantia incondicional assegurada por lei. Se por qualquer motivo achar que a plataforma não atendeu às necessidades da sua equipe, basta solicitar o reembolso na Kiwify para receber 100% do valor de volta."
     }
   ];
 
   return (
-    <div className="space-y-24 sm:space-y-32">
+    <div className="space-y-12 sm:space-y-16">
       {/* SEÇÃO 7: COMO COMEÇAR EM SUA IGREJA (Adoção em 3 etapas) */}
       <section id="como-funciona" className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             Adoção Natural
@@ -197,7 +178,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
       {/* SEÇÃO 8: POR QUE MINISTÉRIOS ESCOLHEM O LILOUPRO */}
       <section className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs font-bold uppercase tracking-wider">
             <ShieldCheck className="w-3.5 h-3.5" />
             Especializado no Reino
@@ -235,20 +216,20 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
       {/* SEÇÃO 9: O QUE ACONTECE NOS PRIMEIROS 30 DIAS (Timeline de Adoção) */}
       <section className="max-w-5xl mx-auto px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider">
             <Clock className="w-3.5 h-3.5" />
             Sem Pressão
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            O que acontece nos seus primeiros 30 dias
+            Resultado desde a primeira semana, tranquilidade por 30 dias
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Uma transição suave e respeitosa. Por isso seu teste gratuito dura 30 dias completos para que todos experimentem o valor com tranquilidade.
+            Você não precisa esperar o teste acabar pra sentir a diferença. O essencial já funciona nos primeiros dias — os 30 dias são só o tempo que você tem pra usar à vontade com toda a equipe, sem pressa e sem cartão de crédito.
           </p>
         </div>
 
-        <div className="relative border-l-2 border-brand/40 ml-4 sm:ml-8 pl-6 sm:pl-10 space-y-10">
+        <div className="relative border-l-2 border-brand/40 ml-4 sm:ml-8 pl-6 sm:pl-10 space-y-6 sm:space-y-8">
           {timelineSteps.map((step, idx) => (
             <div key={idx} className="relative group">
               <div className="absolute -left-[31px] sm:-left-[47px] top-1 w-4 h-4 rounded-full bg-brand border-4 border-slate-950 group-hover:scale-125 transition-transform" />
@@ -269,7 +250,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         </div>
 
         {/* Citação Inspiradora & Compromisso de Marca */}
-        <div className="mt-16 p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-slate-900 via-[#0e172a] to-slate-900 border border-white/15 text-center space-y-3 shadow-xl">
+        <div className="mt-8 sm:mt-10 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-[#0e172a] to-slate-900 border border-white/15 text-center space-y-3 shadow-xl">
           <p className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-relaxed max-w-3xl mx-auto italic">
             "Quando a organização deixa de ser uma preocupação, sobra mais tempo para aquilo que realmente importa: servir."
           </p>
@@ -281,67 +262,85 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
       {/* SEÇÃO 10: DEPOIMENTOS DE LIDERANÇA */}
       <section className="max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Award className="w-3.5 h-3.5" />
             Experiências na Prática
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            O que líderes dizem sobre a paz na rotina
+            Como a rotina das equipes mudou na prática
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Relatos de quem substituiu planilhas soltas e cobranças no WhatsApp por uma organização harmoniosa.
+            Relatos reais de líderes que substituíram mensagens soltas e improvisos por um fluxo colaborativo e pontual.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 flex flex-col justify-between shadow-lg">
+          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "Antes nós gastávamos horas cobrando confirmação de escala no WhatsApp. Agora cada voluntário confirma com 1 toque e sabemos com antecedência quem estará no culto."
+              "Antes nós gastávamos horas cobrando confirmação de escala no WhatsApp. Agora cada voluntário confirma com 1 toque no celular e sabemos com antecedência quem estará no culto de domingo."
             </p>
-            <div className="pt-4 border-t border-white/5">
-              <h4 className="font-bold text-white text-sm">Pr. Eduardo Martins</h4>
-              <span className="text-xs text-slate-400">Líder de Louvor • São Paulo, SP</span>
+            <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-sm flex items-center justify-center shrink-0">
+                EM
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-bold text-white text-sm">Pr. Eduardo Martins</h4>
+                <p className="text-xs text-slate-400">Pastor Auxiliar & Líder de Louvor</p>
+                <p className="text-[11px] text-brand font-medium">Igreja Batista da Graça • São Paulo, SP</p>
+              </div>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 flex flex-col justify-between shadow-lg">
+          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "Para a banda, a transposição instantânea de cifra foi um divisor de águas. Mudamos o tom no ensaio de acordo com a voz e todo mundo toca na mesma sintonia."
+              "Para a nossa banda, a transposição instantânea de cifra foi transformadora. Mudamos o tom no ensaio de acordo com a voz de quem vai ministrar e todos os instrumentistas acompanham na hora."
             </p>
-            <div className="pt-4 border-t border-white/5">
-              <h4 className="font-bold text-white text-sm">Mariana Souza</h4>
-              <span className="text-xs text-slate-400">Ministra e Tecladista • Curitiba, PR</span>
+            <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-full bg-sky-500/20 border border-sky-500/30 text-sky-300 font-bold text-sm flex items-center justify-center shrink-0">
+                MS
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-bold text-white text-sm">Mariana Souza</h4>
+                <p className="text-xs text-slate-400">Ministra de Louvor & Tecladista</p>
+                <p className="text-[11px] text-sky-300 font-medium">Comunidade Bíblica Ágape • Curitiba, PR</p>
+              </div>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 flex flex-col justify-between shadow-lg">
+          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "A projeção pelo navegador simplificou o trabalho da equipe de mídia. Sem pen drive nem retrabalho reescrevendo letras antes de o culto começar."
+              "A projeção pelo navegador simplificou todo o trabalho da equipe de mídia. Sem pen drive corrompido, sem arquivos pesados travando e sem retrabalho conferindo letras minutos antes de o culto começar."
             </p>
-            <div className="pt-4 border-t border-white/5">
-              <h4 className="font-bold text-white text-sm">Gabriel Andrade</h4>
-              <span className="text-xs text-slate-400">Coordenador de Mídia e Projeção • Campinas, SP</span>
+            <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold text-sm flex items-center justify-center shrink-0">
+                GA
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-bold text-white text-sm">Gabriel Andrade</h4>
+                <p className="text-xs text-slate-400">Coordenador de Mídia & Projeção</p>
+                <p className="text-[11px] text-purple-300 font-medium">Primeira Igreja Presbiteriana • Campinas, SP</p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SEÇÃO INTEGRADA DE PLANOS / PREÇOS (Kiwify Checkout Integrado) */}
+      {/* SEÇÃO INTEGRADA DE PLANOS / PREÇOS (Transparente e com Teste Grátis de 30 Dias) */}
       <section id="planos" className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-4 mb-12 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Planos & Assinaturas Oficiais
+            Planos Transparentes
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
             Escolha o plano ideal para a sua igreja
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Comece com teste gratuito no app ou assine com desconto especial e garantia total pela Kiwify.
+            Experimente gratuitamente por 30 dias sem precisar de cartão, ou assine para liberar o acesso contínuo da sua equipe.
           </p>
 
-          {/* Seletor Mensal / Anual (com desconto) */}
+          {/* Seletor Mensal / Anual */}
           <div className="pt-2 flex items-center justify-center">
             <div className="bg-slate-900/90 border border-white/10 p-1 rounded-2xl flex items-center gap-1 shadow-lg">
               <button
@@ -373,32 +372,32 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           </div>
         </div>
 
-        {/* Grid de Planos Principais (Completo, Premium e Vitalício) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 items-stretch mb-10">
+        {/* Grid de 2 Planos (Completo e Premium) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto gap-6 sm:gap-8 items-stretch mb-10">
           
           {/* 1. PLANO COMPLETO */}
-          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl">
+          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl hover:border-white/20 transition-all">
             <div className="space-y-4">
               <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
                 {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
               </span>
               <h3 className="text-2xl font-bold text-white">Plano Completo</h3>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Ideal para ministérios que precisam de gestão eficiente de escalas, cifras transpostas e cancioneiro.
+                Ideal para ministérios que buscam organização eficiente de escalas, cifras transpostas e cancioneiro da congregação.
               </p>
               
               <div className="py-3 border-y border-white/10">
                 {billingCycle === 'annual' ? (
                   <div>
-                    <div className="text-xs text-slate-400 line-through">De R$ 588,00</div>
                     <span className="text-3xl sm:text-4xl font-black text-white">R$ 470,40</span>
                     <span className="text-xs text-slate-400"> / ano</span>
-                    <div className="text-[11px] text-emerald-400 font-semibold mt-1">Equivale a apenas R$ 39,20/mês</div>
+                    <div className="text-[11px] text-emerald-400 font-semibold mt-1">Equivale a R$ 39,20/mês cobrados anualmente</div>
                   </div>
                 ) : (
                   <div>
                     <span className="text-3xl sm:text-4xl font-black text-white">R$ 49,00</span>
                     <span className="text-xs text-slate-400"> / mês</span>
+                    <div className="text-[11px] text-slate-400 mt-1">Sem fidelidade, cancele quando quiser</div>
                   </div>
                 )}
               </div>
@@ -406,7 +405,11 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               <ul className="space-y-2.5 text-xs text-slate-300">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Escalas e repertórios ilimitados</span>
+                  <span>Músicos, vocais e voluntários ilimitados</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span>Escalas e repertórios sem limite</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
@@ -418,57 +421,55 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Suporte via WhatsApp</span>
+                  <span>Suporte em português via WhatsApp</span>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <a
-                href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xrEKt4N' : 'https://pay.kiwify.com.br/3qXHMCe'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider text-center transition-all shadow-lg shadow-sky-500/20 cursor-pointer block"
-              >
-                Assinar Completo ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})
-              </a>
+            <div className="space-y-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
-                className="w-full py-2 text-center text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="w-full py-4 rounded-xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-xs uppercase tracking-wider text-center shadow-lg shadow-brand/20 transition-all cursor-pointer block"
               >
-                ou testar 30 dias grátis
+                Testar grátis por 30 dias
               </button>
+              <div className="text-center">
+                <a
+                  href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xrEKt4N' : 'https://pay.kiwify.com.br/3qXHMCe'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors underline"
+                >
+                  ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})
+                </a>
+              </div>
             </div>
           </div>
 
-          {/* 2. PLANO PREMIUM (Destaque) */}
-          <div className="bg-slate-900 border-2 border-brand rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-2xl shadow-brand/20 relative md:-translate-y-2">
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-brand text-slate-950 font-black text-[10px] uppercase tracking-wider shadow">
-              Mais Recomendado
-            </div>
-            
+          {/* 2. PLANO PREMIUM */}
+          <div className="bg-slate-900/90 border border-brand/40 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl hover:border-brand/60 transition-all">
             <div className="space-y-4">
               <span className="text-xs font-bold text-brand uppercase tracking-wider">
-                {billingCycle === 'annual' ? 'Assinatura Anual com Desconto' : 'Assinatura Mensal VIP'}
+                {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
               </span>
               <h3 className="text-2xl font-bold text-white">Plano Premium</h3>
               <p className="text-slate-400 text-xs leading-relaxed">
-                A experiência definitiva com projeção ao vivo no telão, múltiplos ministérios, relatórios e suporte prioritário.
+                A solução completa com projeção sincronizada no telão, múltiplos ministérios, relatórios e suporte prioritário.
               </p>
               
               <div className="py-3 border-y border-white/10">
                 {billingCycle === 'annual' ? (
                   <div>
-                    <div className="text-xs text-slate-400 line-through">De R$ 1.188,00</div>
-                    <span className="text-4xl font-black text-brand">R$ 950,40</span>
+                    <span className="text-3xl sm:text-4xl font-black text-brand">R$ 950,40</span>
                     <span className="text-xs text-slate-400"> / ano</span>
-                    <div className="text-[11px] text-brand font-semibold mt-1">Equivale a apenas R$ 79,20/mês</div>
+                    <div className="text-[11px] text-emerald-400 font-semibold mt-1">Equivale a R$ 79,20/mês cobrados anualmente</div>
                   </div>
                 ) : (
                   <div>
-                    <span className="text-4xl font-black text-brand">R$ 99,00</span>
+                    <span className="text-3xl sm:text-4xl font-black text-brand">R$ 99,00</span>
                     <span className="text-xs text-slate-400"> / mês</span>
+                    <div className="text-[11px] text-slate-400 mt-1">Sem fidelidade, cancele quando quiser</div>
                   </div>
                 )}
               </div>
@@ -476,11 +477,11 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               <ul className="space-y-2.5 text-xs text-slate-200">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span><strong>Tudo do Plano Completo</strong></span>
+                  <span><strong>Tudo incluído no Plano Completo</strong></span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Projeção para telão em tempo real</span>
+                  <span>Projeção de letras no telão em tempo real</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
@@ -488,110 +489,58 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Histórico completo, estatísticas e escalas avançadas</span>
+                  <span>Histórico completo e relatórios de participação</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Suporte prioritário exclusivo via WhatsApp</span>
+                  <span>Suporte prioritário via WhatsApp</span>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <a
-                href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xlsUZKY' : 'https://pay.kiwify.com.br/BlF0RJs'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-4 rounded-xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-xs uppercase tracking-wider text-center shadow-lg shadow-brand/25 transition-all cursor-pointer block"
-              >
-                Assinar Premium ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})
-              </a>
+            <div className="space-y-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
-                className="w-full py-2 text-center text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="w-full py-4 rounded-xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-xs uppercase tracking-wider text-center shadow-lg shadow-brand/25 transition-all cursor-pointer block"
               >
-                ou testar 30 dias grátis
+                Testar grátis por 30 dias
               </button>
-            </div>
-          </div>
-
-          {/* 3. CONDIÇÃO DE LANÇAMENTO: VITALÍCIO */}
-          <div className="bg-gradient-to-br from-amber-500/15 via-slate-900 to-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl">
-            <div className="space-y-4">
-              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">Oferta de Lançamento</span>
-              <h3 className="text-2xl font-bold text-white">Acesso Vitalício</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Pagamento único para acesso permanente a todas as funções completas e futuras atualizações sem mensalidades.
-              </p>
-              
-              <div className="py-3 border-y border-white/10">
-                <div className="text-xs text-slate-400 line-through">De R$ 1.490,00</div>
-                <span className="text-3xl sm:text-4xl font-black text-amber-400">R$ 697,90</span>
-                <span className="text-xs text-slate-400"> pagamento único</span>
-                <div className="text-[11px] text-amber-300 font-semibold mt-1">Ou em até 12x no cartão de crédito</div>
+              <div className="text-center">
+                <a
+                  href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xlsUZKY' : 'https://pay.kiwify.com.br/BlF0RJs'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors underline"
+                >
+                  ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})
+                </a>
               </div>
-
-              <ul className="space-y-2.5 text-xs text-slate-300">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span><strong>Acesso permanente vitalício</strong></span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Sem mensalidades ou anuidades</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Todas as funcionalidades ilimitadas</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Garantia de 7 dias com reembolso total</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <a
-                href="https://pay.kiwify.com.br/hzdGE1G"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider text-center transition-all shadow-lg shadow-amber-500/20 cursor-pointer block"
-              >
-                Garantir Vitalício (R$ 697,90)
-              </a>
-              <p className="text-center text-[11px] text-slate-400">
-                Checkout seguro e instantâneo via Kiwify
-              </p>
             </div>
           </div>
+
         </div>
 
-        {/* Rodapé da Seção de Preços com Selos de Confiança */}
-        <div className="p-6 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-wrap items-center justify-around gap-4 text-xs text-slate-400 text-center">
+        {/* Rodapé da Seção de Preços com Selos de Confiança Sóbrios */}
+        <div className="max-w-4xl mx-auto p-6 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-wrap items-center justify-around gap-4 text-xs text-slate-400 text-center">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Pagamento 100% seguro via Kiwify</span>
+            <span>30 dias gratuitos sem cartão de crédito</span>
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-brand" />
-            <span>Liberação imediata de acesso</span>
+            <span>Cancele quando quiser, sem fidelidade</span>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-sky-400" />
-            <span>Garantia incondicional de 7 dias</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="text-slate-300 font-medium">Seus dados e músicas nunca são perdidos</span>
+            <Sparkles className="w-4 h-4 text-sky-400" />
+            <span>Seus dados e músicas ficam salvos na nuvem</span>
           </div>
         </div>
       </section>
 
       {/* SEÇÃO 11: PERGUNTAS FREQUENTES (FAQ) */}
       <section id="faq" className="max-w-4xl mx-auto px-6">
-        <div className="text-center space-y-4 mb-16">
+        <div className="text-center space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-wider">
             <HelpCircle className="w-3.5 h-3.5" />
             Dúvidas Frequentes
@@ -634,8 +583,8 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
       </section>
 
       {/* SEÇÃO 12: CHAMADA FINAL */}
-      <section className="max-w-7xl mx-auto px-6 pb-12">
-        <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-[#0a1829] to-slate-900 border border-white/15 p-10 sm:p-16 lg:p-20 text-center space-y-8 shadow-2xl overflow-hidden">
+      <section className="max-w-7xl mx-auto px-6 pb-6">
+        <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-[#0a1829] to-slate-900 border border-white/15 p-8 sm:p-12 lg:p-14 text-center space-y-6 shadow-2xl overflow-hidden">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-48 bg-brand/15 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 max-w-3xl mx-auto space-y-6">
@@ -645,7 +594,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
             <p className="text-slate-300 text-base sm:text-lg lg:text-xl leading-relaxed">
               Experimente o LiLouPro em sua igreja por 30 dias gratuitos. 
-              Menos tempo organizando e mais tranquilidade para liderar a adoração.
+              Mais clareza para preparar cada culto e cuidar da sua equipe.
             </p>
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -653,7 +602,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 onClick={() => onEnterApp('signup')}
                 className="w-full sm:w-auto px-10 py-5 bg-brand hover:bg-brand/90 text-slate-950 font-black rounded-2xl text-lg shadow-2xl shadow-brand/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
               >
-                <span>Começar meu teste gratuito</span>
+                <span>Testar grátis por 30 dias</span>
                 <ArrowRight className="w-5 h-5" />
               </button>
               <button
@@ -680,8 +629,8 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
       </section>
 
       {/* FOOTER INSTITUCIONAL */}
-      <footer className="border-t border-white/10 pt-16 pb-12 text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+      <footer className="border-t border-white/10 pt-10 pb-8 text-xs text-slate-400">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2">
               <Music2 className="w-6 h-6 text-brand" />
@@ -707,7 +656,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             <ul className="space-y-2">
               <li><button onClick={() => onEnterApp('signup')} className="hover:text-white transition-colors text-left">Teste Gratuito</button></li>
               <li><button onClick={() => onEnterApp('login')} className="hover:text-white transition-colors text-left">Área do Membro</button></li>
-              <li><a href="https://pay.kiwify.com.br/hzdGE1G" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Assinatura Kiwify</a></li>
+              <li><a href="https://pay.kiwify.com.br/xrEKt4N" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Assinatura Oficial</a></li>
             </ul>
           </div>
 

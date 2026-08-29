@@ -20,6 +20,12 @@ O **Liloupro** deve ser uma solução fantástica e de valor comercial (vendáve
 * **Acesso Rápido**: O usuário deve alcançar as ferramentas vitais (cifras, repertórios, diagramas de acordes, escalas de ministério) no menor número de cliques possíveis.
 * **Transições Fluídas**: Utilizar animações de transição suaves (via Framer Motion / Motion) para feedbacks de interação refinados.
 
+## 🛡️ Regra Permanente LiLouPro: Estabilidade Primeiro (Strict Scope)
+* **Alterações Estritamente Pontuais**: Alterar **somente** o que for explicitamente pedido.
+* **Proibido Refatorar ou Reorganizar**: Não refatorar, não reorganizar, não modularizar e não alterar layout, estilos ou funcionalidades existentes por iniciativa própria.
+* **Preservação de Módulos Críticos**: Preservar rigorosamente a liturgia, modo de edição, projeção, repertório, Bíblia, dashboard e escalas, a não ser que uma alteração em um desses módulos seja explicitamente solicitada.
+* **Parar e Perguntar**: Se notar que uma solicitação pede algo ambíguo ou fora do escopo estrito, parar imediatamente e perguntar antes de fazer qualquer alteração.
+
 ## 🎵 Regras Específicas do Domínio (Música e Acordes)
 * **Diagramas de Acordes**:
   * Oferecer sempre a opção de visualização entre **Dedos** (posição original do diagrama) e **Intervalos** (composto por T, 3, 5, etc).

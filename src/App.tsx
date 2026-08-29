@@ -65,8 +65,7 @@ import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jp
 const DashboardView = lazy(() => import('./components/DashboardView'));
 const SongsView = lazy(() => import('./components/SongsView'));
 const LiturgyView = lazy(() => import('./components/LiturgyView'));
-import { SongDetailView } from './components/SongsView';
-import { AvailabilityView, LiturgyEditor } from './components/AvailabilityAndLiturgy';
+import { SongDetailView, AvailabilityView, LiturgyEditor } from './components/SongsView';
 
 
 function cn(...inputs: ClassValue[]) {

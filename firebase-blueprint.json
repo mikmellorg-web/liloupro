@@ -121,10 +121,7 @@
           "type": "string", 
           "enum": ["sugestao", "ideia", "necessidade", "oracao", "outro"] 
         },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "reply": { "type": "string" },
-        "repliedBy": { "type": "string" },
-        "repliedAt": { "type": "number" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["text", "authorId", "authorName", "type", "createdAt"]
     },

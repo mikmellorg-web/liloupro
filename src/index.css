@@ -497,4 +497,12 @@
   background: var(--brand, #3b82f6);
 }
 
+/* Utilitário para renderização nítida de imagens e capturas de tela da Landing Page em telas Retina e 4K */
+.landing-crisp-img {
+  image-rendering: -webkit-optimize-contrast;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
 

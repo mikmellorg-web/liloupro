@@ -1,4 +1,4 @@
-import { LiturgyEditor } from "./AvailabilityAndLiturgy";
+import { LiturgyEditor } from "./SongsView";
 import { getServicePlaylistSongs, getServiceSongs } from "../utils/servicePlaylistUtils";
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { toPng } from 'html-to-image';

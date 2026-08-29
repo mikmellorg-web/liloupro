@@ -64,7 +64,7 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
                 LiLouPro
               </span>
               <span className="text-[10px] font-bold text-slate-400 tracking-wider">
-                Liturgia - Louvor - Projeção
+                IGREJAS CONECTADAS
               </span>
             </div>
           </div>
@@ -121,7 +121,7 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
       </header>
 
       {/* Corpo Principal da Landing Page - As 12 Seções Reformuladas com Padrão Apple / Stripe / Linear */}
-      <main className="relative z-10 pt-6 pb-12">
+      <main className="relative z-10 pt-2 sm:pt-4 pb-8 space-y-12 sm:space-y-16">
         {/* Seção 1 (Hero), Seção 2 (Desafios), Seção 3 (A Solução) */}
         <LandingHeroAndChallenges onEnterApp={onEnterApp} />
 

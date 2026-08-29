@@ -1662,23 +1662,13 @@ export default function DashboardView({
   };
 
   const handleReplyMuralItem = async (id: string) => {
-    const trimmed = muralReplyText.trim();
-    if (!trimmed || !user) return;
-    const authorName = memberData?.name || user.displayName || 'Administrador';
+    if (!muralReplyText.trim() || !user) return;
     try {
       await updateDoc(doc(db, 'mural', id), {
-        reply: trimmed,
-        repliedBy: authorName,
-        repliedAt: Date.now()
+        reply: muralReplyText,
+        repliedBy: memberData?.name || user.displayName || 'Administrador',
+        repliedAt: Date.now() // Use simple timestamp for easy formatting or serverTimestamp
       });
-      if (createNotifications) {
-        await createNotifications(
-          `${authorName} respondeu no Mural`,
-          trimmed,
-          'mural',
-          user.uid
-        );
-      }
       setMuralReplyText('');
       setReplyingItemId(null);
     } catch (error) {
@@ -2314,10 +2304,9 @@ export default function DashboardView({
                               </Button>
                               <Button 
                                 onClick={() => handleReplyMuralItem(item.id)} 
-                                className="text-[10px] py-1 h-7 bg-brand text-white px-4 font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm"
+                                className="text-[10px] py-1 h-7 bg-brand text-white px-4 font-bold uppercase tracking-wider"
                               >
-                                <Send size={11} />
-                                <span>RESPONDER</span>
+                                Salvar Resposta
                               </Button>
                             </div>
                           </div>

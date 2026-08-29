@@ -638,7 +638,7 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
               "BLIVRE": "AA" // Use public domain AA (Almeida Atualizada) as fallback to prevent any copyright issues
             };
             const bollsTranslation = BOLLS_TRANSLATIONS[bibleVersion] || "ARA";
-            const res = await fetch(`https://bolls.life/api/v1/single/${bollsTranslation}/${bollsBookId}/${selectedChapter}/`);
+            const res = await fetch(`https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${selectedChapter}/`);
             if (res.ok) {
               const fbData = await res.json();
               if (active && Array.isArray(fbData)) {
@@ -840,40 +840,45 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
         throw new Error("Falha ao comunicar com o assistente.");
       }
 
-      if (assistResponse.body) {
+      const isSse = assistResponse.headers.get('content-type')?.includes('text/event-stream');
+
+      if (isSse && assistResponse.body) {
         const reader = assistResponse.body.getReader();
         const decoder = new TextDecoder();
         let accumulated = '';
+        let sseBuffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() || '';
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.replace('data: ', '').trim();
-              if (dataStr === '[DONE]') break;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.text) {
-                  accumulated += parsed.text;
-                  setAiAnalysis(accumulated);
-                }
-              } catch (e) {
-                // Ignore partial JSON chunks
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.text) {
+                accumulated += parsed.text;
+                setAiAnalysis(accumulated);
               }
+            } catch (e) {
+              // Ignore partial JSON chunks
             }
           }
         }
 
-        if (!accumulated) {
-          const data = await assistResponse.json();
-          setAiAnalysis(data.explanation);
+        if (accumulated) {
+          setAiAnalysis(accumulated);
         }
       } else {
         const data = await assistResponse.json();
-        setAiAnalysis(data.explanation);
+        if (data && data.explanation) {
+          setAiAnalysis(data.explanation);
+        }
       }
     } catch (err: any) {
       console.error("Error explaining verse:", err);
@@ -915,41 +920,55 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
         throw new Error("Erro na consulta.");
       }
 
-      if (response.body) {
+      const isSse = response.headers.get('content-type')?.includes('text/event-stream');
+
+      if (isSse && response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let accumulated = '';
+        let sseBuffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() || '';
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.replace('data: ', '').trim();
-              if (dataStr === '[DONE]') break;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.text) {
-                  accumulated += parsed.text;
-                  setAiChatResponses(prev => {
-                    const next = [...prev];
-                    if (next[msgIndex]) {
-                      next[msgIndex] = { ...next[msgIndex], response: accumulated };
-                    }
-                    return next;
-                  });
-                }
-              } catch (e) {
-                // Ignore partial JSON chunks
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.text) {
+                accumulated += parsed.text;
+                setAiChatResponses(prev => {
+                  const next = [...prev];
+                  if (next[msgIndex]) {
+                    next[msgIndex] = { ...next[msgIndex], response: accumulated };
+                  }
+                  return next;
+                });
               }
+            } catch (e) {
+              // Ignore partial JSON chunks
             }
           }
         }
 
-        if (!accumulated) {
-          const data = await response.json();
+        if (accumulated) {
+          setAiChatResponses(prev => {
+            const next = [...prev];
+            if (next[msgIndex]) {
+              next[msgIndex] = { ...next[msgIndex], response: accumulated };
+            }
+            return next;
+          });
+        }
+      } else {
+        const data = await response.json();
+        if (data && data.explanation) {
           setAiChatResponses(prev => {
             const next = [...prev];
             if (next[msgIndex]) {
@@ -958,15 +977,6 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
             return next;
           });
         }
-      } else {
-        const data = await response.json();
-        setAiChatResponses(prev => {
-          const next = [...prev];
-          if (next[msgIndex]) {
-            next[msgIndex] = { ...next[msgIndex], response: data.explanation };
-          }
-          return next;
-        });
       }
     } catch (err: any) {
       console.error("Assistant chat error:", err);

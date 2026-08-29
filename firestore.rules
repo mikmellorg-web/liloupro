@@ -121,13 +121,10 @@ service cloud.firestore {
     function isValidMuralItem(data) {
       return (data.get('text', null) == null || (data.text is string && data.text.size() > 0 && data.text.size() <= 2000))
         && (data.get('type', null) == null || data.type in ['sugestao', 'ideia', 'necessidade', 'oracao', 'outro'])
-        && (data.get('authorId', null) == null || (data.authorId is string && data.authorId.size() <= 128))
+        && (data.get('authorId', null) == null || (data.authorId is string && data.authorId == request.auth.uid))
         && (data.get('authorName', null) == null || (data.authorName is string && data.authorName.size() <= 200))
-        && (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt is number || data.createdAt is string)
-        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
-        && (data.get('reply', null) == null || (data.reply is string && data.reply.size() <= 2000))
-        && (data.get('repliedBy', null) == null || (data.repliedBy is string && data.repliedBy.size() <= 200))
-        && (data.get('repliedAt', null) == null || data.repliedAt is timestamp || data.repliedAt is number || data.repliedAt is string);
+        && (data.get('createdAt', null) == null || data.createdAt is timestamp)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
     }
 
     function isValidNotification(data) {
@@ -286,7 +283,7 @@ service cloud.firestore {
     // Mural Rules
     match /mural/{itemId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'type', 'authorId', 'authorName', 'createdAt']) && incoming().authorId == request.auth.uid && isValidMuralItem(incoming());
+      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'type', 'authorId', 'authorName', 'createdAt']) && isValidMuralItem(incoming());
       allow update: if (isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid)) && isValidMuralItem(incoming());
       allow delete: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
     }

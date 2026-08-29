@@ -33,7 +33,7 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
-const GEMINI_FALLBACK_MODELS = ["gemini-3.7-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
+const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.7-flash"];
 
 function isQuotaError(error: any): boolean {
   if (!error) return false;
@@ -107,7 +107,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Body parser for api requests (supporting high-resolution image uploads)
+  // Body parser for api requests (aumentado para 50mb para suportar imagens de alta fidelidade sem compressão ou degradação)
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -124,38 +124,87 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Endpoint to save 100% original hero image directly into public and dist folders
-  app.post("/api/upload-hero-image", (req, res) => {
+  // --- PERSISTÊNCIA OFICIAL DE IMAGENS DA LANDING PAGE EM ALTA DEFINIÇÃO ---
+  const landingDataFile = path.join(process.cwd(), "data", "landing-images.json");
+  let memoryLandingImages: {
+    heroImage: string | null;
+    moduleImages: Record<string, string>;
+    simulatorMedia: Record<string, any>;
+  } = {
+    heroImage: null,
+    moduleImages: {},
+    simulatorMedia: {}
+  };
+
+  // Carrega imagens do disco local se existirem
+  try {
+    if (fs.existsSync(landingDataFile)) {
+      const raw = fs.readFileSync(landingDataFile, "utf-8");
+      memoryLandingImages = { ...memoryLandingImages, ...JSON.parse(raw) };
+    }
+  } catch (err) {
+    console.warn("[Landing Images] Aviso ao ler cache local de imagens da landing:", err);
+  }
+
+  // GET /api/landing/images: Retorna as imagens oficiais configuradas para a landing page (público)
+  app.get("/api/landing/images", async (req, res) => {
     try {
-      const { imageBase64, filename } = req.body;
-      if (!imageBase64) {
-        return res.status(400).json({ error: "Missing imageBase64" });
+      if (serverDb && !memoryLandingImages.heroImage && Object.keys(memoryLandingImages.moduleImages || {}).length === 0) {
+        try {
+          const { doc, getDoc } = await import("firebase/firestore");
+          const snap = await getDoc(doc(serverDb, "system_config", "landing_images"));
+          if (snap.exists()) {
+            memoryLandingImages = { ...memoryLandingImages, ...snap.data() as any };
+          }
+        } catch (e) {
+          // Ignora se Firestore não tiver o documento
+        }
       }
-      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(cleanBase64, "base64");
+      res.setHeader("Cache-Control", "public, max-age=60, s-maxage=120");
+      return res.json(memoryLandingImages);
+    } catch (err: any) {
+      console.error("[Landing Images GET Error]:", err);
+      return res.json(memoryLandingImages);
+    }
+  });
 
-      const publicDir = path.join(process.cwd(), "public");
-      const distDir = path.join(process.cwd(), "dist");
+  // POST /api/landing/images: Salva as imagens oficiais sem compressão com perdas
+  app.post("/api/landing/images", async (req, res) => {
+    try {
+      const { heroImage, moduleImages, simulatorMedia } = req.body || {};
+      if (heroImage !== undefined) memoryLandingImages.heroImage = heroImage;
+      if (moduleImages !== undefined) {
+        memoryLandingImages.moduleImages = { ...(memoryLandingImages.moduleImages || {}), ...moduleImages };
+      }
+      if (simulatorMedia !== undefined) {
+        memoryLandingImages.simulatorMedia = { ...(memoryLandingImages.simulatorMedia || {}), ...simulatorMedia };
+      }
 
-      const names = [
-        "capa da landin page.png",
-        "capa_landing_page.png",
-        "capa_da_landin_page.png"
-      ];
-      if (filename) names.push(filename);
+      // Salva no disco local
+      try {
+        const dataDir = path.dirname(landingDataFile);
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        fs.writeFileSync(landingDataFile, JSON.stringify(memoryLandingImages, null, 2), "utf-8");
+      } catch (fErr) {
+        console.warn("[Landing Images] Aviso ao gravar imagens em disco:", fErr);
+      }
 
-      for (const name of names) {
-        fs.writeFileSync(path.join(publicDir, name), buffer);
-        if (fs.existsSync(distDir)) {
-          fs.writeFileSync(path.join(distDir, name), buffer);
+      // Persiste no Firestore se serverDb estiver ativo
+      if (serverDb) {
+        try {
+          const { doc, setDoc } = await import("firebase/firestore");
+          await setDoc(doc(serverDb, "system_config", "landing_images"), memoryLandingImages, { merge: true });
+        } catch (fbErr) {
+          console.warn("[Landing Images] Aviso ao persistir no Firestore:", fbErr);
         }
       }
 
-      console.log(`[Upload] Hero image saved successfully (${buffer.length} bytes) as:`, names);
-      return res.json({ success: true, url: "/capa da landin page.png" });
+      return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Upload error]:", err);
-      return res.status(500).json({ error: err?.message || "Failed to save image" });
+      console.error("[Landing Images POST Error]:", err);
+      return res.status(500).json({ error: "Erro ao salvar imagens da landing page" });
     }
   });
 
@@ -484,7 +533,7 @@ async function startServer() {
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
-        const url = `https://bolls.life/api/v1/single/${bollsTranslation}/${bollsBookId}/${chapter}/`;
+        const url = `https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${chapter}/`;
 
         console.log(`[Bible Service] Primary structured retrieval for ${book} ${chapter} (${bollsTranslation})`);
         
@@ -621,7 +670,11 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
             contents: prompt,
             config: {
               systemInstruction,
-              ...(modelName.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+              ...(modelName === "gemini-3.1-flash-lite"
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+                : modelName.includes("gemini-3")
+                  ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                  : {}),
               responseMimeType: "application/json",
               temperature: 0.1,
               responseSchema: {
@@ -737,7 +790,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
-        const fallbackUrl = `https://bolls.life/api/v1/single/${bollsTranslation}/${bollsBookId}/${chapter}/`;
+        const fallbackUrl = `https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${chapter}/`;
 
         console.log(`[Bible Service] Alternative delivery request target: ${book} ${chapter} (${bollsTranslation}) via bolls.life`);
         const fallbackRes = await fetch(fallbackUrl, {
@@ -932,36 +985,55 @@ Por favor, estruture seu estudo em tópicos usando Markdown clássico:
 
       // 2. Stream response if requested
       if (stream || req.headers.accept === 'text/event-stream') {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+        const streamModels = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.7-flash"];
+        let streamSentHeaders = false;
 
-        let fullText = '';
-        try {
-          const responseStream = await ai.models.generateContentStream({
-            model: "gemini-3.7-flash",
-            contents: prompt,
-            config: {
-              systemInstruction,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        for (const model of streamModels) {
+          try {
+            console.log(`[Bible AI Stream] Tentando modelo de resposta rápida "${model}"...`);
+            const responseStream = await ai.models.generateContentStream({
+              model,
+              contents: prompt,
+              config: {
+                systemInstruction,
+                ...(model === "gemini-3.1-flash-lite"
+                  ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+                  : model.includes("gemini-3")
+                    ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                    : {})
+              }
+            });
+
+            if (!res.headersSent) {
+              res.setHeader('Content-Type', 'text/event-stream');
+              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('Connection', 'keep-alive');
+              res.flushHeaders?.();
+              streamSentHeaders = true;
             }
-          });
 
-          for await (const chunk of responseStream) {
-            if (chunk.text) {
-              fullText += chunk.text;
-              res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+            let fullText = '';
+            for await (const chunk of responseStream) {
+              if (chunk.text) {
+                fullText += chunk.text;
+                res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+              }
+            }
+
+            if (fullText) {
+              bibleExplainCache.set(cacheKey, fullText.trim());
+            }
+            res.write(`data: [DONE]\n\n`);
+            res.end();
+            return;
+          } catch (streamErr: any) {
+            console.warn(`[Bible AI Stream] Modelo ${model} falhou:`, streamErr?.message || streamErr);
+            if (streamSentHeaders) {
+              res.write(`data: [DONE]\n\n`);
+              res.end();
+              return;
             }
           }
-          if (fullText) {
-            bibleExplainCache.set(cacheKey, fullText.trim());
-          }
-          res.write(`data: [DONE]\n\n`);
-          res.end();
-          return;
-        } catch (streamErr) {
-          console.error("[Bible AI] SSE Stream error, falling back to non-streaming", streamErr);
-          // If streaming fails mid-way, close nicely or continue to JSON fallback
         }
       }
 
@@ -978,7 +1050,11 @@ Por favor, estruture seu estudo em tópicos usando Markdown clássico:
             contents: prompt,
             config: {
               systemInstruction,
-              ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {})
+              ...(model === "gemini-3.1-flash-lite"
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+                : model.includes("gemini-3")
+                  ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                  : {})
             }
           });
 
@@ -998,6 +1074,12 @@ Por favor, estruture seu estudo em tópicos usando Markdown clássico:
 
       const finalExplanation = responseText.trim();
       bibleExplainCache.set(cacheKey, finalExplanation);
+
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ text: finalExplanation })}\n\n`);
+        res.write(`data: [DONE]\n\n`);
+        return res.end();
+      }
       return res.json({ explanation: finalExplanation });
 
     } catch (error: any) {
@@ -1017,7 +1099,12 @@ Na liturgia cristã, as verdades encontradas nesta passagem servem como combust�
 #### 3. **Aplicação Prática & Ministração**
 * **Dica de Ministração de 1 minuto:** "Igreja, a Palavra de Deus nos lembra em **${passage}** que o Senhor é fiel e Sua misericórdia dura para sempre. Diante desta promessa eterna, vamos levantar nossas vozes em adoração sincera. Deixe as preocupações de lado e renda o seu melhor louvor Àquele que reina eternamente. Amém!"`;
 
-      res.json({ explanation: defaultExplanation });
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ text: defaultExplanation })}\n\n`);
+        res.write(`data: [DONE]\n\n`);
+        return res.end();
+      }
+      return res.json({ explanation: defaultExplanation });
     }
   });
 
@@ -1326,7 +1413,11 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
             contents: prompt,
             config: {
               systemInstruction,
-              ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+              ...(model === "gemini-3.1-flash-lite"
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+                : model.includes("gemini-3")
+                  ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                  : {}),
               responseMimeType: "application/json"
             }
           });
@@ -3086,7 +3177,14 @@ Complete a finalização da música`,
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (/\.(png|jpe?g|webp|avif|svg|gif|ico)$/i.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
+      }
+    }));
     // Since Express v5 is used, use *all for wildcard fallback
     app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
