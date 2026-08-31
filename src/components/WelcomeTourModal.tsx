@@ -194,11 +194,7 @@ export const WelcomeTourModal: React.FC<WelcomeTourModalProps> = ({
 
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
-      const nextIndex = currentStep + 1;
-      setCurrentStep(nextIndex);
-      if (onNavigateTab && tourSteps[nextIndex].tabTarget) {
-        onNavigateTab(tourSteps[nextIndex].tabTarget!);
-      }
+      setCurrentStep(prev => prev + 1);
     } else {
       handleFinishTour();
     }
@@ -206,11 +202,7 @@ export const WelcomeTourModal: React.FC<WelcomeTourModalProps> = ({
 
   const handlePrev = () => {
     if (currentStep > 0) {
-      const prevIndex = currentStep - 1;
-      setCurrentStep(prevIndex);
-      if (onNavigateTab && tourSteps[prevIndex].tabTarget) {
-        onNavigateTab(tourSteps[prevIndex].tabTarget!);
-      }
+      setCurrentStep(prev => prev - 1);
     }
   };
 
@@ -259,14 +251,23 @@ export const WelcomeTourModal: React.FC<WelcomeTourModalProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleFinishTour}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-            title="Pular Tour"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleFinishTour}
+              className="text-xs font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors uppercase tracking-wider hidden sm:block"
+            >
+              Pular
+            </button>
+            <button
+              type="button"
+              onClick={handleFinishTour}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              title="Pular / Fechar Tour"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -315,12 +316,7 @@ export const WelcomeTourModal: React.FC<WelcomeTourModalProps> = ({
               <button
                 key={idx}
                 type="button"
-                onClick={() => {
-                  setCurrentStep(idx);
-                  if (onNavigateTab && tourSteps[idx].tabTarget) {
-                    onNavigateTab(tourSteps[idx].tabTarget!);
-                  }
-                }}
+                onClick={() => setCurrentStep(idx)}
                 className={`h-2 rounded-full transition-all duration-300 ${
                   idx === currentStep 
                     ? 'w-6 bg-brand' 

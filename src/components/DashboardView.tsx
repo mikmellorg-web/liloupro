@@ -1913,14 +1913,14 @@ export default function DashboardView({
       />
 
       {/* Persistent Quick Tour Banner for Members */}
-      {!isAdmin && (
-        <div className="bg-gradient-to-r from-brand/15 via-indigo-500/10 to-emerald-500/10 border border-brand/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
-          <div className="flex items-center gap-3.5">
+      {!isAdmin && !localStorage.getItem('liloupro_member_guide_banner_dismissed') && (
+        <div className="relative bg-gradient-to-r from-brand/15 via-indigo-500/10 to-emerald-500/10 border border-brand/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg group">
+          <div className="flex items-center gap-3.5 pr-8 sm:pr-0">
             <div className="w-10 h-10 rounded-xl bg-brand/20 text-brand flex items-center justify-center shrink-0 border border-brand/30">
               <Sparkles size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-tight">
                   Guia do Ministro: Escala, Repertório & Disponibilidade
                 </h4>
@@ -1933,14 +1933,28 @@ export default function DashboardView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowMemberTour(true)}
-            className="w-full sm:w-auto px-4 py-2.5 bg-brand hover:bg-brand-light text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
-          >
-            <Compass size={14} />
-            <span>Ver Tour Guiado</span>
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowMemberTour(true)}
+              className="flex-1 sm:flex-initial px-4 py-2.5 bg-brand hover:bg-brand-light text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <Compass size={14} />
+              <span>Ver Tour Guiado</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem('liloupro_member_guide_banner_dismissed', 'true');
+                // Force re-render
+                setShowMemberTour(false);
+              }}
+              className="p-2.5 rounded-xl border border-white/10 text-text-muted hover:text-white hover:bg-white/10 transition-colors"
+              title="Fechar / Dispensar guia"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       )}
 
