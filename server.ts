@@ -3167,6 +3167,85 @@ Complete a finalização da música`,
     }
   });
 
+  // --- ENDPOINT OFICIAL DE DISPARO DE PUSH NOTIFICATIONS (FCM) ---
+  app.post("/api/notifications/send-push", async (req, res) => {
+    try {
+      const { tokens, title, body, url = "/", data = {} } = req.body || {};
+      if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+        return res.status(400).json({ success: false, error: "Nenhum token fornecido para o envio." });
+      }
+
+      const validTokens = tokens.filter((t: any) => typeof t === "string" && t.trim().length > 10);
+      if (validTokens.length === 0) {
+        return res.status(400).json({ success: false, error: "Nenhum token válido encontrado." });
+      }
+
+      const payloadNotification = {
+        title: title || "LiLouPro • Notificação",
+        body: body || "Nova mensagem no ministério de louvor.",
+        icon: "/pwa-512x512.png?v=4.0",
+        badge: "/pwa-192x192.png?v=4.0"
+      };
+
+      console.log(`[FCM Server] Enviando push para ${validTokens.length} token(s): "${title}"`);
+
+      // 1. Tentar disparo via Google FCM REST API se houver chave configurada ou fallbacks
+      let sentCount = 0;
+      const errors: string[] = [];
+
+      // Loop de envio resiliente para cada token
+      for (const token of validTokens) {
+        try {
+          // Utiliza o endpoint legacy / v1 FCM de forma compatível
+          // Obs: em ambiente com Web Push standard, enviamos requisição HTTP segura
+          const fcmResponse = await fetch("https://fcm.googleapis.com/fcm/send", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // Chave de autorização pública/servidor do Firebase configurada no projeto
+              "Authorization": `key=${process.env.FIREBASE_SERVER_KEY || "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk"}`
+            },
+            body: JSON.stringify({
+              to: token,
+              notification: payloadNotification,
+              data: {
+                ...data,
+                title: payloadNotification.title,
+                body: payloadNotification.body,
+                url: url || "/"
+              },
+              priority: "high"
+            })
+          });
+
+          if (fcmResponse.ok) {
+            sentCount++;
+          } else {
+            const errText = await fcmResponse.text();
+            console.warn(`[FCM Server] Aviso ao enviar para token (${token.slice(0, 10)}...):`, errText);
+            errors.push(errText);
+          }
+        } catch (itemErr: any) {
+          console.warn("[FCM Server] Erro no envio unitário:", itemErr?.message || itemErr);
+          errors.push(itemErr?.message || String(itemErr));
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        sentCount,
+        totalTokens: validTokens.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (err: any) {
+      console.error("[FCM Push Endpoint Error]:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Erro interno ao processar disparo de notificações push"
+      });
+    }
+  });
+
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");

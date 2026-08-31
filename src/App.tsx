@@ -59,6 +59,7 @@ import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
+import { sendPushNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Lazy-loaded components for code-splitting
@@ -2314,6 +2315,31 @@ function MainContent() {
         });
       });
       await Promise.all(creations);
+
+      // Disparar Web Push (FCM) em background para todos os aparelhos dos membros selecionados
+      const pushTokens: string[] = [];
+      targets.forEach(m => {
+        if (Array.isArray(m.fcmTokens) && m.fcmTokens.length > 0) {
+          m.fcmTokens.forEach((tok: any) => {
+            if (typeof tok === 'string' && tok.trim().length > 10) {
+              pushTokens.push(tok.trim());
+            }
+          });
+        }
+      });
+
+      if (pushTokens.length > 0) {
+        // Envio assíncrono não bloqueante
+        sendPushNotification({
+          tokens: pushTokens,
+          title,
+          body: content,
+          url: '/',
+          data: { type, timestamp: Date.now() }
+        }).catch(err => {
+          console.warn('[FCM] Push send background notification caught:', err);
+        });
+      }
     } catch (e) {
       console.error("Error creating notifications:", e);
     }

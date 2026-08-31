@@ -126,3 +126,55 @@ export const setupForegroundMessageListener = async (
     return null;
   }
 };
+
+/**
+ * Sends a push notification to one or multiple FCM tokens.
+ * Sends request to backend endpoint /api/notifications/send-push.
+ */
+export const sendPushNotification = async (payload: {
+  tokens: string[];
+  title: string;
+  body: string;
+  url?: string;
+  data?: Record<string, any>;
+}): Promise<{ success: boolean; sentCount: number; errors?: any[] }> => {
+  const { tokens, title, body, url = '/', data = {} } = payload;
+  if (!tokens || tokens.length === 0) {
+    return { success: true, sentCount: 0 };
+  }
+
+  // Filter valid non-empty tokens
+  const validTokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 10);
+  if (validTokens.length === 0) {
+    return { success: true, sentCount: 0 };
+  }
+
+  try {
+    const response = await fetch('/api/notifications/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tokens: validTokens,
+        title,
+        body,
+        url,
+        data,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn('[FCM] Push send request returned status:', response.status, errorText);
+      return { success: false, sentCount: 0, errors: [errorText] };
+    }
+
+    const resJson = await response.json();
+    return resJson;
+  } catch (error) {
+    console.warn('[FCM] Failed to send push notifications:', error);
+    return { success: false, sentCount: 0, errors: [error] };
+  }
+};
+
