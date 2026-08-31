@@ -1,4 +1,52 @@
-// Service Worker with support for background Web Push Notifications, Badging, Luxury Icon & Automatic Seamless Update - v9.0
+// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.0
+
+// Import official Firebase compat libraries for background messaging
+try {
+  importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
+
+  // Initialize Firebase with public client configuration (safe for client-side/service worker)
+  const firebaseConfig = {
+    projectId: "gen-lang-client-0330039755",
+    appId: "1:255415345138:web:7da934465ab8a57b99d56b",
+    apiKey: "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk",
+    authDomain: "gen-lang-client-0330039755.firebaseapp.com",
+    storageBucket: "gen-lang-client-0330039755.firebasestorage.app",
+    messagingSenderId: "255415345138"
+  };
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
+  const messaging = firebase.messaging();
+
+  // Official background message handler for Firebase Cloud Messaging
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[sw.js] Received FCM background message:', payload);
+
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
+    const notificationOptions = {
+      body: payload.notification?.body || payload.data?.body || 'Nova atualização no ministério de louvor.',
+      icon: payload.notification?.icon || payload.data?.icon || '/pwa-512x512.png?v=4.0',
+      badge: '/pwa-192x192.png?v=4.0',
+      data: payload.data || { url: '/' },
+      vibrate: [200, 100, 200, 100, 200, 100, 400],
+      tag: payload.data?.tag || 'liloupro-fcm-' + Date.now(),
+      requireInteraction: true,
+      renotify: true,
+      actions: [
+        { action: 'open', title: '💬 Abrir Mensagem' },
+        { action: 'dismiss', title: 'Fechar' }
+      ]
+    };
+
+    self.registration.showNotification(notificationTitle, notificationOptions);
+  });
+} catch (err) {
+  console.warn('[sw.js] Firebase Cloud Messaging background init deferred:', err);
+}
+
 const CACHE_NAME = 'liloupro-v9.0-gold-official-pwa';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';

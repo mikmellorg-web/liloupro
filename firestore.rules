@@ -52,7 +52,9 @@ service cloud.firestore {
         && (data.get('lastAvailabilityUpdate', null) == null || data.lastAvailabilityUpdate is timestamp)
         && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('favoriteSongs', null) == null || data.favoriteSongs is list)
-        && (data.get('defaultBibleVersion', null) == null || data.defaultBibleVersion is string);
+        && (data.get('defaultBibleVersion', null) == null || data.defaultBibleVersion is string)
+        && (data.get('fcmTokens', null) == null || (data.fcmTokens is list && data.fcmTokens.size() <= 20))
+        && (data.get('lastFcmTokenUpdate', null) == null || data.lastFcmTokenUpdate is timestamp);
     }
 
     function isValidAdminEntry(data) {

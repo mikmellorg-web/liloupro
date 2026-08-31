@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getChurchEffectivePlan, isVitalicioPlan, EffectivePlanResult } from '../services/planService';
+import { requestFcmToken, setupForegroundMessageListener } from '../services/fcmService';
 
 interface AuthContextType {
   user: User | null;
@@ -184,6 +185,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (unsubscribeChurch) unsubscribeChurch();
     };
   }, []);
+
+  // Firebase Cloud Messaging (FCM) token registration and foreground message listener
+  const fcmRegisteredUidRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      fcmRegisteredUidRef.current = null;
+      return;
+    }
+
+    let unsubscribeForeground: (() => void) | null = null;
+
+    // Register token once per user session
+    if (fcmRegisteredUidRef.current !== user.uid) {
+      fcmRegisteredUidRef.current = user.uid;
+      requestFcmToken().catch((err) => {
+        console.warn('[FCM] Token registration skipped or deferred:', err);
+      });
+    }
+
+    // Attach foreground listener for active app sessions
+    setupForegroundMessageListener((payload) => {
+      console.log('[FCM] Notificação em primeiro plano recebida:', payload);
+    }).then((unsub) => {
+      if (unsub) {
+        unsubscribeForeground = unsub;
+      }
+    });
+
+    return () => {
+      if (unsubscribeForeground) {
+        unsubscribeForeground();
+      }
+    };
+  }, [user?.uid]);
 
   return (
     <AuthContext.Provider value={{ user, loading, memberData, isAdmin, churchData, effectivePlan, isVitalicio, isPaidActive }}>

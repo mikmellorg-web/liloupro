@@ -14,11 +14,29 @@ import {
   persistentLocalCache, 
   persistentSingleTabManager 
 } from 'firebase/firestore';
+import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+
+// Safe Firebase Cloud Messaging instance retrieval with browser compatibility check
+let messagingInstance: Messaging | null = null;
+export const getFirebaseMessaging = async (): Promise<Messaging | null> => {
+  if (typeof window === 'undefined') return null;
+  if (!messagingInstance) {
+    try {
+      const supported = await isSupported();
+      if (supported) {
+        messagingInstance = getMessaging(app);
+      }
+    } catch {
+      return null;
+    }
+  }
+  return messagingInstance;
+};
 
 export const db = initializeFirestore(
   app,

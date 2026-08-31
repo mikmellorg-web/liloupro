@@ -31,6 +31,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
+import defaultHeroDevicesImg from '../assets/images/liloupro_hero_capa_1787862990137.jpg';
 import { 
   getLocalAsset, 
   setLocalAsset, 
@@ -53,6 +54,8 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
   const [showUrlPrompt, setShowUrlPrompt] = useState(false);
   const [urlInputValue, setUrlInputValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const activeHeroImage = customHeroImage || defaultHeroDevicesImg || '/liloupro_devices_hero.jpg';
 
   useEffect(() => {
     let isMounted = true;
@@ -345,12 +348,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                 </div>
               )}
 
-              {/* SE TIVER IMAGEM REAL: EXIBE APENAS A IMAGEM INTEIRA SEM BORDAS NEM PAINEL */}
-              {customHeroImage ? (
+              {/* SE TIVER IMAGEM REAL / PADRÃO: EXIBE A IMAGEM EM ALTA RESOLUÇÃO */}
+              {activeHeroImage ? (
                 <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl transform-gpu">
                   <img
-                    src={customHeroImage}
-                    alt="Interface do LiLouPro"
+                    src={activeHeroImage}
+                    alt="Interface do LiLouPro no Celular, Notebook e Tablet"
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
@@ -366,14 +369,18 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                     >
                       <Upload size={12} /> Trocar foto
                     </button>
-                    <span className="text-white/20">|</span>
-                    <button
-                      onClick={handleRemoveCustomImage}
-                      className="text-slate-400 hover:text-rose-300 flex items-center gap-1 font-medium cursor-pointer"
-                      title="Voltar ao modelo padrão"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    {customHeroImage && (
+                      <>
+                        <span className="text-white/20">|</span>
+                        <button
+                          onClick={handleRemoveCustomImage}
+                          className="text-slate-400 hover:text-rose-300 flex items-center gap-1 font-medium cursor-pointer"
+                          title="Voltar ao modelo padrão"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
