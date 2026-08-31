@@ -17206,7 +17206,157 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
               themeColor={themeColorPreview} 
               customBrandColor={customBrandColorPreview} 
             />
-           {/* Sua Igreja / Organização (Multi-Igreja / Tenancy Isolation) */}
+           {/* Notification Preferences Card */}
+            <Card className="p-8 space-y-6">
+               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                 <Bell size={14} className="text-brand" /> Preferências de Notificação
+               </h3>
+               <p className="text-xs text-text-muted leading-relaxed">
+                 Personalize quais tipos de notificações você deseja receber neste aplicativo.
+               </p>
+
+               {/* Status das Notificações do Sistema / Native PWA System Notifications Setup */}
+                <div className="p-4 rounded-xl border border-border bg-black/5 dark:bg-white/5 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-text-main">
+                      Notificações no Celular (Push)
+                    </p>
+                    
+                    {notificationPermission === 'granted' ? (
+                      <div className="inline-flex items-center gap-1.5 bg-green-500/10 text-green-500 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        Permissão Ativa
+                      </div>
+                    ) : notificationPermission === 'denied' ? (
+                      <div className="inline-flex items-center gap-1.5 bg-rose-500/10 text-rose-500 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        Bloqueado no Navegador
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        Aguardando Ativação
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-text-muted leading-relaxed">
+                    Receba notificações e avisos de escalas mesmo quando o aplicativo estiver totalmente fechado ou com a tela do celular desligada.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const perm = await Notification.requestPermission();
+                          setNotificationPermission(perm);
+                          const tok = await requestFcmToken();
+                          if (tok) {
+                            alert("✅ Token de Push gerado e salvo com sucesso no Firebase!");
+                          } else {
+                            alert("Permissão solicitada (" + perm + "). Se o seu navegador permitir, o token será conectado.");
+                          }
+                        } catch (e: any) {
+                          alert("Aviso: " + (e?.message || String(e)));
+                        }
+                      }}
+                      className="bg-brand hover:brightness-110 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-brand/20 cursor-pointer"
+                    >
+                      <Bell size={14} />
+                      <span>{notificationPermission === 'granted' ? '🔄 Atualizar Token' : '🔔 Ativar Permissão'}</span>
+                    </Button>
+
+                    <Button
+                      onClick={async () => {
+                        const tok = await requestFcmToken();
+                        alert("🚀 Teste disparado! BLOQUEIE a tela ou FECHE o aplicativo AGORA para ver o aviso tocar no celular.");
+                        setTimeout(() => {
+                          sendPushNotification({
+                            tokens: tok ? [tok] : ['all'],
+                            title: "LiLouPro • Teste de Notificação",
+                            body: "🎉 Push em segundo plano funcionando no celular fechado!",
+                            url: "/"
+                          }).then(res => {
+                            console.log("Resultado do envio Push:", res);
+                          });
+                        }, 4000);
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
+                    >
+                      <Sparkles size={14} />
+                      <span>📲 Testar Celular Fechado (4s)</span>
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
+                   <div className="space-y-0.5 max-w-[80%]">
+                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Lembretes de Escala</h4>
+                     <p className="text-[10px] text-text-muted leading-tight">Receber lembrete automático 24 horas antes do início de um culto em que você estiver escalado.</p>
+                   </div>
+                   <button
+                     onClick={() => handleTogglePreference('notifyDayBeforeReminder')}
+                     className={cn(
+                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
+                       currentMember?.notifyDayBeforeReminder !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
+                     )}
+                   >
+                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
+                   </button>
+                 </div>
+
+                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
+                   <div className="space-y-0.5 max-w-[80%]">
+                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Novas Músicas</h4>
+                     <p className="text-[10px] text-text-muted leading-tight">Ser notificado quando uma nova música for adicionada ao repertório do grupo de louvor.</p>
+                   </div>
+                   <button
+                     onClick={() => handleTogglePreference('notifyNewSongs')}
+                     className={cn(
+                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
+                       currentMember?.notifyNewSongs !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
+                     )}
+                   >
+                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
+                   </button>
+                 </div>
+
+                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
+                   <div className="space-y-0.5 max-w-[80%]">
+                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Alterações na Escala</h4>
+                     <p className="text-[10px] text-text-muted leading-tight">Receber avisos sobre novos agendamentos, escalas e atualizações nos cultos.</p>
+                   </div>
+                   <button
+                     onClick={() => handleTogglePreference('notifyScheduleChanges')}
+                     className={cn(
+                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
+                       currentMember?.notifyScheduleChanges !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
+                     )}
+                   >
+                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
+                   </button>
+                 </div>
+
+                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
+                   <div className="space-y-0.5 max-w-[80%]">
+                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Nova Liturgia</h4>
+                     <p className="text-[10px] text-text-muted leading-tight">Ser notificado quando uma nova liturgia for criada e salva pelo administrador.</p>
+                   </div>
+                   <button
+                     onClick={() => handleTogglePreference('notifyNewLiturgy')}
+                     className={cn(
+                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
+                       currentMember?.notifyNewLiturgy !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
+                     )}
+                   >
+                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
+                   </button>
+                 </div>
+               </div>
+            </Card>
+
+            {/* Sua Igreja / Organização (Multi-Igreja / Tenancy Isolation) */}
            <Card className="p-8 space-y-6">
               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
                 <Home size={14} className="text-brand" /> Sua Igreja / Organização
@@ -18509,122 +18659,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
               </div>
             </Card>
 
-            {/* Notification Preferences Card */}
-            <Card className="p-8 space-y-6">
-               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                 <Bell size={14} className="text-brand" /> Preferências de Notificação
-               </h3>
-               <p className="text-xs text-text-muted leading-relaxed">
-                 Personalize quais tipos de notificações você deseja receber neste aplicativo.
-               </p>
-
-               {/* Status das Notificações do Sistema / Native PWA System Notifications Setup */}
-               <div className="p-4 rounded-xl border border-border bg-black/5 dark:bg-white/5 space-y-3">
-                 <p className="text-[10px] uppercase font-black tracking-widest text-text-main">
-                   Notificações do Sistema (WhatsApp Style)
-                 </p>
-                 
-                 {notificationPermission === 'granted' ? (
-                   <div className="space-y-2">
-                     <div className="inline-flex items-center gap-2 bg-green-500/10 text-green-500 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider">
-                       <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                       Notificações Ativas Neste Celular
-                     </div>
-                     <p className="text-[10px] text-text-muted leading-relaxed">
-                       O seu aparelho está configurado para receber notificações em segundo plano. As atualizações da escala e lembretes acionarão avisos na tela e mudarão o badge no ícone do aplicativo (número vermelho), mesmo com o app fechado.
-                     </p>
-                   </div>
-                 ) : notificationPermission === 'denied' ? (
-                   <div className="space-y-2">
-                     <div className="inline-flex items-center gap-2 bg-rose-500/10 text-rose-500 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider">
-                       Bloqueado no Aparelho
-                     </div>
-                     <p className="text-[10px] text-zinc-400 leading-relaxed">
-                       A permissão para exibir avisos foi bloqueada neste navegador. Para receber alertas quando o aplicativo estiver fechado, por favor acesse as configurações do seu navegador ou do celular e permita notificações para este site.
-                     </p>
-                   </div>
-                 ) : (
-                   <div className="space-y-3">
-                     <p className="text-[10px] text-text-muted leading-relaxed">
-                       Para que as notificações apareçam mesmo com o aplicativo fechado ou em segundo plano (atualizando a numeração de avisos no ícone do celular), é necessário dar permissão ao sistema.
-                     </p>
-                     <Button
-                       onClick={handleRequestNotificationPermission}
-                       className="w-full bg-brand hover:brightness-110 text-white font-black text-[10px] uppercase tracking-widest h-10 px-4 rounded-xl shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
-                     >
-                       <Bell size={14} />
-                       <span>Permitir Notificações no Celular</span>
-                     </Button>
-                   </div>
-                 )}
-               </div>
-               
-               <div className="space-y-4">
-                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
-                   <div className="space-y-0.5 max-w-[80%]">
-                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Lembretes de Escala</h4>
-                     <p className="text-[10px] text-text-muted leading-tight">Receber lembrete automático 24 horas antes do início de um culto em que você estiver escalado.</p>
-                   </div>
-                   <button
-                     onClick={() => handleTogglePreference('notifyDayBeforeReminder')}
-                     className={cn(
-                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
-                       currentMember?.notifyDayBeforeReminder !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
-                     )}
-                   >
-                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
-                   </button>
-                 </div>
-
-                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
-                   <div className="space-y-0.5 max-w-[80%]">
-                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Novas Músicas</h4>
-                     <p className="text-[10px] text-text-muted leading-tight">Ser notificado quando uma nova música for adicionada ao repertório do grupo de louvor.</p>
-                   </div>
-                   <button
-                     onClick={() => handleTogglePreference('notifyNewSongs')}
-                     className={cn(
-                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
-                       currentMember?.notifyNewSongs !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
-                     )}
-                   >
-                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
-                   </button>
-                 </div>
-
-                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
-                   <div className="space-y-0.5 max-w-[80%]">
-                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Alterações na Escala</h4>
-                     <p className="text-[10px] text-text-muted leading-tight">Receber avisos sobre novos agendamentos, escalas e atualizações nos cultos.</p>
-                   </div>
-                   <button
-                     onClick={() => handleTogglePreference('notifyScheduleChanges')}
-                     className={cn(
-                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
-                       currentMember?.notifyScheduleChanges !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
-                     )}
-                   >
-                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
-                   </button>
-                 </div>
-
-                 <div className="flex items-center justify-between p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40">
-                   <div className="space-y-0.5 max-w-[80%]">
-                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">Nova Liturgia</h4>
-                     <p className="text-[10px] text-text-muted leading-tight">Ser notificado quando uma nova liturgia for criada e salva pelo administrador.</p>
-                   </div>
-                   <button
-                     onClick={() => handleTogglePreference('notifyNewLiturgy')}
-                     className={cn(
-                       "w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer outline-none",
-                       currentMember?.notifyNewLiturgy !== false ? "bg-brand justify-end" : "bg-border dark:bg-zinc-700 justify-start"
-                     )}
-                   >
-                     <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md cursor-pointer" />
-                   </button>
-                 </div>
-               </div>
-            </Card>
+            
 
             {/* PWA Connection & Notification Guide Card */}
             <Card className="p-8 space-y-6 md:col-span-2 border-amber-500/15 bg-amber-500/[0.01] dark:bg-amber-500/[0.02]">
@@ -20245,3 +20280,5 @@ function StatCard({ label, value, icon, color }: { label: string, value: number,
     </Card>
   );
 }
+                
+                
