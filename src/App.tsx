@@ -2855,7 +2855,14 @@ function MainContent() {
             icon={<Calendar size={22} />} 
             active={activeTab === 'calendar'} 
             onClick={() => { setActiveTab('calendar'); setShowMoreMenu(false); }} 
-            label="Escala" 
+            label={
+              <span className="flex flex-col md:flex-row items-center md:gap-1 text-center md:text-left leading-[1.05] md:leading-normal">
+                <span className="md:hidden text-[9px] font-black tracking-tighter">Agenda/</span>
+                <span className="md:hidden text-[9px] font-black tracking-tighter">Escala</span>
+                <span className="hidden md:inline">Agenda / Escala</span>
+              </span>
+            } 
+            title="Agenda e Escala de Cultos"
             isCollapsed={isSidebarCollapsed} 
           />
           
@@ -3154,7 +3161,7 @@ function MainContent() {
 function NavIcon({ 
   icon, active, onClick, label, danger, isMobileOnlyIcon, isCollapsed, subItem, success, title
 }: { 
-  icon: React.ReactNode, active?: boolean, onClick: () => void, label: string, danger?: boolean, isMobileOnlyIcon?: boolean, isCollapsed?: boolean, subItem?: boolean, success?: boolean, title?: string
+  icon: React.ReactNode, active?: boolean, onClick: () => void, label: React.ReactNode, danger?: boolean, isMobileOnlyIcon?: boolean, isCollapsed?: boolean, subItem?: boolean, success?: boolean, title?: string
 }) {
   return (
     <button 
@@ -15398,52 +15405,37 @@ function CalendarView({
                </div>
                
                <div className="flex flex-col sm:items-end gap-3 sm:gap-4 no-export">
-                  <div className="bg-black/10 dark:bg-black/20 p-1.5 sm:p-2 rounded-2xl border border-border shadow-inner flex items-center gap-2 sm:3 overflow-hidden">
-                    <span className="text-[8px] sm:text-[10px] font-black text-text-main uppercase tracking-widest pl-2 sm:3 shrink-0">Status:</span>
-                    <div className="flex gap-1 pr-1">
-                      {(['available', 'unavailable', 'maybe'] as const).map(status => (
-                        <button
-                          key={status}
-                          onClick={() => setAvailability(service.id, status)}
-                          className={cn(
-                            "w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:xl flex items-center justify-center text-xs transition-all border shadow-sm",
-                            service.availability?.[user!.uid] === status 
-                              ? (status === 'available' ? "bg-green-500 border-green-400 text-white" : status === 'unavailable' ? "bg-red-500 border-red-400 text-white" : "bg-yellow-500 border-yellow-400 text-white")
-                              : "bg-black/5 dark:bg-white/5 border-border text-text-main font-bold hover:bg-black/10 dark:hover:bg-white/10 hover:text-text-main"
-                          )}
-                        >
-                          {status === 'available' ? <Check size={12} strokeWidth={3} className="sm:w-4 sm:h-4"/> : status === 'unavailable' ? <X size={12} strokeWidth={3} className="sm:w-4 sm:h-4"/> : <span className="font-black text-[10px] sm:text-xs">?</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button 
                       onClick={() => downloadScalePDF(service)}
-                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-2 bg-brand px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-brand/20 shadow-sm"
+                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-2 bg-brand px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-brand/20 shadow-sm"
                     >
-                      <Download size={10} className="sm:w-3 sm:h-3"/> PDF
+                      <Download size={11} className="sm:w-3.5 sm:h-3.5"/> PDF
                     </button>
                     <button 
                       onClick={() => shareScaleWhatsAppIndividual(service)}
-                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-2 bg-emerald-600 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-emerald-600/20 shadow-sm"
+                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-2 bg-emerald-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-emerald-600/20 shadow-sm"
                     >
-                      <Share2 size={10} className="sm:w-3 sm:h-3"/> WhatsApp
+                      <Share2 size={11} className="sm:w-3.5 sm:h-3.5"/> WhatsApp
                     </button>
                     {isAdmin && (
-                      <ConfirmButton 
-                        onConfirm={async () => {
-                          const servicePath = `services/${service.id}`;
-                          try {
-                            await deleteDoc(doc(db, 'services', service.id));
-                          } catch (error) {
-                            handleFirestoreError(error, OperationType.DELETE, servicePath);
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Deseja realmente excluir o agendamento do culto "${service.title}"? Esta ação removerá o culto e a escala associada.`)) {
+                            const servicePath = `services/${service.id}`;
+                            try {
+                              await deleteDoc(doc(db, 'services', service.id));
+                            } catch (error) {
+                              handleFirestoreError(error, OperationType.DELETE, servicePath);
+                            }
                           }
                         }}
-                        className="text-[9px] sm:text-[10px] font-black text-red-500 hover:text-red-600 transition-colors uppercase tracking-widest flex items-center gap-2 bg-red-500/5 px-3 sm:4 py-1 sm:1.5 rounded-full border border-red-500/10"
+                        className="text-[9px] sm:text-[10px] font-black text-red-500 hover:text-white hover:bg-red-600 transition-all uppercase tracking-widest flex items-center gap-1.5 bg-red-500/10 hover:border-red-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-red-500/20 shadow-sm cursor-pointer"
+                        title="Excluir agendamento do culto"
                       >
-                        <Trash2 size={10} className="sm:w-3 sm:h-3"/> Excluir Culto
-                      </ConfirmButton>
+                        <X size={13} strokeWidth={2.5} className="sm:w-3.5 sm:h-3.5"/> Excluir Culto
+                      </button>
                     )}
                </div>
             </div>
