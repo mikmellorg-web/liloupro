@@ -194,11 +194,16 @@ self.addEventListener('push', (event) => {
 
   try {
     const payload = event.data.json();
-    const title = payload.title || 'LiLouPro • Nova Notificação';
+    const title = payload.notification?.title || payload.data?.title || payload.title || 'LiLouPro • Nova Notificação';
+    const body = payload.notification?.body || payload.data?.body || payload.body || 'Você tem uma nova mensagem ou atualização no ministério.';
+    const icon = payload.notification?.icon || payload.icon || '/pwa-512x512.png?v=4.0';
+    const badge = payload.notification?.badge || payload.badge || '/pwa-192x192.png?v=4.0';
+    const targetUrl = payload.data?.url || payload.fcmOptions?.link || payload.url || '/';
+
     const options = {
-      body: payload.body || 'Você tem uma nova mensagem ou atualização no ministério.',
-      icon: payload.icon || '/pwa-512x512.png?v=4.0',
-      badge: payload.badge || '/pwa-192x192.png?v=4.0',
+      body,
+      icon,
+      badge,
       tag: payload.tag || 'liloupro-msg-' + Date.now(),
       renotify: true,
       requireInteraction: true,
@@ -207,7 +212,7 @@ self.addEventListener('push', (event) => {
         { action: 'open', title: '💬 Abrir Mensagem' },
         { action: 'dismiss', title: 'Fechar' }
       ],
-      data: payload.data || { url: '/' },
+      data: { url: targetUrl, ...(payload.data || {}) },
     };
 
     // Determine badge count to display:

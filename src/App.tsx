@@ -59,7 +59,7 @@ import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
-import { sendPushNotification } from './services/fcmService';
+import { sendPushNotification, requestFcmToken } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Lazy-loaded components for code-splitting
@@ -17028,6 +17028,15 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
       if (permission === 'granted') {
+        // Obter e registrar token FCM imediatamente
+        try {
+          const tok = await requestFcmToken();
+          if (tok) {
+            console.log('[FCM] Token registrado com sucesso via Ajustes:', tok.slice(0, 10) + '...');
+          }
+        } catch (fcmErr) {
+          console.warn('[FCM] Registro do token falhou:', fcmErr);
+        }
         alert("Excelente! Notificações nativas autorizadas no seu aparelho. Agora o aplicativo está pronto para receber avisos e atualizar o ícone sempre que houver novidades.");
       } else if (permission === 'denied') {
         alert("O recebimento de notificações foi silenciado. Para receber avisos importantes, permita as notificações nas configurações do seu celular ou navegador.");

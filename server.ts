@@ -1,9 +1,28 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage, adaptToNAA } from "./src/localBibleDb.js";
+
+// Inicialização segura do Firebase Admin
+try {
+  if (!getApps().length) {
+    const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (rawServiceAccount) {
+      const sa = typeof rawServiceAccount === 'string' ? JSON.parse(rawServiceAccount.trim()) : rawServiceAccount;
+      initializeApp({ credential: cert(sa) });
+      console.log('[Server Firebase Admin] Inicializado com Service Account.');
+    } else {
+      initializeApp();
+      console.log('[Server Firebase Admin] Inicializado com Default Credentials.');
+    }
+  }
+} catch (adminErr) {
+  console.warn('[Server Firebase Admin] Alerta na inicialização:', adminErr);
+}
 
 // Global in-memory cache for Bible passages (Keys: book_chapter_verseRange_version) to make Bible loading lightning-fast and save API quota
 const biblePassageCache = new Map<string, any>();
@@ -3180,38 +3199,85 @@ Complete a finalização da música`,
         return res.status(400).json({ success: false, error: "Nenhum token válido encontrado." });
       }
 
-      const payloadNotification = {
-        title: title || "LiLouPro • Notificação",
-        body: body || "Nova mensagem no ministério de louvor.",
-        icon: "/pwa-512x512.png?v=4.0",
-        badge: "/pwa-192x192.png?v=4.0"
-      };
+      const payloadTitle = title || "LiLouPro • Notificação";
+      const payloadBody = body || "Nova mensagem no ministério de louvor.";
 
-      console.log(`[FCM Server] Enviando push para ${validTokens.length} token(s): "${title}"`);
+      console.log(`[FCM Server] Enviando push para ${validTokens.length} token(s): "${payloadTitle}"`);
 
-      // 1. Tentar disparo via Google FCM REST API se houver chave configurada ou fallbacks
+      // 1. Envio oficial via Firebase Admin SDK (FCM HTTP v1)
+      if (getApps().length) {
+        try {
+          const messagePayload: MulticastMessage = {
+            notification: {
+              title: payloadTitle,
+              body: payloadBody,
+            },
+            data: {
+              title: payloadTitle,
+              body: payloadBody,
+              url: url || "/",
+              ...(data || {})
+            },
+            webpush: {
+              notification: {
+                title: payloadTitle,
+                body: payloadBody,
+                icon: "/pwa-512x512.png?v=4.0",
+                badge: "/pwa-192x192.png?v=4.0",
+                vibrate: [200, 100, 200]
+              },
+              fcmOptions: {
+                link: url || "/"
+              }
+            },
+            tokens: validTokens
+          };
+
+          const response = await getMessaging().sendEachForMulticast(messagePayload);
+          console.log(`[FCM Server] HTTP v1 resultado: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
+
+          const errors: any[] = [];
+          response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              errors.push({ token: validTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
+            }
+          });
+
+          return res.status(200).json({
+            success: true,
+            sentCount: response.successCount,
+            totalTokens: validTokens.length,
+            errors: errors.length > 0 ? errors : undefined
+          });
+        } catch (adminSendErr: any) {
+          console.warn("[FCM Server] Falha no envio via Admin SDK:", adminSendErr?.message || adminSendErr);
+        }
+      }
+
+      // 2. Fallback legado
       let sentCount = 0;
       const errors: string[] = [];
 
-      // Loop de envio resiliente para cada token
       for (const token of validTokens) {
         try {
-          // Utiliza o endpoint legacy / v1 FCM de forma compatível
-          // Obs: em ambiente com Web Push standard, enviamos requisição HTTP segura
           const fcmResponse = await fetch("https://fcm.googleapis.com/fcm/send", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              // Chave de autorização pública/servidor do Firebase configurada no projeto
               "Authorization": `key=${process.env.FIREBASE_SERVER_KEY || "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk"}`
             },
             body: JSON.stringify({
               to: token,
-              notification: payloadNotification,
+              notification: {
+                title: payloadTitle,
+                body: payloadBody,
+                icon: "/pwa-512x512.png?v=4.0",
+                badge: "/pwa-192x192.png?v=4.0"
+              },
               data: {
                 ...data,
-                title: payloadNotification.title,
-                body: payloadNotification.body,
+                title: payloadTitle,
+                body: payloadBody,
                 url: url || "/"
               },
               priority: "high"
@@ -3222,11 +3288,9 @@ Complete a finalização da música`,
             sentCount++;
           } else {
             const errText = await fcmResponse.text();
-            console.warn(`[FCM Server] Aviso ao enviar para token (${token.slice(0, 10)}...):`, errText);
             errors.push(errText);
           }
         } catch (itemErr: any) {
-          console.warn("[FCM Server] Erro no envio unitário:", itemErr?.message || itemErr);
           errors.push(itemErr?.message || String(itemErr));
         }
       }

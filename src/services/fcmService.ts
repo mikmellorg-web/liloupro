@@ -7,9 +7,11 @@ import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
  * Designed to work gracefully when VAPID key is configured or left blank during preparation.
  */
 
-// Chave VAPID pública definida via variável de ambiente (VITE_FIREBASE_VAPID_KEY)
+// Chave VAPID pública gerada no Firebase Console (Certificado Web Push)
+const DEFAULT_VAPID_KEY = 'BACyIDME-yrLJkLyX_8vpJV1pYDq6_DFmHBX0QxvP9l_THmBOlj4y4RZ7CafG0-oiN7kqSR6TrvPLVhEprLP-TI';
+
 export const getVapidKey = (): string => {
-  return (import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined)?.trim() || '';
+  return (import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined)?.trim() || DEFAULT_VAPID_KEY;
 };
 
 /**
@@ -44,10 +46,6 @@ export const requestFcmToken = async (): Promise<string | null> => {
   }
 
   const vapidKey = getVapidKey();
-  if (!vapidKey) {
-    console.info('[FCM] VAPID Key is currently empty. FCM is prepared and will activate as soon as the key is set.');
-    return null;
-  }
 
   try {
     const permission = await Notification.requestPermission();
@@ -65,10 +63,14 @@ export const requestFcmToken = async (): Promise<string | null> => {
     // Obter service worker registration ativo
     const registration = await navigator.serviceWorker.ready;
 
-    const token = await getToken(messaging, {
-      vapidKey,
+    const tokenOptions: { serviceWorkerRegistration: ServiceWorkerRegistration; vapidKey?: string } = {
       serviceWorkerRegistration: registration,
-    });
+    };
+    if (vapidKey) {
+      tokenOptions.vapidKey = vapidKey;
+    }
+
+    const token = await getToken(messaging, tokenOptions);
 
     if (token) {
       console.log('[FCM] Token obtained successfully');
