@@ -59,7 +59,7 @@ import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
-import { sendPushNotification, requestFcmToken } from './services/fcmService';
+import { sendPushNotification, requestFcmToken, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Lazy-loaded components for code-splitting
@@ -17252,9 +17252,9 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                           setNotificationPermission(perm);
                           const tok = await requestFcmToken();
                           if (tok) {
-                            alert("✅ Token de Push gerado e salvo com sucesso no Firebase!");
+                            alert("✅ Notificações Ativadas! Token de Push gerado e salvo com sucesso no Firebase.");
                           } else {
-                            alert("Permissão solicitada (" + perm + "). Se o seu navegador permitir, o token será conectado.");
+                            alert("✅ Permissão solicitada (" + perm + "). No celular, toque no botão verde ao lado para testar a notificação com a tela desligada!");
                           }
                         } catch (e: any) {
                           alert("Aviso: " + (e?.message || String(e)));
@@ -17268,18 +17268,44 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
                     <Button
                       onClick={async () => {
-                        const tok = await requestFcmToken();
-                        alert("🚀 Teste disparado! BLOQUEIE a tela ou FECHE o aplicativo AGORA para ver o aviso tocar no celular.");
-                        setTimeout(() => {
-                          sendPushNotification({
-                            tokens: tok ? [tok] : ['all'],
-                            title: "LiLouPro • Teste de Notificação",
-                            body: "🎉 Push em segundo plano funcionando no celular fechado!",
+                        try {
+                          let perm = notificationPermission;
+                          if (perm !== 'granted') {
+                            perm = await Notification.requestPermission();
+                            setNotificationPermission(perm);
+                          }
+                          
+                          if (perm !== 'granted') {
+                            alert("⚠️ A permissão de notificações não foi concedida nas configurações do seu navegador.");
+                            return;
+                          }
+
+                          // 1. Agenda disparo direto no Service Worker (roda em background mesmo com tela desligada)
+                          await scheduleServiceWorkerNotification({
+                            delayMs: 4000,
+                            title: "LiLouPro • Notificação no Celular",
+                            body: "🎉 Teste de segundo plano com celular fechado funcionando com sucesso!",
                             url: "/"
-                          }).then(res => {
-                            console.log("Resultado do envio Push:", res);
                           });
-                        }, 4000);
+
+                          // 2. Dispara também via servidor se houver token FCM ativo
+                          requestFcmToken().then(tok => {
+                            if (tok) {
+                              setTimeout(() => {
+                                sendPushNotification({
+                                  tokens: [tok],
+                                  title: "LiLouPro • Notificação",
+                                  body: "🎉 Notificação remota FCM entregue com sucesso!",
+                                  url: "/"
+                                });
+                              }, 4000);
+                            }
+                          }).catch(() => {});
+
+                          alert("🚀 TESTE INICIADO!\n\nBLOQUEIE a tela do celular ou FECHE o aplicativo AGORA.\nEm 4 segundos a notificação vai tocar na tela!");
+                        } catch (err: any) {
+                          alert("Erro ao disparar teste: " + (err?.message || String(err)));
+                        }
                       }}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
                     >

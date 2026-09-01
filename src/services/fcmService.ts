@@ -37,6 +37,54 @@ export const getNotificationPermission = (): NotificationPermission => {
 };
 
 /**
+ * Schedules a notification directly in the Service Worker timer.
+ * This runs completely in background, allowing test notifications when screen is locked or app is closed.
+ */
+export const scheduleServiceWorkerNotification = async (options: {
+  delayMs?: number;
+  title?: string;
+  body?: string;
+  url?: string;
+}): Promise<boolean> => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return false;
+  }
+
+  const {
+    delayMs = 4000,
+    title = 'LiLouPro • Notificação no Celular',
+    body = '🎉 Teste de segundo plano com celular fechado funcionando com sucesso!',
+    url = '/'
+  } = options;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    if (registration.active) {
+      registration.active.postMessage({
+        type: 'SCHEDULE_NOTIFICATION',
+        delay: delayMs,
+        title,
+        body,
+        url
+      });
+      return true;
+    } else if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_NOTIFICATION',
+        delay: delayMs,
+        title,
+        body,
+        url
+      });
+      return true;
+    }
+  } catch (err) {
+    console.warn('[SW Notification] Failed to postMessage to Service Worker:', err);
+  }
+  return false;
+};
+
+/**
  * Requests push notification permission from the user and retrieves the FCM token if VAPID key is provided.
  */
 export const requestFcmToken = async (): Promise<string | null> => {
@@ -63,14 +111,30 @@ export const requestFcmToken = async (): Promise<string | null> => {
     // Obter service worker registration ativo
     const registration = await navigator.serviceWorker.ready;
 
-    const tokenOptions: { serviceWorkerRegistration: ServiceWorkerRegistration; vapidKey?: string } = {
-      serviceWorkerRegistration: registration,
-    };
+    let token: string | null = null;
+    
+    // Tenta primeiro com a chave VAPID se configurada
     if (vapidKey) {
-      tokenOptions.vapidKey = vapidKey;
+      try {
+        token = await getToken(messaging, {
+          serviceWorkerRegistration: registration,
+          vapidKey: vapidKey
+        });
+      } catch (vapidErr) {
+        console.warn('[FCM] Error with custom VAPID key, trying without VAPID key...', vapidErr);
+      }
     }
 
-    const token = await getToken(messaging, tokenOptions);
+    // Fallback se não passou ou falhou com VAPID customizada
+    if (!token) {
+      try {
+        token = await getToken(messaging, {
+          serviceWorkerRegistration: registration
+        });
+      } catch (fallbackErr) {
+        console.warn('[FCM] Error retrieving token with default options:', fallbackErr);
+      }
+    }
 
     if (token) {
       console.log('[FCM] Token obtained successfully');

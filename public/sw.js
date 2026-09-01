@@ -185,6 +185,31 @@ self.addEventListener('message', (event) => {
     event.waitUntil(
       saveBadgeCountToCache(count).then(() => updateAppBadge(count))
     );
+    return;
+  }
+  if (event.data.type === 'SCHEDULE_NOTIFICATION') {
+    const delay = parseInt(event.data.delay, 10) || 4000;
+    const title = event.data.title || 'LiLouPro • Notificação do Sistema';
+    const body = event.data.body || 'Teste de notificação com celular fechado funcionando perfeitamente! 🎉';
+    const url = event.data.url || '/';
+
+    setTimeout(() => {
+      self.registration.showNotification(title, {
+        body: body,
+        icon: '/pwa-512x512.png?v=4.0',
+        badge: '/pwa-192x192.png?v=4.0',
+        vibrate: [200, 100, 200, 100, 200, 100, 400],
+        tag: 'liloupro-test-' + Date.now(),
+        renotify: true,
+        requireInteraction: true,
+        data: { url: url },
+        actions: [
+          { action: 'open', title: '💬 Abrir Mensagem' },
+          { action: 'dismiss', title: 'Fechar' }
+        ]
+      });
+    }, delay);
+    return;
   }
 });
 
