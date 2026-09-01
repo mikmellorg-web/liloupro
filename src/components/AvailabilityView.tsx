@@ -62,6 +62,7 @@ import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { FootswitchModal, FootswitchConfig, MVAVE_CHOCOLATE_DEFAULT_MAPPINGS } from './FootswitchModal';
 import { getServicePlaylistSongs, getServiceSongs, getServiceSongIds, updateServicePlaylistUrl } from '../utils/servicePlaylistUtils';
+import { sendPushNotification } from '../services/fcmService';
 
 
 
@@ -978,7 +979,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       const encodedMessage = encodeURIComponent(message);
       
       // Also write in-app notifications for ALL administrators to ensure they never miss it!
-      const adminUsersDocs = allMembers.filter(m => m.isAdmin === true || m.email === 'mikmellorg@gmail.com');
+      const adminUsersDocs = allMembers.filter(m => m.isAdmin === true || m.role === 'admin' || m.role === 'leader' || m.email === 'mikmellorg@gmail.com');
       const inAppNotificationsPromises = adminUsersDocs.map(admin => {
         const adminUserId = admin.id || admin.uid;
         if (!adminUserId || adminUserId === user.uid) return Promise.resolve();
@@ -992,6 +993,36 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         });
       });
       await Promise.all(inAppNotificationsPromises);
+
+      // Disparar notificação Push para os administradores (funciona mesmo com app fechado)
+      try {
+        const adminTokens: string[] = [];
+        adminUsersDocs.forEach(adm => {
+          if (adm.fcmTokens && Array.isArray(adm.fcmTokens)) {
+            adm.fcmTokens.forEach((t: string) => { if (t && !adminTokens.includes(t)) adminTokens.push(t); });
+          }
+          if (adm.fcmToken && !adminTokens.includes(adm.fcmToken)) {
+            adminTokens.push(adm.fcmToken);
+          }
+          if (adm.lastFcmToken && !adminTokens.includes(adm.lastFcmToken)) {
+            adminTokens.push(adm.lastFcmToken);
+          }
+        });
+
+        const pushTitle = `📅 Disponibilidade: ${currentUserData?.name || 'Membro'}`;
+        const pushBody = `${currentUserData?.name || 'Um membro'} finalizou e salvou a escala de disponibilidade para ${currentDate.toLocaleDateString('pt-BR', { month: 'long' })} (${finishedCount} de ${localActiveMembers.length} marcaram).`;
+
+        if (adminTokens.length > 0) {
+          sendPushNotification({
+            tokens: adminTokens,
+            title: pushTitle,
+            body: pushBody,
+            url: '/?tab=availability'
+          }).catch(err => console.warn('[Push Availability] Erro ao enviar push para admins:', err));
+        }
+      } catch (pushErr) {
+        console.warn('[Push Availability] Erro geral ao preparar push:', pushErr);
+      }
 
       // Store success state and show the popup dialog
       setSubmissionStatus({
