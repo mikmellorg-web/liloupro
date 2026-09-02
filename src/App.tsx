@@ -1543,6 +1543,15 @@ export const SERVICE_THEMES: Record<string, {
     text: 'text-zinc-400 dark:text-zinc-300',
     desc: 'Tema padrão do aplicativo (usa as cores do ministério)'
   },
+  santa_ceia: {
+    name: 'Culto de Santa Ceia',
+    icon: '🍞🍷',
+    bgDark: 'linear-gradient(135deg, #450a0a 0%, #2b0606 60%, #170000 100%)',
+    bgLight: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+    badge: 'bg-red-900/25 text-red-300 border-red-700/40 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800/50',
+    text: 'text-red-400 dark:text-red-300',
+    desc: 'Vinho bordeaux nobre, pão e cálice em memorial sagrado de comunhão'
+  },
   missions: {
     name: 'Culto de Missões',
     icon: '🌍',
@@ -2321,20 +2330,53 @@ function MainContent() {
       targets.forEach(m => {
         if (Array.isArray(m.fcmTokens) && m.fcmTokens.length > 0) {
           m.fcmTokens.forEach((tok: any) => {
-            if (typeof tok === 'string' && tok.trim().length > 10) {
+            if (typeof tok === 'string' && tok.trim().length > 10 && !pushTokens.includes(tok.trim())) {
               pushTokens.push(tok.trim());
             }
           });
         }
+        if (typeof m.fcmToken === 'string' && m.fcmToken.trim().length > 10 && !pushTokens.includes(m.fcmToken.trim())) {
+          pushTokens.push(m.fcmToken.trim());
+        }
+        if (typeof m.lastFcmToken === 'string' && m.lastFcmToken.trim().length > 10 && !pushTokens.includes(m.lastFcmToken.trim())) {
+          pushTokens.push(m.lastFcmToken.trim());
+        }
       });
 
+      // Também buscar tokens atualizados diretamente no Firestore para garantir entrega máxima
+      try {
+        const membersSnap = await getDocs(collection(db, 'members'));
+        const targetUserIds = new Set(targets.map(t => t.uid || t.id));
+        membersSnap.forEach(docSnap => {
+          if (targetUserIds.has(docSnap.id)) {
+            const data = docSnap.data();
+            if (Array.isArray(data.fcmTokens)) {
+              data.fcmTokens.forEach((tok: any) => {
+                if (typeof tok === 'string' && tok.trim().length > 10 && !pushTokens.includes(tok.trim())) {
+                  pushTokens.push(tok.trim());
+                }
+              });
+            }
+            if (typeof data.fcmToken === 'string' && data.fcmToken.trim().length > 10 && !pushTokens.includes(data.fcmToken.trim())) {
+              pushTokens.push(data.fcmToken.trim());
+            }
+            if (typeof data.lastFcmToken === 'string' && data.lastFcmToken.trim().length > 10 && !pushTokens.includes(data.lastFcmToken.trim())) {
+              pushTokens.push(data.lastFcmToken.trim());
+            }
+          }
+        });
+      } catch (fcmFetchErr) {
+        console.warn('[FCM] Error fetching fresh tokens from Firestore:', fcmFetchErr);
+      }
+
       if (pushTokens.length > 0) {
+        const targetUrl = type === 'service' || preferenceKey === 'notifyNewLiturgy' ? '/?tab=liturgy' : '/';
         // Envio assíncrono não bloqueante
         sendPushNotification({
           tokens: pushTokens,
           title,
           body: content,
-          url: '/',
+          url: targetUrl,
           data: { type, timestamp: Date.now() }
         }).catch(err => {
           console.warn('[FCM] Push send background notification caught:', err);

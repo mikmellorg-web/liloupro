@@ -898,7 +898,7 @@ export function LiturgyEditor({
         user?.uid,
         'notifyNewLiturgy'
       );
-      alert("Notificação enviada com sucesso para todos os membros!");
+      alert("🚀 Notificação enviada com sucesso para o celular de todos os membros!");
     } catch (e) {
       console.error("Erro ao notificar liturgia:", e);
       alert("Não foi possível enviar a notificação.");
@@ -1332,7 +1332,7 @@ export function LiturgyEditor({
                      className="text-[10px] sm:text-[11px] font-black text-emerald-700 dark:text-white transition-all uppercase tracking-widest flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-600/30 hover:bg-emerald-500/20 dark:hover:bg-emerald-600/50 px-5 py-2 rounded-full border border-emerald-500/20 dark:border-emerald-500/40 shadow-lg shadow-emerald-500/10 active:scale-95 disabled:opacity-50 cursor-pointer"
                    >
                      <Bell size={14}/>
-                     Notificar Membros (In-App)
+                     Notificar Membros (Push & In-App)
                    </button>
                    <button 
                      onClick={handleShareLiturgyWhatsApp} 

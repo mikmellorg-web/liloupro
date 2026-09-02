@@ -1187,6 +1187,15 @@ export const SERVICE_THEMES: Record<string, {
     text: 'text-zinc-400 dark:text-zinc-300',
     desc: 'Tema padrão do aplicativo (usa as cores do ministério)'
   },
+  santa_ceia: {
+    name: 'Culto de Santa Ceia',
+    icon: '🍞🍷',
+    bgDark: 'linear-gradient(135deg, #450a0a 0%, #2b0606 60%, #170000 100%)',
+    bgLight: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+    badge: 'bg-red-900/25 text-red-300 border-red-700/40 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800/50',
+    text: 'text-red-400 dark:text-red-300',
+    desc: 'Vinho bordeaux nobre, pão e cálice em memorial sagrado de comunhão'
+  },
   missions: {
     name: 'Culto de Missões',
     icon: '🌍',
