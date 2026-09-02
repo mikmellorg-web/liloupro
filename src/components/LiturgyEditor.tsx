@@ -642,7 +642,7 @@ export function LiturgyEditor({
   service: any, 
   onOpenSong?: (songId: string) => void, 
   playlistOnly?: boolean,
-  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<void>
+  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>
 }) {
   const { user, isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState((service?.liturgy || []).length === 0);
@@ -891,14 +891,20 @@ export function LiturgyEditor({
     setIsSaving(true);
     try {
       const dateStr = new Date(service.date).toLocaleDateString('pt-BR');
-      await createNotifications(
+      const result = await createNotifications(
         '📖 Nova Liturgia Disponível',
         `A liturgia para o culto "${service.title}" em ${dateStr} foi definida. Venha conferir!`,
         'service',
         user?.uid,
         'notifyNewLiturgy'
       );
-      alert("🚀 Notificação enviada com sucesso para o celular de todos os membros!");
+      if (result && result.pushSentCount > 0) {
+        alert(`🚀 Notificação enviada para ${result.pushSentCount} aparelho(s) e registrada no mural do aplicativo!`);
+      } else if (result && result.pushTokensCount > 0 && result.pushSentCount === 0) {
+        alert(`🔔 Notificação registrada com sucesso no aplicativo para todos os membros!\n\nℹ️ Para que a notificação remota acorde o celular com o aplicativo totalmente fechado no Vercel, certifique-se de cadastrar a chave FIREBASE_SERVICE_ACCOUNT nas variáveis de ambiente da Vercel.`);
+      } else {
+        alert(`🔔 Notificação registrada no mural do aplicativo!\n\n💡 Dica: Para que o celular toque com tela apagada, peça aos membros para entrarem em Ajustes > Notificações e ativarem as notificações.`);
+      }
     } catch (e) {
       console.error("Erro ao notificar liturgia:", e);
       alert("Não foi possível enviar a notificação.");

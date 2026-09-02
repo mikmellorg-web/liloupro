@@ -1,4 +1,4 @@
-// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.0
+// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.1
 
 // Import official Firebase compat libraries for background messaging
 try {
@@ -22,32 +22,37 @@ try {
   const messaging = firebase.messaging();
 
   // Official background message handler for Firebase Cloud Messaging
-  messaging.onBackgroundMessage((payload) => {
+  messaging.onBackgroundMessage(async (payload) => {
     console.log('[sw.js] Received FCM background message:', payload);
 
     const notificationTitle = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
-    const notificationOptions = {
-      body: payload.notification?.body || payload.data?.body || 'Nova atualização no ministério de louvor.',
-      icon: payload.notification?.icon || payload.data?.icon || '/pwa-512x512.png?v=4.0',
-      badge: '/pwa-192x192.png?v=4.0',
-      data: payload.data || { url: '/' },
-      vibrate: [200, 100, 200, 100, 200, 100, 400],
-      tag: payload.data?.tag || 'liloupro-fcm-' + Date.now(),
-      requireInteraction: true,
-      renotify: true,
-      actions: [
-        { action: 'open', title: '💬 Abrir Mensagem' },
-        { action: 'dismiss', title: 'Fechar' }
-      ]
-    };
+    const body = payload.notification?.body || payload.data?.body || 'Nova atualização no ministério de louvor.';
+    const icon = payload.notification?.icon || payload.data?.icon || '/pwa-512x512.png?v=4.0';
+    const badge = '/pwa-192x192.png?v=4.0';
+    const targetUrl = payload.data?.url || payload.fcmOptions?.link || '/';
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    try {
+      await self.registration.showNotification(notificationTitle, {
+        body,
+        icon,
+        badge,
+        data: { url: targetUrl, ...(payload.data || {}) },
+        tag: payload.data?.tag || 'liloupro-fcm-' + Date.now(),
+        renotify: true,
+        requireInteraction: true
+      });
+    } catch (err) {
+      console.warn('[sw.js] Fallback showNotification:', err);
+      try {
+        await self.registration.showNotification(notificationTitle, { body, icon });
+      } catch (e) {}
+    }
   });
 } catch (err) {
   console.warn('[sw.js] Firebase Cloud Messaging background init deferred:', err);
 }
 
-const CACHE_NAME = 'liloupro-v9.0-gold-official-pwa';
+const CACHE_NAME = 'liloupro-v9.1-fcm-fix';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';
 
@@ -251,7 +256,17 @@ self.addEventListener('push', (event) => {
 
         await saveBadgeCountToCache(badgeCount);
         await updateAppBadge(badgeCount);
-        await self.registration.showNotification(title, options);
+        try {
+          await self.registration.showNotification(title, options);
+        } catch (showErr) {
+          console.warn('[sw.js] Standard showNotification failed, using clean fallback:', showErr);
+          await self.registration.showNotification(title, {
+            body,
+            icon,
+            badge,
+            data: { url: targetUrl }
+          });
+        }
       })()
     );
   } catch (error) {
@@ -262,18 +277,17 @@ self.addEventListener('push', (event) => {
         const badgeCount = cachedCount + 1;
         await saveBadgeCountToCache(badgeCount);
         await updateAppBadge(badgeCount);
-        await self.registration.showNotification('LiLouPro • Nova Notificação', {
-          body: text,
-          icon: '/luxury_app_icon.jpg?v=2.0',
-          badge: '/luxury_app_icon.jpg?v=2.0',
-          renotify: true,
-          requireInteraction: true,
-          vibrate: [200, 100, 200, 100, 200, 100, 400],
-          actions: [
-            { action: 'open', title: '💬 Abrir Mensagem' },
-            { action: 'dismiss', title: 'Fechar' }
-          ]
-        });
+        try {
+          await self.registration.showNotification('LiLouPro • Nova Notificação', {
+            body: text,
+            icon: '/luxury_app_icon.jpg?v=2.0',
+            badge: '/luxury_app_icon.jpg?v=2.0',
+            renotify: true,
+            requireInteraction: true
+          });
+        } catch (fallbackErr) {
+          await self.registration.showNotification('LiLouPro • Nova Notificação', { body: text });
+        }
       })()
     );
   }

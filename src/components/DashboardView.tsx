@@ -1343,7 +1343,7 @@ export default function DashboardView({
 }: { 
   onNavigate: (tab: any) => void, 
   onOpenSong?: (songId: string) => void,
-  createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<void>,
+  createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
   setShowLiturgySongs?: (show: boolean) => void,
   theme: 'dark' | 'light',
   allSongs?: any[],

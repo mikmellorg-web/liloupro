@@ -341,6 +341,21 @@
     "/kiwify_webhooks/{logId}": {
       "schema": "KiwifyWebhookLog",
       "description": "Collection of received Kiwify webhook logs."
+    },
+    "/fcm_tokens/{tokenId}": {
+      "schema": {
+        "title": "FcmToken",
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "uid": { "type": "string" },
+          "email": { "type": "string" },
+          "name": { "type": "string" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["token", "uid"]
+      },
+      "description": "Collection of registered FCM push tokens for user devices."
     }
   }
 }

@@ -59,7 +59,7 @@ import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
-import { sendPushNotification, requestFcmToken, scheduleServiceWorkerNotification } from './services/fcmService';
+import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Lazy-loaded components for code-splitting
@@ -2304,11 +2304,17 @@ function MainContent() {
     type: 'announcement' | 'mural' | 'service' | 'general', 
     excludeUserId?: string,
     preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy'
-  ) => {
+  ): Promise<{
+    success: boolean;
+    targetsCount: number;
+    pushTokensCount: number;
+    pushSentCount: number;
+    pushErrors?: any[];
+  }> => {
     try {
       if (!allMembers || allMembers.length === 0) {
         console.warn("No members available to notify");
-        return;
+        return { success: false, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
       }
       const targets = allMembers.filter(m => {
         const userId = m.uid || m.id;
@@ -2323,7 +2329,9 @@ function MainContent() {
         }
         return true;
       });
-      if (targets.length === 0) return;
+      if (targets.length === 0) {
+        return { success: true, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
+      }
 
       const creations = targets.map(m => {
         const userId = m.uid || m.id;
@@ -2394,6 +2402,9 @@ function MainContent() {
         console.warn('[FCM] Error fetching fresh tokens from Firestore:', fcmFetchErr);
       }
 
+      let pushSentCount = 0;
+      let pushErrors: any[] | undefined = undefined;
+
       if (pushTokens.length > 0) {
         const targetUrl = type === 'service' || preferenceKey === 'notifyNewLiturgy' ? '/?tab=liturgy' : '/';
         try {
@@ -2404,15 +2415,26 @@ function MainContent() {
             url: targetUrl,
             data: { type, timestamp: Date.now() }
           });
-          console.log(`[FCM] Disparo de push concluído: ${pushResult.sentCount || 0} enviados para ${pushTokens.length} aparelhos.`);
+          pushSentCount = pushResult.sentCount || 0;
+          pushErrors = pushResult.errors;
+          console.log(`[FCM] Disparo de push concluído: ${pushSentCount} enviados para ${pushTokens.length} aparelhos.`);
         } catch (pushErr) {
           console.warn('[FCM] Falha ao enviar push notification:', pushErr);
         }
       } else {
         console.log('[FCM] Nenhum token push registrado entre os membros destinatários.');
       }
+
+      return {
+        success: true,
+        targetsCount: targets.length,
+        pushTokensCount: pushTokens.length,
+        pushSentCount,
+        pushErrors
+      };
     } catch (e) {
       console.error("Error creating notifications:", e);
+      return { success: false, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
     }
   };
 
@@ -14509,7 +14531,7 @@ function CalendarView({
   theme
 }: { 
   onOpenSong?: (songId: string) => void,
-  createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<void>,
+  createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
   theme?: 'light' | 'dark'
 }) {
   const { user, isAdmin, memberData } = useAuth();
@@ -17319,13 +17341,17 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     <Button
                       onClick={async () => {
                         try {
-                          const perm = await Notification.requestPermission();
-                          setNotificationPermission(perm);
-                          const tok = await requestFcmToken();
-                          if (tok) {
-                            alert("✅ Notificações Ativadas! Token de Push gerado e salvo com sucesso no Firebase.");
+                          const result = await requestFcmTokenDetailed();
+                          if (result.permission) setNotificationPermission(result.permission);
+                          if (result.success && result.token) {
+                            const shortTok = result.token.slice(0, 12) + '...' + result.token.slice(-6);
+                            if (result.firestoreSaved) {
+                              alert(`✅ APARELHO REGISTRADO!\n\nSeu celular está conectado para receber notificações em segundo plano mesmo com o aplicativo fechado.\n\n📱 Token FCM: ${shortTok}\n💾 Banco Firebase: Sincronizado com sucesso!`);
+                            } else {
+                              alert(`⚠️ Token FCM gerado (${shortTok}), mas houve aviso ao salvar no banco: ${result.firestoreError || 'Permissão'}`);
+                            }
                           } else {
-                            alert("✅ Permissão solicitada (" + perm + "). No celular, toque no botão verde ao lado para testar a notificação com a tela desligada!");
+                            alert(`⚠️ Falha ao obter token do aparelho:\n\n${result.error || 'Erro desconhecido'}\n\n💡 Verifique se as notificações estão permitidas nas configurações do celular.`);
                           }
                         } catch (e: any) {
                           alert("Aviso: " + (e?.message || String(e)));
@@ -17365,8 +17391,8 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                               setTimeout(() => {
                                 sendPushNotification({
                                   tokens: [tok],
-                                  title: "LiLouPro • Notificação",
-                                  body: "🎉 Notificação remota FCM entregue com sucesso!",
+                                  title: "LiLouPro • Notificação Remota",
+                                  body: "🎉 Notificação remota FCM entregue com sucesso pelo servidor!",
                                   url: "/"
                                 });
                               }, 4000);
@@ -17384,6 +17410,37 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                       <span>📲 Testar Celular Fechado (4s)</span>
                     </Button>
                   </div>
+
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const tok = await requestFcmToken();
+                        if (!tok) {
+                          alert("⚠️ Este aparelho ainda não possui um token FCM ativo.\nToque no botão 'Atualizar Token' acima primeiro.");
+                          return;
+                        }
+                        alert("📡 Enviando notificação push real via Servidor Vercel (FCM HTTP v1)...\n\nFECHE o aplicativo ou BLOQUEIE a tela agora!");
+                        const res = await sendPushNotification({
+                          tokens: [tok],
+                          title: "LiLouPro • Teste Servidor FCM",
+                          body: "🎉 Notificação remota entregue com sucesso pelo Firebase Admin no Vercel!",
+                          url: "/"
+                        });
+                        if (res.success && res.sentCount > 0) {
+                          alert(`🚀 SUCESSO NO SERVIDOR!\n\nO servidor Vercel enviou a notificação para ${res.sentCount} aparelho(s) via Firebase Cloud Messaging.`);
+                        } else {
+                          const errMsg = res.errors?.[0]?.error || (res as any).error || 'Falha ao despachar';
+                          alert(`⚠️ Resposta do Servidor:\n\n${errMsg}\n\n💡 Verifique se FIREBASE_SERVICE_ACCOUNT está cadastrado na Vercel.`);
+                        }
+                      } catch (err: any) {
+                        alert("Erro ao testar servidor: " + (err?.message || String(err)));
+                      }
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer mt-1"
+                  >
+                    <Send size={13} className="text-amber-400" />
+                    <span>📡 Testar Disparo Real Servidor FCM</span>
+                  </Button>
                 </div>
                 
                 <div className="space-y-4">

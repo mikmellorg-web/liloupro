@@ -106,7 +106,7 @@ export default function SongsView({
   onAddModalClose?: () => void,
   showLiturgySongs: boolean,
   setShowLiturgySongs: (show: boolean) => void,
-  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<void>,
+  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
   onStartPlaylist?: (songs: any[]) => void,
   theme?: 'light' | 'dark'
 }) {

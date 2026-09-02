@@ -1,29 +1,59 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getMessaging, type MulticastMessage } from 'firebase-admin/messaging';
 
-// Inicialização segura do Firebase Admin com suporte a Vercel Serverless
-if (!getApps().length) {
+function initFirebaseAdmin() {
+  if (getApps().length > 0) return true;
+
   try {
+    // 1. Verificar variável FIREBASE_SERVICE_ACCOUNT (JSON ou base64)
     const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (rawServiceAccount) {
       let serviceAccount: any;
       if (typeof rawServiceAccount === 'string') {
-        serviceAccount = JSON.parse(rawServiceAccount.trim());
+        const trimmed = rawServiceAccount.trim();
+        if (trimmed.startsWith('{')) {
+          serviceAccount = JSON.parse(trimmed);
+        } else {
+          // Tentar base64 decode
+          const decoded = Buffer.from(trimmed, 'base64').toString('utf-8');
+          serviceAccount = JSON.parse(decoded);
+        }
       } else {
         serviceAccount = rawServiceAccount;
       }
-      initializeApp({
-        credential: cert(serviceAccount)
-      });
+      initializeApp({ credential: cert(serviceAccount) });
       console.log('[Firebase Admin] Inicializado com sucesso via Service Account.');
-    } else {
-      initializeApp();
-      console.log('[Firebase Admin] Inicializado com Default Credentials.');
+      return true;
     }
-  } catch (initErr) {
-    console.error('[Firebase Admin Init Error]:', initErr);
+
+    // 2. Verificar variáveis separadas (comuns no Vercel)
+    const projectId = process.env.FIREBASE_PROJECT_ID || 'gen-lang-client-0330039755';
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+    if (clientEmail && privateKey) {
+      initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+      console.log('[Firebase Admin] Inicializado com sucesso via variáveis individuais.');
+      return true;
+    }
+
+    // 3. Fallback para Application Default Credentials (ambientes GCP/Cloud Run)
+    initializeApp();
+    console.log('[Firebase Admin] Inicializado com Default Credentials.');
+    return true;
+  } catch (initErr: any) {
+    console.warn('[Firebase Admin Init Warning]:', initErr?.message || initErr);
+    return false;
   }
 }
+
+initFirebaseAdmin();
 
 export default async function handler(req: any, res: any) {
   // Configurar cabeçalhos CORS
@@ -56,6 +86,8 @@ export default async function handler(req: any, res: any) {
 
     const payloadTitle = title || 'LiLouPro • Notificação';
     const payloadBody = body || 'Nova mensagem no ministério de louvor.';
+
+    initFirebaseAdmin();
 
     // Envio oficial via Firebase Admin SDK (FCM HTTP v1)
     if (getApps().length) {
@@ -107,15 +139,18 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    return res.status(500).json({
+    return res.status(200).json({
       success: false,
-      error: 'Firebase Admin SDK não pôde ser inicializado no servidor.'
+      sentCount: 0,
+      totalTokens: validTokens.length,
+      error: 'Firebase Admin SDK requer a chave FIREBASE_SERVICE_ACCOUNT configurada nas variáveis de ambiente da Vercel.'
     });
   } catch (err: any) {
     console.error('[FCM Handler Error]:', err);
-    return res.status(500).json({
+    return res.status(200).json({
       success: false,
-      error: err?.message || 'Erro interno ao processar disparo de notificações push'
+      sentCount: 0,
+      error: err?.message || 'Erro ao processar disparo de notificações push'
     });
   }
 }

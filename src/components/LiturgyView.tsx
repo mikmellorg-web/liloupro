@@ -1333,7 +1333,7 @@ export default function LiturgyView({
   theme
 }: { 
   onOpenSong?: (songId: string) => void,
-  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<void>,
+  createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
   allSongs?: any[],
   onStartPlaylist?: (songs: any[]) => void,
   theme?: 'light' | 'dark'

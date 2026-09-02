@@ -53,7 +53,9 @@ service cloud.firestore {
         && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('favoriteSongs', null) == null || data.favoriteSongs is list)
         && (data.get('defaultBibleVersion', null) == null || data.defaultBibleVersion is string)
-        && (data.get('fcmTokens', null) == null || (data.fcmTokens is list && data.fcmTokens.size() <= 20))
+        && (data.get('fcmTokens', null) == null || (data.fcmTokens is list && data.fcmTokens.size() <= 50))
+        && (data.get('fcmToken', null) == null || data.fcmToken is string)
+        && (data.get('lastFcmToken', null) == null || data.lastFcmToken is string)
         && (data.get('lastFcmTokenUpdate', null) == null || data.lastFcmTokenUpdate is timestamp);
     }
 
@@ -260,9 +262,16 @@ service cloud.firestore {
     // Member Rules
     match /members/{memberId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && incoming().keys().hasAll(['name', 'uid', 'roles']) && isValidMember(incoming());
-      allow update: if (isAdmin() || request.auth.uid == memberId) && isValidMember(incoming());
+      allow create: if isSignedIn() && (incoming().uid == request.auth.uid || isAdmin()) && isValidMember(incoming());
+      allow update: if (isAdmin() || request.auth.uid == memberId || (existing().uid != null && existing().uid == request.auth.uid) || (existing().email != null && existing().email == request.auth.token.email)) && isValidMember(incoming());
       allow delete: if isAdmin();
+    }
+
+    // FCM Device Tokens Rules
+    match /fcm_tokens/{tokenId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn() && (incoming().uid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
     // Song Rules
