@@ -1,6 +1,6 @@
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { getFirebaseMessaging, db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDocs, collection, query, where, arrayUnion } from 'firebase/firestore';
 
 /**
  * Service to manage Firebase Cloud Messaging (FCM) Web Push tokens and foreground messages.
@@ -120,8 +120,8 @@ export const requestFcmToken = async (): Promise<string | null> => {
           serviceWorkerRegistration: registration,
           vapidKey: vapidKey
         });
-      } catch (vapidErr) {
-        console.warn('[FCM] Error with custom VAPID key, trying without VAPID key...', vapidErr);
+      } catch (vapidErr: any) {
+        console.warn('[FCM] Error with custom VAPID key, trying without VAPID key...', vapidErr?.message || vapidErr);
       }
     }
 
@@ -131,18 +131,33 @@ export const requestFcmToken = async (): Promise<string | null> => {
         token = await getToken(messaging, {
           serviceWorkerRegistration: registration
         });
-      } catch (fallbackErr) {
-        console.warn('[FCM] Error retrieving token with default options:', fallbackErr);
+      } catch (fallbackErr: any) {
+        console.warn('[FCM] Error retrieving token with default options:', fallbackErr?.message || fallbackErr);
+      }
+    }
+
+    // Fallback adicional caso getRegistration retorne uma instância diferente
+    if (!token) {
+      try {
+        const swReg = await navigator.serviceWorker.getRegistration('/sw.js') || await navigator.serviceWorker.getRegistration();
+        if (swReg) {
+          token = await getToken(messaging, {
+            serviceWorkerRegistration: swReg,
+            ...(vapidKey ? { vapidKey } : {})
+          });
+        }
+      } catch (regErr: any) {
+        console.warn('[FCM] Error retrieving token via getRegistration:', regErr?.message || regErr);
       }
     }
 
     if (token) {
-      console.log('[FCM] Token obtained successfully');
+      console.log('[FCM] Token obtido com sucesso!');
       // Salva no Firestore se o usuário estiver autenticado
       await registerTokenInFirestore(token);
       return token;
     } else {
-      console.warn('[FCM] No registration token available.');
+      console.warn('[FCM] Nenhum token de registro disponível.');
       return null;
     }
   } catch (error) {
@@ -152,22 +167,58 @@ export const requestFcmToken = async (): Promise<string | null> => {
 };
 
 /**
- * Associates an FCM token with the logged-in member document in Firestore.
+ * Associates an FCM token with the logged-in member document and device registry in Firestore.
  */
 export const registerTokenInFirestore = async (token: string): Promise<void> => {
   const currentUser = auth.currentUser;
   if (!currentUser || !token) return;
 
-  const memberPath = `members/${currentUser.uid}`;
   try {
+    // 1. Garante que o documento do membro com o UID do Auth receba o token
     const memberRef = doc(db, 'members', currentUser.uid);
-    await updateDoc(memberRef, {
+    await setDoc(memberRef, {
+      uid: currentUser.uid,
+      email: currentUser.email || '',
+      name: currentUser.displayName || '',
       fcmTokens: arrayUnion(token),
+      fcmToken: token,
+      lastFcmToken: token,
       lastFcmTokenUpdate: new Date(),
-    });
+    }, { merge: true });
+
+    // 2. Registra na coleção global de aparelhos 'fcm_tokens' para indexação rápida
+    const safeTokenSuffix = token.slice(-16).replace(/[^a-zA-Z0-9]/g, '');
+    const tokenDocId = `${currentUser.uid}_${safeTokenSuffix}`;
+    await setDoc(doc(db, 'fcm_tokens', tokenDocId), {
+      token,
+      uid: currentUser.uid,
+      email: currentUser.email || '',
+      name: currentUser.displayName || '',
+      updatedAt: new Date()
+    }, { merge: true });
+
+    // 3. Se houver outro documento de membro com mesmo e-mail (criado por líder), atualiza também
+    if (currentUser.email) {
+      try {
+        const q = query(collection(db, 'members'), where('email', '==', currentUser.email));
+        const emailSnap = await getDocs(q);
+        emailSnap.forEach(async (d) => {
+          if (d.id !== currentUser.uid) {
+            await setDoc(doc(db, 'members', d.id), {
+              fcmTokens: arrayUnion(token),
+              fcmToken: token,
+              lastFcmToken: token,
+              lastFcmTokenUpdate: new Date()
+            }, { merge: true });
+          }
+        });
+      } catch (err) {
+        // Silencioso em caso de query
+      }
+    }
+    console.log('[FCM] Token de push registrado com sucesso no Firestore.');
   } catch (error) {
-    // Não interrompe o app se o documento ainda não existir ou permissão falhar
-    console.warn('[FCM] Failed to update member fcmTokens:', error);
+    console.warn('[FCM] Failed to update member fcmTokens in Firestore:', error);
   }
 };
 

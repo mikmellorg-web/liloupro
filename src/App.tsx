@@ -2341,44 +2341,55 @@ function MainContent() {
 
       // Disparar Web Push (FCM) em background para todos os aparelhos dos membros selecionados
       const pushTokens: string[] = [];
+      const addTokenSafe = (rawTok: any) => {
+        if (typeof rawTok === 'string') {
+          const clean = rawTok.trim();
+          if (clean.length > 15 && !pushTokens.includes(clean)) {
+            pushTokens.push(clean);
+          }
+        }
+      };
+
+      // 1. Coletar dos membros filtrados da memória
       targets.forEach(m => {
-        if (Array.isArray(m.fcmTokens) && m.fcmTokens.length > 0) {
-          m.fcmTokens.forEach((tok: any) => {
-            if (typeof tok === 'string' && tok.trim().length > 10 && !pushTokens.includes(tok.trim())) {
-              pushTokens.push(tok.trim());
-            }
-          });
+        if (Array.isArray(m.fcmTokens)) {
+          m.fcmTokens.forEach(addTokenSafe);
         }
-        if (typeof m.fcmToken === 'string' && m.fcmToken.trim().length > 10 && !pushTokens.includes(m.fcmToken.trim())) {
-          pushTokens.push(m.fcmToken.trim());
-        }
-        if (typeof m.lastFcmToken === 'string' && m.lastFcmToken.trim().length > 10 && !pushTokens.includes(m.lastFcmToken.trim())) {
-          pushTokens.push(m.lastFcmToken.trim());
-        }
+        addTokenSafe(m.fcmToken);
+        addTokenSafe(m.lastFcmToken);
       });
 
-      // Também buscar tokens atualizados diretamente no Firestore para garantir entrega máxima
+      // 2. Coletar diretamente de todas as coleções de tokens do Firestore para garantir 100% de entrega
       try {
-        const membersSnap = await getDocs(collection(db, 'members'));
-        const targetUserIds = new Set(targets.map(t => t.uid || t.id));
-        membersSnap.forEach(docSnap => {
-          if (targetUserIds.has(docSnap.id)) {
+        const [membersSnap, fcmTokensSnap] = await Promise.allSettled([
+          getDocs(collection(db, 'members')),
+          getDocs(collection(db, 'fcm_tokens'))
+        ]);
+
+        if (membersSnap.status === 'fulfilled') {
+          membersSnap.value.forEach(docSnap => {
             const data = docSnap.data();
+            const docUserId = data.uid || docSnap.id;
+            // Se for o usuário emissor excluído, ignora
+            if (excludeUserId && docUserId === excludeUserId) return;
+            // Respeita preferência do usuário caso explicitamente desativada
+            if (preferenceKey && data[preferenceKey] === false) return;
+
             if (Array.isArray(data.fcmTokens)) {
-              data.fcmTokens.forEach((tok: any) => {
-                if (typeof tok === 'string' && tok.trim().length > 10 && !pushTokens.includes(tok.trim())) {
-                  pushTokens.push(tok.trim());
-                }
-              });
+              data.fcmTokens.forEach(addTokenSafe);
             }
-            if (typeof data.fcmToken === 'string' && data.fcmToken.trim().length > 10 && !pushTokens.includes(data.fcmToken.trim())) {
-              pushTokens.push(data.fcmToken.trim());
-            }
-            if (typeof data.lastFcmToken === 'string' && data.lastFcmToken.trim().length > 10 && !pushTokens.includes(data.lastFcmToken.trim())) {
-              pushTokens.push(data.lastFcmToken.trim());
-            }
-          }
-        });
+            addTokenSafe(data.fcmToken);
+            addTokenSafe(data.lastFcmToken);
+          });
+        }
+
+        if (fcmTokensSnap.status === 'fulfilled') {
+          fcmTokensSnap.value.forEach(docSnap => {
+            const data = docSnap.data();
+            if (excludeUserId && data.uid === excludeUserId) return;
+            addTokenSafe(data.token);
+          });
+        }
       } catch (fcmFetchErr) {
         console.warn('[FCM] Error fetching fresh tokens from Firestore:', fcmFetchErr);
       }

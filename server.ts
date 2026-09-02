@@ -3219,6 +3219,10 @@ Complete a finalização da música`,
               ...(data || {})
             },
             webpush: {
+              headers: {
+                Urgency: "high",
+                TTL: "86400"
+              },
               notification: {
                 title: payloadTitle,
                 body: payloadBody,

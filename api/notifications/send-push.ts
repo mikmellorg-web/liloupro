@@ -71,6 +71,10 @@ export default async function handler(req: any, res: any) {
           ...(data || {})
         },
         webpush: {
+          headers: {
+            Urgency: 'high',
+            TTL: '86400'
+          },
           notification: {
             title: payloadTitle,
             body: payloadBody,
