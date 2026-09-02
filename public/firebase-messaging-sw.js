@@ -4,12 +4,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
 const firebaseConfig = {
+  projectId: "gen-lang-client-0330039755",
+  appId: "1:255415345138:web:7da934465ab8a57b99d56b",
   apiKey: "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk",
   authDomain: "gen-lang-client-0330039755.firebaseapp.com",
-  projectId: "gen-lang-client-0330039755",
-  storageBucket: "gen-lang-client-0330039755.appspot.com",
-  messagingSenderId: "255415345138",
-  appId: "1:255415345138:web:b1d7f6c382fca6f04c6020"
+  storageBucket: "gen-lang-client-0330039755.firebasestorage.app",
+  messagingSenderId: "255415345138"
 };
 
 firebase.initializeApp(firebaseConfig);

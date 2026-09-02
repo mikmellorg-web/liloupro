@@ -1799,6 +1799,20 @@ function MainContent() {
     }
   }, [user, loading]);
 
+  // Auto-register FCM Web Push token for logged in user if permission is already granted
+  useEffect(() => {
+    if (!user || loading) return;
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      requestFcmToken().then((tok) => {
+        if (tok) {
+          console.log('[FCM] Token de push do membro atualizado com sucesso.');
+        }
+      }).catch((err) => {
+        console.warn('[FCM] Falha ao registrar token em background:', err);
+      });
+    }
+  }, [user, loading]);
+
   const alertedNotificationsRef = useRef<Set<string>>(new Set());
   const isFirstLoadNotificationsRef = useRef(true);
 
@@ -2371,16 +2385,20 @@ function MainContent() {
 
       if (pushTokens.length > 0) {
         const targetUrl = type === 'service' || preferenceKey === 'notifyNewLiturgy' ? '/?tab=liturgy' : '/';
-        // Envio assíncrono não bloqueante
-        sendPushNotification({
-          tokens: pushTokens,
-          title,
-          body: content,
-          url: targetUrl,
-          data: { type, timestamp: Date.now() }
-        }).catch(err => {
-          console.warn('[FCM] Push send background notification caught:', err);
-        });
+        try {
+          const pushResult = await sendPushNotification({
+            tokens: pushTokens,
+            title,
+            body: content,
+            url: targetUrl,
+            data: { type, timestamp: Date.now() }
+          });
+          console.log(`[FCM] Disparo de push concluído: ${pushResult.sentCount || 0} enviados para ${pushTokens.length} aparelhos.`);
+        } catch (pushErr) {
+          console.warn('[FCM] Falha ao enviar push notification:', pushErr);
+        }
+      } else {
+        console.log('[FCM] Nenhum token push registrado entre os membros destinatários.');
       }
     } catch (e) {
       console.error("Error creating notifications:", e);
@@ -15949,7 +15967,7 @@ function CalendarView({
                })()}
                 
                 <div className="mt-8 pt-8 border-t border-white/10">
-                  <LiturgyEditor key={`editor-${service.id}`} service={service} onOpenSong={onOpenSong} playlistOnly={true} />
+                  <LiturgyEditor key={`editor-${service.id}`} service={service} onOpenSong={onOpenSong} playlistOnly={true} createNotifications={createNotifications} />
                 </div>
               </div>
           </Card>
