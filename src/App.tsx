@@ -2312,42 +2312,39 @@ function MainContent() {
     pushErrors?: any[];
   }> => {
     try {
-      if (!allMembers || allMembers.length === 0) {
-        console.warn("No members available to notify");
-        return { success: false, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
-      }
-      const targets = allMembers.filter(m => {
+      const targets = (allMembers || []).filter(m => {
         const userId = m.uid || m.id;
         if (!userId) return false;
-        if (userId === excludeUserId) return false;
+        if (excludeUserId && userId === excludeUserId) return false;
         
         // Respect customizable user preferences
-        if (preferenceKey) {
-          if (m[preferenceKey] === false) {
-            return false;
-          }
+        if (preferenceKey && m[preferenceKey] === false) {
+          return false;
         }
         return true;
       });
-      if (targets.length === 0) {
-        return { success: true, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
+
+      // 1. Gravar no mural / central de notificações in-app
+      if (targets.length > 0) {
+        const creations = targets.map(m => {
+          const userId = m.uid || m.id;
+          if (!userId) return Promise.resolve();
+          return addDoc(collection(db, 'notifications'), {
+            userId,
+            title,
+            content,
+            type,
+            read: false,
+            createdAt: serverTimestamp()
+          }).catch(err => {
+            console.warn('[Notifications] Erro ao gravar notificação in-app para usuário:', userId, err);
+            return null;
+          });
+        });
+        await Promise.allSettled(creations);
       }
 
-      const creations = targets.map(m => {
-        const userId = m.uid || m.id;
-        if (!userId) return Promise.resolve();
-        return addDoc(collection(db, 'notifications'), {
-          userId,
-          title,
-          content,
-          type,
-          read: false,
-          createdAt: serverTimestamp()
-        });
-      });
-      await Promise.all(creations);
-
-      // Disparar Web Push (FCM) em background para todos os aparelhos dos membros selecionados
+      // 2. Disparar Web Push (FCM) em background para todos os aparelhos registrados
       const pushTokens: string[] = [];
       const addTokenSafe = (rawTok: any) => {
         if (typeof rawTok === 'string') {
@@ -2358,8 +2355,9 @@ function MainContent() {
         }
       };
 
-      // 1. Coletar dos membros filtrados da memória
-      targets.forEach(m => {
+      // Coletar dos membros filtrados da memória
+      (allMembers || []).forEach(m => {
+        if (preferenceKey && m[preferenceKey] === false) return;
         if (Array.isArray(m.fcmTokens)) {
           m.fcmTokens.forEach(addTokenSafe);
         }
@@ -2367,7 +2365,7 @@ function MainContent() {
         addTokenSafe(m.lastFcmToken);
       });
 
-      // 2. Coletar diretamente de todas as coleções de tokens do Firestore para garantir 100% de entrega
+      // Coletar diretamente das coleções do Firestore para garantir 100% de cobertura
       try {
         const [membersSnap, fcmTokensSnap] = await Promise.allSettled([
           getDocs(collection(db, 'members')),
@@ -2377,10 +2375,6 @@ function MainContent() {
         if (membersSnap.status === 'fulfilled') {
           membersSnap.value.forEach(docSnap => {
             const data = docSnap.data();
-            const docUserId = data.uid || docSnap.id;
-            // Se for o usuário emissor excluído, ignora
-            if (excludeUserId && docUserId === excludeUserId) return;
-            // Respeita preferência do usuário caso explicitamente desativada
             if (preferenceKey && data[preferenceKey] === false) return;
 
             if (Array.isArray(data.fcmTokens)) {
@@ -2394,7 +2388,6 @@ function MainContent() {
         if (fcmTokensSnap.status === 'fulfilled') {
           fcmTokensSnap.value.forEach(docSnap => {
             const data = docSnap.data();
-            if (excludeUserId && data.uid === excludeUserId) return;
             addTokenSafe(data.token);
           });
         }
@@ -2413,7 +2406,12 @@ function MainContent() {
             title,
             body: content,
             url: targetUrl,
-            data: { type, timestamp: Date.now() }
+            data: { 
+              type: String(type), 
+              timestamp: String(Date.now()),
+              title: String(title),
+              body: String(content)
+            }
           });
           pushSentCount = pushResult.sentCount || 0;
           pushErrors = pushResult.errors;

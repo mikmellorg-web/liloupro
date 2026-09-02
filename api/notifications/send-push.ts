@@ -89,6 +89,20 @@ export default async function handler(req: any, res: any) {
 
     initFirebaseAdmin();
 
+    // Sanitizar data: O Firebase Admin SDK exige estritamente que TODAS as chaves e valores de `data` sejam strings.
+    const sanitizedData: Record<string, string> = {
+      title: String(payloadTitle),
+      body: String(payloadBody),
+      url: String(url || '/'),
+    };
+    if (data && typeof data === 'object') {
+      Object.entries(data).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) {
+          sanitizedData[k] = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        }
+      });
+    }
+
     // Envio oficial via Firebase Admin SDK (FCM HTTP v1)
     if (getApps().length) {
       const messagePayload: MulticastMessage = {
@@ -96,12 +110,7 @@ export default async function handler(req: any, res: any) {
           title: payloadTitle,
           body: payloadBody,
         },
-        data: {
-          title: payloadTitle,
-          body: payloadBody,
-          url: url || '/',
-          ...(data || {})
-        },
+        data: sanitizedData,
         webpush: {
           headers: {
             Urgency: 'high',
@@ -111,8 +120,7 @@ export default async function handler(req: any, res: any) {
             title: payloadTitle,
             body: payloadBody,
             icon: '/pwa-512x512.png?v=4.0',
-            badge: '/pwa-192x192.png?v=4.0',
-            vibrate: [200, 100, 200]
+            badge: '/pwa-192x192.png?v=4.0'
           },
           fcmOptions: {
             link: url || '/'

@@ -259,13 +259,21 @@ self.addEventListener('push', (event) => {
         try {
           await self.registration.showNotification(title, options);
         } catch (showErr) {
-          console.warn('[sw.js] Standard showNotification failed, using clean fallback:', showErr);
-          await self.registration.showNotification(title, {
-            body,
-            icon,
-            badge,
-            data: { url: targetUrl }
-          });
+          console.warn('[sw.js] Standard showNotification failed, trying mobile fallback:', showErr);
+          try {
+            await self.registration.showNotification(title, {
+              body,
+              icon,
+              badge,
+              data: { url: targetUrl }
+            });
+          } catch (mobileErr) {
+            console.warn('[sw.js] Mobile fallback failed, trying minimal notification:', mobileErr);
+            await self.registration.showNotification(title, {
+              body,
+              data: { url: targetUrl }
+            });
+          }
         }
       })()
     );
