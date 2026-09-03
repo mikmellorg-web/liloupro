@@ -15189,91 +15189,188 @@ function CalendarView({
   const suggestScalesForService = async (serviceId: string) => {
     setIsGenerating(serviceId);
     const service = services.find(s => s.id === serviceId);
-    if (!service) return;
+    if (!service) {
+      setIsGenerating(null);
+      return;
+    }
 
-    const dateStr = service.date.split('T')[0];
     const servicePath = `services/${serviceId}`;
 
     try {
-      // 1. Fetch general availabilities for this date
-      const availSnap = await getDocs(query(
-        collection(db, 'availability'),
-        where('date', '==', dateStr)
-      ));
-      const generalAvail = availSnap.docs.reduce((acc, doc) => {
-        acc[doc.data().userId] = doc.data().status;
-        return acc;
-      }, {} as Record<string, string>);
+      // 1. Extrair datas válidas do culto para busca precisa
+      let sDateObj: Date;
+      if (service.date?.toDate) {
+        sDateObj = service.date.toDate();
+      } else if (service.date instanceof Date) {
+        sDateObj = service.date;
+      } else if (typeof service.date === 'string') {
+        sDateObj = new Date(service.date);
+      } else {
+        sDateObj = new Date();
+      }
 
-      // 2. Calculate participation frequency (last 90 days)
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
-      const historyServices = services.filter(s => s.date >= getLocalDateTimeString(threeMonthsAgo) && s.date < service.date);
-      
-      const usageCount: Record<string, number> = {};
-      historyServices.forEach(s => {
-        Object.values(s.scales || {}).flat().forEach((mId: any) => {
-          usageCount[mId] = (usageCount[mId] || 0) + 1;
-        });
-      });
+      const localDateStr = getLocalDateString(sDateObj);
+      const rawDateStr = typeof service.date === 'string'
+        ? (service.date.includes('T') ? service.date.split('T')[0] : (service.date.includes(' ') ? service.date.split(' ')[0] : service.date.substring(0, 10)))
+        : localDateStr;
 
-      // 3. Generate suggestions for each role
-      const baseScales = (editingServiceId === serviceId) ? localScales : (service.scales || {});
-      const newScales: Record<string, string[]> = { ...baseScales };
-      
-      roles.forEach(role => {
-        // Only suggest if not already filled
-        if (newScales[role] && newScales[role].length > 0) return;
+      const targetDates = Array.from(new Set([localDateStr, rawDateStr].filter(Boolean)));
 
-        const candidates = members.filter(m => Array.isArray(m.roles) && m.roles.includes(role));
-        
-        const scoredCandidates = candidates.map(m => {
-          let score = 0;
-          
-          // Availability check
-          const specificAvail = service.availability?.[m.id];
-          const generalStatus = generalAvail[m.id];
+      // 2. Buscar disponibilidades registradas na coleção 'availability' para essa data
+      let availSnap;
+      if (targetDates.length === 1) {
+        availSnap = await getDocs(query(
+          collection(db, 'availability'),
+          where('date', '==', targetDates[0])
+        ));
+      } else {
+        availSnap = await getDocs(query(
+          collection(db, 'availability'),
+          where('date', 'in', targetDates)
+        ));
+      }
 
-          if (specificAvail === 'unavailable') return null;
-          if (generalStatus === 'unavailable' && !specificAvail) return null;
-
-          if (specificAvail === 'available') score += 100;
-          else if (generalStatus === 'available') score += 50;
-          else if (specificAvail === 'maybe') score += 10;
-
-          // Frequency check (favor those who played less)
-          const frequency = usageCount[m.id] || 0;
-          score -= frequency * 5;
-
-          return { id: m.id, score };
-        }).filter(Boolean) as { id: string, score: number }[];
-
-        // Sort by score descending
-        scoredCandidates.sort((a, b) => b.score - a.score);
-
-        if (scoredCandidates.length > 0) {
-          // Add top candidate
-          newScales[role] = [scoredCandidates[0].id];
+      const generalAvail: Record<string, string> = {};
+      availSnap.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.userId && data.status) {
+          generalAvail[data.userId] = data.status;
         }
       });
 
+      // 3. Regra estrita: Apenas membros explicitamente 'available' entram na auto-escala
+      const isMemberAvailableForService = (m: any): boolean => {
+        const ids = [m.id, m.uid, m.userId].filter(Boolean);
+
+        // a) Prioridade para marcação específica no próprio culto (service.availability)
+        const specificStatus = ids.map(id => service.availability?.[id]).find(Boolean);
+        if (specificStatus === 'unavailable') return false; // Explicitamente indisponível
+
+        // b) Consulta na tabela de disponibilidade mensal geral
+        const generalStatus = ids.map(id => generalAvail[id]).find(Boolean);
+        if (generalStatus === 'unavailable' && specificStatus !== 'available') return false;
+
+        // REGRA ESTRITA: Apenas entra na auto-escala quem tiver marcado 'available' (no culto ou na grade geral)
+        // Membros que não marcaram ou marcaram 'maybe' NÃO entram na auto-escala
+        return specificStatus === 'available' || generalStatus === 'available';
+      };
+
+      // 4. Calcular frequência de participação (últimos 90 dias) para rodízio justo
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
+      const threeMonthsAgoStr = getLocalDateTimeString(threeMonthsAgo);
+      const currentServiceDateStr = typeof service.date === 'string' ? service.date : getLocalDateTimeString(sDateObj);
+
+      const historyServices = services.filter(s => {
+        const sDate = typeof s.date === 'string' ? s.date : (s.date?.toDate ? getLocalDateTimeString(s.date.toDate()) : '');
+        return sDate >= threeMonthsAgoStr && sDate < currentServiceDateStr;
+      });
+
+      const usageCount: Record<string, number> = {};
+      historyServices.forEach(s => {
+        Object.values(s.scales || {}).flat().forEach((mId: any) => {
+          if (mId) {
+            usageCount[mId] = (usageCount[mId] || 0) + 1;
+          }
+        });
+      });
+
+      // 5. Preencher funções vazias com os melhores candidatos disponíveis
+      const baseScales = (editingServiceId === serviceId && Object.keys(localScales).length > 0)
+        ? localScales
+        : (service.scales || {});
+      const newScales: Record<string, string[]> = { ...baseScales };
+
+      let newlyAssignedCount = 0;
+      const rolesWithNoAvailable: string[] = [];
+
+      roles.forEach(role => {
+        // Se a função já foi preenchida, preservar
+        const existingList = newScales[role];
+        if (Array.isArray(existingList) ? existingList.length > 0 : Boolean(existingList)) {
+          return;
+        }
+
+        // Candidatos devem ter a função E OBRIGATORIAMENTE estar disponíveis
+        const candidates = members.filter(m => {
+          if (!Array.isArray(m.roles) || !m.roles.includes(role)) return false;
+          return isMemberAvailableForService(m);
+        });
+
+        if (candidates.length === 0) {
+          rolesWithNoAvailable.push(role);
+          return;
+        }
+
+        const scoredCandidates = candidates.map(m => {
+          let score = 100;
+          const ids = [m.id, m.uid, m.userId].filter(Boolean);
+
+          // Bônus se confirmou disponibilidade especificamente neste culto
+          const specificStatus = ids.map(id => service.availability?.[id]).find(Boolean);
+          if (specificStatus === 'available') {
+            score += 50;
+          }
+
+          // Rodízio: favorece quem tocou menos vezes no período recente
+          const memberUsage = ids.reduce((max, id) => Math.max(max, usageCount[id] || 0), 0);
+          score -= memberUsage * 10;
+
+          // Se já foi escalado em outra função neste mesmo culto durante esta geração, reduz prioridade
+          const isAlreadyAssignedInThisService = Object.entries(newScales).some(([r, assignedIds]) => {
+            if (r === role) return false;
+            const list = Array.isArray(assignedIds) ? assignedIds : [assignedIds].filter(Boolean);
+            return ids.some(id => list.includes(id));
+          });
+          if (isAlreadyAssignedInThisService) {
+            score -= 80;
+          }
+
+          return { id: m.id, score };
+        });
+
+        // Ordena por pontuação decrescente
+        scoredCandidates.sort((a, b) => b.score - a.score);
+
+        if (scoredCandidates.length > 0) {
+          newScales[role] = [scoredCandidates[0].id];
+          newlyAssignedCount++;
+        }
+      });
+
+      // 6. Mensagens de retorno claras para a liderança
+      if (newlyAssignedCount === 0 && rolesWithNoAvailable.length > 0) {
+        alert("Nenhum membro marcou disponibilidade como 'Disponível' para a data deste culto.\n\nPara que a Auto-Escala funcione, apenas os membros que colocaram seus nomes disponíveis (no menu 'Minha Disponibilidade' ou no próprio culto) são incluídos.");
+        setIsGenerating(null);
+        return;
+      }
+
       if (editingServiceId === serviceId) {
         setLocalScales(newScales);
-        alert("Sugestão de escala gerada localmente! Ajuste as marcações e clique em 'Concluir e Salvar' para consolidar.");
+        let msg = `Sugestão gerada localmente para ${newlyAssignedCount} função(ões) com membros disponíveis!`;
+        if (rolesWithNoAvailable.length > 0) {
+          msg += `\n\n⚠️ Funções sem voluntários disponíveis para este dia: ${rolesWithNoAvailable.join(', ')}.`;
+        }
+        msg += "\n\nRevise a escala e clique em '💾 Concluir e Salvar Culto' para publicar.";
+        alert(msg);
       } else {
         await updateDoc(doc(db, 'services', serviceId), { scales: newScales });
         const svc = services.find(s => s.id === serviceId);
         if (createNotifications && svc) {
-          const dateStr = new Date(svc.date).toLocaleDateString('pt-BR');
+          const dateStr = sDateObj.toLocaleDateString('pt-BR');
           await createNotifications(
             '📅 Escala Gerada',
-            `Uma nova sugestão de escala para "${svc.title}" em ${dateStr} foi definida.`,
+            `Uma nova sugestão de escala para "${svc.title}" em ${dateStr} foi definida com membros disponíveis.`,
             'service',
             user?.uid,
             'notifyScheduleChanges'
           );
         }
-        alert("Sugestão de escala gerada com sucesso! Baseada em disponibilidade e rodízio de membros.");
+        let msg = `Auto-Escala gerada com sucesso para ${newlyAssignedCount} função(ões) utilizando apenas voluntários disponíveis!`;
+        if (rolesWithNoAvailable.length > 0) {
+          msg += `\n\n⚠️ Funções sem voluntários disponíveis: ${rolesWithNoAvailable.join(', ')}.`;
+        }
+        alert(msg);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
@@ -15789,7 +15886,7 @@ function CalendarView({
                                 >
                                 <option value="" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-zinc-100">+ {role}</option>
                                   {members.map(m => {
-                                    const availability = service.availability?.[m.uid];
+                                    const availability = service.availability?.[m.uid] || service.availability?.[m.id];
                                     let label = '⚪';
                                     if(availability === 'available') label = '✅';
                                     if(availability === 'unavailable') label = '❌';
@@ -15947,7 +16044,7 @@ function CalendarView({
                                       {recommendedMembers.length > 0 && (
                                         <optgroup label="✨ RECOMENDADOS (TEM A FUNÇÃO)" className="bg-white dark:bg-slate-850 text-purple-600 dark:text-purple-400 font-bold">
                                           {recommendedMembers.map(m => {
-                                            const availability = service.availability?.[m.uid];
+                                            const availability = service.availability?.[m.uid] || service.availability?.[m.id];
                                             let label = '⚪';
                                             if(availability === 'available') label = '✅';
                                             if(availability === 'unavailable') label = '❌';
@@ -15961,7 +16058,7 @@ function CalendarView({
 
                                       <optgroup label="👥 OUTROS MEMBROS" className="bg-white dark:bg-slate-850 text-zinc-500 dark:text-zinc-400">
                                         {otherMembers.map(m => {
-                                          const availability = service.availability?.[m.uid];
+                                          const availability = service.availability?.[m.uid] || service.availability?.[m.id];
                                           let label = '⚪';
                                           if(availability === 'available') label = '✅';
                                           if(availability === 'unavailable') label = '❌';

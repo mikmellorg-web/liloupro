@@ -777,13 +777,16 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       // Reset monthly status to pending on change so they are forced to finalize and notify again
       const currentUserData = allMembers.find(m => m.id === user.uid);
       const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      if (currentUserData?.availabilityStatus?.[currentMonthStr] === 'finished') {
-        const updatedStatus = { ...(currentUserData.availabilityStatus || {}) };
+      const updatedStatus = { ...(currentUserData?.availabilityStatus || {}) };
+      let statusChanged = false;
+      if (updatedStatus[currentMonthStr] === 'finished') {
         delete updatedStatus[currentMonthStr];
-        await updateDoc(doc(db, 'members', user.uid), {
-          availabilityStatus: updatedStatus
-        });
+        statusChanged = true;
       }
+      await updateDoc(doc(db, 'members', user.uid), {
+        ...(statusChanged ? { availabilityStatus: updatedStatus } : {}),
+        lastAvailabilityUpdate: serverTimestamp()
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, availabilityPath);
     }
@@ -978,8 +981,19 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
       const encodedMessage = encodeURIComponent(message);
       
-      // Also write in-app notifications for ALL administrators to ensure they never miss it!
-      const adminUsersDocs = allMembers.filter(m => m.isAdmin === true || m.role === 'admin' || m.role === 'leader' || m.email === 'mikmellorg@gmail.com');
+      // Identificar todos os administradores e líderes de forma robusta
+      const isMemberAdmin = (m: any) => {
+        if (!m) return false;
+        if (m.isAdmin === true || m.isMasterAdmin === true) return true;
+        if (m.role === 'admin' || m.role === 'leader' || m.role === 'master_admin') return true;
+        if (Array.isArray(m.roles) && m.roles.some((r: any) => /admin|líder|lider|coordenador/i.test(String(r)))) return true;
+        const emailLower = (m.email || '').toLowerCase().trim();
+        if (emailLower === 'mikmellorg@gmail.com' || emailLower === 'miqueiasmellopro@gmail.com') return true;
+        if (adminEmailTargets.some(t => t.email && t.email.toLowerCase().trim() === emailLower)) return true;
+        return false;
+      };
+
+      const adminUsersDocs = allMembers.filter(isMemberAdmin);
       const inAppNotificationsPromises = adminUsersDocs.map(admin => {
         const adminUserId = admin.id || admin.uid;
         if (!adminUserId || adminUserId === user.uid) return Promise.resolve();
@@ -990,35 +1004,102 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           type: 'general',
           read: false,
           createdAt: serverTimestamp()
+        }).catch(err => {
+          console.warn('[Availability Notifications] Erro ao gravar notificação in-app:', err);
+          return null;
         });
       });
-      await Promise.all(inAppNotificationsPromises);
+      await Promise.allSettled(inAppNotificationsPromises);
 
       // Disparar notificação Push para os administradores (funciona mesmo com app fechado)
       try {
         const adminTokens: string[] = [];
+        const addTokenSafe = (rawTok: any) => {
+          if (typeof rawTok === 'string') {
+            const trimmed = rawTok.trim();
+            if (trimmed.length > 15 && !adminTokens.includes(trimmed)) {
+              adminTokens.push(trimmed);
+            }
+          }
+        };
+
+        // 1. Coletar dos membros administradores da memória
         adminUsersDocs.forEach(adm => {
-          if (adm.fcmTokens && Array.isArray(adm.fcmTokens)) {
-            adm.fcmTokens.forEach((t: string) => { if (t && !adminTokens.includes(t)) adminTokens.push(t); });
-          }
-          if (adm.fcmToken && !adminTokens.includes(adm.fcmToken)) {
-            adminTokens.push(adm.fcmToken);
-          }
-          if (adm.lastFcmToken && !adminTokens.includes(adm.lastFcmToken)) {
-            adminTokens.push(adm.lastFcmToken);
-          }
+          if (Array.isArray(adm.fcmTokens)) adm.fcmTokens.forEach(addTokenSafe);
+          addTokenSafe(adm.fcmToken);
+          addTokenSafe(adm.lastFcmToken);
         });
+
+        // 2. Coletar diretamente das coleções do Firestore (fcm_tokens e members) para garantir 100% de entrega
+        const adminUidSet = new Set<string>(adminUsersDocs.map(a => a.id || a.uid).filter(Boolean));
+        const adminEmailSet = new Set<string>([
+          'mikmellorg@gmail.com',
+          'miqueiasmellopro@gmail.com',
+          ...adminEmailTargets.map(t => (t.email || '').toLowerCase().trim()).filter(Boolean),
+          ...adminUsersDocs.map(a => (a.email || '').toLowerCase().trim()).filter(Boolean)
+        ]);
+
+        try {
+          const [fcmSnap, membersSnap] = await Promise.allSettled([
+            getDocs(collection(db, 'fcm_tokens')),
+            getDocs(collection(db, 'members'))
+          ]);
+
+          if (fcmSnap.status === 'fulfilled') {
+            fcmSnap.value.forEach(docSnap => {
+              const data = docSnap.data();
+              const token = data.token;
+              if (!token) return;
+              const dataEmail = (data.email || '').toLowerCase().trim();
+              const dataUid = data.uid || '';
+              // Se pertencer a algum admin ou email de líder
+              if (adminEmailSet.has(dataEmail) || adminUidSet.has(dataUid)) {
+                addTokenSafe(token);
+              }
+            });
+          }
+
+          if (membersSnap.status === 'fulfilled') {
+            membersSnap.value.forEach(docSnap => {
+              const data = docSnap.data();
+              if (isMemberAdmin(data)) {
+                if (Array.isArray(data.fcmTokens)) data.fcmTokens.forEach(addTokenSafe);
+                addTokenSafe(data.fcmToken);
+                addTokenSafe(data.lastFcmToken);
+              }
+            });
+          }
+
+          // Se por ventura nenhum token foi filtrado especificamente, enviar para os aparelhos de fcm_tokens que não sejam do usuário que está marcando
+          if (adminTokens.length === 0 && fcmSnap.status === 'fulfilled') {
+            fcmSnap.value.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data.token && (!user?.uid || data.uid !== user.uid)) {
+                addTokenSafe(data.token);
+              }
+            });
+          }
+        } catch (fcmErr) {
+          console.warn('[Push Availability] Erro ao consultar fcm_tokens no Firestore:', fcmErr);
+        }
 
         const pushTitle = `📅 Disponibilidade: ${currentUserData?.name || 'Membro'}`;
         const pushBody = `${currentUserData?.name || 'Um membro'} finalizou e salvou a escala de disponibilidade para ${currentDate.toLocaleDateString('pt-BR', { month: 'long' })} (${finishedCount} de ${localActiveMembers.length} marcaram).`;
 
         if (adminTokens.length > 0) {
-          sendPushNotification({
+          await sendPushNotification({
             tokens: adminTokens,
             title: pushTitle,
             body: pushBody,
-            url: '/?tab=availability'
-          }).catch(err => console.warn('[Push Availability] Erro ao enviar push para admins:', err));
+            url: '/?tab=availability',
+            data: {
+              type: 'availability',
+              url: '/?tab=availability',
+              title: String(pushTitle),
+              body: String(pushBody),
+              timestamp: String(Date.now())
+            }
+          });
         }
       } catch (pushErr) {
         console.warn('[Push Availability] Erro geral ao preparar push:', pushErr);
