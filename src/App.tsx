@@ -13,7 +13,7 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Crown, ShieldCheck, Globe, Laptop, Mail
+  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX
 } from 'lucide-react';
 import { Music2 } from './components/MusicIcon';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -14817,7 +14817,30 @@ function CalendarView({
     try {
       const serviceRef = doc(db, 'services', serviceId);
       const service = services.find(s => s.id === serviceId);
-      const updatedAvailability = { ...(service.availability || {}), [user.uid]: status };
+      if (!service) return;
+
+      const currentAvail = service.availability || {};
+      const currentStatus = currentAvail[user.uid];
+      const newStatus = currentStatus === status ? null : status;
+
+      const updatedAvailability = { ...currentAvail };
+      if (newStatus) {
+        updatedAvailability[user.uid] = newStatus;
+      } else {
+        delete updatedAvailability[user.uid];
+      }
+
+      // Sincronizar também com membro associado (caso id seja diferente de uid)
+      const matchedMember = members.find(m => m.id === user.uid || m.uid === user.uid || (user.email && m.email === user.email));
+      if (matchedMember?.id && matchedMember.id !== user.uid) {
+        if (newStatus) {
+          updatedAvailability[matchedMember.id] = newStatus;
+        } else {
+          delete updatedAvailability[matchedMember.id];
+        }
+      }
+
+      setServices(prev => prev.map(s => s.id === serviceId ? { ...s, availability: updatedAvailability } : s));
       await updateDoc(serviceRef, { availability: updatedAvailability });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
@@ -15197,7 +15220,7 @@ function CalendarView({
     const servicePath = `services/${serviceId}`;
 
     try {
-      // 1. Extrair datas válidas do culto para busca precisa
+      // 1. Extrair data exata do culto para busca precisa
       let sDateObj: Date;
       if (service.date?.toDate) {
         sDateObj = service.date.toDate();
@@ -15209,49 +15232,59 @@ function CalendarView({
         sDateObj = new Date();
       }
 
-      const localDateStr = getLocalDateString(sDateObj);
-      const rawDateStr = typeof service.date === 'string'
-        ? (service.date.includes('T') ? service.date.split('T')[0] : (service.date.includes(' ') ? service.date.split(' ')[0] : service.date.substring(0, 10)))
-        : localDateStr;
+      const exactServiceDate = typeof service.date === 'string' && service.date.includes('T')
+        ? service.date.split('T')[0]
+        : (typeof service.date === 'string' && service.date.includes(' ')
+            ? service.date.split(' ')[0]
+            : (typeof service.date === 'string' && service.date.length >= 10
+                ? service.date.substring(0, 10)
+                : getLocalDateString(sDateObj)));
 
-      const targetDates = Array.from(new Set([localDateStr, rawDateStr].filter(Boolean)));
-
-      // 2. Buscar disponibilidades registradas na coleção 'availability' para essa data
-      let availSnap;
-      if (targetDates.length === 1) {
-        availSnap = await getDocs(query(
-          collection(db, 'availability'),
-          where('date', '==', targetDates[0])
-        ));
-      } else {
-        availSnap = await getDocs(query(
-          collection(db, 'availability'),
-          where('date', 'in', targetDates)
-        ));
-      }
+      // 2. Buscar disponibilidades registradas na coleção 'availability' para essa data exata
+      const availSnap = await getDocs(query(
+        collection(db, 'availability'),
+        where('date', '==', exactServiceDate)
+      ));
 
       const generalAvail: Record<string, string> = {};
       availSnap.docs.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.userId && data.status) {
-          generalAvail[data.userId] = data.status;
+        const uId = data.userId || docSnap.id.split('_')[0];
+        if (uId && data.status) {
+          generalAvail[uId] = data.status;
         }
       });
 
-      // 3. Regra estrita: Apenas membros explicitamente 'available' entram na auto-escala
+      // 3. Regra ESTRITA de Auto-Escala (solicitada pelo usuário):
+      // "faça com que aqueles que apenas os que estão disponíveis para o culto agendado entrem na função de auto escala"
+      const serviceAvail: Record<string, string> = service.availability || {};
+
+      // Verifica membros que colocaram seus nomes como disponíveis diretamente no culto agendado
+      const membersDirectlyAvailable = members.filter(m => {
+        const ids = [m.id, m.uid, m.userId].filter(Boolean);
+        return ids.some(id => serviceAvail[id] === 'available');
+      });
+
+      const hasDirectServiceAvailability = membersDirectlyAvailable.length > 0;
+
       const isMemberAvailableForService = (m: any): boolean => {
         const ids = [m.id, m.uid, m.userId].filter(Boolean);
 
-        // a) Prioridade para marcação específica no próprio culto (service.availability)
-        const specificStatus = ids.map(id => service.availability?.[id]).find(Boolean);
-        if (specificStatus === 'unavailable') return false; // Explicitamente indisponível
+        // a) Se marcou indisponível especificamente no culto agendado, JAMAIS entra
+        const specificStatus = ids.map(id => serviceAvail[id]).find(Boolean);
+        if (specificStatus === 'unavailable') return false;
 
-        // b) Consulta na tabela de disponibilidade mensal geral
+        // b) Se voluntários colocaram seus nomes disponíveis diretamente para este culto agendado:
+        // APENAS quem colocou o nome disponível neste culto agendado entra na auto-escala!
+        if (hasDirectServiceAvailability) {
+          return specificStatus === 'available';
+        }
+
+        // c) Caso nenhum voluntário tenha marcado diretamente no culto específico ainda:
+        // Considera APENAS quem marcou 'available' na data exata deste culto no calendário
         const generalStatus = ids.map(id => generalAvail[id]).find(Boolean);
-        if (generalStatus === 'unavailable' && specificStatus !== 'available') return false;
+        if (generalStatus === 'unavailable') return false;
 
-        // REGRA ESTRITA: Apenas entra na auto-escala quem tiver marcado 'available' (no culto ou na grade geral)
-        // Membros que não marcaram ou marcaram 'maybe' NÃO entram na auto-escala
         return specificStatus === 'available' || generalStatus === 'available';
       };
 
@@ -15283,8 +15316,9 @@ function CalendarView({
 
       let newlyAssignedCount = 0;
       const rolesWithNoAvailable: string[] = [];
+      const rolesToScale = Array.from(new Set([...roles, 'Professor Babies', 'Professor Kids']));
 
-      roles.forEach(role => {
+      rolesToScale.forEach(role => {
         // Se a função já foi preenchida, preservar
         const existingList = newScales[role];
         if (Array.isArray(existingList) ? existingList.length > 0 : Boolean(existingList)) {
@@ -15307,7 +15341,7 @@ function CalendarView({
           const ids = [m.id, m.uid, m.userId].filter(Boolean);
 
           // Bônus se confirmou disponibilidade especificamente neste culto
-          const specificStatus = ids.map(id => service.availability?.[id]).find(Boolean);
+          const specificStatus = ids.map(id => serviceAvail[id]).find(Boolean);
           if (specificStatus === 'available') {
             score += 50;
           }
@@ -15340,7 +15374,7 @@ function CalendarView({
 
       // 6. Mensagens de retorno claras para a liderança
       if (newlyAssignedCount === 0 && rolesWithNoAvailable.length > 0) {
-        alert("Nenhum membro marcou disponibilidade como 'Disponível' para a data deste culto.\n\nPara que a Auto-Escala funcione, apenas os membros que colocaram seus nomes disponíveis (no menu 'Minha Disponibilidade' ou no próprio culto) são incluídos.");
+        alert("Nenhum voluntário marcou disponibilidade como 'Disponível' para este culto agendado.\n\nPara que a Auto-Escala funcione com segurança e justiça, apenas membros que colocaram seus nomes disponíveis (no culto agendado ou no calendário) são incluídos.");
         setIsGenerating(null);
         return;
       }
@@ -15633,9 +15667,93 @@ function CalendarView({
                {(() => {
                  const isEditingThis = editingServiceId === service.id;
                  const scalesToUse = isEditingThis ? localScales : (service.scales || {});
+                 const currentMember = user ? members.find(m => m.uid === user.uid || m.id === user.uid || (user.email && m.email === user.email)) : null;
+                 const myIds = [user?.uid, currentMember?.id, currentMember?.uid].filter(Boolean);
+                 const myStatus = myIds.map(id => service.availability?.[id as string]).find(Boolean);
+                 const availableVolunteers = members.filter(m => {
+                   const ids = [m.id, m.uid, m.userId].filter(Boolean);
+                   return ids.some(id => service.availability?.[id] === 'available');
+                 });
                  
                  return (
                    <>
+                     {/* Bloco de Disponibilidade do Culto Agendado */}
+                     <div className="mb-6 p-3 sm:p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-border flex flex-col gap-3">
+                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                         <div className="flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-text-main flex items-center gap-1.5">
+                             <UserCheck size={14} className="text-emerald-500" />
+                             Disponibilidade para este Culto
+                           </span>
+                           <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                             {availableVolunteers.length} disponível{availableVolunteers.length !== 1 ? 'is' : ''}
+                           </span>
+                         </div>
+
+                         {user && (
+                           <div className="flex items-center gap-2">
+                             <span className="text-[9px] font-black uppercase tracking-wider text-text-muted hidden xs:inline">
+                               Minha Presença:
+                             </span>
+                             <button
+                               type="button"
+                               onClick={() => setAvailability(service.id, 'available')}
+                               className={cn(
+                                 "h-7 sm:h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border",
+                                 myStatus === 'available'
+                                   ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/30"
+                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30"
+                               )}
+                             >
+                               <Check size={12} strokeWidth={3} /> Estou Disponível
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => setAvailability(service.id, 'unavailable')}
+                               className={cn(
+                                 "h-7 sm:h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border",
+                                 myStatus === 'unavailable'
+                                   ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/30"
+                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30"
+                               )}
+                             >
+                               <X size={12} strokeWidth={3} /> Não Posso
+                             </button>
+                           </div>
+                         )}
+                       </div>
+
+                       {availableVolunteers.length > 0 ? (
+                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                           <span className="text-[9px] font-black uppercase text-text-muted mr-1">
+                             Voluntários com disponibilidade confirmada:
+                           </span>
+                           {availableVolunteers.map(m => (
+                             <div 
+                               key={m.id}
+                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-border text-[10px] font-bold text-text-main"
+                             >
+                               <div className="w-4 h-4 rounded-full overflow-hidden bg-brand/20 shrink-0">
+                                 <CachedAvatar photoUrl={m.photoUrl} alt={m.name} fallbackText={m.name} className="w-full h-full" />
+                               </div>
+                               <span>{m.name}</span>
+                               {Array.isArray(m.roles) && m.roles[0] && (
+                                 <span className="text-[8px] text-brand font-black uppercase px-1 rounded bg-brand/10">
+                                   {m.roles[0]}
+                                 </span>
+                               )}
+                             </div>
+                           ))}
+                         </div>
+                       ) : (
+                         <p className="text-[10px] text-amber-500/90 font-medium italic flex items-center gap-1.5 pt-0.5">
+                           <AlertTriangle size={12} className="shrink-0 text-amber-500" />
+                           Nenhum voluntário confirmou disponibilidade para este culto ainda. A Auto-Escala escala apenas quem colocou o nome disponível.
+                         </p>
+                       )}
+                     </div>
+
                      <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-border pb-3 sm:4 mb-6 sm:8 gap-4">
                        <h4 className="text-[9px] sm:text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
                           <span className="w-3 sm:4 h-[1px] bg-brand"></span> Composição da Escala Musical

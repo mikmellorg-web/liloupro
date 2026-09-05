@@ -1,11 +1,29 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage, adaptToNAA } from "./src/localBibleDb.js";
+
+// Compatibilidade universal para obter o diretório do servidor tanto em ESM (tsx) quanto em CommonJS compilado (esbuild)
+const serverDir: string = (() => {
+  try {
+    if (typeof __dirname !== "undefined" && __dirname) {
+      return __dirname;
+    }
+  } catch (e) {}
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== "undefined" && import.meta?.url) {
+      // @ts-ignore
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  } catch (e) {}
+  return process.cwd();
+})();
 
 // Inicialização segura do Firebase Admin
 try {
@@ -26,6 +44,42 @@ try {
 
 // Global in-memory cache for Bible passages (Keys: book_chapter_verseRange_version) to make Bible loading lightning-fast and save API quota
 const biblePassageCache = new Map<string, any>();
+
+// Local in-memory full BLIVRE database (all 66 books) for instant 0ms responses and zero external failure
+let localBlivreData: string[][][] | null = null;
+function getLocalBlivreData(): string[][][] | null {
+  if (localBlivreData && Array.isArray(localBlivreData) && localBlivreData.length === 66) {
+    return localBlivreData;
+  }
+  const candidatePaths = [
+    path.join(process.cwd(), "data", "blivre.json"),
+    path.join(process.cwd(), "public", "data", "blivre.json"),
+    path.join(process.cwd(), "dist", "data", "blivre.json"),
+    path.join(serverDir, "data", "blivre.json"),
+    path.join(serverDir, "../data", "blivre.json"),
+    path.join(serverDir, "public", "data", "blivre.json"),
+    path.join(serverDir, "../public", "data", "blivre.json"),
+  ];
+  for (const p of candidatePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, "utf-8");
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.length === 66) {
+          localBlivreData = parsed;
+          console.log(`[Server Bible] Banco de dados BLIVRE (66 livros) carregado localmente com sucesso de ${p}.`);
+          return localBlivreData;
+        }
+      }
+    } catch (e) {
+      console.warn(`[Server Bible] Falha ao tentar carregar ${p}:`, e);
+    }
+  }
+  return null;
+}
+
+// Initial eager load at startup
+getLocalBlivreData();
 
 // Global in-memory caches for Bible AI and song AI responses for instant 0ms response time
 const bibleExplainCache = new Map<string, string>();
@@ -142,6 +196,22 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
+
+  // Initialize Firebase serverDb early for all endpoints
+  let serverDb: any = null;
+  try {
+    const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const { initializeApp: initializeServerApp } = await import('firebase/app');
+      const { getFirestore: getServerFirestore } = await import('firebase/firestore');
+      const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const serverApp = initializeServerApp(firebaseConfig, 'server-app-kiwify');
+      serverDb = getServerFirestore(serverApp, firebaseConfig.firestoreDatabaseId);
+      console.log('[Server Firebase] serverDb inicializado com sucesso.');
+    }
+  } catch (fbErr) {
+    console.error('[Server Firebase] Aviso ao carregar Firebase serverDb:', fbErr);
+  }
 
   // --- PERSISTÊNCIA OFICIAL DE IMAGENS DA LANDING PAGE EM ALTA DEFINIÇÃO ---
   const landingDataFile = path.join(process.cwd(), "data", "landing-images.json");
@@ -506,49 +576,136 @@ async function startServer() {
       return res.json(biblePassageCache.get(cacheKey));
     }
 
-    // High-speed, lightweight primary check via structured API (bolls.life) on the server side
-    try {
-      const BOLLS_BOOK_IDS: Record<string, number> = {
-        "Gênesis": 1, "Êxodo": 2, "Levítico": 3, "Números": 4, "Deuteronômio": 5,
-        "Josué": 6, "Juízes": 7, "Rute": 8, "1 Samuel": 9, "2 Samuel": 10,
-        "1 Reis": 11, "2 Reis": 12, "1 Crônicas": 13, "2 Crônicas": 14,
-        "Esdras": 15, "Neemias": 16, "Ester": 17, "Jó": 18, "Salmos": 19,
-        "Provérbios": 20, "Eclesiastes": 21, "Cânticos": 22, "Isaías": 23,
-        "Jeremias": 24, "Lamentações": 25, "Ezequiel": 26, "Daniel": 27,
-        "Oseias": 28, "Joel": 29, "Amós": 30, "Obadias": 31, "Jonas": 32,
-        "Miqueias": 33, "Naum": 34, "Habacuque": 35, "Sofonias": 36,
-        "Ageu": 37, "Zacarias": 38, "Malaquias": 39,
-        "Mateus": 40, "Marcos": 41, "Lucas": 42, "João": 43, "Atos": 44,
-        "Romanos": 45, "1 Coríntios": 46, "2 Coríntios": 47, "Gálatas": 48,
-        "Efésios": 49, "Filipenses": 50, "Colossenses": 51, "1 Tessalonicenses": 52,
-        "2 Tessalonicenses": 53, "1 Timóteo": 54, "2 Timóteo": 55, "Tito": 56,
-        "Filemon": 57, "Hebreus": 58, "Tiago": 59, "1 Pedro": 60, "2 Pedro": 61,
-        "1 João": 62, "2 João": 63, "3 João": 64, "Judas": 65, "Apocalipse": 66
+    const BOLLS_BOOK_IDS: Record<string, number> = {
+      "Gênesis": 1, "Êxodo": 2, "Levítico": 3, "Números": 4, "Deuteronômio": 5,
+      "Josué": 6, "Juízes": 7, "Rute": 8, "1 Samuel": 9, "2 Samuel": 10,
+      "1 Reis": 11, "2 Reis": 12, "1 Crônicas": 13, "2 Crônicas": 14,
+      "Esdras": 15, "Neemias": 16, "Ester": 17, "Jó": 18, "Salmos": 19,
+      "Provérbios": 20, "Eclesiastes": 21, "Cânticos": 22, "Isaías": 23,
+      "Jeremias": 24, "Lamentações": 25, "Ezequiel": 26, "Daniel": 27,
+      "Oseias": 28, "Joel": 29, "Amós": 30, "Obadias": 31, "Jonas": 32,
+      "Miqueias": 33, "Naum": 34, "Habacuque": 35, "Sofonias": 36,
+      "Ageu": 37, "Zacarias": 38, "Malaquias": 39,
+      "Mateus": 40, "Marcos": 41, "Lucas": 42, "João": 43, "Atos": 44,
+      "Romanos": 45, "1 Coríntios": 46, "2 Coríntios": 47, "Gálatas": 48,
+      "Efésios": 49, "Filipenses": 50, "Colossenses": 51, "1 Tessalonicenses": 52,
+      "2 Tessalonicenses": 53, "1 Timóteo": 54, "2 Timóteo": 55, "Tito": 56,
+      "Filemon": 57, "Hebreus": 58, "Tiago": 59, "1 Pedro": 60, "2 Pedro": 61,
+      "1 João": 62, "2 João": 63, "3 João": 64, "Judas": 65, "Apocalipse": 66
+    };
+
+    const normStr = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const getBollsBookId = (bookName: string): number => {
+      let raw = normStr(bookName);
+
+      // Normalize Roman numerals & prefixes
+      raw = raw.replace(/^iii\s+/, "3 ").replace(/^ii\s+/, "2 ").replace(/^i\s+/, "1 ");
+      raw = raw.replace(/^[1-3]º\s+/, (m) => m[0] + " ");
+      raw = raw.replace(/^(o\s+)?(livro\s+de\s+|evangelho\s+(segundo\s+|de\s+)?|carta\s+(de\s+|aos\s+|a\s+)?|epistola\s+(de\s+|aos\s+|a\s+)?)/, "");
+
+      const normTarget = raw.trim();
+      if (normTarget === 'jo' && (bookName.toLowerCase() === 'jó' || bookName.toLowerCase() === 'jo')) {
+        return 18; // Jó
+      }
+      for (const [key, value] of Object.entries(BOLLS_BOOK_IDS)) {
+        if (normStr(key) === normTarget) {
+          return value;
+        }
+      }
+      const ALIASES: Record<string, number> = {
+        "gn": 1, "genesis": 1, "ex": 2, "exodo": 2, "lv": 3, "levitico": 3,
+        "nm": 4, "numeros": 4, "dt": 5, "deuteronomio": 5, "js": 6, "josue": 6,
+        "jz": 7, "juizes": 7, "rt": 8, "rute": 8, "1sm": 9, "1samuel": 9, "1 samuel": 9,
+        "2sm": 10, "2samuel": 10, "2 samuel": 10, "1rs": 11, "1reis": 11, "1 reis": 11, "2rs": 12, "2reis": 12, "2 reis": 12,
+        "1cr": 13, "1cronicas": 13, "1 cronicas": 13, "2cr": 14, "2cronicas": 14, "2 cronicas": 14, "ed": 15, "esdras": 15,
+        "ne": 16, "neemias": 16, "et": 17, "ester": 17, "job": 18,
+        "sl": 19, "salmo": 19, "salmos": 19, "psalm": 19, "psalms": 19,
+        "pv": 20, "proverbios": 20, "ec": 21, "eclesiastes": 21,
+        "ct": 22, "canticos": 22, "cantares": 22, "cantico dos canticos": 22, "cantares de salomao": 22, "is": 23, "isaias": 23,
+        "jr": 24, "jeremias": 24, "lm": 25, "lamentacoes": 25, "ez": 26, "ezequiel": 26,
+        "dn": 27, "daniel": 27, "os": 28, "oseias": 28, "jl": 29, "joel": 29,
+        "am": 30, "amos": 30, "ob": 31, "obadias": 31, "jn": 32, "jonas": 32,
+        "mq": 33, "miqueias": 33, "na": 34, "naum": 34, "hc": 35, "habacuque": 35,
+        "sf": 36, "sofonias": 36, "ag": 37, "ageu": 37, "zc": 38, "zacarias": 38,
+        "ml": 39, "malaquias": 39, "mt": 40, "mateus": 40, "matthew": 40,
+        "mc": 41, "marcos": 41, "marco": 41, "mark": 41, "lc": 42, "lucas": 42, "luke": 42,
+        "joao": 43, "john": 43, "at": 44, "atos": 44, "acts": 44, "atos dos apostolos": 44,
+        "rm": 45, "romanos": 45, "romans": 45, "1co": 46, "1corintios": 46, "1 corintios": 46,
+        "2co": 47, "2corintios": 47, "2 corintios": 47, "gl": 48, "galatas": 48, "ef": 49, "efesios": 49,
+        "fp": 50, "filipenses": 50, "philippians": 50, "cl": 51, "colossenses": 51,
+        "1ts": 52, "1tessalonicenses": 52, "1 tessalonicenses": 52, "2ts": 53, "2tessalonicenses": 53, "2 tessalonicenses": 53,
+        "1tm": 54, "1timoteo": 54, "1 timoteo": 54, "2tm": 55, "2timoteo": 55, "2 timoteo": 55, "tt": 56, "tito": 56,
+        "fm": 57, "filemom": 57, "filemon": 57, "hb": 58, "hebreus": 58,
+        "tg": 59, "tiago": 59, "james": 59, "1pe": 60, "1pedro": 60, "1 pedro": 60, "2pe": 61, "2pedro": 61, "2 pedro": 61,
+        "1jo": 62, "1joao": 62, "1 joao": 62, "2jo": 63, "2joao": 63, "2 joao": 63, "3jo": 64, "3joao": 64, "3 joao": 64,
+        "jd": 65, "judas": 65, "ap": 66, "apocalipse": 66, "apocalipse de joao": 66, "revelation": 66, "revelacao": 66
       };
+      return ALIASES[normTarget] || 0;
+    };
 
-      const getBollsBookId = (bookName: string): number => {
-        const normalize = (str: string) => str.trim().toLowerCase()
-          .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    // 1. Instant response for BLIVRE version from local full database (66 books)
+    const blivreData = getLocalBlivreData();
+    if (selectedVersion === 'BLIVRE' && blivreData) {
+      const bollsBookId = getBollsBookId(book);
+      if (bollsBookId >= 1 && bollsBookId <= 66) {
+        const bookIndex = bollsBookId - 1;
+        const totalChaptersInBook = blivreData[bookIndex] ? blivreData[bookIndex].length : 0;
+        const requestedChapter = Number(chapter);
+        const chapterIndex = Math.min(Math.max(1, isNaN(requestedChapter) ? 1 : requestedChapter), totalChaptersInBook || 1) - 1;
 
-        const normTarget = normalize(bookName);
-        for (const [key, value] of Object.entries(BOLLS_BOOK_IDS)) {
-          if (normalize(key) === normTarget) {
-            return value;
+        if (blivreData[bookIndex] && blivreData[bookIndex][chapterIndex]) {
+          const rawVerses = blivreData[bookIndex][chapterIndex];
+          let formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+            verse: idx + 1,
+            text: txt.trim()
+          }));
+
+          if (verseRange) {
+            const parts = verseRange.split("-");
+            if (parts.length === 2) {
+              const start = Number(parts[0]);
+              const end = Number(parts[1]);
+              if (!isNaN(start) && !isNaN(end)) {
+                formattedVerses = formattedVerses.filter((v: any) => v.verse >= start && v.verse <= end);
+              }
+            } else {
+              const singleVerse = Number(verseRange);
+              if (!isNaN(singleVerse)) {
+                formattedVerses = formattedVerses.filter((v: any) => v.verse === singleVerse);
+              }
+            }
+          }
+
+          if (formattedVerses.length > 0) {
+            const textRepresentation = formattedVerses.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
+            const rangeStr = verseRange ? `:${verseRange}` : '';
+            const responseObj = {
+              reference: `${book} ${chapter}${rangeStr} (BLIVRE)`,
+              text: textRepresentation,
+              verses: formattedVerses,
+              isFallback: false
+            };
+            biblePassageCache.set(cacheKey, responseObj);
+            console.log(`[Bible Service] Instant local BLIVRE delivery for ${book} ${chapter}`);
+            return res.json(responseObj);
           }
         }
-        return 0;
-      };
+      }
+    }
 
+    // High-speed, lightweight primary check via structured API (bolls.life) on the server side
+    try {
       const bollsBookId = getBollsBookId(book);
       if (bollsBookId > 0) {
         const BOLLS_TRANSLATIONS: Record<string, string> = {
-          "NAA": "ARA", // We will adapt ARA to NAA using our adaptToNAA rules
+          "NAA": "NAA",
           "ARA": "ARA",
-          "ARC": "ARC",
+          "ARC": "ARC09",
           "NVI": "NVIPT",
-          "NTLH": "AA",
-          "ACF": "ACF",
-          "BLIVRE": "AA" // Map to public domain Almeida Atualizada (AA) to prevent any copyright issues
+          "NTLH": "NTLH",
+          "ACF": "ACF11",
+          "BLIVRE": "TB10"
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
@@ -573,10 +730,13 @@ async function startServer() {
         if (fetchRes.ok) {
           const fbData = await fetchRes.json();
           if (Array.isArray(fbData) && fbData.length > 0) {
-            let formattedVerses = fbData.map((v: any) => ({
-              verse: Number(v.verse),
-              text: selectedVersion === 'NAA' ? adaptToNAA(v.text.trim()) : v.text.trim()
-            }));
+            let formattedVerses = fbData.map((v: any) => {
+              const cleanText = (v.text || "").replace(/<[^>]+>/g, '').replace(/[\u24d0-\u24e9]/g, '').trim();
+              return {
+                verse: Number(v.verse),
+                text: selectedVersion === 'NAA' ? adaptToNAA(cleanText) : cleanText
+              };
+            });
 
             // Filter by verseRange if specified
             if (verseRange) {
@@ -799,13 +959,13 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
         }
 
         const BOLLS_TRANSLATIONS: Record<string, string> = {
-          "NAA": "ARA",
+          "NAA": "NAA",
           "ARA": "ARA",
-          "ARC": "ARC",
+          "ARC": "ARC09",
           "NVI": "NVIPT",
-          "NTLH": "AA",
-          "ACF": "ACF",
-          "BLIVRE": "ARA" // Fallback dynamically to ARA on bolls.life (BLIVRE is not in bolls.life, avoiding 404)
+          "NTLH": "NTLH",
+          "ACF": "ACF11",
+          "BLIVRE": "TB10"
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
@@ -827,10 +987,13 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
           throw new Error("Formato de resposta inválido de bolls.life");
         }
 
-        let formattedVerses = fbData.map((v: any) => ({
-          verse: Number(v.verse),
-          text: selectedVersion === 'NAA' ? adaptToNAA(v.text.trim()) : v.text.trim()
-        }));
+        let formattedVerses = fbData.map((v: any) => {
+          const cleanText = (v.text || "").replace(/<[^>]+>/g, '').replace(/[\u24d0-\u24e9]/g, '').trim();
+          return {
+            verse: Number(v.verse),
+            text: selectedVersion === 'NAA' ? adaptToNAA(cleanText) : cleanText
+          };
+        });
 
         // Filter by verseRange if specified
         if (verseRange) {
@@ -932,6 +1095,57 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
         }
 
         console.log("[Bible Service] Activating final delivery channel.");
+
+        // If local full BLIVRE database is loaded, use it as guaranteed real text
+        const fallbackBlivre = getLocalBlivreData();
+        if (fallbackBlivre) {
+          const bollsBookId = getBollsBookId(book);
+          if (bollsBookId >= 1 && bollsBookId <= 66) {
+            const bookIndex = bollsBookId - 1;
+            const totalChaptersInBook = fallbackBlivre[bookIndex] ? fallbackBlivre[bookIndex].length : 0;
+            const requestedChapter = Number(chapter);
+            const chapterIndex = Math.min(Math.max(1, isNaN(requestedChapter) ? 1 : requestedChapter), totalChaptersInBook || 1) - 1;
+
+            if (fallbackBlivre[bookIndex] && fallbackBlivre[bookIndex][chapterIndex]) {
+              const rawVerses = fallbackBlivre[bookIndex][chapterIndex];
+              let formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+                verse: idx + 1,
+                text: txt.trim()
+              }));
+
+              if (verseRange) {
+                const parts = verseRange.split("-");
+                if (parts.length === 2) {
+                  const start = Number(parts[0]);
+                  const end = Number(parts[1]);
+                  if (!isNaN(start) && !isNaN(end)) {
+                    formattedVerses = formattedVerses.filter((v: any) => v.verse >= start && v.verse <= end);
+                  }
+                } else {
+                  const singleVerse = Number(verseRange);
+                  if (!isNaN(singleVerse)) {
+                    formattedVerses = formattedVerses.filter((v: any) => v.verse === singleVerse);
+                  }
+                }
+              }
+
+              if (formattedVerses.length > 0) {
+                const textRepresentation = formattedVerses.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
+                const rangeStr = verseRange ? `:${verseRange}` : '';
+                const fallbackLocalObj = {
+                  reference: `${book} ${chapter}${rangeStr} (BLIVRE)`,
+                  text: textRepresentation,
+                  verses: formattedVerses,
+                  isFallback: selectedVersion !== 'BLIVRE',
+                  warning: selectedVersion !== 'BLIVRE' ? `Exibindo tradução da Bíblia Livre (BLIVRE) como contingência local para ${selectedVersion}.` : null
+                };
+                biblePassageCache.set(cacheKey, fallbackLocalObj);
+                return res.json(fallbackLocalObj);
+              }
+            }
+          }
+        }
+
         const offlineResult = getLocalBiblePassage(book, Number(chapter), selectedVersion);
         
         // If it's a demonstration message (meaning we don't have the real text pre-seeded), 
@@ -2874,22 +3088,6 @@ Complete a finalização da música`,
   // --- KIWIFY WEBHOOK ATIVAÇÃO AUTOMÁTICA ---
   // Express endpoint para receber notificações de pagamento da Kiwify em tempo real
 
-  // Initialize Firebase serverDb if available
-  let serverDb: any = null;
-  try {
-    const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(cfgPath)) {
-      const { initializeApp: initializeServerApp } = await import('firebase/app');
-      const { getFirestore: getServerFirestore } = await import('firebase/firestore');
-      const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-      const serverApp = initializeServerApp(firebaseConfig, 'server-app-kiwify');
-      serverDb = getServerFirestore(serverApp, firebaseConfig.firestoreDatabaseId);
-      console.log('[Kiwify Webhook] Firebase serverDb inicializado com sucesso.');
-    }
-  } catch (fbErr) {
-    console.error('[Kiwify Webhook] Aviso ao carregar Firebase serverDb:', fbErr);
-  }
-
   // Funcao auxiliar para processar e ativar licença Kiwify
   async function processKiwifyNotification(payload: any, isSimulation: boolean = false) {
     const rawBody = payload || {};
@@ -3323,7 +3521,18 @@ Complete a finalização da música`,
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const candidateDistPaths = [
+      path.join(process.cwd(), "dist"),
+      path.join(serverDir, "dist"),
+      serverDir,
+    ];
+    let distPath = path.join(process.cwd(), "dist");
+    for (const d of candidateDistPaths) {
+      if (fs.existsSync(path.join(d, "index.html"))) {
+        distPath = d;
+        break;
+      }
+    }
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
         if (/\.(png|jpe?g|webp|avif|svg|gif|ico)$/i.test(filePath)) {

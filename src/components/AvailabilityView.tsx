@@ -14,7 +14,7 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Flame, TrendingUp, TrendingDown, Sliders, Layers, Bluetooth, Radio, Mail
+  Flame, TrendingUp, TrendingDown, Sliders, Layers, Bluetooth, Radio, Mail, UserCheck, UserX
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
@@ -774,6 +774,24 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         });
       }
 
+      // Sincronizar também com os cultos agendados para este dia
+      const dayServices = services.filter(s => {
+        const sDate = typeof s.date === 'string' ? s.date.split('T')[0] : (s.date?.toDate ? getLocalDateString(s.date.toDate()) : '');
+        return sDate === dateStr;
+      });
+      for (const svc of dayServices) {
+        const serviceRef = doc(db, 'services', svc.id);
+        const currentAvail = svc.availability || {};
+        const updatedAvail = { ...currentAvail };
+        if (existingStatus === status) {
+          delete updatedAvail[user.uid];
+        } else {
+          updatedAvail[user.uid] = status;
+        }
+        await updateDoc(serviceRef, { availability: updatedAvail });
+        setServices(prev => prev.map(s => s.id === svc.id ? { ...s, availability: updatedAvail } : s));
+      }
+
       // Reset monthly status to pending on change so they are forced to finalize and notify again
       const currentUserData = allMembers.find(m => m.id === user.uid);
       const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
@@ -789,6 +807,27 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, availabilityPath);
+    }
+  };
+
+  const toggleServiceAvailability = async (serviceId: string, status: 'available' | 'unavailable') => {
+    if (!user) return;
+    const targetService = services.find(s => s.id === serviceId);
+    if (!targetService) return;
+    const currentAvail = targetService.availability || {};
+    const currentStatus = currentAvail[user.uid];
+    const newStatus = currentStatus === status ? null : status;
+    const updatedAvail = { ...currentAvail };
+    if (newStatus) {
+      updatedAvail[user.uid] = newStatus;
+    } else {
+      delete updatedAvail[user.uid];
+    }
+    setServices(prev => prev.map(s => s.id === serviceId ? { ...s, availability: updatedAvail } : s));
+    try {
+      await updateDoc(doc(db, 'services', serviceId), { availability: updatedAvail });
+    } catch (error) {
+      console.error("Erro ao salvar disponibilidade no culto:", error);
     }
   };
 
@@ -1489,39 +1528,83 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                   {getServicesForDay(selectedDate.getDate()).length > 0 && (
                     <div className="space-y-4">
                       <p className="text-[12px] font-black text-text-main uppercase tracking-widest pl-1">Cultos agendados para este dia:</p>
-                      {getServicesForDay(selectedDate.getDate()).map(service => (
-                        <Card key={service.id} className="p-5 border-border bg-card flex items-center justify-between group">
-                          <div>
-                            <h4 className="font-black text-text-main text-lg tracking-tight">{service.title}</h4>
-                            <p className="text-xs text-text-main font-black mt-1 flex items-center gap-1.5 ">
-                               <Clock size={12} className="text-text-main"/>
-                               {new Date(service.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                          <div className="flex -space-x-1.5 overflow-hidden">
-                             {(() => {
-                               const matchedIds = Array.from(new Set(Object.values(service.scales || {}).flat().filter(Boolean) as string[]));
-                               return matchedIds.slice(0, 4).map((memberId) => {
-                                 const m = allMembers.find(mem => mem.id === memberId || mem.uid === memberId);
-                                 return (
-                                   <div 
-                                     key={memberId} 
-                                     className="w-7 h-7 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-[10px] font-black text-brand overflow-hidden shrink-0 relative"
-                                     title={m?.name || "Integrante"}
-                                   >
-                                     <CachedAvatar 
-                                       photoUrl={m?.photoUrl} 
-                                       alt={m?.name} 
-                                       className="w-full h-full" 
-                                       fallbackText={m?.name}
-                                     />
-                                   </div>
-                                 );
-                               });
-                             })()}
-                          </div>
-                        </Card>
-                      ))}
+                      {getServicesForDay(selectedDate.getDate()).map(service => {
+                        const myServiceStatus = service.availability?.[user?.uid];
+                        const availableVolunteersCount = Object.values(service.availability || {}).filter(st => st === 'available').length;
+                        return (
+                          <Card key={service.id} className="p-4 sm:p-5 border-border bg-card flex flex-col gap-3 group">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <h4 className="font-black text-text-main text-base sm:text-lg tracking-tight">{service.title}</h4>
+                                <p className="text-xs text-text-main font-black mt-0.5 flex items-center gap-1.5">
+                                   <Clock size={12} className="text-brand"/>
+                                   {new Date(service.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                   {availableVolunteersCount > 0 && (
+                                     <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-emerald-500 font-black bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                       <UserCheck size={10} /> {availableVolunteersCount} disponível{availableVolunteersCount > 1 ? 'is' : ''}
+                                     </span>
+                                   )}
+                                </p>
+                              </div>
+                              <div className="flex -space-x-1.5 overflow-hidden">
+                                {(() => {
+                                  const matchedIds = Array.from(new Set(Object.values(service.scales || {}).flat().filter(Boolean) as string[]));
+                                  return matchedIds.slice(0, 4).map((memberId) => {
+                                    const m = allMembers.find(mem => mem.id === memberId || mem.uid === memberId);
+                                    return (
+                                      <div 
+                                        key={memberId} 
+                                        className="w-7 h-7 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-[10px] font-black text-brand overflow-hidden shrink-0 relative"
+                                        title={m?.name || "Integrante"}
+                                      >
+                                        <CachedAvatar 
+                                          photoUrl={m?.photoUrl} 
+                                          alt={m?.name} 
+                                          className="w-full h-full" 
+                                          fallbackText={m?.name}
+                                        />
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+
+                            {/* Botões de marcação direta de presença para este culto agendado */}
+                            <div className="pt-2 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+                                Sua presença neste culto:
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleServiceAvailability(service.id, 'available')}
+                                  className={cn(
+                                    "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
+                                    myServiceStatus === 'available'
+                                      ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20"
+                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30"
+                                  )}
+                                >
+                                  <Check size={13} strokeWidth={3} /> Disponível
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleServiceAvailability(service.id, 'unavailable')}
+                                  className={cn(
+                                    "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
+                                    myServiceStatus === 'unavailable'
+                                      ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20"
+                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30"
+                                  )}
+                                >
+                                  <X size={13} strokeWidth={3} /> Não posso
+                                </button>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                </div>

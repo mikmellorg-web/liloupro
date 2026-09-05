@@ -12,6 +12,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
 import { parseBibleReference } from './BibleSearch';
 import ContextualHelp from './ContextualHelp';
+import {
+  getPassageFromIndexedDB,
+  savePassageToIndexedDB,
+  saveBlivreFullToIndexedDB,
+  getBlivreFullFromIndexedDB,
+  loadRecentPassagesFromIndexedDB,
+  buildPassageKey
+} from '../utils/bibleIndexedDb';
 
 // Detailed map of Books of the Bible with grouping, abbreviations, and exact chapter counts
 interface BibleBook {
@@ -109,7 +117,23 @@ const BIBLE_BOOKS_DATA: BibleBook[] = [
 // Client-side in-memory cache to make page-turning and navigation inside the Bible Reader completely instant (0ms)
 const clientBibleCache = new Map<string, { verses: { verse: number; text: string }[]; isFallback: boolean; warning: string | null }>();
 
-const saveClientBibleCache = () => {
+// Synchronously restore valid cached passages from localStorage at startup
+try {
+  const storedPassages = localStorage.getItem('lilo-bible-passages-cache-v4');
+  if (storedPassages) {
+    const parsed = JSON.parse(storedPassages);
+    for (const [k, v] of Object.entries(parsed)) {
+      const entry = v as any;
+      if (entry && Array.isArray(entry.verses) && entry.verses.length > 0 && !entry.verses[0]?.text?.includes("não está disponível offline")) {
+        clientBibleCache.set(k, entry);
+      }
+    }
+  }
+} catch (e) {
+  // localStorage may be unavailable or empty
+}
+
+const saveClientBibleCache = (cacheKey?: string, entry?: { verses: { verse: number; text: string }[]; isFallback: boolean; warning: string | null }) => {
   try {
     // Keep max 120 chapters in localStorage to prevent exceeding 5MB quota
     if (clientBibleCache.size > 120) {
@@ -122,11 +146,133 @@ const saveClientBibleCache = () => {
   } catch (e) {
     console.warn("Could not save client bible cache:", e);
   }
+
+  // Persist to IndexedDB for virtually unlimited, reliable offline storage
+  try {
+    if (cacheKey && entry && Array.isArray(entry.verses) && entry.verses.length > 0) {
+      const parts = cacheKey.split('-');
+      if (parts.length >= 3) {
+        const version = parts.pop() || 'BLIVRE';
+        const chapter = Number(parts.pop() || 1);
+        const book = parts.join('-');
+        savePassageToIndexedDB({
+          book,
+          chapter,
+          version,
+          verses: entry.verses,
+          isFallback: entry.isFallback,
+          warning: entry.warning
+        }).catch(() => {});
+      }
+    }
+  } catch (idbErr) {
+    // Non-blocking
+  }
 };
+
+// Asynchronously hydrate in-memory cache with chapters previously persisted in IndexedDB
+if (typeof window !== 'undefined') {
+  loadRecentPassagesFromIndexedDB(300).then((items) => {
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        if (item && item.id && Array.isArray(item.verses) && item.verses.length > 0) {
+          if (!clientBibleCache.has(item.id)) {
+            clientBibleCache.set(item.id, {
+              verses: item.verses,
+              isFallback: !!item.isFallback,
+              warning: item.warning || null
+            });
+          }
+        }
+      }
+    }
+  }).catch(() => {});
+}
+
+// Client-side static BLIVRE cache for guaranteed offline/direct browser reading
+let clientBlivreData: string[][][] | null = null;
+let clientBlivrePromise: Promise<string[][][] | null> | null = null;
+
+async function getClientBlivreData(): Promise<string[][][] | null> {
+  if (clientBlivreData && Array.isArray(clientBlivreData) && clientBlivreData.length === 66) {
+    return clientBlivreData;
+  }
+  if (!clientBlivrePromise) {
+    clientBlivrePromise = (async () => {
+      // 1. Check IndexedDB first for instant local/offline access
+      try {
+        const idbBlivre = await getBlivreFullFromIndexedDB();
+        if (idbBlivre && Array.isArray(idbBlivre) && idbBlivre.length === 66) {
+          clientBlivreData = idbBlivre;
+          return clientBlivreData;
+        }
+      } catch (e) {
+        // Continue to network fetch
+      }
+
+      // 2. Fetch static JSON
+      try {
+        const res = await fetch('/data/blivre.json');
+        if (res.ok) {
+          const parsed = await res.json();
+          if (Array.isArray(parsed) && parsed.length === 66) {
+            clientBlivreData = parsed;
+            // Persist into IndexedDB asynchronously for permanent offline guarantee
+            saveBlivreFullToIndexedDB(parsed).catch(() => {});
+            return clientBlivreData;
+          }
+        }
+      } catch (e) {
+        console.warn("Notice: Could not load static /data/blivre.json on client:", e);
+      }
+      // Reset promise so subsequent requests can retry instead of caching null forever
+      clientBlivrePromise = null;
+      return null;
+    })();
+  }
+  return clientBlivrePromise;
+}
 
 const prefetchPassage = async (book: BibleBook, chapter: number, version: string) => {
   const cacheKey = `${book.name}-${chapter}-${version}`;
   if (clientBibleCache.has(cacheKey)) return;
+
+  // Check IndexedDB before network fetch
+  try {
+    const idbPassage = await getPassageFromIndexedDB(book.name, chapter, version);
+    if (idbPassage && Array.isArray(idbPassage.verses) && idbPassage.verses.length > 0) {
+      clientBibleCache.set(cacheKey, {
+        verses: idbPassage.verses,
+        isFallback: idbPassage.isFallback,
+        warning: idbPassage.warning
+      });
+      return;
+    }
+  } catch (e) {}
+
+  if (version === 'BLIVRE') {
+    try {
+      const blivre = await getClientBlivreData();
+      if (blivre) {
+        const bookIdx = BIBLE_BOOKS_DATA.findIndex(b => b.name.toLowerCase() === book.name.toLowerCase());
+        if (bookIdx >= 0 && blivre[bookIdx] && blivre[bookIdx][chapter - 1]) {
+          const rawVerses = blivre[bookIdx][chapter - 1];
+          const formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+            verse: idx + 1,
+            text: txt.trim()
+          }));
+          const entry = {
+            verses: formattedVerses,
+            isFallback: false,
+            warning: null
+          };
+          clientBibleCache.set(cacheKey, entry);
+          saveClientBibleCache(cacheKey, entry);
+          return;
+        }
+      }
+    } catch (e) {}
+  }
 
   try {
     const response = await fetch("/api/bible/passage", {
@@ -145,12 +291,13 @@ const prefetchPassage = async (book: BibleBook, chapter: number, version: string
         v.text.includes("demonstração") || v.text.includes("chave de API") || v.text.includes("AI Studio")
       );
       if (data && data.verses && !isDemoMessage) {
-        clientBibleCache.set(cacheKey, {
+        const entry = {
           verses: data.verses,
           isFallback: !!data.isFallback,
           warning: data.warning || null
-        });
-        saveClientBibleCache();
+        };
+        clientBibleCache.set(cacheKey, entry);
+        saveClientBibleCache(cacheKey, entry);
       }
     }
   } catch (err) {
@@ -247,6 +394,112 @@ const parseTextToVerses = (text: string): { verse: number; text: string }[] => {
   return versesList;
 };
 
+interface BibleReaderSkeletonProps {
+  bookName: string;
+  chapter: number;
+  version: string;
+  isLight: boolean;
+  nightMode: 'sepia' | 'pitchBlack' | 'off';
+  fontSize: number;
+}
+
+const BibleReaderSkeleton: React.FC<BibleReaderSkeletonProps> = ({
+  bookName,
+  chapter,
+  version,
+  isLight,
+  nightMode,
+  fontSize
+}) => {
+  const shimmerClass = 
+    nightMode === 'sepia' ? 'bg-[#ebdcb9]/75' :
+    nightMode === 'pitchBlack' ? 'bg-zinc-900/90' :
+    isLight ? 'bg-zinc-200/90' : 'bg-slate-800/80';
+
+  const badgeBg = 
+    nightMode === 'sepia' ? 'bg-[#ebdcb9] border-[#dacda8] text-amber-950/70' :
+    nightMode === 'pitchBlack' ? 'bg-[#050505] border-zinc-900 text-[#dfcc9f]/70' :
+    isLight ? 'bg-zinc-100 border-zinc-200 text-brand/70' : 'bg-slate-900 border-slate-800 text-brand/70';
+
+  const lineGroups = [
+    ['w-[96%]', 'w-[91%]', 'w-[68%]'],
+    ['w-[98%]', 'w-[94%]', 'w-[86%]', 'w-[42%]'],
+    ['w-[90%]', 'w-[82%]', 'w-[54%]'],
+    ['w-[95%]', 'w-[88%]', 'w-[92%]', 'w-[73%]'],
+    ['w-[93%]', 'w-[85%]', 'w-[51%]'],
+    ['w-[97%]', 'w-[90%]', 'w-[76%]'],
+    ['w-[94%]', 'w-[87%]', 'w-[60%]']
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex flex-col gap-6 pb-24 select-none"
+    >
+      {/* Visual Header Skeleton matching real header */}
+      <div className={`text-center md:text-left py-4 border-b ${
+        nightMode === 'sepia' ? 'border-[#dacda8]/60' :
+        nightMode === 'pitchBlack' ? 'border-zinc-900' :
+        isLight ? 'border-zinc-200' : 'border-slate-900'
+      }`}>
+        <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+          <div className={`h-3 w-28 rounded-full ${shimmerClass} animate-pulse`} />
+          <span className="text-zinc-500 text-xs">•</span>
+          <div className={`h-3 w-16 rounded-full ${shimmerClass} animate-pulse`} />
+        </div>
+        <div className="flex items-baseline justify-center md:justify-start gap-3">
+          <h1 className={`text-4xl md:text-5xl font-black tracking-tight ${
+            nightMode === 'sepia' ? 'text-[#36271c]' :
+            nightMode === 'pitchBlack' ? 'text-[#fbf0d3]' :
+            isLight ? 'text-zinc-900' : 'text-slate-50'
+          }`}>
+            {bookName} {chapter}
+          </h1>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand animate-ping" />
+            <span>Sincronizando...</span>
+          </span>
+        </div>
+        <p className={`text-xs ${
+          nightMode === 'sepia' ? 'text-[#6e5845]' :
+          nightMode === 'pitchBlack' ? 'text-[#b29e74]' :
+          isLight ? 'text-zinc-500' : 'text-slate-400'
+        } font-mono mt-1 uppercase tracking-wide flex items-center justify-center md:justify-start gap-2`}>
+          <span>Tradução: {version}</span>
+          <span>•</span>
+          <span>Carregando versículos...</span>
+        </p>
+      </div>
+
+      {/* Verses Lines Skeleton */}
+      <div 
+        className="flex flex-col gap-5 leading-relaxed tracking-wide text-justify font-sans"
+        style={{ fontSize: `${fontSize}px` }}
+      >
+        {lineGroups.map((lines, vIdx) => (
+          <div key={vIdx} className="p-2 rounded-xl flex items-start gap-3">
+            <span className={`font-extrabold font-mono text-xs sm:text-sm px-1.5 py-0.5 rounded border ${badgeBg} shrink-0`}>
+              {vIdx + 1}
+            </span>
+            <div className="flex-1 flex flex-col gap-2.5 pt-1">
+              {lines.map((lineWidth, lIdx) => (
+                <div
+                  key={lIdx}
+                  className={`h-[1em] rounded-md ${lineWidth} ${shimmerClass} animate-pulse`}
+                  style={{ animationDelay: `${(vIdx * 0.08 + lIdx * 0.04).toFixed(2)}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
 export default function BibleReaderView({ theme = 'dark', services = [] }: { theme?: 'dark' | 'light'; services?: any[] }) {
   const isLight = theme === 'light';
   // Navigation states initialized from localStorage so the last read passage is restored seamlessly
@@ -264,21 +517,34 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
     } catch (e) {
       console.warn("Could not load saved Bible book:", e);
     }
-    return BIBLE_BOOKS_DATA.find(b => b.name === "João") || BIBLE_BOOKS_DATA[43];
+    return BIBLE_BOOKS_DATA.find(b => b.name === "João") || BIBLE_BOOKS_DATA[42];
   });
 
   const [selectedChapter, setSelectedChapter] = useState<number>(() => {
+    let ch = 3;
     try {
       const savedChapter = localStorage.getItem('liloupro_last_bible_chapter');
       if (savedChapter) {
         const parsed = parseInt(savedChapter, 10);
-        if (!isNaN(parsed) && parsed > 0) return parsed;
+        if (!isNaN(parsed) && parsed > 0) ch = parsed;
       }
     } catch (e) {
       console.warn("Could not load saved Bible chapter:", e);
     }
-    return 3;
+    return ch;
   });
+
+  // Eagerly pre-load client BLIVRE database in background on component mount for instant 0ms reading
+  useEffect(() => {
+    getClientBlivreData().catch(e => console.warn("Background prefetch of blivre:", e));
+  }, []);
+
+  // Ensure selected chapter is always within the selected book's chapter limit
+  useEffect(() => {
+    if (selectedBook && selectedChapter > selectedBook.chapters) {
+      setSelectedChapter(Math.min(selectedChapter, selectedBook.chapters));
+    }
+  }, [selectedBook, selectedChapter]);
 
   // Persist last read passage whenever selectedBook or selectedChapter changes
   useEffect(() => {
@@ -448,7 +714,10 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
       if (storedPassages) {
         const parsed = JSON.parse(storedPassages);
         for (const [k, v] of Object.entries(parsed)) {
-          clientBibleCache.set(k, v as any);
+          const entry = v as any;
+          if (entry && Array.isArray(entry.verses) && entry.verses.length > 0 && !entry.verses[0]?.text?.includes("não está disponível offline")) {
+            clientBibleCache.set(k, entry);
+          }
         }
       }
     } catch (e) {
@@ -485,12 +754,18 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
             parsed.bookName.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
           );
           if (standardBook) {
+            let serviceDateStr = '';
+            if (typeof s.date === 'string') serviceDateStr = s.date;
+            else if (s.date instanceof Date) serviceDateStr = s.date.toISOString();
+            else if (typeof s.date?.toDate === 'function') serviceDateStr = s.date.toDate().toISOString();
+            else if (typeof s.date?.seconds === 'number') serviceDateStr = new Date(s.date.seconds * 1000).toISOString();
+
             list.push({
               book: standardBook,
               chapter: parsed.chapter,
               version: 'NAA',
-              serviceTitle: s.title,
-              serviceDate: s.date,
+              serviceTitle: s.title || '',
+              serviceDate: serviceDateStr,
               itemTitle: title,
               details: details
             });
@@ -504,8 +779,14 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
 
   const closestReading = useMemo(() => {
     if (liturgicalReadingsList.length === 0) return null;
-    // Return the first reading (or closest date)
-    const sorted = [...liturgicalReadingsList].sort((a, b) => a.serviceDate.localeCompare(b.serviceDate));
+    const getServiceTime = (d: any): number => {
+      if (!d) return 0;
+      if (typeof d === 'string') return new Date(d).getTime() || 0;
+      if (d instanceof Date) return d.getTime();
+      return 0;
+    };
+    // Return the closest reading
+    const sorted = [...liturgicalReadingsList].sort((a, b) => getServiceTime(a.serviceDate) - getServiceTime(b.serviceDate));
     return sorted[0];
   }, [liturgicalReadingsList]);
 
@@ -545,54 +826,156 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
   useEffect(() => {
     let active = true;
     const loadPassage = async () => {
+      // Guarantee that the chapter is within the valid range for the book
+      const validChapter = Math.min(Math.max(1, selectedChapter), selectedBook.chapters);
+      if (validChapter !== selectedChapter) {
+        setSelectedChapter(validChapter);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       setIsFallbackActive(false);
       setFallbackWarning(null);
 
-      const cacheKey = `${selectedBook.name}-${selectedChapter}-${bibleVersion}`;
+      const cacheKey = `${selectedBook.name}-${validChapter}-${bibleVersion}`;
       let cachedFallback = false;
+
+      // 1. Instant check from in-memory / persisted cache
       if (clientBibleCache.has(cacheKey)) {
         const cached = clientBibleCache.get(cacheKey)!;
-        // Clean and adapt cached verses to modern NAA 2017 to avoid displaying old/incorrect terms from cached fallbacks
-        const cleanVerses = cached.verses.map(v => ({
-          ...v,
-          text: bibleVersion === 'NAA' ? adaptToNAA(v.text) : v.text
-        }));
-        setVerses(cleanVerses);
-        setIsFallbackActive(cached.isFallback);
-        setFallbackWarning(cached.warning);
-        setIsLoading(false);
-        // Scroll smoothly to top of passage
-        readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (cached && Array.isArray(cached.verses) && cached.verses.length > 0 && !cached.verses[0]?.text?.includes("não está disponível offline")) {
+          // Clean and adapt cached verses to modern NAA 2017 to avoid displaying old/incorrect terms from cached fallbacks
+          const cleanVerses = cached.verses.map(v => ({
+            ...v,
+            text: bibleVersion === 'NAA' ? adaptToNAA(v.text) : v.text
+          }));
+          setVerses(cleanVerses);
+          setIsFallbackActive(cached.isFallback);
+          setFallbackWarning(cached.warning);
+          setIsLoading(false);
+          // Scroll smoothly to top of passage
+          readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
 
-        // Trigger background prefetch for adjacent chapters so they are ready if not cached yet
-        prefetchAdjacentPassages(selectedBook, selectedChapter, bibleVersion);
-        
-        if (!cached.isFallback) {
-          return;
+          // Trigger background prefetch for adjacent chapters so they are ready if not cached yet
+          prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+          
+          if (!cached.isFallback) {
+            return;
+          }
+          cachedFallback = true;
+        } else {
+          clientBibleCache.delete(cacheKey);
         }
-        cachedFallback = true;
       }
 
+      // 2. Direct memory check for full BLIVRE text (0ms latency, zero spinner)
+      if (bibleVersion === 'BLIVRE' && clientBlivreData) {
+        const bookIdx = BIBLE_BOOKS_DATA.findIndex(b => b.name.toLowerCase() === selectedBook.name.toLowerCase());
+        if (bookIdx >= 0 && clientBlivreData[bookIdx] && clientBlivreData[bookIdx][validChapter - 1]) {
+          const rawVerses = clientBlivreData[bookIdx][validChapter - 1];
+          const formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+            verse: idx + 1,
+            text: txt.trim()
+          }));
+          if (formattedVerses.length > 0 && active) {
+            setVerses(formattedVerses);
+            setIsFallbackActive(false);
+            setFallbackWarning(null);
+            setIsLoading(false);
+            setError(null);
+            const entry = {
+              verses: formattedVerses,
+              isFallback: false,
+              warning: null
+            };
+            clientBibleCache.set(cacheKey, entry);
+            saveClientBibleCache(cacheKey, entry);
+            prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+            return;
+          }
+        }
+      }
+
+      // 2.5 Instant check from IndexedDB local storage (ultra-fast offline persistence)
       try {
-        const response = await fetch("/api/bible/passage", {
+        const idbPassage = await getPassageFromIndexedDB(selectedBook.name, validChapter, bibleVersion);
+        if (idbPassage && Array.isArray(idbPassage.verses) && idbPassage.verses.length > 0 && active) {
+          const cleanVerses = idbPassage.verses.map(v => ({
+            ...v,
+            text: bibleVersion === 'NAA' ? adaptToNAA(v.text) : v.text
+          }));
+          setVerses(cleanVerses);
+          setIsFallbackActive(idbPassage.isFallback);
+          setFallbackWarning(idbPassage.warning);
+          setIsLoading(false);
+          readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          const entry = {
+            verses: cleanVerses,
+            isFallback: idbPassage.isFallback,
+            warning: idbPassage.warning
+          };
+          clientBibleCache.set(cacheKey, entry);
+          prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+          if (!idbPassage.isFallback) {
+            return;
+          }
+          cachedFallback = true;
+        }
+      } catch (idbErr) {
+        // Continue to network fetch
+      }
+
+      // 3. Fetch from API and static JSON in parallel with timeout to avoid hanging
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        try { abortController.abort(); } catch (e) {}
+      }, 4000);
+
+      try {
+        const fetchServer = fetch("/api/bible/passage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             book: selectedBook.name,
-            chapter: selectedChapter,
+            chapter: validChapter,
             version: bibleVersion
-          })
+          }),
+          signal: abortController.signal
+        }).then(async res => {
+          if (!res.ok) throw new Error("Erro na resposta do servidor.");
+          return res.json();
         });
 
-        if (!response.ok) {
-          throw new Error("Erro na resposta do servidor.");
-        }
+        // Parallel attempt to get client blivre if not ready yet
+        const fetchClientBlivre = (bibleVersion === 'BLIVRE')
+          ? getClientBlivreData().then(blivre => {
+              if (!blivre) throw new Error("Client BLIVRE not loaded");
+              const bookIdx = BIBLE_BOOKS_DATA.findIndex(b => b.name.toLowerCase() === selectedBook.name.toLowerCase());
+              if (bookIdx >= 0 && blivre[bookIdx] && blivre[bookIdx][validChapter - 1]) {
+                const rawVerses = blivre[bookIdx][validChapter - 1];
+                const verses = rawVerses.map((txt: string, idx: number) => ({
+                  verse: idx + 1,
+                  text: txt.trim()
+                }));
+                if (verses.length > 0) {
+                  return { verses, isFallback: false, warning: null };
+                }
+              }
+              throw new Error("Chapter missing in client BLIVRE");
+            })
+          : Promise.reject(new Error("Not BLIVRE"));
 
-        const data = await response.json();
+        // Use Promise.any to take whichever responds first with valid verses
+        const data = await Promise.any([fetchServer, fetchClientBlivre]).catch(async () => {
+          // Fallback to whichever promise might still succeed
+          return await fetchClientBlivre.catch(() => fetchServer);
+        });
+
+        clearTimeout(timeoutId);
+
         if (active) {
-          if (data && data.verses) {
+          if (data && data.verses && Array.isArray(data.verses) && data.verses.length > 0) {
             // Guard: check if returned verses are offline demo instructions
             const isDemoMessage = !!data.isDemo;
             if (isDemoMessage) {
@@ -602,67 +985,107 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
             setVerses(data.verses);
             setIsFallbackActive(!!data.isFallback);
             setFallbackWarning(data.warning || null);
+            setError(null);
             
             // Store in client-side cache
-            clientBibleCache.set(cacheKey, {
+            const primaryEntry = {
               verses: data.verses,
               isFallback: !!data.isFallback,
               warning: data.warning || null
-            });
-            saveClientBibleCache();
+            };
+            clientBibleCache.set(cacheKey, primaryEntry);
+            saveClientBibleCache(cacheKey, primaryEntry);
 
             // Background prefetch next/prev chapters
-            prefetchAdjacentPassages(selectedBook, selectedChapter, bibleVersion);
+            prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+            return;
           } else {
             throw new Error("Formato de resposta inválido.");
           }
         }
       } catch (err: any) {
+        clearTimeout(timeoutId);
         if (active) {
           if (cachedFallback) {
             console.log("[Bible Reader] Silently skipped background fallback override since cached fallback is already present.");
             return;
           }
-          console.warn("Notice: Local server passage load deferred, trying direct browser fallbacks:", err);
+          console.warn("Notice: Primary passage load deferred, trying direct browser fallbacks:", err);
           
+          // 1. Direct local BLIVRE fallback (instant and guaranteed offline)
+          if (bibleVersion === 'BLIVRE') {
+            try {
+              const blivre = await getClientBlivreData();
+              if (blivre) {
+                const bookIdx = BIBLE_BOOKS_DATA.findIndex(b => b.name.toLowerCase() === selectedBook.name.toLowerCase());
+                if (bookIdx >= 0 && blivre[bookIdx] && blivre[bookIdx][validChapter - 1]) {
+                  const rawVerses = blivre[bookIdx][validChapter - 1];
+                  const formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+                    verse: idx + 1,
+                    text: txt.trim()
+                  }));
+                  setVerses(formattedVerses);
+                  setIsFallbackActive(false);
+                  setFallbackWarning(null);
+                  setError(null);
+                  const blivreEntry = {
+                    verses: formattedVerses,
+                    isFallback: false,
+                    warning: null
+                  };
+                  clientBibleCache.set(cacheKey, blivreEntry);
+                  saveClientBibleCache(cacheKey, blivreEntry);
+                  prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+                  return;
+                }
+              }
+            } catch (blivreErr) {
+              console.warn("Information: client-side blivre.json fallback deferred:", blivreErr);
+            }
+          }
+
           try {
             // First try direct browser fallback to online bolls.life Portuguese Bible API
             const bollsBookId = BIBLE_BOOKS_DATA.findIndex(b => b.name === selectedBook.name) + 1;
             const BOLLS_TRANSLATIONS: Record<string, string> = {
-              "NAA": "ARA",
+              "NAA": "NAA",
               "ARA": "ARA",
-              "ARC": "ARC",
+              "ARC": "ARC09",
               "NVI": "NVIPT",
-              "NTLH": "AA",
-              "ACF": "ACF",
-              "BLIVRE": "AA" // Use public domain AA (Almeida Atualizada) as fallback to prevent any copyright issues
+              "NTLH": "NTLH",
+              "ACF": "ACF11",
+              "BLIVRE": "TB10"
             };
             const bollsTranslation = BOLLS_TRANSLATIONS[bibleVersion] || "ARA";
-            const res = await fetch(`https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${selectedChapter}/`);
+            const res = await fetch(`https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${validChapter}/`);
             if (res.ok) {
               const fbData = await res.json();
-              if (active && Array.isArray(fbData)) {
-                const formattedVerses = fbData.map((v: any) => ({
-                  verse: Number(v.verse),
-                  text: bibleVersion === 'NAA' ? adaptToNAA(v.text.trim()) : v.text.trim()
-                }));
+              if (active && Array.isArray(fbData) && fbData.length > 0) {
+                const formattedVerses = fbData.map((v: any) => {
+                  const cleanText = (v.text || "").replace(/<[^>]+>/g, '').replace(/[\u24d0-\u24e9]/g, '').trim();
+                  return {
+                    verse: Number(v.verse),
+                    text: bibleVersion === 'NAA' ? adaptToNAA(cleanText) : cleanText
+                  };
+                });
                 setVerses(formattedVerses);
                 setIsFallbackActive(true);
                 const warningMsg = bibleVersion === 'BLIVRE'
-                  ? "Exibindo tradução Almeida (AA) pública como contingência para a Bíblia Livre."
+                  ? "Exibindo tradução brasileira como contingência para a Bíblia Livre."
                   : `Exibindo tradução ${bibleVersion} via servidor de contingência.`;
                 setFallbackWarning(warningMsg);
                 setError(null);
 
                 // Also cache fallback results so we don't spam requests
-                clientBibleCache.set(cacheKey, {
+                const bollsEntry = {
                   verses: formattedVerses,
                   isFallback: true,
                   warning: warningMsg
-                });
-                saveClientBibleCache();
+                };
+                clientBibleCache.set(cacheKey, bollsEntry);
+                saveClientBibleCache(cacheKey, bollsEntry);
 
-                prefetchAdjacentPassages(selectedBook, selectedChapter, bibleVersion);
+                prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
                 return;
               }
             }
@@ -672,7 +1095,7 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
 
           try {
             // Direct browser-friendly bible-api.com fallback (supports CORS)
-            const queryRef = `${selectedBook.apiId} ${selectedChapter}`;
+            const queryRef = `${selectedBook.apiId} ${validChapter}`;
             const res = await fetch(`https://bible-api.com/${encodeURIComponent(queryRef)}?translation=almeida`);
             if (res.ok) {
               const fbData = await res.json();
@@ -686,14 +1109,15 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
                 setFallbackWarning("Exibindo tradução Almeida via servidor de contingência super-resiliente.");
                 setError(null);
 
-                clientBibleCache.set(cacheKey, {
+                const almeidaEntry = {
                   verses: formattedVerses,
                   isFallback: true,
                   warning: "Exibindo tradução Almeida via servidor de contingência super-resiliente."
-                });
-                saveClientBibleCache();
+                };
+                clientBibleCache.set(cacheKey, almeidaEntry);
+                saveClientBibleCache(cacheKey, almeidaEntry);
 
-                prefetchAdjacentPassages(selectedBook, selectedChapter, bibleVersion);
+                prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
                 return;
               }
             }
@@ -701,10 +1125,43 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
             console.warn("Information: bible-api.com fallback not available.");
           }
 
+          // Fallback to local BLIVRE data before local demo instructions
+          try {
+            const blivre = await getClientBlivreData();
+            if (blivre) {
+              const bookIdx = BIBLE_BOOKS_DATA.findIndex(b => b.name.toLowerCase() === selectedBook.name.toLowerCase());
+              if (bookIdx >= 0 && blivre[bookIdx] && blivre[bookIdx][validChapter - 1]) {
+                const rawVerses = blivre[bookIdx][validChapter - 1];
+                const formattedVerses = rawVerses.map((txt: string, idx: number) => ({
+                  verse: idx + 1,
+                  text: txt.trim()
+                }));
+                if (active && formattedVerses.length > 0) {
+                  setVerses(formattedVerses);
+                  setIsFallbackActive(bibleVersion !== 'BLIVRE');
+                  const warnMsg = bibleVersion !== 'BLIVRE' ? `Exibindo tradução da Bíblia Livre (BLIVRE) como contingência local para ${bibleVersion}.` : null;
+                  setFallbackWarning(warnMsg);
+                  setError(null);
+                  const localBlivreEntry = {
+                    verses: formattedVerses,
+                    isFallback: bibleVersion !== 'BLIVRE',
+                    warning: warnMsg
+                  };
+                  clientBibleCache.set(cacheKey, localBlivreEntry);
+                  saveClientBibleCache(cacheKey, localBlivreEntry);
+                  prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Information: local blivre fallback unhandled:", e);
+          }
+
           // Ultra resilient final client-side offline database fallback
           if (active) {
             try {
-              const offlineResult = getLocalBiblePassage(selectedBook.name, selectedChapter, bibleVersion);
+              const offlineResult = getLocalBiblePassage(selectedBook.name, validChapter, bibleVersion);
               setVerses(offlineResult.verses);
               setIsFallbackActive(offlineResult.isFallback);
               setFallbackWarning(offlineResult.warning);
@@ -1705,26 +2162,45 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
         }`}>
           <div className="max-w-2xl mx-auto w-full flex flex-col h-full">
             
-            {/* Loading Indicator */}
-            {isLoading ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                <div className={`w-12 h-12 border-4 border-t-brand ${isLight ? 'border-zinc-200' : 'border-slate-800'} rounded-full animate-spin`} />
-                <p className={`text-sm font-bold ${isLight ? 'text-zinc-500' : 'text-slate-400'} uppercase tracking-wider animate-pulse`}>Buscando versículos em {selectedBook.name}...</p>
-              </div>
-            ) : error ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                <AlertCircle size={48} className="text-red-500 mb-3" />
-                <p className="text-red-400 font-bold mb-4">{error}</p>
-                <button 
-                  onClick={() => setSelectedChapter(selectedChapter)} // trigger reload
-                  className={`px-4 py-2 ${isLight ? 'bg-zinc-200 hover:bg-zinc-300 text-zinc-800 border border-zinc-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-100'} rounded-xl font-bold text-xs flex items-center gap-2`}
+            {/* Fluid Loading Skeleton Interface & Content */}
+            <AnimatePresence mode="wait">
+              {isLoading ? (
+                <BibleReaderSkeleton
+                  key="reader-skeleton"
+                  bookName={selectedBook.name}
+                  chapter={selectedChapter}
+                  version={bibleVersion}
+                  isLight={isLight}
+                  nightMode={nightMode}
+                  fontSize={fontSize}
+                />
+              ) : error ? (
+                <motion.div
+                  key="reader-error"
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center p-6 text-center"
                 >
-                  <RotateCcw size={14} />
-                  Tentar Novamente
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-6 pb-24">
+                  <AlertCircle size={48} className="text-red-500 mb-3" />
+                  <p className="text-red-400 font-bold mb-4">{error}</p>
+                  <button 
+                    onClick={() => setReloadTrigger(prev => prev + 1)}
+                    className={`px-4 py-2 ${isLight ? 'bg-zinc-200 hover:bg-zinc-300 text-zinc-800 border border-zinc-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-100'} rounded-xl font-bold text-xs flex items-center gap-2`}
+                  >
+                    <RotateCcw size={14} />
+                    Tentar Novamente
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`reader-content-${selectedBook.name}-${selectedChapter}-${bibleVersion}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex flex-col gap-6 pb-24"
+                >
                 
                 {/* Guia Rápido do Estudo Bíblico */}
                 <ContextualHelp
@@ -1878,8 +2354,9 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
                   </button>
                 </div>
 
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
           </div>
         </div>
