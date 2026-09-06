@@ -261,6 +261,22 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
         // Silencioso em caso de query
       }
     }
+    // 4. Registra também no registry do servidor para disparos em segundo plano com app fechado
+    try {
+      await fetch('/api/notifications/register-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: currentUser.uid,
+          token,
+          email: currentUser.email || '',
+          name: currentUser.displayName || ''
+        })
+      });
+    } catch (serverErr) {
+      // Ignora erro de rede se offline
+    }
+
     console.log('[FCM] Token de push registrado com sucesso no Firestore.');
     return { success: true };
   } catch (error: any) {

@@ -6,10 +6,10 @@ const SHARPS_TO_FLATS: Record<string, string> = { 'C#': 'Db', 'D#': 'Eb', 'F#': 
 // Comprehensive, strict regex pattern for valid musical chord quality/extensions (suffixes)
 // Prevents false positive matching on non-chord Portuguese/English words like "alma", "fogo", "deus", "com"
 // Accurately supports 7+, 7+(9), 7M(9), 7(9), 7+(#11), m7+(9), parenthesized extensions, and slash basses
-const CHORD_SUFFIX_PATTERN = /^(?:m(?:aj|in)?|M|Δ|dim|°|º|ø|aug|\+|sus[249]?|add[0-9]{1,2}|omit[35]|no[35]|alt)?(?:[0-9]{1,2}(?:M|m|maj|\+|Δ|\-)?|\+|\-|\/)?(?:(?:\/|\+)[0-9]{1,2}[b#\+\-]?)?(?:\((?:[b#]?[0-9]{1,2}[b#\+\-]?|add[0-9]{1,2}|sus[249]?|maj7?|7\+|7M|omit[35]|no[35]|[b#]5|[b#]9|[b#]11|[b#]13|[0-9]{1,2}\/[0-9]{1,2}|[b#]?[0-9]{1,2}\/[b#]?[0-9]{1,2}|\+|\-|\-5|\+5)\))*(?:\/(?:\([A-G][#b]?\)|[A-G][#b]?|b?[1-7]M?|\#[1-7]|\([1-7]M?\)))?$/i;
+const CHORD_SUFFIX_PATTERN = /^(?:m(?:aj|in)?|M|Δ|dim|°|º|ø|aug|\+|sus[249]?|add[0-9]{1,2}|omit[35]|no[35]|alt)?(?:[0-9]{1,2}(?:M|m|maj|\+|Δ|\-)?|\+|\-)?(?:(?:\/|\+)[0-9]{1,2}[b#\+\-]?)?(?:\((?:[b#]?[0-9]{1,2}[b#\+\-]?|add[0-9]{1,2}|sus[249]?|maj7?|7\+|7M|omit[35]|no[35]|[b#]5|[b#]9|[b#]11|[b#]13|[0-9]{1,2}\/[0-9]{1,2}|[b#]?[0-9]{1,2}\/[b#]?[0-9]{1,2}|\+|\-|\-5|\+5)\))*(?:\/(?:\([A-G][#b]?\)|[A-G][#b]?|b?[1-7]M?|\#[1-7]|\([1-7]M?\))|\(\/[A-G][#b]?\))?$/i;
 
 // Master Chord Finder Regex - accurately extracts full musical chords (including slash chords like C/E, D/F#, G/B, Bb/D, C/3, A7+(9), etc.)
-export const CHORD_FINDER_REGEX = /([A-G][#b]?(?:m(?:aj|in)?|M|Δ|dim|°|º|ø|aug|\+|sus[249]?|add[0-9]{1,2}|omit[35]|no[35]|alt)?(?:[0-9]{1,2}(?:M|m|maj|\+|Δ|\-)?|\+|\-|\/)?(?:(?:\/|\+)[0-9]{1,2}[b#\+\-]?)?(?:\((?:[b#]?[0-9]{1,2}[b#\+\-]?|add[0-9]{1,2}|sus[249]?|maj7?|7\+|7M|omit[35]|no[35]|[b#]5|[b#]9|[b#]11|[b#]13|[0-9]{1,2}\/[0-9]{1,2}|[b#]?[0-9]{1,2}\/[b#]?[0-9]{1,2}|\+|\-|\-5|\+5)\))*(?:\/(?:\([A-G][#b]?\)|[A-G][#b]?|b?[1-7]M?|\#[1-7]|\([1-7]M?\)))?)/g;
+export const CHORD_FINDER_REGEX = /([A-G][#b]?(?:m(?:aj|in)?|M|Δ|dim|°|º|ø|aug|\+|sus[249]?|add[0-9]{1,2}|omit[35]|no[35]|alt)?(?:[0-9]{1,2}(?:M|m|maj|\+|Δ|\-)?|\+|\-)?(?:(?:\/|\+)[0-9]{1,2}[b#\+\-]?)?(?:\((?:[b#]?[0-9]{1,2}[b#\+\-]?|add[0-9]{1,2}|sus[249]?|maj7?|7\+|7M|omit[35]|no[35]|[b#]5|[b#]9|[b#]11|[b#]13|[0-9]{1,2}\/[0-9]{1,2}|[b#]?[0-9]{1,2}\/[b#]?[0-9]{1,2}|\+|\-|\-5|\+5)\))*(?:\/(?:\([A-G][#b]?\)|[A-G][#b]?|b?[1-7]M?|\#[1-7]|\([1-7]M?\))|\(\/[A-G][#b]?\))?)/g;
 
 export type HarmonicDisplayMode = 'chords' | 'numbers' | 'roman' | 'functions';
 

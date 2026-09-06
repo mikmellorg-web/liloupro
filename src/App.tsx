@@ -2204,6 +2204,33 @@ function MainContent() {
     return getServiceSongs(activeLiturgyService, allSongs);
   }, [activeLiturgyService, allSongs]);
 
+  // Sincroniza tokens de push dos membros com o servidor para lembretes em segundo plano mesmo com app fechado
+  useEffect(() => {
+    if (!allMembers || allMembers.length === 0) return;
+    const membersWithTokens = allMembers.filter(m => {
+      const tokens = m.fcmTokens || (m.fcmToken ? [m.fcmToken] : []);
+      return Array.isArray(tokens) && tokens.length > 0;
+    });
+
+    if (membersWithTokens.length > 0) {
+      fetch('/api/notifications/sync-members-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          members: membersWithTokens.map(m => ({
+            uid: m.uid || m.id,
+            name: m.name,
+            email: m.email,
+            fcmTokens: m.fcmTokens || (m.fcmToken ? [m.fcmToken] : []),
+            notifyDayBeforeReminder: m.notifyDayBeforeReminder !== false
+          }))
+        })
+      }).catch(err => {
+        console.warn('[Sync Tokens] Aviso:', err);
+      });
+    }
+  }, [allMembers]);
+
   useEffect(() => {
     if (!user || allServices.length === 0 || allMembers.length === 0) return;
 
@@ -2222,41 +2249,94 @@ function MainContent() {
 
       for (const service of upcomingServices) {
         const scales = service.scales || {};
-        const isUserScheduled = Object.values(scales).flat().includes(user.uid);
+        
+        // Mapeia todos os membros escalados em cada função deste culto
+        const memberRolesMap: Record<string, string[]> = {};
+        Object.entries(scales).forEach(([role, ids]) => {
+          if (Array.isArray(ids)) {
+            ids.forEach(id => {
+              if (id && typeof id === 'string') {
+                if (!memberRolesMap[id]) memberRolesMap[id] = [];
+                if (!memberRolesMap[id].includes(role)) memberRolesMap[id].push(role);
+              }
+            });
+          } else if (ids && typeof ids === 'string') {
+            if (!memberRolesMap[ids]) memberRolesMap[ids] = [];
+            if (!memberRolesMap[ids].includes(role)) memberRolesMap[ids].push(role);
+          }
+        });
 
-        if (isUserScheduled) {
-          const myMemberProfile = allMembers.find(m => m.id === user.uid || m.uid === user.uid);
-          // Default to true if not specified
-          if (myMemberProfile?.notifyDayBeforeReminder === false) {
+        // Itera sobre TODOS os membros escalados no culto
+        for (const [scheduledUid, roles] of Object.entries(memberRolesMap)) {
+          const memberProfile = allMembers.find(m => m.id === scheduledUid || m.uid === scheduledUid);
+          // Se o membro desativou o lembrete de 24h nas preferências, respeita a escolha
+          if (memberProfile?.notifyDayBeforeReminder === false) {
             continue;
           }
 
-          const notificationId = `reminder-${service.id}-${user.uid}`;
+          const notificationId = `reminder-${service.id}-${scheduledUid}`;
           const notifRef = doc(db, 'notifications', notificationId);
 
           try {
             const notifSnap = await getDoc(notifRef);
             if (!notifSnap.exists()) {
-              // Find the roles the user is scheduled for
-              const myRoles = Object.entries(scales)
-                .filter(([role, ids]) => Array.isArray(ids) ? ids.includes(user.uid) : ids === user.uid)
-                .map(([role]) => role)
-                .join(', ');
+              const myRoles = roles.join(', ') || 'Equipe de Louvor';
+              const serviceDateObj = new Date(service.date);
+              const timeStr = serviceDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+              const dateStr = serviceDateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+              const notifTitle = '⏰ Lembrete de Escala (24h)';
+              const notifContent = `Você está escalado para o culto "${service.title}" em menos de 24 horas (${dateStr} às ${timeStr}h). Função: ${myRoles}.`;
 
+              // 1. Grava no Firestore na central de notificações do membro
               await setDoc(notifRef, {
-                userId: user.uid,
-                title: '⏰ Lembrete de Escala (24h)',
-                content: `Você está escalado para o culto "${service.title}" em menos de 24 horas (${new Date(service.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}h). Função: ${myRoles}.`,
+                userId: scheduledUid,
+                title: notifTitle,
+                content: notifContent,
                 type: 'service',
                 read: false,
                 createdAt: serverTimestamp()
               });
+
+              // 2. DISPARA NOTIFICAÇÃO PUSH (FCM) IMEDIATAMENTE PARA O APARELHO (CELULAR COM APP FECHADO)
+              const memberTokens: string[] = [];
+              if (memberProfile?.fcmTokens && Array.isArray(memberProfile.fcmTokens)) {
+                memberTokens.push(...memberProfile.fcmTokens);
+              }
+              if (memberProfile?.fcmToken && typeof memberProfile.fcmToken === 'string') {
+                memberTokens.push(memberProfile.fcmToken);
+              }
+              if ((memberProfile as any)?.lastFcmToken && typeof (memberProfile as any).lastFcmToken === 'string') {
+                memberTokens.push((memberProfile as any).lastFcmToken);
+              }
+
+              const validTokens = Array.from(new Set(memberTokens.filter(t => t && t.trim().length > 10)));
+              if (validTokens.length > 0) {
+                sendPushNotification({
+                  tokens: validTokens,
+                  title: notifTitle,
+                  body: notifContent,
+                  url: '/?tab=liturgy',
+                  data: {
+                    type: 'service_reminder',
+                    serviceId: service.id,
+                    targetUid: scheduledUid,
+                    roles: myRoles
+                  }
+                }).catch(pushErr => {
+                  console.warn(`[Scale Reminder] Falha ao enviar push para membro ${scheduledUid}:`, pushErr);
+                });
+              }
             }
           } catch (e) {
             console.error("Error setting scale reminder notification:", e);
           }
         }
       }
+
+      // Também aciona verificação em background no servidor
+      try {
+        fetch('/api/reminders/check-now', { method: 'POST' }).catch(() => {});
+      } catch (e) {}
     };
 
     checkUpcomingReminders();

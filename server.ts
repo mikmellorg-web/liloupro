@@ -4,6 +4,8 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
+import { initializeApp as initClientApp, getApps as getClientApps } from "firebase/app";
+import { getFirestore as getClientFirestore, collection as clientCollection, getDocs as clientGetDocs } from "firebase/firestore";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage, adaptToNAA } from "./src/localBibleDb.js";
@@ -3384,6 +3386,451 @@ Complete a finalização da música`,
     }
   });
 
+  // =========================================================================
+  // SISTEMA DE LEMBRETES DE ESCALA E REGISTRY DE TOKENS FCM EM SEGUNDO PLANO
+  // =========================================================================
+  const fcmDataDir = path.join(process.cwd(), "data");
+  const fcmRegistryFile = path.join(fcmDataDir, "fcm_tokens_registry.json");
+  const fcmSentRemindersFile = path.join(fcmDataDir, "sent_scale_reminders.json");
+
+  interface RegisteredMemberDevice {
+    uid: string;
+    name?: string;
+    email?: string;
+    tokens: string[];
+    notifyDayBeforeReminder?: boolean;
+    updatedAt: number;
+  }
+
+  const tokenRegistryMap = new Map<string, RegisteredMemberDevice>();
+  const sentRemindersSet = new Set<string>();
+
+  // Carrega registro persistido do disco
+  function loadFcmRegistryFromDisk() {
+    try {
+      if (fs.existsSync(fcmRegistryFile)) {
+        const raw = fs.readFileSync(fcmRegistryFile, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach((item: any) => {
+            if (item && item.uid) {
+              const toks = Array.isArray(item.tokens) ? item.tokens : (item.token ? [item.token] : []);
+              tokenRegistryMap.set(item.uid, {
+                uid: item.uid,
+                name: item.name || "",
+                email: item.email || "",
+                tokens: Array.from(new Set(toks.filter((t: any) => typeof t === "string" && t.trim().length > 10))),
+                notifyDayBeforeReminder: item.notifyDayBeforeReminder !== false,
+                updatedAt: item.updatedAt || Date.now()
+              });
+            }
+          });
+          console.log(`[FCM Registry] Carregados ${tokenRegistryMap.size} membros com aparelhos registrados.`);
+        }
+      }
+    } catch (e) {
+      console.warn("[FCM Registry] Erro ao ler registry:", e);
+    }
+  }
+
+  function saveFcmRegistryToDisk() {
+    try {
+      if (!fs.existsSync(fcmDataDir)) {
+        fs.mkdirSync(fcmDataDir, { recursive: true });
+      }
+      const arr = Array.from(tokenRegistryMap.values());
+      fs.writeFileSync(fcmRegistryFile, JSON.stringify(arr, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("[FCM Registry] Erro ao salvar registry:", e);
+    }
+  }
+
+  function loadSentRemindersFromDisk() {
+    try {
+      if (fs.existsSync(fcmSentRemindersFile)) {
+        const raw = fs.readFileSync(fcmSentRemindersFile, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          list.forEach((id: any) => {
+            if (typeof id === "string") sentRemindersSet.add(id);
+          });
+          console.log(`[Scale Reminders] Carregados ${sentRemindersSet.size} lembretes já enviados anteriormente.`);
+        }
+      }
+    } catch (e) {
+      console.warn("[Scale Reminders] Erro ao ler histórico de envios:", e);
+    }
+  }
+
+  function saveSentRemindersToDisk() {
+    try {
+      if (!fs.existsSync(fcmDataDir)) {
+        fs.mkdirSync(fcmDataDir, { recursive: true });
+      }
+      // Mantém os últimos 1500 IDs para evitar crescimento descontrolado
+      const arr = Array.from(sentRemindersSet).slice(-1500);
+      fs.writeFileSync(fcmSentRemindersFile, JSON.stringify(arr, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("[Scale Reminders] Erro ao salvar histórico de envios:", e);
+    }
+  }
+
+  loadFcmRegistryFromDisk();
+  loadSentRemindersFromDisk();
+
+  // Função centralizada para envio de push notification (FCM HTTP v1 com fallback)
+  async function dispatchFcmPush(
+    validTokens: string[],
+    payloadTitle: string,
+    payloadBody: string,
+    url: string = "/",
+    data: any = {}
+  ): Promise<{ success: boolean; sentCount: number; errors?: any[] }> {
+    if (!validTokens || validTokens.length === 0) {
+      return { success: false, sentCount: 0 };
+    }
+
+    // 1. Envio oficial via Firebase Admin SDK (FCM HTTP v1)
+    if (getApps().length) {
+      try {
+        const messagePayload: MulticastMessage = {
+          notification: {
+            title: payloadTitle,
+            body: payloadBody,
+          },
+          data: {
+            title: payloadTitle,
+            body: payloadBody,
+            url: url || "/",
+            ...(data || {})
+          },
+          webpush: {
+            headers: {
+              Urgency: "high",
+              TTL: "86400"
+            },
+            notification: {
+              title: payloadTitle,
+              body: payloadBody,
+              icon: "/pwa-512x512.png?v=4.0",
+              badge: "/pwa-192x192.png?v=4.0",
+              vibrate: [200, 100, 200, 100, 200, 100, 400]
+            },
+            fcmOptions: {
+              link: url || "/"
+            }
+          },
+          tokens: validTokens
+        };
+
+        const response = await getMessaging().sendEachForMulticast(messagePayload);
+        console.log(`[FCM Dispatcher] HTTP v1 resultado: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
+
+        const errors: any[] = [];
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            errors.push({ token: validTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
+          }
+        });
+
+        return {
+          success: response.successCount > 0,
+          sentCount: response.successCount,
+          errors: errors.length > 0 ? errors : undefined
+        };
+      } catch (adminSendErr: any) {
+        console.warn("[FCM Dispatcher] Falha no envio via Admin SDK:", adminSendErr?.message || adminSendErr);
+      }
+    }
+
+    // 2. Fallback legado
+    let sentCount = 0;
+    const errors: string[] = [];
+
+    for (const token of validTokens) {
+      try {
+        const fcmResponse = await fetch("https://fcm.googleapis.com/fcm/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `key=${process.env.FIREBASE_SERVER_KEY || "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk"}`
+          },
+          body: JSON.stringify({
+            to: token,
+            notification: {
+              title: payloadTitle,
+              body: payloadBody,
+              icon: "/pwa-512x512.png?v=4.0",
+              badge: "/pwa-192x192.png?v=4.0"
+            },
+            data: {
+              ...data,
+              title: payloadTitle,
+              body: payloadBody,
+              url: url || "/"
+            },
+            priority: "high"
+          })
+        });
+
+        if (fcmResponse.ok) {
+          sentCount++;
+        } else {
+          const errText = await fcmResponse.text();
+          errors.push(errText);
+        }
+      } catch (itemErr: any) {
+        errors.push(itemErr?.message || String(itemErr));
+      }
+    }
+
+    return {
+      success: sentCount > 0,
+      sentCount,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  // Rotina de verificação automática de escalas e disparo de lembretes para todos os escalados
+  async function checkAndSendScaleReminders(): Promise<{ sentCount: number; upcomingCount: number; checkedServices: number }> {
+    try {
+      const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (!fs.existsSync(firebaseConfigPath)) {
+        return { sentCount: 0, upcomingCount: 0, checkedServices: 0 };
+      }
+
+      const clientConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+      const clientApp = getClientApps().find(a => a.name === "server-scale-scheduler") ||
+        initClientApp(clientConfig, "server-scale-scheduler");
+      const clientDb = getClientFirestore(clientApp, clientConfig.firestoreDatabaseId);
+
+      const servicesSnap = await clientGetDocs(clientCollection(clientDb, "services"));
+      if (servicesSnap.empty) {
+        return { sentCount: 0, upcomingCount: 0, checkedServices: 0 };
+      }
+
+      const now = Date.now();
+      const twentyFourHoursFromNow = now + (24 * 60 * 60 * 1000);
+
+      const upcomingServices: any[] = [];
+      servicesSnap.forEach(docSnap => {
+        const s = docSnap.data();
+        if (!s.date) return;
+        const sTime = new Date(s.date).getTime();
+        // Cultos futuros que começam nas próximas 24 horas
+        if (sTime > now && sTime <= twentyFourHoursFromNow) {
+          upcomingServices.push({ id: docSnap.id, ...s, time: sTime });
+        }
+      });
+
+      if (upcomingServices.length === 0) {
+        return { sentCount: 0, upcomingCount: 0, checkedServices: servicesSnap.size };
+      }
+
+      let totalDispatched = 0;
+
+      for (const service of upcomingServices) {
+        const scales = service.scales || {};
+        const memberRolesMap: Record<string, string[]> = {};
+
+        Object.entries(scales).forEach(([role, ids]) => {
+          if (Array.isArray(ids)) {
+            ids.forEach(id => {
+              if (id && typeof id === "string") {
+                if (!memberRolesMap[id]) memberRolesMap[id] = [];
+                if (!memberRolesMap[id].includes(role)) memberRolesMap[id].push(role);
+              }
+            });
+          } else if (ids && typeof ids === "string") {
+            if (!memberRolesMap[ids]) memberRolesMap[ids] = [];
+            if (!memberRolesMap[ids].includes(role)) memberRolesMap[ids].push(role);
+          }
+        });
+
+        const serviceDateObj = new Date(service.date);
+        const timeStr = serviceDateObj.toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "America/Sao_Paulo"
+        });
+        const dateStr = serviceDateObj.toLocaleDateString("pt-BR", {
+          weekday: "short",
+          day: "2-digit",
+          month: "2-digit",
+          timeZone: "America/Sao_Paulo"
+        });
+
+        for (const [memberUid, roles] of Object.entries(memberRolesMap)) {
+          const reminderKey = `reminder-${service.id}-${memberUid}`;
+          if (sentRemindersSet.has(reminderKey)) {
+            continue; // Já enviado
+          }
+
+          const memberInfo = tokenRegistryMap.get(memberUid);
+          if (memberInfo && memberInfo.notifyDayBeforeReminder === false) {
+            continue; // Usuário desativou preferência de lembrete
+          }
+
+          const tokens = memberInfo?.tokens || [];
+          const validTokens = tokens.filter(t => typeof t === "string" && t.trim().length > 10);
+
+          const rolesText = roles.join(", ") || "Equipe de Louvor";
+          const title = `⏰ Lembrete de Escala • ${service.title || "Culto"}`;
+          const body = `Você está na escala para o culto "${service.title}" em menos de 24 horas (${dateStr} às ${timeStr}h). Função: ${rolesText}.`;
+
+          if (validTokens.length > 0) {
+            console.log(`[Scale Reminders Server] Disparando push para ${memberInfo?.name || memberUid} (${validTokens.length} aparelhos) no culto "${service.title}"`);
+            const result = await dispatchFcmPush(validTokens, title, body, "/?tab=liturgy", {
+              type: "service_reminder",
+              serviceId: service.id,
+              targetUid: memberUid,
+              roles: rolesText
+            });
+
+            if (result.success && result.sentCount > 0) {
+              totalDispatched += result.sentCount;
+            }
+          }
+
+          // Marca como enviado para este serviço e membro
+          sentRemindersSet.add(reminderKey);
+        }
+      }
+
+      if (totalDispatched > 0) {
+        saveSentRemindersToDisk();
+        console.log(`[Scale Reminders Server] Sucesso: ${totalDispatched} push de lembretes disparados para membros escalados com app fechado.`);
+      }
+
+      return { sentCount: totalDispatched, upcomingCount: upcomingServices.length, checkedServices: servicesSnap.size };
+    } catch (err: any) {
+      console.warn("[Scale Reminders Server] Erro ao verificar lembretes de escala:", err?.message || err);
+      return { sentCount: 0, upcomingCount: 0, checkedServices: 0 };
+    }
+  }
+
+  // Executa uma verificação 5 segundos após o boot do servidor
+  setTimeout(() => {
+    checkAndSendScaleReminders().catch(() => {});
+  }, 5000);
+
+  // Agenda verificação automática a cada 10 minutos
+  setInterval(() => {
+    checkAndSendScaleReminders().catch(() => {});
+  }, 10 * 60 * 1000);
+
+  // --- REGISTRO DE TOKEN FCM DO MEMBRO NO SERVIDOR ---
+  app.post("/api/notifications/register-token", (req, res) => {
+    try {
+      const { uid, token, name, email, notifyDayBeforeReminder } = req.body || {};
+      if (!uid || !token || typeof token !== "string") {
+        return res.status(400).json({ success: false, error: "UID e token obrigatórios." });
+      }
+
+      const existing = tokenRegistryMap.get(uid) || {
+        uid,
+        name: name || "",
+        email: email || "",
+        tokens: [],
+        notifyDayBeforeReminder: true,
+        updatedAt: Date.now()
+      };
+
+      if (name) existing.name = name;
+      if (email) existing.email = email;
+      if (notifyDayBeforeReminder !== undefined) existing.notifyDayBeforeReminder = notifyDayBeforeReminder !== false;
+
+      if (!existing.tokens.includes(token)) {
+        existing.tokens.push(token);
+      }
+      existing.updatedAt = Date.now();
+      tokenRegistryMap.set(uid, existing);
+      saveFcmRegistryToDisk();
+
+      return res.status(200).json({
+        success: true,
+        uid,
+        totalTokensForUser: existing.tokens.length,
+        totalRegisteredMembers: tokenRegistryMap.size
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Erro ao registrar token" });
+    }
+  });
+
+  // --- SINCRONIZAÇÃO COMPLETA DE TOKENS DE MEMBROS PELO CLIENTE ---
+  app.post("/api/notifications/sync-members-tokens", (req, res) => {
+    try {
+      const { members } = req.body || {};
+      if (!Array.isArray(members)) {
+        return res.status(400).json({ success: false, error: "Array de membros inválido." });
+      }
+
+      let updatedCount = 0;
+      for (const m of members) {
+        if (!m || !m.uid) continue;
+        const incomingTokens = Array.isArray(m.fcmTokens) ? m.fcmTokens : (m.fcmToken ? [m.fcmToken] : []);
+        const validTokens = incomingTokens.filter((t: any) => typeof t === "string" && t.trim().length > 10);
+        if (validTokens.length === 0) continue;
+
+        const existing = tokenRegistryMap.get(m.uid) || {
+          uid: m.uid,
+          name: m.name || "",
+          email: m.email || "",
+          tokens: [],
+          notifyDayBeforeReminder: m.notifyDayBeforeReminder !== false,
+          updatedAt: Date.now()
+        };
+
+        if (m.name) existing.name = m.name;
+        if (m.email) existing.email = m.email;
+        if (m.notifyDayBeforeReminder !== undefined) existing.notifyDayBeforeReminder = m.notifyDayBeforeReminder !== false;
+
+        validTokens.forEach((t: string) => {
+          if (!existing.tokens.includes(t)) {
+            existing.tokens.push(t);
+          }
+        });
+
+        existing.updatedAt = Date.now();
+        tokenRegistryMap.set(m.uid, existing);
+        updatedCount++;
+      }
+
+      if (updatedCount > 0) {
+        saveFcmRegistryToDisk();
+      }
+
+      return res.status(200).json({
+        success: true,
+        updatedMembers: updatedCount,
+        totalRegisteredMembers: tokenRegistryMap.size
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Erro ao sincronizar membros" });
+    }
+  });
+
+  // --- DISPARO IMEDIATO / MANUAL DE CHECAGEM DE LEMBRETES ---
+  app.post("/api/reminders/check-now", async (req, res) => {
+    try {
+      const result = await checkAndSendScaleReminders();
+      return res.status(200).json({ success: true, ...result });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Erro ao checar lembretes" });
+    }
+  });
+
+  // --- STATUS DO AGENDADOR DE LEMBRETES ---
+  app.get("/api/reminders/status", (req, res) => {
+    return res.status(200).json({
+      schedulerRunning: true,
+      registeredMembers: tokenRegistryMap.size,
+      sentRemindersCount: sentRemindersSet.size,
+      uptimeSeconds: Math.floor(process.uptime())
+    });
+  });
+
   // --- ENDPOINT OFICIAL DE DISPARO DE PUSH NOTIFICATIONS (FCM) ---
   app.post("/api/notifications/send-push", async (req, res) => {
     try {
@@ -3402,106 +3849,13 @@ Complete a finalização da música`,
 
       console.log(`[FCM Server] Enviando push para ${validTokens.length} token(s): "${payloadTitle}"`);
 
-      // 1. Envio oficial via Firebase Admin SDK (FCM HTTP v1)
-      if (getApps().length) {
-        try {
-          const messagePayload: MulticastMessage = {
-            notification: {
-              title: payloadTitle,
-              body: payloadBody,
-            },
-            data: {
-              title: payloadTitle,
-              body: payloadBody,
-              url: url || "/",
-              ...(data || {})
-            },
-            webpush: {
-              headers: {
-                Urgency: "high",
-                TTL: "86400"
-              },
-              notification: {
-                title: payloadTitle,
-                body: payloadBody,
-                icon: "/pwa-512x512.png?v=4.0",
-                badge: "/pwa-192x192.png?v=4.0",
-                vibrate: [200, 100, 200]
-              },
-              fcmOptions: {
-                link: url || "/"
-              }
-            },
-            tokens: validTokens
-          };
-
-          const response = await getMessaging().sendEachForMulticast(messagePayload);
-          console.log(`[FCM Server] HTTP v1 resultado: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
-
-          const errors: any[] = [];
-          response.responses.forEach((resp, idx) => {
-            if (!resp.success) {
-              errors.push({ token: validTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
-            }
-          });
-
-          return res.status(200).json({
-            success: true,
-            sentCount: response.successCount,
-            totalTokens: validTokens.length,
-            errors: errors.length > 0 ? errors : undefined
-          });
-        } catch (adminSendErr: any) {
-          console.warn("[FCM Server] Falha no envio via Admin SDK:", adminSendErr?.message || adminSendErr);
-        }
-      }
-
-      // 2. Fallback legado
-      let sentCount = 0;
-      const errors: string[] = [];
-
-      for (const token of validTokens) {
-        try {
-          const fcmResponse = await fetch("https://fcm.googleapis.com/fcm/send", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `key=${process.env.FIREBASE_SERVER_KEY || "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk"}`
-            },
-            body: JSON.stringify({
-              to: token,
-              notification: {
-                title: payloadTitle,
-                body: payloadBody,
-                icon: "/pwa-512x512.png?v=4.0",
-                badge: "/pwa-192x192.png?v=4.0"
-              },
-              data: {
-                ...data,
-                title: payloadTitle,
-                body: payloadBody,
-                url: url || "/"
-              },
-              priority: "high"
-            })
-          });
-
-          if (fcmResponse.ok) {
-            sentCount++;
-          } else {
-            const errText = await fcmResponse.text();
-            errors.push(errText);
-          }
-        } catch (itemErr: any) {
-          errors.push(itemErr?.message || String(itemErr));
-        }
-      }
+      const result = await dispatchFcmPush(validTokens, payloadTitle, payloadBody, url, data);
 
       return res.status(200).json({
-        success: true,
-        sentCount,
+        success: result.success,
+        sentCount: result.sentCount,
         totalTokens: validTokens.length,
-        errors: errors.length > 0 ? errors : undefined
+        errors: result.errors
       });
     } catch (err: any) {
       console.error("[FCM Push Endpoint Error]:", err);

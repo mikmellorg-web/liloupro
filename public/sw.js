@@ -317,6 +317,7 @@ self.addEventListener('notificationclick', (event) => {
       await saveBadgeCountToCache(count);
       await updateAppBadge(count);
 
+      const targetUrl = event.notification.data?.url || '/';
       const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of clientList) {
         if (client.url && 'focus' in client) {
@@ -327,7 +328,7 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow(targetUrl);
       }
     })()
   );
