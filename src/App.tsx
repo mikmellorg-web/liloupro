@@ -59,6 +59,7 @@ import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { LilouproAssistant } from './components/LilouproAssistant';
 import { ChromaticTunerModal } from './components/ChromaticTunerModal';
+import { StudyMetronomeModal } from './components/StudyMetronomeModal';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
@@ -1764,6 +1765,34 @@ function MainContent() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isOpenHelpCenter, setIsOpenHelpCenter] = useState(false);
   const [isOpenGlobalTuner, setIsOpenGlobalTuner] = useState(false);
+  const [isOpenGlobalMetronome, setIsOpenGlobalMetronome] = useState(false);
+  const [globalMetronomeBpm, setGlobalMetronomeBpm] = useState(120);
+  const [globalMetronomeTimeSig, setGlobalMetronomeTimeSig] = useState('4/4');
+  const [isGlobalMetronomeActive, setIsGlobalMetronomeActive] = useState(false);
+  const [globalMetronomeVolume, setGlobalMetronomeVolume] = useState(80);
+  const globalMetronomeTapTimesRef = useRef<number[]>([]);
+
+  const handleGlobalMetronomeTap = useCallback(() => {
+    const now = performance.now();
+    const times = globalMetronomeTapTimesRef.current;
+    if (times.length > 0 && now - times[times.length - 1] > 2500) {
+      globalMetronomeTapTimesRef.current = [now];
+      return;
+    }
+    times.push(now);
+    if (times.length > 5) times.shift();
+    if (times.length > 1) {
+      const diffs = [];
+      for (let i = 1; i < times.length; i++) {
+        diffs.push(times[i] - times[i - 1]);
+      }
+      const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+      const calcBpm = Math.round(60000 / avgDiff);
+      if (calcBpm >= 30 && calcBpm <= 300) {
+        setGlobalMetronomeBpm(calcBpm);
+      }
+    }
+  }, []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false);
   const [isSongFocusMode, setIsSongFocusMode] = useState(false);
@@ -1782,6 +1811,8 @@ function MainContent() {
   const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
   const [songInitialScrollSpeed, setSongInitialScrollSpeed] = useState<number | undefined>(undefined);
   const [songInitialAutoScroll, setSongInitialAutoScroll] = useState<boolean | undefined>(undefined);
+  const [songInitialShowPlayer, setSongInitialShowPlayer] = useState<boolean>(false);
+  const [songInitialPlayerTrigger, setSongInitialPlayerTrigger] = useState<number>(0);
   const [bibleNavKey, setBibleNavKey] = useState<number>(0);
 
   // Auto-check if logged-in user hasn't installed PWA and hasn't dismissed the prompt
@@ -3228,13 +3259,14 @@ function MainContent() {
           )}
           {activeTab === 'songs' && selectedSong && (
             <SongDetailView 
-              key={`${selectedSong.id}-${songInitialScrollSpeed ?? 'std'}`} 
+              key={`${selectedSong.id}-${songInitialScrollSpeed ?? 'std'}-${songInitialShowPlayer ? 'player' : 'noplayer'}`} 
               song={selectedSong} 
               onBack={() => { 
                 setSelectedSong(null); 
                 setIsSongFocusMode(false); 
                 setSongInitialScrollSpeed(undefined);
                 setSongInitialAutoScroll(undefined);
+                setSongInitialShowPlayer(false);
               }} 
               theme={theme}
               liturgySongs={activeLiturgySongs}
@@ -3245,6 +3277,8 @@ function MainContent() {
               initialFocusMode={isSongFocusMode}
               initialScrollSpeed={songInitialScrollSpeed}
               initialAutoScroll={songInitialAutoScroll}
+              initialShowPlayer={songInitialShowPlayer}
+              initialPlayerTrigger={songInitialPlayerTrigger}
             />
           )}
           {activeTab === 'calendar' && (
@@ -3345,11 +3379,29 @@ function MainContent() {
         onClose={() => setIsOpenGlobalTuner(false)}
       />
 
+      {/* Global Study Metronome Modal (acessível via Assistente de Voz / comandos) */}
+      <StudyMetronomeModal
+        isOpen={isOpenGlobalMetronome}
+        onClose={() => {
+          setIsOpenGlobalMetronome(false);
+          setIsGlobalMetronomeActive(false);
+        }}
+        bpm={globalMetronomeBpm}
+        timeSignature={globalMetronomeTimeSig}
+        onUpdateBpm={setGlobalMetronomeBpm}
+        isMetronomeActive={isGlobalMetronomeActive}
+        onToggleMetronome={() => setIsGlobalMetronomeActive(prev => !prev)}
+        metronomeVolume={globalMetronomeVolume}
+        onUpdateVolume={setGlobalMetronomeVolume}
+        onTapTempo={handleGlobalMetronomeTap}
+      />
+
       {/* Liloupro Voice and Text Assistant (Active everywhere EXCEPT Focus Mode) */}
       {!isSongFocusMode && (
         <LilouproAssistant 
           theme={theme}
           allSongs={allSongs}
+          currentSong={selectedSong}
           onNavigate={(tab) => {
             setActiveTab(tab);
             setShowMoreMenu(false);
@@ -3366,6 +3418,12 @@ function MainContent() {
             }
             if (options?.autoScroll !== undefined) {
               setSongInitialAutoScroll(options.autoScroll);
+            }
+            if (options?.showPlayer) {
+              setSongInitialShowPlayer(true);
+              setSongInitialPlayerTrigger(Date.now());
+            } else {
+              setSongInitialShowPlayer(false);
             }
           }}
           onOpenBible={(bookName, chapter, verse) => {
@@ -3389,6 +3447,7 @@ function MainContent() {
             setShowMoreMenu(false);
           }}
           onOpenTuner={() => setIsOpenGlobalTuner(true)}
+          onOpenMetronome={() => setIsOpenGlobalMetronome(true)}
           onOpenHelpCenter={() => setIsOpenHelpCenter(true)}
           isAdmin={isAdmin}
           currentTab={activeTab}

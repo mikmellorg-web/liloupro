@@ -12,7 +12,7 @@ import {
 import { 
   initializeFirestore, 
   persistentLocalCache, 
-  persistentSingleTabManager 
+  persistentMultipleTabManager 
 } from 'firebase/firestore';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -41,9 +41,9 @@ export const getFirebaseMessaging = async (): Promise<Messaging | null> => {
 export const db = initializeFirestore(
   app,
   {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
     localCache: persistentLocalCache({
-      tabManager: persistentSingleTabManager({})
+      tabManager: persistentMultipleTabManager()
     })
   },
   firebaseConfig.firestoreDatabaseId

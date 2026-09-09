@@ -6,6 +6,7 @@ export interface PopularSong {
   timeSignature: string;
   chords: string;
   lyrics: string;
+  youtube?: string;
 }
 
 export function findLocalPopularSong(title: string, artist: string): PopularSong | undefined {
@@ -20,6 +21,7 @@ export function findLocalPopularSong(title: string, artist: string): PopularSong
       key: "C",
       bpm: 72,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=Oshg8mX2e1U",
       chords: `[Intro]
 C  C4  C  C4
 
@@ -118,6 +120,7 @@ Do Teu Nome vem força e poder pra vencer`
       key: "F#m",
       bpm: 83,
       timeSignature: "6/8",
+      youtube: "https://www.youtube.com/watch?v=9_iM8_e-E3c",
       chords: `[Intro]
 F#m   E   D   A
 
@@ -193,6 +196,7 @@ Pra me encontrar`
       key: "C",
       bpm: 68,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=1_Zq63Z_oXk",
       chords: `[Intro]
 F   C   G   Am
 
@@ -255,6 +259,7 @@ Te adorarei, Te adorarei`
         key: "D",
         bpm: 70,
         timeSignature: "4/4",
+        youtube: "https://www.youtube.com/watch?v=oUu0V5N67kY",
         chords: `[Intro]
 G   D   G   D
 
@@ -357,6 +362,7 @@ De Tua bondade, Deus`
         key: "Ab",
         bpm: 68,
         timeSignature: "4/4",
+        youtube: "https://www.youtube.com/watch?v=kYJvM9lJb_c",
         chords: `[Intro]
 Db7M   Ab   Db7M   Ab
 
@@ -463,6 +469,7 @@ De Tua bondade, Deus`
       key: "F#",
       bpm: 72,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=1u3C_Jq3r9c",
       chords: `[Intro]
 B7M   F#   C#   D#m7
 B7M   F#   C#   D#m7
@@ -556,6 +563,7 @@ Como a terra seca clama por chuva`
       key: "A",
       bpm: 80,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=Xh0m2tZc2Z0",
       chords: `[Intro]
 A   D   A   D
 
@@ -625,6 +633,7 @@ Incomparáveis são tuas promessas pra mim`
       key: "G",
       bpm: 74,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=L2G9W_W71Z4",
       chords: `[Intro]
 C7M   D   Em7   Bm7
 C7M   D   Em7   Bm7
@@ -674,6 +683,7 @@ Essa casa é Sua casa, nós deixamos ela pra Você, Jesus`
       key: "G",
       bpm: 72,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=R9K1Xk8B2qM",
       chords: `[Intro]
 C9   G   Em7   D
 
@@ -734,6 +744,7 @@ Me atraiu o Teu amor, me atraiu o Teu amor`
       key: "G",
       bpm: 68,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=Qx8wV2kF9yQ",
       chords: `[Intro]
 G   D/F#   Em7   C9 (2x)
 
@@ -812,6 +823,7 @@ Não há outro igual a Ti, Senhor`
       key: "C",
       bpm: 115,
       timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=7uC26gQ8U_U",
       chords: `[Intro]
 C  G  Am  F
 
@@ -891,6 +903,58 @@ Tu fazes tudo cooperar
 Para o meu bem
 Tu fazes tudo cooperar
 Para o meu bem`
+    };
+  }
+
+  // 12. Raridade
+  if (normalizedTitle.includes("raridade")) {
+    return {
+      title: "Raridade",
+      artist: "Anderson Freire",
+      key: "B",
+      bpm: 68,
+      timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=mYqS3W4y6zQ",
+      chords: `[Intro]
+E  F#  G#m  F#/A#  B  E
+
+[Verso 1]
+B                       F#/A#
+Não consigo entender o que Tu vês em mim
+G#m                 E
+O que Te faz me amar tanto assim
+B                   F#/A#
+Tanta fraqueza, tanta imperfeição
+G#m                     E
+E mesmo assim não me deixas na mão
+
+[Pré-Refrão]
+C#m                 G#m
+Mesmo que eu não consiga entender
+C#m                 F#
+O Teu amor nunca vai me esquecer
+
+[Refrão]
+B                      F#/A#
+Você é um espelho que reflete a imagem do Senhor
+G#m                   E
+Não chore se o mundo ainda não te notou
+B                  F#/A#
+Já é o bastante Deus reconhecer o teu valor
+C#m                    E                   B
+Você é precioso, mais raro que o ouro puro de Ofir`,
+      lyrics: `Não consigo entender o que Tu vês em mim
+O que Te faz me amar tanto assim
+Tanta fraqueza, tanta imperfeição
+E mesmo assim não me deixas na mão
+
+Mesmo que eu não consiga entender
+O Teu amor nunca vai me esquecer
+
+Você é um espelho que reflete a imagem do Senhor
+Não chore se o mundo ainda não te notou
+Já é o bastante Deus reconhecer o teu valor
+Você é precioso, mais raro que o ouro puro de Ofir`
     };
   }
 

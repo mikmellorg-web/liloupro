@@ -88,7 +88,9 @@ export function SongDetailView({
   onFocusModeChange,
   initialFocusMode = false,
   initialScrollSpeed,
-  initialAutoScroll = false
+  initialAutoScroll = false,
+  initialShowPlayer = false,
+  initialPlayerTrigger = 0
 }: { 
   song: any, 
   onBack: () => void,
@@ -100,7 +102,9 @@ export function SongDetailView({
   onFocusModeChange?: (active: boolean) => void,
   initialFocusMode?: boolean,
   initialScrollSpeed?: number,
-  initialAutoScroll?: boolean
+  initialAutoScroll?: boolean,
+  initialShowPlayer?: boolean,
+  initialPlayerTrigger?: number
 }) {
   const { user, isAdmin, memberData } = useAuth();
 
@@ -766,14 +770,38 @@ export function SongDetailView({
 
   const getYoutubeId = (url: string) => {
     if (!url) return null;
+    const trimmed = url.trim();
+    if (trimmed.length === 11 && !trimmed.includes('/') && !trimmed.includes('.')) return trimmed;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
+    const match = trimmed.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
   };
 
+  const effectiveYoutubeSrc = useMemo(() => {
+    if (editedSong?.youtube) {
+      const id = getYoutubeId(editedSong.youtube);
+      if (id) {
+        return `https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1`;
+      }
+    }
+    const query = `${editedSong?.title || ''} ${editedSong?.artist || ''}`.trim();
+    if (query) {
+      return `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    }
+    return null;
+  }, [editedSong?.youtube, editedSong?.title, editedSong?.artist]);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showPracticePlayer, setShowPracticePlayer] = useState(false);
+  const [showPracticePlayer, setShowPracticePlayer] = useState(initialShowPlayer);
   const [isPracticePlayerMinimized, setIsPracticePlayerMinimized] = useState(false);
+
+  // Sync practice player with external props / triggers (from Assistant commands)
+  useEffect(() => {
+    if (initialShowPlayer || (initialPlayerTrigger && initialPlayerTrigger > 0)) {
+      setShowPracticePlayer(true);
+      setIsPracticePlayerMinimized(false);
+    }
+  }, [initialShowPlayer, initialPlayerTrigger]);
   const [tempLink, setTempLink] = useState({ name: '', url: '' });
   const [playingAudioIndex, setPlayingAudioIndex] = useState<number | null>(null);
   const [isAnalyzingAudioBpm, setIsAnalyzingAudioBpm] = useState(false);
@@ -813,6 +841,14 @@ export function SongDetailView({
     window.addEventListener('resize', handleDeviceDetection);
     return () => window.removeEventListener('resize', handleDeviceDetection);
   }, [hasManuallyToggledColumns]);
+
+  // Synchronize initialShowPlayer when requested
+  useEffect(() => {
+    if (initialShowPlayer) {
+      setShowPracticePlayer(true);
+      setIsPracticePlayerMinimized(false);
+    }
+  }, [initialShowPlayer]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
@@ -1903,13 +1939,13 @@ export function SongDetailView({
               </div>
 
               <div className={cn("p-4 space-y-4", isPracticePlayerMinimized ? "hidden" : "block")}>
-                {editedSong.youtube && (
+                {effectiveYoutubeSrc && (
                   <div className="space-y-3">
                     <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-inner">
                       <iframe
                         width="100%"
                         height="100%"
-                        src={`https://www.youtube.com/embed/${getYoutubeId(editedSong.youtube)}?autoplay=0`}
+                        src={effectiveYoutubeSrc}
                         title="YouTube video player"
                         frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -1979,6 +2015,22 @@ export function SongDetailView({
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {!editedSong.youtube && (!editedSong.audio || editedSong.audio.length === 0) && (
+                  <div className="text-center py-4 px-3 space-y-3 bg-white/5 rounded-xl border border-white/10">
+                    <p className="text-xs text-slate-300">
+                      Nenhum link de vídeo do YouTube ou áudio cadastrado nesta música ainda.
+                    </p>
+                    <a
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent((editedSong.title || '') + ' ' + (editedSong.artist || ''))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+                    >
+                      <Play size={14} /> Ouvir no YouTube
+                    </a>
                   </div>
                 )}
               </div>
@@ -4623,7 +4675,7 @@ export function SongDetailView({
             </div>
 
             {/* 1. PLAYER (MODO ESTUDO) */}
-            {!isEditing && editedSong.youtube && (
+            {!isEditing && (
               <div className="p-3.5 bg-gradient-to-br from-brand/10 to-transparent border border-brand/20 rounded-2xl relative overflow-hidden group space-y-2">
                 <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-110 transition-transform pointer-events-none">
                   <Volume2 size={50} className="text-brand" />

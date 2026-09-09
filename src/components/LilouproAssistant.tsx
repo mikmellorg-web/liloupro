@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
-  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio
+  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findLocalPopularSong } from '../songsDatabase';
@@ -23,11 +23,13 @@ interface Message {
 interface LilouproAssistantProps {
   theme: 'dark' | 'light';
   allSongs: any[];
+  currentSong?: any;
   onNavigate: (tab: 'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master') => void;
-  onOpenSong: (song: any, options?: { focusMode?: boolean; scrollSpeed?: number; autoScroll?: boolean }) => void;
+  onOpenSong: (song: any, options?: { focusMode?: boolean; scrollSpeed?: number; autoScroll?: boolean; showPlayer?: boolean }) => void;
   onOpenBible: (bookName: string, chapter: number, verse?: number) => void;
   onOpenAddSong: () => void;
   onOpenTuner?: () => void;
+  onOpenMetronome?: () => void;
   onOpenHelpCenter?: () => void;
   isAdmin?: boolean;
   currentTab?: string;
@@ -42,11 +44,13 @@ const getUniqueAssistantMsgId = (sender: string) => {
 export function LilouproAssistant({
   theme,
   allSongs = [],
+  currentSong,
   onNavigate,
   onOpenSong,
   onOpenBible,
   onOpenAddSong,
   onOpenTuner,
+  onOpenMetronome,
   onOpenHelpCenter,
   isAdmin = false,
   currentTab = 'home'
@@ -91,8 +95,9 @@ export function LilouproAssistant({
       text: 'Olá! Sou o **Liloupro Assistente** 🎙️\nEstou aqui para guiá-lo em qualquer dúvida ou executar comandos de voz pelo app.',
       timestamp: new Date(),
       steps: [
+        'Diga ex: "Abrir player da música Teu amor não falha"',
         'Diga ex: "Abra o afinador do app"',
-        'Diga ex: "Abrir cifra Teu amor não falha no modo foco na rolagem 3x"',
+        'Diga ex: "Abra o metrônomo do app"',
         'Diga ex: "Abrir a bíblia do app no salmo 86"',
         'Pergunte ex: "Como faço para agendar um culto?"',
         'Pergunte ex: "Como cadastrar uma música nova no app?"'
@@ -275,148 +280,24 @@ export function LilouproAssistant({
     setInterimTranscript('');
     setIsLoading(true);
 
-    const norm = normalize(text);
+    let norm = normalize(text);
+    // Normalize speech recognition phonetic variations in Portuguese
+    norm = norm
+      .replace(/\babril\b/g, 'abrir')
+      .replace(/\babri\b/g, 'abrir')
+      .replace(/\babriu\b/g, 'abrir')
+      .replace(/\btoqua\b/g, 'toca')
+      .replace(/\btoqui\b/g, 'toque');
 
     // ==========================================
-    // 1. INTENT: ABRIR CIFRA (COM OU SEM MODO FOCO / ROLAGEM)
-    // Ex: "Abrir cifra Teu amor não falha no modo foco na rolagem 3 x"
-    // ==========================================
-    if (
-      norm.includes('abrir cifra') ||
-      norm.includes('abrir musica') ||
-      norm.includes('ver cifra') ||
-      norm.includes('tocar cifra') ||
-      norm.includes('cifra de') ||
-      (norm.startsWith('cifra ') && !norm.includes('como')) ||
-      (norm.includes('modo foco') && (norm.includes('cifra') || norm.includes('musica') || norm.includes('abrir')))
-    ) {
-      const isFocusMode = norm.includes('modo foco') || norm.includes('no foco') || norm.includes('foco');
-      
-      // Extract scroll speed if mentioned (e.g. "rolagem 3 x", "rolagem 3x", "velocidade 3", "3x", "0.3x")
-      let scrollSpeed: number | undefined = undefined;
-      let autoScroll = false;
-      const scrollMatch = text.match(/(?:rolagem|velocidade|scroll)\s*(\d+(?:[.,]\d+)?)\s*x?/i) ||
-                          text.match(/(\d+(?:[.,]\d+)?)\s*x/i);
-      
-      if (scrollMatch && scrollMatch[1]) {
-        const parsedSpeed = parseFloat(scrollMatch[1].replace(',', '.'));
-        if (!isNaN(parsedSpeed) && parsedSpeed > 0) {
-          scrollSpeed = parsedSpeed;
-          autoScroll = true;
-        }
-      } else if (norm.includes('rolagem') || norm.includes('autoscroll') || norm.includes('auto scroll')) {
-        scrollSpeed = 0.3;
-        autoScroll = true;
-      }
-
-      // Extract song name candidate by cleaning control words
-      let cleanQuery = norm
-        .replace(/abrir cifra (de |da |do )?/g, '')
-        .replace(/abrir musica (de |da |do )?/g, '')
-        .replace(/ver cifra (de |da |do )?/g, '')
-        .replace(/tocar cifra (de |da |do )?/g, '')
-        .replace(/cifra de /g, '')
-        .replace(/^cifra /g, '')
-        .replace(/no modo foco/g, '')
-        .replace(/modo foco/g, '')
-        .replace(/na rolagem \d+(\.\d+)? ?x?/g, '')
-        .replace(/velocidade \d+(\.\d+)? ?x?/g, '')
-        .replace(/rolagem \d+(\.\d+)? ?x?/g, '')
-        .replace(/\d+(\.\d+)? ?x/g, '')
-        .replace(/na rolagem/g, '')
-        .replace(/com rolagem/g, '')
-        .replace(/do app/g, '')
-        .trim();
-
-      // Find in existing church songs (allSongs)
-      let foundSong = allSongs.find(s => {
-        const titleNorm = normalize(s.title || '');
-        const artistNorm = normalize(s.artist || '');
-        return titleNorm.includes(cleanQuery) || cleanQuery.includes(titleNorm) || 
-               (artistNorm && (artistNorm.includes(cleanQuery) || cleanQuery.includes(artistNorm)));
-      });
-
-      // If not in allSongs, check built-in popular songs database (e.g. Teu Amor Não Falha)
-      if (!foundSong) {
-        const popular = findLocalPopularSong(cleanQuery, "");
-        if (popular) {
-          foundSong = {
-            id: `popular-${normalize(popular.title).replace(/\s+/g, '-')}`,
-            title: popular.title,
-            artist: popular.artist,
-            key: popular.key,
-            bpm: popular.bpm,
-            timeSignature: popular.timeSignature,
-            chords: popular.chords,
-            lyrics: popular.lyrics,
-            isFavorite: false
-          };
-        }
-      }
-
-      if (foundSong) {
-        setIsLoading(false);
-        const focusText = isFocusMode ? ' no **Modo Foco**' : '';
-        const scrollText = scrollSpeed !== undefined ? ` com **rolagem automática (${scrollSpeed}x)**` : '';
-        const replyText = `Abrindo a cifra de **"${foundSong.title}"**${focusText}${scrollText}!`;
-
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: `🎵 Abrir ${foundSong.title}`,
-          actionIcon: <Music size={15} />,
-          actionSuccessMessage: `✓ Cifra aberta${isFocusMode ? ' em Modo Foco' : ''}!`,
-          onActionClick: () => {
-            onOpenSong(foundSong, {
-              focusMode: isFocusMode,
-              scrollSpeed: scrollSpeed,
-              autoScroll: autoScroll
-            });
-            setIsOpen(false);
-          }
-        });
-
-        speak(replyText);
-
-        // Auto execute after short confirmation delay
-        setTimeout(() => {
-          onOpenSong(foundSong, {
-            focusMode: isFocusMode,
-            scrollSpeed: scrollSpeed,
-            autoScroll: autoScroll
-          });
-          setIsOpen(false);
-        }, 1200);
-
-        return;
-      } else {
-        setIsLoading(false);
-        const replyText = `Não encontrei nenhuma música com o nome "${cleanQuery}" no seu repertório. Você pode cadastrá-la agora mesmo no botão abaixo!`;
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: '➕ Cadastrar Nova Música',
-          actionIcon: <Plus size={15} />,
-          onActionClick: () => {
-            onOpenAddSong();
-            setIsOpen(false);
-          }
-        });
-        speak(replyText);
-        return;
-      }
-    }
-
-    // ==========================================
-    // 2. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
-    // Ex: "abra a bíblia do app em Marcos capítulo 12 versículo 20", "salmo 23", "abrir bíblia"
+    // 1. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
+    // Ex: "abra a bíblia em Marcos 12:20", "abra a bíblia", "salmo 23", "abrir bíblia"
     // ==========================================
     const parsedBible = parseSpokenBibleCommand(text);
-    const isGeneralBible = !parsedBible && isGeneralBibleRequest(text);
+    const isGeneralBible = !parsedBible && (
+      isGeneralBibleRequest(text) ||
+      ((norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')) && (norm.includes('biblia') || norm.includes('escritura')))
+    );
 
     if (parsedBible || isGeneralBible) {
       setIsLoading(false);
@@ -444,15 +325,13 @@ export function LilouproAssistant({
 
         speak(speakText);
 
-        // Auto execute after short confirmation delay
         setTimeout(() => {
           onOpenBible(bookName, chapter, verse);
           setIsOpen(false);
-        }, 1200);
+        }, 1100);
 
         return;
       } else {
-        // General Bible Reader navigation
         const replyText = 'Abrindo a Bíblia Sagrada do Liloupro!';
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -480,8 +359,8 @@ export function LilouproAssistant({
     }
 
     // ==========================================
-    // 3. INTENT: AFINADOR CROMÁTICO (ABRIR AUTOMATICAMENTE OU EXPLICAR)
-    // Ex: "Abra o afinador do app", "abrir afinador", "afinar violão", "afinar instrumento"
+    // 2. INTENT: AFINADOR CROMÁTICO (LiLouPro Tuner)
+    // Ex: "Abra o afinador do app", "abra o afinador", "afinar violão", "afinador"
     // ==========================================
     if (
       norm.includes('afinador') ||
@@ -497,7 +376,6 @@ export function LilouproAssistant({
     ) {
       setIsLoading(false);
 
-      // Check if it's purely a theoretical question without any command intent
       const isPurelyQuestion = (
         norm.startsWith('como funciona') ||
         norm.startsWith('o que e') ||
@@ -533,8 +411,7 @@ export function LilouproAssistant({
         speak('O afinador cromático fica na barra de ferramentas das cifras, ou você pode abri-lo agora tocando no botão.');
         return;
       } else {
-        // Direct Action: Open Tuner automatically!
-        const replyText = 'Abrindo o **Afinador Cromático** do LiLouPro com detecção precisa por microfone e afinações predefinidas!';
+        const replyText = 'Abrindo o **Afinador Cromático** do LiLouPro com detecção precisa por microfone!';
         const speakText = 'Abrindo o afinador cromático do aplicativo!';
 
         addMessage({
@@ -553,12 +430,619 @@ export function LilouproAssistant({
 
         speak(speakText);
 
-        // Auto execute after short confirmation delay
         setTimeout(() => {
           onOpenTuner?.();
           setIsOpen(false);
+        }, 1000);
+
+        return;
+      }
+    }
+
+    // ==========================================
+    // 3. INTENT: METRÔNOMO INTERATIVO (Pedal de Ritmo / BPM)
+    // Ex: "abra o metrônomo", "abrir metrônomo", "abra o metrônomo do app", "metrônomo"
+    // ==========================================
+    if (
+      norm.includes('metronomo') ||
+      norm.includes('pedal de ritmo') ||
+      norm.includes('marcador de tempo') ||
+      (norm.includes('ritmo') && (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')))
+    ) {
+      setIsLoading(false);
+
+      const isPurelyQuestion = (
+        norm.startsWith('como funciona') ||
+        norm.startsWith('o que e') ||
+        norm.startsWith('onde fica')
+      ) && !norm.includes('abra') && !norm.includes('abrir') && !norm.includes('abre') && !norm.includes('iniciar');
+
+      if (isPurelyQuestion) {
+        const replyText = 'O **Metrônomo Interativo** do LiLouPro fica na barra de ferramentas das cifras e também pode ser aberto a qualquer momento:';
+        const steps = [
+          '1. Toque em qualquer música para abrir a cifra.',
+          '2. Na barra de ferramentas, toque no botão do **Metrônomo (BPM)**.',
+          '3. Ajuste o andamento (BPM), fórmula de compasso (4/4, 3/4, 6/8, 2/4) e divisões rítmicas.',
+          '4. Use o botão **Tap Tempo** para encontrar a velocidade batendo o dedo.',
+          '5. Ou abra-o instantaneamente dizendo: *"Abra o metrônomo do app"*.'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '⏱️ Abrir Metrônomo',
+          actionIcon: <Timer size={15} />,
+          actionSuccessMessage: '✓ Metrônomo aberto!',
+          onActionClick: () => {
+            onOpenMetronome?.();
+            setIsOpen(false);
+          }
+        });
+
+        speak('O metrônomo fica nas cifras ou você pode abri-lo agora mesmo!');
+        return;
+      } else {
+        const replyText = 'Abrindo o **Metrônomo Interativo** do LiLouPro com controle de BPM, Tap Tempo e fórmulas de compasso!';
+        const speakText = 'Abrindo o metrônomo do aplicativo!';
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '⏱️ Abrir Metrônomo',
+          actionIcon: <Timer size={15} />,
+          actionSuccessMessage: '✓ Metrônomo aberto com sucesso!',
+          onActionClick: () => {
+            onOpenMetronome?.();
+            setIsOpen(false);
+          }
+        });
+
+        speak(speakText);
+
+        setTimeout(() => {
+          onOpenMetronome?.();
+          setIsOpen(false);
+        }, 1000);
+
+        return;
+      }
+    }
+
+    // ==========================================
+    // 4. INTENT: PROJEÇÃO / TELÃO (Abertura Direta)
+    // Ex: "abra a projeção", "abrir telão", "abra o modo projeção", "abra os slides"
+    // ==========================================
+    if (
+      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
+      (norm.includes('projecao') || norm.includes('telao') || norm.includes('slides') || norm.includes('letras na tv') || norm.includes('modo projecao'))
+    ) {
+      setIsLoading(false);
+      const replyText = 'Abrindo o modo de **Projeção para Telão e TV**!';
+      const speakText = 'Abrindo a tela de projeção!';
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '📺 Ir para Projeção',
+        actionIcon: <Tv size={15} />,
+        actionSuccessMessage: '✓ Projeção aberta!',
+        onActionClick: () => {
+          onNavigate('projection');
+          setIsOpen(false);
+        }
+      });
+
+      speak(speakText);
+
+      setTimeout(() => {
+        onNavigate('projection');
+        setIsOpen(false);
+      }, 1000);
+
+      return;
+    }
+
+    // ==========================================
+    // 5. INTENT: LITURGIA / CULTOS (Abertura Direta)
+    // Ex: "abra a liturgia", "abrir cultos", "abra os cultos", "abra o culto"
+    // ==========================================
+    if (
+      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
+      (norm.includes('liturgia') || norm.includes('culto') || norm.includes('cultos') || norm.includes('ordem do culto'))
+    ) {
+      setIsLoading(false);
+      const replyText = 'Abrindo a aba de **Liturgia e Cultos**!';
+      const speakText = 'Abrindo liturgia e cultos!';
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '📅 Ir para Liturgia',
+        actionIcon: <Calendar size={15} />,
+        actionSuccessMessage: '✓ Liturgia aberta!',
+        onActionClick: () => {
+          onNavigate('liturgy');
+          setIsOpen(false);
+        }
+      });
+
+      speak(speakText);
+
+      setTimeout(() => {
+        onNavigate('liturgy');
+        setIsOpen(false);
+      }, 1000);
+
+      return;
+    }
+
+    // ==========================================
+    // 6. INTENT: ESCALAS / CALENDÁRIO (Abertura Direta)
+    // Ex: "abra as escalas", "abrir escalas", "abra o calendário", "abra os voluntários"
+    // ==========================================
+    if (
+      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
+      (norm.includes('escala') || norm.includes('escalas') || norm.includes('calendario') || norm.includes('voluntarios') || norm.includes('escalados'))
+    ) {
+      setIsLoading(false);
+      const replyText = 'Abrindo a gestão de **Escalas e Calendário**!';
+      const speakText = 'Abrindo escalas e calendário!';
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '👥 Ir para Escalas',
+        actionIcon: <Calendar size={15} />,
+        actionSuccessMessage: '✓ Escalas abertas!',
+        onActionClick: () => {
+          onNavigate('calendar');
+          setIsOpen(false);
+        }
+      });
+
+      speak(speakText);
+
+      setTimeout(() => {
+        onNavigate('calendar');
+        setIsOpen(false);
+      }, 1000);
+
+      return;
+    }
+
+    // ==========================================
+    // 7. INTENT: CADASTRO DE NOVA MÚSICA (Abertura Direta)
+    // Ex: "abra cadastrar música", "abra nova música", "adicionar música", "cadastrar música"
+    // ==========================================
+    if (
+      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('adicionar') || norm.startsWith('cadastrar')) &&
+      (norm.includes('cadastrar musica') || norm.includes('cadastro de musica') || norm.includes('nova musica') || norm.includes('adicionar musica') || norm.includes('adicionar cifra'))
+    ) {
+      const isQuestion = norm.startsWith('como') || norm.startsWith('onde');
+      if (!isQuestion) {
+        setIsLoading(false);
+        const replyText = 'Abrindo o formulário para **Cadastrar Nova Música**!';
+        const speakText = 'Abrindo o cadastro de nova música!';
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '➕ Cadastrar Música',
+          actionIcon: <Plus size={15} />,
+          actionSuccessMessage: '✓ Formulário aberto!',
+          onActionClick: () => {
+            onOpenAddSong();
+            setIsOpen(false);
+          }
+        });
+
+        speak(speakText);
+
+        setTimeout(() => {
+          onOpenAddSong();
+          setIsOpen(false);
+        }, 1000);
+
+        return;
+      }
+    }
+
+    // ==========================================
+    // 8. INTENT: TEORIA / MEMBROS / CHAT / AJUDA (Abertura Direta)
+    // ==========================================
+    if (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')) {
+      if (norm.includes('teoria') || norm.includes('dicionario') || norm.includes('estudo')) {
+        setIsLoading(false);
+        const replyText = 'Abrindo a aba de **Teoria Musical e Dicionário de Acordes**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🎼 Teoria Musical',
+          actionIcon: <Music size={15} />,
+          onActionClick: () => {
+            onNavigate('theory');
+            setIsOpen(false);
+          }
+        });
+        speak('Abrindo teoria musical!');
+        setTimeout(() => {
+          onNavigate('theory');
+          setIsOpen(false);
+        }, 1000);
+        return;
+      }
+
+      if (norm.includes('membros') || norm.includes('equipe') || norm.includes('musicos') || norm.includes('integrantes')) {
+        setIsLoading(false);
+        const replyText = 'Abrindo a gestão de **Membros e Equipe de Louvor**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '👥 Ver Membros',
+          actionIcon: <Calendar size={15} />,
+          onActionClick: () => {
+            onNavigate('members');
+            setIsOpen(false);
+          }
+        });
+        speak('Abrindo equipe e membros!');
+        setTimeout(() => {
+          onNavigate('members');
+          setIsOpen(false);
+        }, 1000);
+        return;
+      }
+
+      if (norm.includes('chat') || norm.includes('mensagens') || norm.includes('bate papo')) {
+        setIsLoading(false);
+        const replyText = 'Abrindo o **Chat da Equipe de Louvor**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '💬 Ir para Chat',
+          actionIcon: <Bot size={15} />,
+          onActionClick: () => {
+            onNavigate('chat');
+            setIsOpen(false);
+          }
+        });
+        speak('Abrindo o chat da equipe!');
+        setTimeout(() => {
+          onNavigate('chat');
+          setIsOpen(false);
+        }, 1000);
+        return;
+      }
+
+      if (norm.includes('ajuda') || norm.includes('suporte') || norm.includes('central de ajuda')) {
+        setIsLoading(false);
+        const replyText = 'Abrindo a **Central de Ajuda e Suporte**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '❓ Central de Ajuda',
+          actionIcon: <HelpCircle size={15} />,
+          onActionClick: () => {
+            onOpenHelpCenter?.();
+            setIsOpen(false);
+          }
+        });
+        speak('Abrindo a central de ajuda!');
+        setTimeout(() => {
+          onOpenHelpCenter?.();
+          setIsOpen(false);
+        }, 1000);
+        return;
+      }
+    }
+
+    // ==========================================
+    // 9. INTENT: ABRIR MÚSICA / CIFRA / LETRA / PLAYER (Abertura Direta)
+    // Ex: "abrir player da música Teu amor não falha", "tocar música Teu amor não falha", "tocar música Bondade de Deus", "abra o player da música Bondade de Deus", "abra Raridade", "tocar cifra", "ver cifra"
+    // ==========================================
+    const isPlayerMode = 
+      norm.includes('player') || 
+      norm.includes('ouvir') || 
+      norm.includes('tocar audio') || 
+      norm.includes('tocar video') || 
+      norm.includes('modo estudo') || 
+      norm.includes('modo pratique') ||
+      norm.startsWith('tocar') ||
+      norm.startsWith('toque') ||
+      norm.startsWith('toca') ||
+      norm.startsWith('play') ||
+      norm.startsWith('reproduzir') ||
+      norm.includes('tocar musica') ||
+      norm.includes('toque musica') ||
+      norm.includes('toca musica') ||
+      norm.includes('dar play');
+
+    const isSongCommand =
+      norm.startsWith('abra') ||
+      norm.startsWith('abrir') ||
+      norm.startsWith('abre') ||
+      norm.startsWith('tocar') ||
+      norm.startsWith('toque') ||
+      norm.startsWith('toca') ||
+      norm.startsWith('play') ||
+      norm.startsWith('dar play') ||
+      norm.startsWith('ver') ||
+      norm.startsWith('ouvir') ||
+      norm.startsWith('reproduzir') ||
+      norm.includes('cifra') ||
+      norm.includes('musica') ||
+      norm.includes('cancao') ||
+      norm.includes('letra') ||
+      norm.includes('player') ||
+      norm.includes('modo foco') ||
+      norm.includes('rolagem');
+
+    if (isSongCommand) {
+      const isFocusMode = norm.includes('modo foco') || norm.includes('no foco') || norm.includes('foco');
+      const isLyricsOnly = norm.includes('letra') && !norm.includes('cifra') && !isPlayerMode;
+
+      // Extract scroll speed if mentioned (e.g. "rolagem 3 x", "rolagem 3x", "velocidade 3", "3x", "0.3x")
+      let scrollSpeed: number | undefined = undefined;
+      let autoScroll = false;
+      const scrollMatch = text.match(/(?:rolagem|velocidade|scroll)\s*(\d+(?:[.,]\d+)?)\s*x?/i) ||
+                          text.match(/(\d+(?:[.,]\d+)?)\s*x/i);
+      
+      if (scrollMatch && scrollMatch[1]) {
+        const parsedSpeed = parseFloat(scrollMatch[1].replace(',', '.'));
+        if (!isNaN(parsedSpeed) && parsedSpeed > 0) {
+          scrollSpeed = parsedSpeed;
+          autoScroll = true;
+        }
+      } else if (norm.includes('rolagem') || norm.includes('autoscroll') || norm.includes('auto scroll')) {
+        scrollSpeed = 0.3;
+        autoScroll = true;
+      }
+
+      // Extract song name candidate by cleaning control words and command prefixes
+      let cleanQuery = norm
+        .replace(/no modo foco/g, '')
+        .replace(/modo foco/g, '')
+        .replace(/em foco/g, '')
+        .replace(/no foco/g, '')
+        .replace(/na rolagem \d+(\.\d+)? ?x?/g, '')
+        .replace(/com rolagem \d+(\.\d+)? ?x?/g, '')
+        .replace(/velocidade \d+(\.\d+)? ?x?/g, '')
+        .replace(/rolagem \d+(\.\d+)? ?x?/g, '')
+        .replace(/\d+(\.\d+)? ?x/g, '')
+        .replace(/na rolagem/g, '')
+        .replace(/com rolagem/g, '')
+        .replace(/com autoscroll/g, '')
+        .replace(/autoscroll/g, '')
+        .replace(/rolagem automatica/g, '')
+        .replace(/do app/g, '')
+        .replace(/no app/g, '')
+        .replace(/por favor/g, '')
+        .trim();
+
+      // First strip "player" commands: e.g. "abrir player da musica Teu amor", "abrir player Teu amor", "player Teu amor"
+      cleanQuery = cleanQuery
+        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|acesse|acessar|iniciar|solte|soltar)\s+(o\s+|a\s+)?player\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)?/i, '')
+        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|acesse|acessar|iniciar|solte|soltar)\s+player\s+/i, '')
+        .replace(/^(o\s+|a\s+)?player\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)/i, '')
+        .replace(/^(o\s+|a\s+)?player\s+/i, '')
+        // Then strip "tocar musica", "tocar a musica", "toque musica", "toque", "tocar", "ouvir", "reproduzir", "play"
+        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)?/i, '')
+        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+/i, '')
+        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?/i, '')
+        .replace(/^(cifra|letra|musica|cancao|faixa)\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)/i, '')
+        .replace(/^(cifra|letra|musica|cancao|faixa)\s+/i, '')
+        .replace(/^[::\s\-–—"']+|["']+$/g, '')
+        .replace(/\s+(no\s+|com\s+|pelo\s+)?(player|som|youtube)$/i, '')
+        .trim();
+
+      // If user asked to open player or play music without specifying a song
+      if (isPlayerMode && (!cleanQuery || cleanQuery === 'player' || cleanQuery === 'musica' || cleanQuery === 'musicas' || cleanQuery === 'tal')) {
+        if (currentSong) {
+          setIsLoading(false);
+          const replyText = `Tocando **"${currentSong.title}"** no player de áudio e vídeo!`;
+          const speakText = `Tocando ${currentSong.title} no player!`;
+          addMessage({
+            id: getUniqueAssistantMsgId('assistant'),
+            sender: 'assistant',
+            text: replyText,
+            timestamp: new Date(),
+            actionLabel: `▶️ Tocar Música: ${currentSong.title}`,
+            actionIcon: <Volume2 size={15} />,
+            actionSuccessMessage: `✓ Player de ${currentSong.title} iniciado!`,
+            onActionClick: () => {
+              onOpenSong(currentSong, {
+                focusMode: isFocusMode,
+                scrollSpeed: scrollSpeed,
+                autoScroll: autoScroll,
+                showPlayer: true
+              });
+              setIsOpen(false);
+            }
+          });
+          speak(speakText);
+          setTimeout(() => {
+            onOpenSong(currentSong, {
+              focusMode: isFocusMode,
+              scrollSpeed: scrollSpeed,
+              autoScroll: autoScroll,
+              showPlayer: true
+            });
+            setIsOpen(false);
+          }, 1100);
+          return;
+        } else {
+          setIsLoading(false);
+          const replyText = 'Qual música você gostaria de tocar? Diga por exemplo: *"Tocar música Teu amor não falha"* ou *"Abrir player da música Bondade de Deus"*.';
+          addMessage({
+            id: getUniqueAssistantMsgId('assistant'),
+            sender: 'assistant',
+            text: replyText,
+            timestamp: new Date(),
+            actionLabel: '🎵 Ver Músicas',
+            actionIcon: <Music size={15} />,
+            actionSuccessMessage: '✓ Repertório aberto!',
+            onActionClick: () => {
+              onNavigate('songs');
+              setIsOpen(false);
+            }
+          });
+          speak('Qual música você gostaria de tocar?');
+          return;
+        }
+      }
+
+      // If user just requested opening the general songbook
+      if (!cleanQuery || cleanQuery === 'cifra' || cleanQuery === 'cifras' || cleanQuery === 'musica' || cleanQuery === 'musicas' || cleanQuery === 'repertorio') {
+        setIsLoading(false);
+        const replyText = 'Abrindo o repertório de **Músicas e Cifras**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🎵 Ir para Músicas',
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: '✓ Repertório aberto!',
+          onActionClick: () => {
+            onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+        speak('Abrindo o repertório de músicas e cifras!');
+        setTimeout(() => {
+          onNavigate('songs');
+          setIsOpen(false);
+        }, 1000);
+        return;
+      }
+
+      // Find in existing church songs (allSongs)
+      // 1. Exact match on title
+      let foundSong = allSongs.find(s => normalize(s.title || '') === cleanQuery);
+      // 2. Starts with on title
+      if (!foundSong) {
+        foundSong = allSongs.find(s => {
+          const t = normalize(s.title || '');
+          return t.startsWith(cleanQuery) || cleanQuery.startsWith(t);
+        });
+      }
+      // 3. Substring match on title or artist
+      if (!foundSong) {
+        foundSong = allSongs.find(s => {
+          const titleNorm = normalize(s.title || '');
+          const artistNorm = normalize(s.artist || '');
+          return titleNorm.includes(cleanQuery) || cleanQuery.includes(titleNorm) || 
+                 (artistNorm && (artistNorm.includes(cleanQuery) || cleanQuery.includes(artistNorm)));
+        });
+      }
+
+      // If not in allSongs, check built-in popular songs database (e.g. Teu Amor Não Falha)
+      if (!foundSong) {
+        const popular = findLocalPopularSong(cleanQuery, "");
+        if (popular) {
+          foundSong = {
+            id: `popular-${normalize(popular.title).replace(/\s+/g, '-')}`,
+            title: popular.title,
+            artist: popular.artist,
+            key: popular.key,
+            bpm: popular.bpm,
+            timeSignature: popular.timeSignature,
+            chords: popular.chords,
+            lyrics: popular.lyrics,
+            youtube: popular.youtube || undefined,
+            isFavorite: false
+          };
+        }
+      }
+
+      if (foundSong) {
+        setIsLoading(false);
+        const focusText = isFocusMode ? ' no **Modo Foco**' : '';
+        const scrollText = scrollSpeed !== undefined ? ` com **rolagem automática (${scrollSpeed}x)**` : '';
+        const isTocarCommand = norm.startsWith('tocar') || norm.startsWith('toque') || norm.startsWith('toca') || norm.startsWith('play') || norm.startsWith('reproduzir');
+        const actionVerb = isTocarCommand ? 'Tocando' : (isPlayerMode ? 'Abrindo o player de' : (isLyricsOnly ? 'Abrindo a letra de' : 'Abrindo a cifra de'));
+        const replyText = `${actionVerb} **"${foundSong.title}"**${focusText}${scrollText}!`;
+        const speakText = `${actionVerb} ${foundSong.title}!`;
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: isTocarCommand ? `▶️ Tocar Música: ${foundSong.title}` : (isPlayerMode ? `▶️ Abrir Player: ${foundSong.title}` : `🎵 Abrir ${foundSong.title}`),
+          actionIcon: isPlayerMode ? <Volume2 size={15} /> : <Music size={15} />,
+          actionSuccessMessage: `✓ ${isPlayerMode ? 'Player' : (isLyricsOnly ? 'Letra' : 'Cifra')} de ${foundSong.title} aberto${isFocusMode ? ' em Modo Foco' : ''}!`,
+          onActionClick: () => {
+            onOpenSong(foundSong, {
+              focusMode: isFocusMode,
+              scrollSpeed: scrollSpeed,
+              autoScroll: autoScroll,
+              showPlayer: isPlayerMode
+            });
+            setIsOpen(false);
+          }
+        });
+
+        speak(speakText);
+
+        // Auto execute after short confirmation delay
+        setTimeout(() => {
+          onOpenSong(foundSong, {
+            focusMode: isFocusMode,
+            scrollSpeed: scrollSpeed,
+            autoScroll: autoScroll,
+            showPlayer: isPlayerMode
+          });
+          setIsOpen(false);
         }, 1100);
 
+        return;
+      } else if (
+        norm.startsWith('abra') ||
+        norm.startsWith('abrir') ||
+        norm.startsWith('abre') ||
+        norm.includes('cifra') ||
+        norm.includes('musica') ||
+        norm.includes('letra') ||
+        norm.includes('player')
+      ) {
+        setIsLoading(false);
+        const replyText = `Não encontrei a música **"${cleanQuery}"** no repertório. Deseja cadastrá-la agora mesmo?`;
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '➕ Cadastrar Nova Música',
+          actionIcon: <Plus size={15} />,
+          actionSuccessMessage: '✓ Cadastro iniciado!',
+          onActionClick: () => {
+            onOpenAddSong();
+            setIsOpen(false);
+          }
+        });
+        speak(`Não encontrei a música ${cleanQuery} no repertório. Você pode cadastrá-la com um toque.`);
         return;
       }
     }
@@ -1162,61 +1646,61 @@ export function LilouproAssistant({
                   onClick={() => handleQuickChip('Abra o afinador do app')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
                     isLight 
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100 text-emerald-700' 
-                      : 'bg-emerald-950/60 border-emerald-600/40 hover:bg-emerald-900/60 text-emerald-300'
+                      ? 'bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-900' 
+                      : 'bg-amber-950/60 border-amber-600/40 hover:bg-amber-900/60 text-amber-300'
                   }`}
                 >
                   🎯 Afinador do app
                 </button>
                 <button
-                  onClick={() => handleQuickChip('Como faço para agendar um culto?')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                  onClick={() => handleQuickChip('Abra o metrônomo do app')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
                     isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100 text-emerald-900' 
+                      : 'bg-emerald-950/60 border-emerald-600/40 hover:bg-emerald-900/60 text-emerald-300'
                   }`}
                 >
-                  🗓️ Agendar culto
+                  ⏱️ Metrônomo do app
                 </button>
                 <button
-                  onClick={() => handleQuickChip('Como cadastrar uma musica nova no app?')}
+                  onClick={() => handleQuickChip('Abra as escalas')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
                       ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
                       : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
                   }`}
                 >
-                  ➕ Cadastrar música
+                  👥 Escalas
                 </button>
                 <button
-                  onClick={() => handleQuickChip('Abrir cifra Teu amor não falha no modo foco na rolagem 3 x')}
+                  onClick={() => handleQuickChip('Abra a bíblia no Salmo 23')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
                       ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
                       : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
                   }`}
                 >
-                  🎵 Cifra foco (rolagem 3x)
+                  📖 Salmo 23
                 </button>
                 <button
-                  onClick={() => handleQuickChip('Abrir a bíblia do app no salmo 86')}
+                  onClick={() => handleQuickChip('Abra a liturgia')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
                       ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
                       : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
                   }`}
                 >
-                  📖 Bíblia Salmo 86
+                  🗓️ Liturgia
                 </button>
                 <button
-                  onClick={() => handleQuickChip('Como projetar letras no telão?')}
+                  onClick={() => handleQuickChip('Abra a projeção')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
                       ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
                       : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
                   }`}
                 >
-                  📺 Projetar letras
+                  📺 Projeção
                 </button>
               </div>
 
