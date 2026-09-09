@@ -57,6 +57,8 @@ import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
 import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
+import { LilouproAssistant } from './components/LilouproAssistant';
+import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
@@ -1761,6 +1763,7 @@ function MainContent() {
   const [shouldOpenAddModal, setShouldOpenAddModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isOpenHelpCenter, setIsOpenHelpCenter] = useState(false);
+  const [isOpenGlobalTuner, setIsOpenGlobalTuner] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false);
   const [isSongFocusMode, setIsSongFocusMode] = useState(false);
@@ -1777,6 +1780,9 @@ function MainContent() {
   const [isPlaylistPlayerOpen, setIsPlaylistPlayerOpen] = useState<boolean>(false);
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
   const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
+  const [songInitialScrollSpeed, setSongInitialScrollSpeed] = useState<number | undefined>(undefined);
+  const [songInitialAutoScroll, setSongInitialAutoScroll] = useState<boolean | undefined>(undefined);
+  const [bibleNavKey, setBibleNavKey] = useState<number>(0);
 
   // Auto-check if logged-in user hasn't installed PWA and hasn't dismissed the prompt
   useEffect(() => {
@@ -3222,9 +3228,14 @@ function MainContent() {
           )}
           {activeTab === 'songs' && selectedSong && (
             <SongDetailView 
-              key={selectedSong.id} 
+              key={`${selectedSong.id}-${songInitialScrollSpeed ?? 'std'}`} 
               song={selectedSong} 
-              onBack={() => { setSelectedSong(null); setIsSongFocusMode(false); }} 
+              onBack={() => { 
+                setSelectedSong(null); 
+                setIsSongFocusMode(false); 
+                setSongInitialScrollSpeed(undefined);
+                setSongInitialAutoScroll(undefined);
+              }} 
               theme={theme}
               liturgySongs={activeLiturgySongs}
               allSongs={allSongs}
@@ -3232,6 +3243,8 @@ function MainContent() {
               activeLiturgyService={activeLiturgyService}
               onFocusModeChange={setIsSongFocusMode}
               initialFocusMode={isSongFocusMode}
+              initialScrollSpeed={songInitialScrollSpeed}
+              initialAutoScroll={songInitialAutoScroll}
             />
           )}
           {activeTab === 'calendar' && (
@@ -3278,7 +3291,7 @@ function MainContent() {
             <TheoryStudyView key="theory" />
           )}
           {activeTab === 'bible' && (
-            <BibleReaderView key="bible" theme={theme} services={allServices} />
+            <BibleReaderView key={`bible-${bibleNavKey}`} theme={theme} services={allServices} />
           )}
           {activeTab === 'offline' && (
             <OfflineView 
@@ -3325,6 +3338,62 @@ function MainContent() {
       <CustomInstallBanner 
         onOpenGuideModal={() => setShowInstallPromptModal(true)}
       />
+
+      {/* Global Chromatic Tuner Modal (acessível via Assistente de Voz / comandos) */}
+      <ChromaticTunerModal
+        isOpen={isOpenGlobalTuner}
+        onClose={() => setIsOpenGlobalTuner(false)}
+      />
+
+      {/* Liloupro Voice and Text Assistant (Active everywhere EXCEPT Focus Mode) */}
+      {!isSongFocusMode && (
+        <LilouproAssistant 
+          theme={theme}
+          allSongs={allSongs}
+          onNavigate={(tab) => {
+            setActiveTab(tab);
+            setShowMoreMenu(false);
+          }}
+          onOpenSong={(song, options) => {
+            setSelectedSong(song);
+            setActiveTab('songs');
+            setShowMoreMenu(false);
+            if (options?.focusMode) {
+              setIsSongFocusMode(true);
+            }
+            if (options?.scrollSpeed !== undefined) {
+              setSongInitialScrollSpeed(options.scrollSpeed);
+            }
+            if (options?.autoScroll !== undefined) {
+              setSongInitialAutoScroll(options.autoScroll);
+            }
+          }}
+          onOpenBible={(bookName, chapter, verse) => {
+            try {
+              localStorage.setItem('liloupro_last_bible_book', bookName);
+              localStorage.setItem('liloupro_last_bible_chapter', chapter.toString());
+              if (verse !== undefined && verse > 0) {
+                localStorage.setItem('liloupro_last_bible_verse', verse.toString());
+              } else {
+                localStorage.removeItem('liloupro_last_bible_verse');
+              }
+            } catch (e) {}
+            setBibleNavKey(prev => prev + 1);
+            setActiveTab('bible');
+            setShowMoreMenu(false);
+          }}
+          onOpenAddSong={() => {
+            setActiveTab('songs');
+            setSelectedSong(null);
+            setShouldOpenAddModal(true);
+            setShowMoreMenu(false);
+          }}
+          onOpenTuner={() => setIsOpenGlobalTuner(true)}
+          onOpenHelpCenter={() => setIsOpenHelpCenter(true)}
+          isAdmin={isAdmin}
+          currentTab={activeTab}
+        />
+      )}
     </div>
   );
 }

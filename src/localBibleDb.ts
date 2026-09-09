@@ -63,6 +63,25 @@ const OFFLINE_PASSAGES: Record<string, Record<number, BibleVerse[]>> = {
       { verse: 9, text: "Você disse: 'O Senhor é o meu refúgio.' No Altíssimo você fez a sua habitação." },
       { verse: 10, text: "Nenhum mal lhe sucederá, praga nenhuma chegará à tua tenda." }
     ],
+    86: [
+      { verse: 1, text: "Inclina, Senhor, os teus ouvidos e responde-me, pois sou pobre e necessitado." },
+      { verse: 2, text: "Preserva a minha vida, pois sou piedoso; tu, ó meu Deus, salva o teu servo que em ti confia." },
+      { verse: 3, text: "Tem misericórdia de mim, ó Senhor, pois a ti clamo o dia todo." },
+      { verse: 4, text: "Alegra a alma do teu servo, pois a ti, Senhor, elevo a minha alma." },
+      { verse: 5, text: "Pois tu, Senhor, és bom e compassivo, abundante em amor para com todos os que te invocam." },
+      { verse: 6, text: "Escuta, Senhor, a minha oração e atende à voz das minhas súplicas." },
+      { verse: 7, text: "No dia da minha angústia clamo a ti, porque tu me respondes." },
+      { verse: 8, text: "Não há entre os deuses nenhum semelhante a ti, Senhor, nem há obras como as tuas." },
+      { verse: 9, text: "Todas as nações que fizeste virão e se prostrarão diante de ti, Senhor, e glorificarão o teu nome." },
+      { verse: 10, text: "Pois tu és grande e operas maravilhas; só tu és Deus." },
+      { verse: 11, text: "Ensina-me, Senhor, o teu caminho, e andarei na tua verdade; une o meu coração para temer o teu nome." },
+      { verse: 12, text: "Dar-te-ei graças, Senhor Deus meu, de todo o meu coração, e glorificarei o teu nome para sempre." },
+      { verse: 13, text: "Pois grande é a tua misericórdia para comigo, e livraste a minha alma das profundezas do Seol." },
+      { verse: 14, text: "Ó Deus, os soberbos se levantaram contra mim, e um bando de violentos procura tirar-me a vida; eles não te põem diante dos seus olhos." },
+      { verse: 15, text: "Mas tu, Senhor, és Deus compassivo e gracioso, longânimo e abundante em misericórdia e verdade." },
+      { verse: 16, text: "Volta-te para mim e tem misericórdia de mim; concede a tua força ao teu servo e salva o filho da tua serva." },
+      { verse: 17, text: "Mostra-me um sinal do teu favor, para que o vejam os que me odeiam e fiquem envergonhados, porquanto tu, Senhor, me ajudaste e me consolaste." }
+    ],
     92: [
       { verse: 1, text: "Bom é render graças ao Senhor e cantar louvores ao teu nome, ó Altíssimo," },
       { verse: 2, text: "anunciar de manhã a tua misericórdia e, durante as noites, a tua fidelidade," },

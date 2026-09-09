@@ -86,7 +86,9 @@ export function SongDetailView({
   onSelectSong,
   activeLiturgyService,
   onFocusModeChange,
-  initialFocusMode = false
+  initialFocusMode = false,
+  initialScrollSpeed,
+  initialAutoScroll = false
 }: { 
   song: any, 
   onBack: () => void,
@@ -96,7 +98,9 @@ export function SongDetailView({
   onSelectSong?: (song: any) => void,
   activeLiturgyService?: any,
   onFocusModeChange?: (active: boolean) => void,
-  initialFocusMode?: boolean
+  initialFocusMode?: boolean,
+  initialScrollSpeed?: number,
+  initialAutoScroll?: boolean
 }) {
   const { user, isAdmin, memberData } = useAuth();
 
@@ -1039,12 +1043,25 @@ export function SongDetailView({
     localStorage.setItem('metronome-volume', String(metronomeVolume));
   }, [metronomeVolume]);
   
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(initialAutoScroll);
   const [showSpeedSelector, setShowSpeedSelector] = useState(false);
   const [isSmartScroll, setIsSmartScroll] = useState(false); // Default to false so 0.2x speed is standard default
-  const [scrollSpeed, setScrollSpeed] = useState(0.2); // 0.2 as default per user request
-  const scrollSpeedRef = useRef(0.2);
+  const [scrollSpeed, setScrollSpeed] = useState(initialScrollSpeed ?? 0.2); // 0.2 as default per user request
+  const scrollSpeedRef = useRef(initialScrollSpeed ?? 0.2);
   const scrollAccumulatorRef = useRef(0);
+
+  useEffect(() => {
+    if (initialScrollSpeed !== undefined) {
+      setScrollSpeed(initialScrollSpeed);
+      scrollSpeedRef.current = initialScrollSpeed;
+    }
+  }, [initialScrollSpeed]);
+
+  useEffect(() => {
+    if (initialAutoScroll) {
+      setIsAutoScrolling(true);
+    }
+  }, [initialAutoScroll]);
 
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;

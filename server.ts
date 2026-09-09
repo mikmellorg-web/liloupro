@@ -3866,6 +3866,81 @@ Complete a finalização da música`,
     }
   });
 
+  // Liloupro Assistente AI Chat Endpoint
+  app.post("/api/assistant/chat", async (req, res) => {
+    try {
+      const { message, history } = req.body;
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ error: "A mensagem é obrigatória." });
+      }
+
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        return res.json({
+          reply: "O LiLouPro Assistente está operando no modo guia rápido local. Você pode me pedir para abrir cifras (ex: 'Abrir cifra Teu amor não falha no modo foco na rolagem 3x'), abrir a Bíblia (ex: 'Abrir bíblia no Salmo 86') ou perguntar como agendar cultos e cadastrar músicas!"
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const systemInstruction = `Você é o "Liloupro Assistente", assistente oficial de voz e texto do LiLouPro (aplicativo completo de gestão de louvor, repertório com cifras transponíveis, escalas de ministério, liturgia e projeção de letras).
+Sua principal função é ser um guia acolhedor, rápido e didático para novos usuários e equipes de louvor.
+Diretrizes fundamentais:
+1. Responda SEMPRE em português do Brasil (pt-BR).
+2. Se o usuário perguntar como fazer algo no LiLouPro (ex: agendar culto, cadastrar música, transpor tom, projetar na TV, montar escalas, afinar instrumentos), responda SEMPRE com um passo a passo numerado, bem claro, direto e sem enrolação (3 a 5 passos no máximo).
+3. Destaque em negrito as abas e botões exatos do LiLouPro:
+   - **Músicas**: Repertório de músicas com cifras, transposição de tom (+1 / -1), rolagem automática e **Modo Foco**.
+   - **Afinador Cromático (LiLouPro Tuner)**: Fica disponível na barra de ferramentas dentro da visualização da cifra de qualquer música (aba **Músicas** -> abrir qualquer música -> botão **"LiLouPro Tuner"**). Também pode ser aberto a qualquer momento pelo assistente de voz dizendo *"Abra o afinador do app"*. NUNCA diga que fica na tela inicial ou no menu inferior genérico!
+   - **Metrônomo (Pedal de Ritmo)**: Fica na barra de ferramentas da cifra de qualquer música.
+   - **Liturgia**: Botão **"+ Novo Culto / Evento"** para criar e planejar liturgias, momentos do culto e vincular músicas.
+   - **Escalas**: Montagem e acompanhamento das escalas dos músicos e voluntários.
+   - **Bíblia Sagrada**: Leitor bíblico completo com pesquisa rápida e comandos de voz (ex: *"abra a bíblia em Marcos 12:20"*).
+   - **Projeção**: Aba **Projeção** -> botão **"Abrir Tela do Telão"** para projetar as estrofes na TV/projetor.
+4. Mantenha as respostas curtas e legíveis em telas de celular (mobile-friendly).`;
+
+      const contents: any[] = [];
+      if (Array.isArray(history)) {
+        for (const item of history.slice(-6)) {
+          if (item && item.role && item.content) {
+            contents.push({
+              role: item.role === 'user' ? 'user' : 'model',
+              parts: [{ text: item.content }]
+            });
+          }
+        }
+      }
+      contents.push({
+        role: 'user',
+        parts: [{ text: message }]
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.3,
+          maxOutputTokens: 600,
+        }
+      });
+
+      const replyText = response.text || "Desculpe, não consegui formular a resposta agora. Você pode tentar novamente ou usar os botões de atalho rápidos!";
+      return res.json({ reply: replyText });
+    } catch (err: any) {
+      console.error("[Liloupro Assistant Chat Error]:", err);
+      return res.json({
+        reply: "Aqui está o guia rápido do LiLouPro! Você pode navegar pelas abas Músicas, Liturgia, Escalas e Bíblia usando o menu principal, ou tocar nos botões de atalhos rápidos."
+      });
+    }
+  });
+
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");

@@ -505,4 +505,31 @@
   transform: translateZ(0);
 }
 
+/* Assistant Subtle Glow & Shimmer FX */
+@keyframes assistantGlowPulse {
+  0%, 100% {
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25), 0 0 6px rgba(56, 189, 248, 0.15);
+  }
+  50% {
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35), 0 0 10px rgba(56, 189, 248, 0.25);
+  }
+}
+
+.assistant-radiant-glow {
+  animation: assistantGlowPulse 4s ease-in-out infinite;
+}
+
+@keyframes assistantShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  30%, 100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-assistant-shimmer {
+  animation: assistantShimmer 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 

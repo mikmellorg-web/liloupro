@@ -800,6 +800,97 @@ Não há outro igual a Ti
 
 Não há outro além de Ti
 Não há outro igual a Ti, Senhor`
+
+    };
+  }
+
+  // 11. Teu Amor Não Falha / Your Love Never Fails
+  if (normalizedTitle.includes("teu amor não falha") || normalizedTitle.includes("teu amor nao falha") || normalizedTitle.includes("your love never fails")) {
+    return {
+      title: "Teu Amor Não Falha",
+      artist: "Nívea Soares",
+      key: "C",
+      bpm: 115,
+      timeSignature: "4/4",
+      chords: `[Intro]
+C  G  Am  F
+
+[Verso 1]
+C              G
+  Nada pode me separar
+Am                 F
+  Mesmo se eu me perder
+C                 G        Am   F
+  Teu amor não falha
+C                     G
+  Mesmo quando a fraqueza vem
+Am                    F
+  Tua força me sustém
+C                 G        Am   F
+  Teu amor não falha
+
+[Refrão]
+F            C             G
+  Tu és o mesmo pra sempre
+          Dm7              F
+Teu amor nunca mudará
+             C              G    Dm7
+Se as tempestades me cercarem
+F               C             G
+  Não temerei mal nenhum
+                  Dm7              F
+Pois sei que Tu me amas
+             C              G    Dm7
+Teu amor não falha
+
+[Verso 2]
+C                     G
+  Se o mar agitado estiver
+Am                   F
+  Sobre as ondas andarei
+C                 G        Am   F
+  Teu amor não falha
+C                  G
+  O Teu amor me resgatou
+Am                  F
+  A Tua cruz me salvou
+C                 G        Am   F
+  Teu amor não falha
+
+[Ponte]
+F              Am            G
+  Tu fazes tudo cooperar
+                     Dm7
+Para o meu bem
+F              Am            G
+  Tu fazes tudo cooperar
+                     Dm7
+Para o meu bem`,
+      lyrics: `Nada pode me separar
+Mesmo se eu me perder
+Teu amor não falha
+Mesmo quando a fraqueza vem
+Tua força me sustém
+Teu amor não falha
+
+Tu és o mesmo pra sempre
+Teu amor nunca mudará
+Se as tempestades me cercarem
+Não temerei mal nenhum
+Pois sei que Tu me amas
+Teu amor não falha
+
+Se o mar agitado estiver
+Sobre as ondas andarei
+Teu amor não falha
+O Teu amor me resgatou
+A Tua cruz me salvou
+Teu amor não falha
+
+Tu fazes tudo cooperar
+Para o meu bem
+Tu fazes tudo cooperar
+Para o meu bem`
     };
   }
 

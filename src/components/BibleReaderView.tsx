@@ -507,10 +507,11 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
     try {
       const savedBookName = localStorage.getItem('liloupro_last_bible_book');
       if (savedBookName) {
+        const normSaved = savedBookName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
         const found = BIBLE_BOOKS_DATA.find(
-          b => b.name.toLowerCase() === savedBookName.toLowerCase() ||
-               b.abbrev.toLowerCase() === savedBookName.toLowerCase() ||
-               b.apiId.toLowerCase() === savedBookName.toLowerCase()
+          b => b.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() === normSaved ||
+               b.abbrev.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() === normSaved ||
+               b.apiId.toLowerCase() === normSaved
         );
         if (found) return found;
       }
@@ -854,8 +855,10 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
           setIsFallbackActive(cached.isFallback);
           setFallbackWarning(cached.warning);
           setIsLoading(false);
-          // Scroll smoothly to top of passage
-          readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          // Scroll smoothly to top of passage only if no specific verse is targeted
+          if (!localStorage.getItem('liloupro_last_bible_verse')) {
+            readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
 
           // Trigger background prefetch for adjacent chapters so they are ready if not cached yet
           prefetchAdjacentPassages(selectedBook, validChapter, bibleVersion);
@@ -909,7 +912,9 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
           setIsFallbackActive(idbPassage.isFallback);
           setFallbackWarning(idbPassage.warning);
           setIsLoading(false);
-          readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          if (!localStorage.getItem('liloupro_last_bible_verse')) {
+            readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
           const entry = {
             verses: cleanVerses,
             isFallback: idbPassage.isFallback,
@@ -1174,8 +1179,10 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
       } finally {
         if (active) {
           setIsLoading(false);
-          // Scroll smoothly to top of passage
-          readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          // Scroll smoothly to top of passage only if no specific verse is targeted
+          if (!localStorage.getItem('liloupro_last_bible_verse')) {
+            readerTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
         }
       }
     };
@@ -1185,6 +1192,34 @@ export default function BibleReaderView({ theme = 'dark', services = [] }: { the
       active = false;
     };
   }, [selectedBook, selectedChapter, bibleVersion, reloadTrigger]);
+
+  // Auto-scroll and highlight target verse when opened via Assistant or Quick Reference
+  useEffect(() => {
+    if (verses.length > 0) {
+      try {
+        const savedVerse = localStorage.getItem('liloupro_last_bible_verse');
+        if (savedVerse) {
+          const verseNum = parseInt(savedVerse, 10);
+          if (!isNaN(verseNum) && verseNum > 0) {
+            localStorage.removeItem('liloupro_last_bible_verse');
+            const timer = setTimeout(() => {
+              const element = document.getElementById(`verse-container-${verseNum}`);
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const foundVerse = verses.find(v => v.verse === verseNum);
+                if (foundVerse) {
+                  setActiveVerseOverlay(foundVerse);
+                }
+              }
+            }, 350);
+            return () => clearTimeout(timer);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not scroll to saved verse:", e);
+      }
+    }
+  }, [verses]);
 
   // Handle Book Selection
   const handleSelectBook = (book: BibleBook) => {
