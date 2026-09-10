@@ -415,14 +415,9 @@ export function SongDetailView({
   const [isImportingCifra, setIsImportingCifra] = useState(false);
 
   const handleImportFromCifraClub = async () => {
-    if (!editCifraClubUrl) {
-      setAutofillError("Por favor, cole um link válido do Cifra Club primeiro.");
-      return;
-    }
-
-    const trimmedUrl = editCifraClubUrl.trim();
-    if (!trimmedUrl.toLowerCase().includes("cifraclub.com.br")) {
-      setAutofillError("O link deve pertencer ao site cifraclub.com.br.");
+    const rawInput = (editCifraClubUrl || "").trim().replace(/^["'\\]+|["'\\]+$/g, "");
+    if (!rawInput) {
+      setAutofillError("Por favor, cole um link do Cifra Club ou digite o nome da música.");
       return;
     }
 
@@ -431,18 +426,45 @@ export function SongDetailView({
     setAutofillError(null);
 
     try {
-      const response = await fetch("/api/songs/import-cifraclub", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmedUrl })
-      });
+      let data: any = null;
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
+      if (rawInput.toLowerCase().includes("cifraclub.com.br")) {
+        const response = await fetch("/api/songs/import-cifraclub", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: rawInput })
+        });
+
+        if (response.ok) {
+          data = await response.json();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
+        }
+      } else {
+        // Support searching by song name or "Artist - Title"
+        const parts = rawInput.split(/\s*[-–—]\s*/);
+        let searchTitle = rawInput;
+        let searchArtist = "";
+        if (parts.length >= 2) {
+          searchArtist = parts[0].trim();
+          searchTitle = parts.slice(1).join(" - ").trim();
+        }
+
+        const searchRes = await fetch("/api/songs/import-cifraclub-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: searchTitle, artist: searchArtist })
+        });
+
+        if (searchRes.ok) {
+          data = await searchRes.json();
+        } else {
+          const errData = await searchRes.json().catch(() => ({}));
+          throw new Error(errData.details || errData.error || `Não foi possível encontrar a música "${rawInput}" no Cifra Club.`);
+        }
       }
 
-      const data = await response.json();
       setEditedSong(prev => ({
         ...prev,
         title: data.title || prev.title,
@@ -456,10 +478,10 @@ export function SongDetailView({
         capo: data.capo || prev.capo || ""
       }));
       setEditCifraClubUrl('');
-      setAutofillSuccess(`Música "${data.title}" importada e preenchida com sucesso direto do Cifra Club! Abas de cifra e letra também atualizadas.`);
+      setAutofillSuccess(`Música "${data.title}" importada e preenchida com sucesso direto do Cifra Club!`);
     } catch (error: any) {
       console.error("Erro ao importar do Cifra Club:", error);
-      setAutofillError(error.message || "Erro de conexão ao realizar a importação direta do Cifra Club. Verifique o link e tente novamente.");
+      setAutofillError(error.message || "Não foi possível importar a cifra do Cifra Club. Verifique o link e tente novamente.");
     } finally {
       setIsImportingCifra(false);
     }
