@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
-  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer
+  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findLocalPopularSong } from '../songsDatabase';
 import { parseSpokenBibleCommand, isGeneralBibleRequest } from '../utils/bibleParser';
+import { ScreenInteractiveManualModal, SCREEN_MANUALS } from './ScreenInteractiveManualModal';
 
 interface Message {
   id: string;
@@ -88,6 +89,68 @@ export function LilouproAssistant({
     });
   };
 
+  // State for Screen Interactive Manual
+  const [isInteractiveManualOpen, setIsInteractiveManualOpen] = useState(false);
+  const [interactiveManualKey, setInteractiveManualKey] = useState<string>('home');
+
+  // Identificação inteligente da tela atual
+  const currentScreenKey = useMemo(() => {
+    if (currentSong && currentTab === 'songs') {
+      return 'song_detail';
+    }
+    if (currentTab && SCREEN_MANUALS[currentTab]) {
+      return currentTab;
+    }
+    return 'home';
+  }, [currentSong, currentTab]);
+
+  const currentScreenData = SCREEN_MANUALS[currentScreenKey] || SCREEN_MANUALS['home'];
+
+  const currentScreenTitle = useMemo(() => {
+    if (currentSong && currentTab === 'songs') {
+      return `Cifra: ${currentSong.title || 'Música'}`;
+    }
+    return currentScreenData.screenName;
+  }, [currentSong, currentTab, currentScreenData]);
+
+  const handleOpenScreenManual = (screenKey?: string) => {
+    const targetKey = screenKey || currentScreenKey;
+    setInteractiveManualKey(targetKey);
+    setIsInteractiveManualOpen(true);
+  };
+
+  const handleAskHowToUseThisScreen = (screenKey?: string) => {
+    const targetKey = screenKey || currentScreenKey;
+    const targetData = SCREEN_MANUALS[targetKey] || SCREEN_MANUALS['home'];
+    
+    addMessage({
+      id: getUniqueAssistantMsgId('user'),
+      sender: 'user',
+      text: `Como usar esta tela? (${targetData.screenName})`,
+      timestamp: new Date()
+    });
+
+    const stepsList = targetData.steps.map(s => `• **${s.title}**: ${s.description}`).join('\n');
+    const replyText = `Aqui está o guia de **${targetData.screenName}**:\n\n${targetData.tagline}\n\n${stepsList}\n\n💡 *Dica de ouro:* ${targetData.proTips[0] || 'Aproveite os recursos práticos integrados no LiLouPro!'}`;
+    const speakText = `Abrindo o manual interativo de ${targetData.screenName}!`;
+
+    addMessage({
+      id: getUniqueAssistantMsgId('assistant'),
+      sender: 'assistant',
+      text: replyText,
+      timestamp: new Date(),
+      actionLabel: `📖 Abrir Manual Interativo: ${targetData.screenName}`,
+      actionIcon: <BookOpen size={15} />,
+      actionSuccessMessage: `✓ Manual interativo aberto!`,
+      onActionClick: () => {
+        handleOpenScreenManual(targetKey);
+      }
+    });
+
+    speak(speakText);
+    handleOpenScreenManual(targetKey);
+  };
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -95,6 +158,7 @@ export function LilouproAssistant({
       text: 'Olá! Sou o **Liloupro Assistente** 🎙️\nEstou aqui para guiá-lo em qualquer dúvida ou executar comandos de voz pelo app.',
       timestamp: new Date(),
       steps: [
+        'Diga ex: "Como usar esta tela?"',
         'Diga ex: "Abrir player da música Teu amor não falha"',
         'Diga ex: "Abra o afinador do app"',
         'Diga ex: "Abra o metrônomo do app"',
@@ -288,6 +352,37 @@ export function LilouproAssistant({
       .replace(/\babriu\b/g, 'abrir')
       .replace(/\btoqua\b/g, 'toca')
       .replace(/\btoqui\b/g, 'toque');
+
+    // ==========================================
+    // 0. INTENT: COMO USAR ESTA TELA / MANUAL INTERATIVO DA TELA
+    // Ex: "Como usar esta tela?", "Como funciona esta tela?", "Manual desta tela", "Ajuda nesta tela"
+    // ==========================================
+    const isHowToUseScreen = (
+      norm.includes('como usar esta tela') ||
+      norm.includes('como usar essa tela') ||
+      norm.includes('como funciona esta tela') ||
+      norm.includes('como funciona essa tela') ||
+      norm.includes('manual desta tela') ||
+      norm.includes('manual dessa tela') ||
+      norm.includes('manual da tela') ||
+      norm.includes('ajuda desta tela') ||
+      norm.includes('ajuda nessa tela') ||
+      norm.includes('o que faz esta tela') ||
+      norm.includes('como mexer nesta tela') ||
+      norm.includes('como mexer nessa tela') ||
+      norm.includes('manual interativo') ||
+      norm.includes('guia da tela') ||
+      norm.includes('guia desta tela') ||
+      norm === 'como usar' ||
+      norm === 'manual' ||
+      norm === 'ajuda'
+    );
+
+    if (isHowToUseScreen) {
+      setIsLoading(false);
+      handleAskHowToUseThisScreen();
+      return;
+    }
 
     // ==========================================
     // 1. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
@@ -758,6 +853,554 @@ export function LilouproAssistant({
     }
 
     // ==========================================
+    // DETECT QUESTIONS & HOW-TO / TUTORIAL COMMANDS
+    // Ex: "Como faço para agendar um culto?", "Como agendar um culto?", "Como cadastrar uma música nova?", "Como cadastrar membro?", "Como marcar disponibilidade?"
+    // ==========================================
+    const isQuestionOrHowTo = 
+      norm.startsWith('como ') ||
+      norm === 'como' ||
+      norm.startsWith('o que ') ||
+      norm.startsWith('qual ') ||
+      norm.startsWith('onde ') ||
+      norm.startsWith('por que ') ||
+      norm.startsWith('porque ') ||
+      norm.startsWith('passo a passo') ||
+      norm.startsWith('tutorial') ||
+      norm.startsWith('guia') ||
+      norm.startsWith('duvida') ||
+      norm.startsWith('ajuda ') ||
+      norm.includes('como faco') ||
+      norm.includes('como fazer') ||
+      norm.includes('como cadastrar') ||
+      norm.includes('como agendar') ||
+      norm.includes('como criar') ||
+      norm.includes('como montar') ||
+      norm.includes('como usar') ||
+      norm.includes('como funciona') ||
+      norm.includes('como marcar') ||
+      norm.includes('como mudar') ||
+      norm.includes('como transpor') ||
+      norm.includes('como projetar') ||
+      norm.includes('como afinar') ||
+      norm.includes('como ensaiar') ||
+      norm.includes('como praticar') ||
+      norm.includes('como baixar') ||
+      norm.includes('como exportar') ||
+      norm.includes('como compartilhar') ||
+      norm.includes('como escalar') ||
+      norm.includes('como gerar escala');
+
+    if (isQuestionOrHowTo) {
+      // 1. COMO AGENDAR UM CULTO / CRIAR CULTO?
+      if (
+        norm.includes('agendar') ||
+        norm.includes('agenda') ||
+        norm.includes('novo culto') ||
+        norm.includes('criar culto') ||
+        norm.includes('marcar culto') ||
+        (norm.includes('culto') && (norm.includes('criar') || norm.includes('agendar') || norm.includes('fazer') || norm.includes('marcar') || norm.includes('adicionar') || norm.includes('faco')))
+      ) {
+        setIsLoading(false);
+        const replyText = 'Aqui está o passo a passo completo e detalhado para **agendar um culto e organizar a celebração** no LiLouPro:';
+        const steps = [
+          '1. **Acessar a Agenda**: No menu principal, clique na aba **Escalas** (no menu inferior do celular ou no menu lateral do computador).',
+          '2. **Abrir Novo Agendamento**: No topo da tela, clique no botão **"+ Novo Agendamento"**.',
+          '3. **Preencher o Formulário de Agendamento**:\n   • **Identificação do Culto**: Digite o nome da celebração (ex: *Culto de Celebração*, *Culto de Domingo Noite*, *Culto de Jovens*);\n   • **Tema / Ocasião**: Selecione o tema no seletor (ex: *Normal*, *Santa Ceia*, *Missões*, *Família*, *Jovens*, *Batismo*);\n   • **Data e Horário**: Defina o dia e o horário do início do culto;\n   • **Link da Playlist (Opcional)**: Cole o link do YouTube com a playlist das músicas para os músicos ensaiarem;\n   • Clique em **"Criar Agendamento"**.',
+          '4. **Escalar a Equipe**: No card do culto recém-criado, clique no botão de editar escala para selecionar os voluntários em cada função (Vocal, Violão, Teclado, Bateria, Baixo, Mídia/Projeção, Som, etc.) — ou clique em **"Gerar Escala com IA"** para que o assistente inteligente cruze as disponibilidades e monte a escala automaticamente!',
+          '5. **Definir Músicas e Liturgia**: No card do culto, clique em **"Lista de Músicas"** (ou abra a aba **Liturgia**) para definir a ordem dos momentos e vincular as canções do repertório já nos tons corretos.',
+          '6. **Notificar e Compartilhar**: Clique no botão **"WhatsApp"** no topo da página para enviar a escala formatada com 1 toque para o grupo do ministério ou em **"Baixar Escala Mês"** para gerar o documento oficial em PDF!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Ir para Escalas e Agendar Culto',
+          actionIcon: <Calendar size={15} />,
+          actionSuccessMessage: '✓ Abrindo tela de Escalas!',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para agendar um culto, vá na aba Escalas e clique em Novo Agendamento. Preencha o nome, tema, data e horário, e clique em Criar Agendamento. Depois, no card do culto, você escala os voluntários e vincula o repertório de músicas!');
+        return;
+      }
+
+      // 2. COMO CADASTRAR UMA MÚSICA NOVA?
+      if (
+        (norm.includes('musica') || norm.includes('cifra') || norm.includes('cancao') || norm.includes('repertorio')) &&
+        (norm.includes('cadastrar') || norm.includes('adicionar') || norm.includes('inserir') || norm.includes('nova') || norm.includes('novo') || norm.includes('salvar') || norm.includes('colocar') || norm.includes('faco') || norm.includes('como'))
+      ) {
+        setIsLoading(false);
+        const replyText = 'Aqui está o passo a passo completo para **cadastrar uma nova música** no repertório do LiLouPro:';
+        const steps = [
+          '1. **Acessar o Repertório**: Acesse a aba **Músicas** no menu de navegação.',
+          '2. **Iniciar Cadastro**: Toque no botão **"+ Cadastrar Música"** localizado no canto superior da tela.',
+          '3. **Busca Automática com 1 Clique (Mais Rápido)**: Digite o título da canção e artista na barra de pesquisa integrada (Cifra Club / YouTube / Letras). O app busca e preenche automaticamente a cifra completa, letra, tom original e o vídeo do YouTube!',
+          '4. **Cadastro Manual**: Se preferir, digite o título, artista, selecione o Tom Original, informe o BPM, cole o link do YouTube e cole a letra com acordes no editor.',
+          '5. **Salvar no Repertório**: Toque em **"Salvar Música"**. A canção fica salva na nuvem para toda a igreja, pronta com diagramas de acordes anatômicos (dedos e intervalos), transposição de tom e rolagem automática no Modo Foco.'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '➕ Cadastrar Nova Música Agora',
+          actionIcon: <Plus size={15} />,
+          actionSuccessMessage: '✓ Abrindo cadastro de músicas!',
+          onActionClick: () => {
+            onOpenAddSong();
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para cadastrar uma música, abra a aba Músicas e clique em Cadastrar Música. Você pode usar a busca automática integrada para importar a cifra, letra e tom com um toque!');
+        return;
+      }
+
+      // 3. COMO CADASTRAR MEMBRO / INTEGRANTE / VOLUNTÁRIO?
+      if (
+        (norm.includes('membro') || norm.includes('integrante') || norm.includes('voluntario') || norm.includes('musico') || norm.includes('cantor') || norm.includes('equipe')) &&
+        (norm.includes('cadastrar') || norm.includes('adicionar') || norm.includes('inserir') || norm.includes('novo') || norm.includes('faco') || norm.includes('como'))
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **cadastrar integrantes e voluntários** no ministério de louvor:';
+        const steps = [
+          '1. **Acessar Membros**: Clique na aba **Membros** no menu principal.',
+          '2. **Novo Cadastro**: Toque no botão **"+ Novo Membro"** no topo da tela.',
+          '3. **Preencher os Dados**:\n   • **Nome Completo**: Nome do integrante;\n   • **WhatsApp com DDD**: Fundamental para envio automático de escalas e avisos de culto;\n   • **E-mail**: Para notificações e login no sistema;\n   • **Data de Nascimento**: Para o controle de aniversariantes da equipe.',
+          '4. **Definir Funções Ministeriais**: Marque as caixas de atuação da pessoa (ex: *Vocal*, *Violão*, *Teclado*, *Baixo*, *Bateria*, *Guitarra*, *Mídia/Projeção*, *Sonoplastia*, *Ministro de Louvor*).',
+          '5. **Salvar**: Clique em **"Salvar"**. O membro já estará apto para ser escalado nos cultos e poderá preencher suas disponibilidades mensais!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '👥 Ir para Membros',
+          actionIcon: <Users size={15} />,
+          actionSuccessMessage: '✓ Abrindo lista de membros!',
+          onActionClick: () => {
+            onNavigate('members');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para cadastrar um membro, vá na aba Membros, clique em Novo Membro, preencha os dados e selecione as funções ministeriais que ele exerce na equipe!');
+        return;
+      }
+
+      // 4. COMO MARCAR / PREENCHER DISPONIBILIDADE?
+      if (
+        norm.includes('disponibilidade') ||
+        norm.includes('disponivel') ||
+        norm.includes('indisponivel') ||
+        norm.includes('posso tocar') ||
+        norm.includes('nao posso')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **informar suas disponibilidades para os cultos do mês**:';
+        const steps = [
+          '1. **Acessar a Tela**: Acesse a aba **Disponibilidade** no menu de navegação.',
+          '2. **Visualizar o Calendário**: Você verá a lista de todos os cultos e eventos programados pela liderança para o mês atual.',
+          '3. **Marcar as Datas**:\n   • Toque no culto para alternar entre **Disponível (Verde)** e **Indisponível (Vermelho)**;\n   • Adicione observações se houver restrições de horário (ex: *chego após as 19h*).',
+          '4. **Salvar Respostas**: Clique no botão **"Salvar Disponibilidade"**.',
+          '5. **Benefício**: A liderança e o gerador de escala por IA consultarão suas datas e respeitarão seus dias de folga automaticamente!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '📅 Marcar Minha Disponibilidade',
+          actionIcon: <Calendar size={15} />,
+          actionSuccessMessage: '✓ Abrindo tela de disponibilidade!',
+          onActionClick: () => {
+            onNavigate('availability');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para marcar disponibilidade, abra a aba Disponibilidade, marque verde para os dias que você pode servir e vermelho para os que não pode, depois clique em Salvar!');
+        return;
+      }
+
+      // 5. COMO MONTAR LITURGIA / ORDEM DO CULTO?
+      if (
+        norm.includes('liturgia') ||
+        norm.includes('ordem do culto') ||
+        norm.includes('ordem de culto') ||
+        norm.includes('momentos do culto')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **estruturar a liturgia e ordem do culto**:';
+        const steps = [
+          '1. **Acessar Liturgia**: Toque na aba **Liturgia** no menu principal.',
+          '2. **Selecionar o Culto**: Escolha o culto agendado na lista de celebrações.',
+          '3. **Estruturar os Blocos**: Clique em **"+ Adicionar Momento"** para criar a sequência cronológica (ex: *Oração Inicial*, *Momento de Louvor*, *Dízimos & Ofertas*, *Ministração da Palavra*, *Ceia do Senhor*, *Bênção Final*).',
+          '4. **Vincular Músicas do Repertório**: No bloco de louvor, clique em **"+ Adicionar Música"** e vincule as canções do repertório já com as versões e tonalidades definidas.',
+          '5. **Definir Duração e Observações**: Indique o tempo previsto de cada momento e anotações para o operador de som e projeção.',
+          '6. **Sincronização em Tempo Real**: A liturgia fica sincronizada automaticamente com o telão de projeção e com os dispositivos dos músicos no altar!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '📋 Ir para Liturgia',
+          actionIcon: <Layers size={15} />,
+          actionSuccessMessage: '✓ Abrindo liturgia!',
+          onActionClick: () => {
+            onNavigate('liturgy');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para montar a liturgia, acesse a aba Liturgia, selecione o culto e adicione os momentos da celebração vinculando as músicas do repertório!');
+        return;
+      }
+
+      // 6. COMO PROJETAR LETRAS / TELÃO DA IGREJA?
+      if (
+        norm.includes('projetar') ||
+        norm.includes('projecao') ||
+        norm.includes('telao') ||
+        norm.includes('tv') ||
+        norm.includes('transmissao')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **projetar as letras das músicas no telão ou TV da igreja**:';
+        const steps = [
+          '1. **Conectar a Tela**: Conecte o computador ao projetor ou TV via cabo HDMI (ou sem fio) e configure a exibição no modo **Estender Área de Trabalho** (no Windows: pressione `Win + P` e escolha *Estender*).',
+          '2. **Acessar Projeção**: No LiLouPro, clique na aba **Projeção** no menu.',
+          '3. **Abrir Tela do Telão**: Clique no botão **"Abrir Tela do Telão"** — isso abrirá uma nova janela limpa, sem menus, dedicada exclusivamente para o público.',
+          '4. **Posicionar em Tela Cheia**: Arraste essa janela para o monitor da TV/Projetor e pressione `F11` (tela cheia).',
+          '5. **Controlar a Projeção**: No monitor principal (ou no seu celular/tablet), selecione a música e toque nas estrofes para trocar as frases na tela instantaneamente com transição suave.',
+          '6. **Botões de Emergência**: Utilize os botões **Blackout (Tela Preta)**, **Limpar Texto** ou o envio direto de versículos da **Bíblia**!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '📺 Abrir Painel de Projeção',
+          actionIcon: <Tv size={15} />,
+          actionSuccessMessage: '✓ Abrindo projeção!',
+          onActionClick: () => {
+            onNavigate('projection');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para projetar letras, abra a aba Projeção, clique em Abrir Tela do Telão, arraste para a TV e toque nas estrofes para transmitir ao vivo!');
+        return;
+      }
+
+      // 7. COMO MUDAR O TOM / TRANSPOSIÇÃO DE CIFRA?
+      if (
+        norm.includes('mudar tom') ||
+        norm.includes('transpor') ||
+        norm.includes('transposicao') ||
+        norm.includes('tom da cifra') ||
+        norm.includes('trocar tom') ||
+        norm.includes('semitom')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **mudar o tom de qualquer música** no LiLouPro:';
+        const steps = [
+          '1. **Abrir a Cifra**: Acesse a aba **Músicas** e abra a canção desejada.',
+          '2. **Ajustar Semitons**: Na barra de ferramentas no topo da cifra, localize os controles de tom:\n   • Clique em **- (Diminuir meio tom / Bemol)**;\n   • Clique em **+ (Aumentar meio tom / Sustenido)**;\n   • Ou selecione diretamente a nota desejada no seletor de tom.',
+          '3. **Recálculo Harmônico**: Todos os acordes da letra são transpostos instantaneamente com precisão harmônica.',
+          '4. **Diagramas Anatômicos**: Os diagramas de acordes no rodapé mudam na mesma hora, mostrando a digitação exata e a opção de ver por Dedos ou por Intervalos.',
+          '5. **Salvar Tom do Culto**: O tom alterado pode ser fixado para a escala do dia para que todos os músicos ensaiem na tonalidade certa!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🎵 Ver Repertório de Músicas',
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: '✓ Abrindo músicas!',
+          onActionClick: () => {
+            onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para mudar o tom, abra a música e use os botões mais e menos de semitom no topo da tela. Todos os acordes e diagramas mudam instantaneamente!');
+        return;
+      }
+
+      // 8. COMO GERAR ESCALA AUTOMÁTICA COM IA?
+      if (
+        (norm.includes('ia') || norm.includes('inteligencia artificial') || norm.includes('automatica') || norm.includes('automatico')) &&
+        (norm.includes('escala') || norm.includes('escalar'))
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **gerar escalas de ministério automaticamente com Inteligência Artificial**:';
+        const steps = [
+          '1. **Acessar Escalas**: Clique na aba **Escalas** no menu principal.',
+          '2. **Localizar o Culto**: Encontre o card do culto que deseja escalar.',
+          '3. **Disparar a IA**: Toque no botão **"Gerar Escala com IA"** no card do culto.',
+          '4. **Processamento Inteligente**: O algoritmo analisa em segundos:\n   • As **disponibilidades confirmadas** pelos membros para aquela data;\n   • As **funções habilitadas** no cadastro de cada integrante (vocal, violão, teclado, etc.);\n   • O **histórico de escalas recentes**, evitando sobrecarregar os mesmos voluntários em cultos seguidos.',
+          '5. **Revisar e Aprovar**: A escala é preenchida na tela para você revisar e aprovar ou trocar qualquer integrante com 1 clique antes de publicar!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🤖 Ir para Escalas e Usar IA',
+          actionIcon: <Bot size={15} />,
+          actionSuccessMessage: '✓ Abrindo escalas!',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para gerar escala com IA, vá na aba Escalas e clique no botão Gerar Escala com IA. A inteligência cruza as disponibilidades e funções dos voluntários automaticamente!');
+        return;
+      }
+
+      // 9. COMO COMPARTILHAR ESCALA NO WHATSAPP OU BAIXAR EM PDF?
+      if (
+        norm.includes('whatsapp') ||
+        norm.includes('pdf') ||
+        norm.includes('baixar escala') ||
+        norm.includes('imprimir escala') ||
+        norm.includes('compartilhar escala') ||
+        norm.includes('enviar escala')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **compartilhar ou exportar a escala do ministério**:';
+        const steps = [
+          '1. **Acessar a Aba Escalas**: Clique em **Escalas** no menu principal.',
+          '2. **Compartilhar no WhatsApp**: Clique no botão **"WhatsApp"** no topo da página. O LiLouPro gera uma mensagem completa, organizada por data e função com emojis de instrumentos, pronta para disparar no grupo de louvor com 1 toque!',
+          '3. **Lembrete Individual**: No card de cada voluntário escalado, você pode clicar no ícone do WhatsApp para enviar uma mensagem personalizada de convocação direto para ele.',
+          '4. **Baixar em PDF**: Clique no botão **"Baixar Escala Mês"** para gerar um documento PDF diagramado para impressão no mural da igreja ou arquivamento.'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Ir para Escalas',
+          actionIcon: <Calendar size={15} />,
+          actionSuccessMessage: '✓ Abrindo escalas!',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para compartilhar a escala, acesse a aba Escalas e use o botão WhatsApp para enviar ao grupo da equipe ou Baixar Escala Mês para gerar o PDF!');
+        return;
+      }
+
+      // 10. COMO USAR O AFINADOR / AFINAR INSTRUMENTOS?
+      if (
+        norm.includes('afinar') ||
+        norm.includes('afinador')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **afinar seu instrumento** com o Afinador Cromático do LiLouPro:';
+        const steps = [
+          '1. **Abrir a Ferramenta**: Diga ao assistente *"Abra o afinador"* ou abra qualquer música e clique no ícone de afinador (frequência) na barra superior.',
+          '2. **Permissão de Microfone**: Permita o acesso ao microfone no navegador se solicitado.',
+          '3. **Tocar a Corda**: Toque a corda solta do instrumento (violão, guitarra, baixo, ukulele) próximo ao microfone.',
+          '4. **Leitura Cromática em Tempo Real**:\n   • **Ponteiro à esquerda / Vermelho**: Corda frouxa (aperte);\n   • **Centro / Verde brilhante**: Afinado com precisão absoluta (0 cents);\n   • **Ponteiro à direita / Vermelho**: Corda apertada (afrouxe).'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🎯 Abrir Afinador do App',
+          actionIcon: <Radio size={15} />,
+          actionSuccessMessage: '✓ Afinador aberto!',
+          onActionClick: () => {
+            onOpenTuner?.();
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para afinar, abra o afinador pelo assistente ou pela cifra, toque a corda do instrumento e acompanhe o ponteiro até ficar verde no centro!');
+        return;
+      }
+
+      // 11. COMO USAR O METRÔNOMO / AJUSTAR BPM?
+      if (
+        norm.includes('metronomo') ||
+        norm.includes('bpm') ||
+        norm.includes('andamento') ||
+        norm.includes('ritmo') ||
+        norm.includes('clique') ||
+        norm.includes('click') ||
+        norm.includes('tap tempo')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **ensaiar com o Metrônomo Interativo**:';
+        const steps = [
+          '1. **Abrir o Metrônomo**: Diga *"Abra o metrônomo"* ao assistente ou toque no ícone de metrônomo dentro de qualquer cifra.',
+          '2. **Ajustar o BPM**: Arraste a barra ou use os botões **+ / -** para definir as batidas por minuto.',
+          '3. **Calcular com TAP TEMPO**: Se não souber o BPM numérico, dê 4 toques ritmados no botão **TAP TEMPO** seguindo a batida da música para que o app calcule o andamento exato na hora!',
+          '4. **Compasso & Timbre**: Escolha a fórmula de compasso (4/4, 3/4, 6/8) e o som do clique (clássico, madeira ou digital).',
+          '5. **Iniciar**: Clique em Play para iniciar o clique e manter a precisão rítmica da equipe durante os ensaios!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '⏱️ Abrir Metrônomo do App',
+          actionIcon: <Timer size={15} />,
+          actionSuccessMessage: '✓ Metrônomo aberto!',
+          onActionClick: () => {
+            onOpenMetronome?.();
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para usar o metrônomo, diga abra o metrônomo ou abra pela cifra, ajuste o BPM ou dê toques no botão Tap Tempo para calcular o andamento da música!');
+        return;
+      }
+
+      // 12. COMO USAR O MODO FOCO / MODO PALCO?
+      if (
+        norm.includes('modo foco') ||
+        norm.includes('modo palco') ||
+        norm.includes('estante') ||
+        norm.includes('autoscroll') ||
+        norm.includes('rolagem')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **usar o Modo Foco nas estantes de partitura e palcos**:';
+        const steps = [
+          '1. **Entrar no Modo Foco**: Ao abrir qualquer cifra, clique no botão **"Modo Foco"** no topo da tela (ou diga *"Abrir modo foco"*).',
+          '2. **Tela 100% Limpa**: Menus, barras e botões são recolhidos para dedicar toda a tela aos acordes e letras com alto contraste.',
+          '3. **Aumentar Tipografia**: Ajuste o tamanho da letra para leitura confortável na estante de partitura a vários metros de distância.',
+          '4. **Rolagem Automática (AutoScroll)**: Toque no controle de rolagem e defina a velocidade (ex: 0.3x, 0.5x, 1x) para a página descer suavemente enquanto você toca.',
+          '5. **Pedais Bluetooth**: Totalmente compatível com pedais Footswitch para passar a página com os pés sem soltar o instrumento!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🎵 Ver Repertório de Músicas',
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: '✓ Abrindo músicas!',
+          onActionClick: () => {
+            onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+
+        speak('O Modo Foco remove menus para estantes de partitura, com fontes ampliadas e rolagem automática ajustável para tocar no palco sem distrações!');
+        return;
+      }
+
+      // 13. COMO USAR A BÍBLIA E PROJETAR VERSÍCULOS?
+      if (
+        norm.includes('biblia') ||
+        norm.includes('versiculo') ||
+        norm.includes('escritura') ||
+        norm.includes('capitulo')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **ler a Bíblia e projetar versículos no culto**:';
+        const steps = [
+          '1. **Acessar a Bíblia**: Diga ao assistente ex: *"Abra a bíblia em Salmos 23"* ou *"Abra a bíblia em João 3:16"* ou acesse a aba **Bíblia** no menu.',
+          '2. **Navegar pelos Livros**: Escolha o livro, capítulo e versão bíblica desejada com busca rápida.',
+          '3. **Projetar Versículo no Telão**: Ao lado de cada versículo há o botão **"Projetar"**. Basta tocar nele para transmitir o texto sagrado imediatamente para a tela do projetor ou TV em tamanho grande e legível para a igreja.',
+          '4. O versículo é enviado em tempo real sem precisar digitar nada!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '📖 Acessar Bíblia Sagrada',
+          actionIcon: <BookOpen size={15} />,
+          actionSuccessMessage: '✓ Abrindo Bíblia!',
+          onActionClick: () => {
+            onNavigate('bible');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para ler ou projetar a Bíblia, peça qualquer versículo por voz como "abra a bíblia em Salmo 23" ou clique no botão projetar ao lado do versículo!');
+        return;
+      }
+
+      // 14. COMO ENSAIAR COM O PLAYER / MODO PRATIQUE?
+      if (
+        norm.includes('player') ||
+        norm.includes('pratique') ||
+        norm.includes('ensaiar') ||
+        norm.includes('ouvir musica') ||
+        norm.includes('tocar junto')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **ensaiar com o Player e Modo Pratique**:';
+        const steps = [
+          '1. Peça ao assistente ex: *"Tocar música Teu amor não falha"* ou abra a cifra e clique no botão **"Player / Modo Pratique"**.',
+          '2. O player integrado carrega o vídeo oficial do YouTube ou áudio guia sincronizado com a letra.',
+          '3. Você pode tocar junto lendo os acordes transpostos na tela e controlar o volume.',
+          '4. Ideal para estudar a dinâmica, introduções e pontes da música antes do ensaio presencial com a banda!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🎵 Ver Músicas',
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: '✓ Abrindo músicas!',
+          onActionClick: () => {
+            onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Para ensaiar, abra o Player da música dizendo "Tocar música" ou pela barra da cifra, e toque junto com o vídeo e áudio oficial!');
+        return;
+      }
+    }
+
+    // ==========================================
     // 9. INTENT: ABRIR MÚSICA / CIFRA / LETRA / PLAYER (Abertura Direta)
     // Ex: "abrir player da música Teu amor não falha", "tocar música Teu amor não falha", "tocar música Bondade de Deus", "abra o player da música Bondade de Deus", "abra Raridade", "tocar cifra", "ver cifra"
     // ==========================================
@@ -778,7 +1421,7 @@ export function LilouproAssistant({
       norm.includes('toca musica') ||
       norm.includes('dar play');
 
-    const isSongCommand =
+    const isSongCommand = !isQuestionOrHowTo && (
       norm.startsWith('abra') ||
       norm.startsWith('abrir') ||
       norm.startsWith('abre') ||
@@ -796,7 +1439,8 @@ export function LilouproAssistant({
       norm.includes('letra') ||
       norm.includes('player') ||
       norm.includes('modo foco') ||
-      norm.includes('rolagem');
+      norm.includes('rolagem')
+    );
 
     if (isSongCommand) {
       const isFocusMode = norm.includes('modo foco') || norm.includes('no foco') || norm.includes('foco');
@@ -1045,218 +1689,6 @@ export function LilouproAssistant({
         speak(`Não encontrei a música ${cleanQuery} no repertório. Você pode cadastrá-la com um toque.`);
         return;
       }
-    }
-
-    // ==========================================
-    // 4. INTENT: COMO AGENDAR UM CULTO?
-    // ==========================================
-    if (
-      norm.includes('agendar') && (norm.includes('culto') || norm.includes('evento')) ||
-      norm.includes('como agendar') ||
-      norm.includes('criar culto') ||
-      norm.includes('marcar culto') ||
-      norm.includes('novo culto')
-    ) {
-      setIsLoading(false);
-      const replyText = 'Aqui está o passo a passo para **agendar um culto** no LiLouPro:';
-      const steps = [
-        '1. Clique na aba **Liturgia** (ou **Escalas**) no menu principal.',
-        '2. Toque no botão **"+ Novo Culto / Evento"** no topo da tela.',
-        '3. Preencha o nome do culto (ex: Domingo Noite), data, horário e ministério.',
-        '4. Adicione os momentos da liturgia e vincule as músicas do repertório.',
-        '5. Escale os músicos da equipe e acompanhe as confirmações de presença!'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date(),
-        actionLabel: '🗓️ Ir para Liturgia e Agendar',
-        actionIcon: <Calendar size={15} />,
-        onActionClick: () => {
-          onNavigate('liturgy');
-          setIsOpen(false);
-        }
-      });
-
-      speak('Para agendar um culto, vá até a aba Liturgia ou Escalas e clique em Novo Culto. Lá você define data, horário, escala e o repertório da celebração!');
-      return;
-    }
-
-    // ==========================================
-    // 4. INTENT: COMO CADASTRAR UMA MÚSICA NOVA?
-    // ==========================================
-    if (
-      norm.includes('cadastrar') && (norm.includes('musica') || norm.includes('cifra')) ||
-      norm.includes('como cadastrar') ||
-      norm.includes('adicionar musica') ||
-      norm.includes('inserir musica') ||
-      norm.includes('nova musica')
-    ) {
-      setIsLoading(false);
-      const replyText = 'Aqui está o passo a passo para **cadastrar uma nova música**:';
-      const steps = [
-        '1. Acesse a aba **Músicas** (Repertório) no menu de navegação.',
-        '2. Toque no botão **"+ Nova Música"** no canto superior direito.',
-        '3. Digite o título e artista da canção.',
-        '4. Escolha a **Busca Automática** (Cifra Club / YouTube) ou cole a cifra e letra manualmente.',
-        '5. O LiLouPro detectará o tom original e gerará os diagramas de acordes automaticamente para violão!'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date(),
-        actionLabel: '➕ Cadastrar Nova Música Agora',
-        actionIcon: <Plus size={15} />,
-        onActionClick: () => {
-          onOpenAddSong();
-          setIsOpen(false);
-        }
-      });
-
-      speak('Para cadastrar uma nova música, abra a aba Músicas e toque em Nova Música. Você pode digitar o nome e usar a busca automática integrada!');
-      return;
-    }
-
-    // ==========================================
-    // 5. INTENT: COMO PROJETAR LETRAS / TELÃO
-    // ==========================================
-    if (
-      norm.includes('projetar') ||
-      norm.includes('projecao') ||
-      norm.includes('telao') ||
-      norm.includes('transmissao') ||
-      norm.includes('como projetar')
-    ) {
-      setIsLoading(false);
-      const replyText = 'Para **projetar letras** na igreja ou telão:';
-      const steps = [
-        '1. Abra a aba **Projeção** no menu.',
-        '2. Conecte o computador ao projetor ou TV (modo estender vídeo).',
-        '3. Toque em **"Abrir Tela do Telão"** para abrir a janela limpa de projeção.',
-        '4. No celular ou painel de controle, toque nas estrofes para trocar as frases em tempo real com fade suave!'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date(),
-        actionLabel: '📺 Abrir Modo Projeção',
-        actionIcon: <Tv size={15} />,
-        onActionClick: () => {
-          onNavigate('projection');
-          setIsOpen(false);
-        }
-      });
-
-      speak('Para projetar letras, abra a aba Projeção e clique em Abrir Tela do Telão para transmitir as estrofes ao vivo!');
-      return;
-    }
-
-    // ==========================================
-    // 6. INTENT: COMO MUDAR TOM / TRANSPOSIÇÃO
-    // ==========================================
-    if (
-      norm.includes('mudar tom') ||
-      norm.includes('transpor') ||
-      norm.includes('tom da cifra') ||
-      norm.includes('como transpor') ||
-      norm.includes('trocar tom')
-    ) {
-      setIsLoading(false);
-      const replyText = 'Para **mudar o tom** de qualquer cifra no LiLouPro:';
-      const steps = [
-        '1. Abra qualquer música do seu repertório.',
-        '2. No topo da cifra, clique nos botões **- (bemol)** ou **+ (sustenido)**.',
-        '3. Todos os acordes da letra são transpostos instantaneamente.',
-        '4. Os diagramas de acordes de violão se adaptam na mesma hora ao novo tom!'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date(),
-        actionLabel: '🎵 Ver Repertório de Músicas',
-        actionIcon: <Music size={15} />,
-        onActionClick: () => {
-          onNavigate('songs');
-          setIsOpen(false);
-        }
-      });
-
-      speak('Para mudar o tom, abra a música e use os botões mais e menos de semitom no topo da tela!');
-      return;
-    }
-
-    // ==========================================
-    // 7. INTENT: COMO USAR O MODO FOCO
-    // ==========================================
-    if (
-      norm.includes('como usar o modo foco') ||
-      norm.includes('o que e modo foco') ||
-      norm.includes('modo foco como funciona')
-    ) {
-      setIsLoading(false);
-      const replyText = 'O **Modo Foco** foi desenhado para músicos no palco e estantes de partitura:';
-      const steps = [
-        '1. Ele oculta todas as barras de navegação e menus para deixar 100% da tela para a cifra.',
-        '2. Aumenta o tamanho das fontes e dos acordes para leitura clara à distância.',
-        '3. Permite ativar a **Rolagem Automática (AutoScroll)** na velocidade desejada.',
-        '4. Suporta pedaleira Bluetooth (Footswitch) para rolar a página com os pés sem soltar o instrumento!'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date()
-      });
-
-      speak('O Modo Foco oculta os menus do app para leitura limpa no palco, com fontes ampliadas e rolagem automática para o músico!');
-      return;
-    }
-
-    // ==========================================
-    // 8. INTENT: VER ESCALAS / CALENDÁRIO
-    // ==========================================
-    if (
-      norm.includes('escalas') ||
-      norm.includes('ver escala') ||
-      norm.includes('calendario') ||
-      norm.includes('quem toca')
-    ) {
-      setIsLoading(false);
-      const replyText = 'Aqui estão as opções de **Escalas e Calendário**:';
-      const steps = [
-        'Acesse a aba **Escalas** para ver todos os cultos do mês, equipes escaladas e músicas escolhidas.'
-      ];
-
-      addMessage({
-        id: getUniqueAssistantMsgId('assistant'),
-        sender: 'assistant',
-        text: replyText,
-        steps: steps,
-        timestamp: new Date(),
-        actionLabel: '🗓️ Ver Escalas',
-        actionIcon: <Calendar size={15} />,
-        onActionClick: () => {
-          onNavigate('calendar');
-          setIsOpen(false);
-        }
-      });
-
-      speak('Abrindo a central de escalas e calendário de cultos!');
-      return;
     }
 
     // ==========================================
@@ -1514,6 +1946,35 @@ export function LilouproAssistant({
                 </div>
               </div>
 
+              {/* Contextual Screen Identification & "Como usar esta tela?" Button */}
+              <div className={`px-3 sm:px-4 py-2 sm:py-2.5 border-b flex items-center justify-between gap-2.5 ${
+                isLight 
+                  ? 'bg-blue-50/70 border-slate-200' 
+                  : 'bg-blue-950/30 border-blue-900/40'
+              }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+                      Tela Atual
+                    </div>
+                    <div className="text-xs font-black truncate text-slate-200 mt-0.5" title={currentScreenTitle}>
+                      {currentScreenTitle}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleAskHowToUseThisScreen()}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-md shadow-blue-500/25 flex items-center gap-1.5 shrink-0 transition-all active:scale-95 min-h-[38px] sm:min-h-[40px] cursor-pointer"
+                  title={`Abrir manual interativo de ${currentScreenTitle}`}
+                >
+                  <HelpCircle size={14} strokeWidth={2.5} className="text-sky-200 shrink-0" />
+                  <span>Como usar esta tela?</span>
+                </button>
+              </div>
+
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs sm:text-[13px] leading-relaxed">
                 {messages.map((msg, index) => {
@@ -1639,9 +2100,53 @@ export function LilouproAssistant({
               <div className={`px-3 py-2 border-t flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px] whitespace-nowrap ${
                 isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-slate-900/60 border-slate-800/80'
               }`}>
-                <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider shrink-0">
-                  Dúvidas rápidas:
+                <button
+                  type="button"
+                  onClick={() => handleAskHowToUseThisScreen()}
+                  className={`px-3 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold flex items-center gap-1 shadow-sm ${
+                    isLight 
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-blue-500/20 hover:bg-blue-700' 
+                      : 'bg-blue-600 border-blue-500 text-white shadow-blue-500/30 hover:bg-blue-500'
+                  }`}
+                  title={`Abrir manual da tela: ${currentScreenTitle}`}
+                >
+                  <HelpCircle size={12} strokeWidth={2.5} />
+                  <span>Como usar esta tela?</span>
+                </button>
+
+                <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider shrink-0 ml-1">
+                  Dúvidas:
                 </span>
+                <button
+                  onClick={() => handleQuickChip('Como faço para agendar um culto?')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                    isLight 
+                      ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 text-blue-900' 
+                      : 'bg-blue-950/60 border-blue-600/40 hover:bg-blue-900/60 text-blue-300'
+                  }`}
+                >
+                  🗓️ Como agendar culto?
+                </button>
+                <button
+                  onClick={() => handleQuickChip('Como cadastrar uma música nova no app?')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                    isLight 
+                      ? 'bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-900' 
+                      : 'bg-purple-950/60 border-purple-600/40 hover:bg-purple-900/60 text-purple-300'
+                  }`}
+                >
+                  ➕ Como cadastrar música?
+                </button>
+                <button
+                  onClick={() => handleQuickChip('Como cadastrar membro no ministério?')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                    isLight 
+                      ? 'bg-sky-50 border-sky-300 hover:bg-sky-100 text-sky-900' 
+                      : 'bg-sky-950/60 border-sky-600/40 hover:bg-sky-900/60 text-sky-300'
+                  }`}
+                >
+                  👥 Como cadastrar membro?
+                </button>
                 <button
                   onClick={() => handleQuickChip('Abra o afinador do app')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
@@ -1650,7 +2155,7 @@ export function LilouproAssistant({
                       : 'bg-amber-950/60 border-amber-600/40 hover:bg-amber-900/60 text-amber-300'
                   }`}
                 >
-                  🎯 Afinador do app
+                  🎯 Afinador
                 </button>
                 <button
                   onClick={() => handleQuickChip('Abra o metrônomo do app')}
@@ -1660,7 +2165,7 @@ export function LilouproAssistant({
                       : 'bg-emerald-950/60 border-emerald-600/40 hover:bg-emerald-900/60 text-emerald-300'
                   }`}
                 >
-                  ⏱️ Metrônomo do app
+                  ⏱️ Metrônomo
                 </button>
                 <button
                   onClick={() => handleQuickChip('Abra as escalas')}
@@ -1760,6 +2265,15 @@ export function LilouproAssistant({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Screen Interactive Manual Modal */}
+      <ScreenInteractiveManualModal
+        isOpen={isInteractiveManualOpen}
+        onClose={() => setIsInteractiveManualOpen(false)}
+        theme={theme}
+        initialScreenKey={interactiveManualKey}
+        onOpenHelpCenter={onOpenHelpCenter}
+      />
     </>
   );
 }
