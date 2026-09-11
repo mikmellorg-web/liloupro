@@ -12,11 +12,26 @@ service cloud.firestore {
     }
 
     function isMasterAdmin() {
-      return isSignedIn() && (request.auth.token.email == 'mikmellorg@gmail.com' || request.auth.token.email == 'miqueiasmellopro@gmail.com');
+      return isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email == 'mikmellorg@gmail.com' || 
+        request.auth.token.email == 'miqueiasmellopro@gmail.com' ||
+        request.auth.token.email.lower() == 'mikmellorg@gmail.com' || 
+        request.auth.token.email.lower() == 'miqueiasmellopro@gmail.com'
+      );
+    }
+
+    function isMemberAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
+      );
     }
 
     function isAdmin() {
-      return isSignedIn() && (isMasterAdmin() || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      return isSignedIn() && (
+        isMasterAdmin() || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        isMemberAdmin()
+      );
     }
 
     function isValidSettings(data) {
@@ -277,8 +292,8 @@ service cloud.firestore {
     // Song Rules
     match /songs/{songId} {
       allow get, list: if isSignedIn();
-      allow create: if isAdmin() && incoming().keys().hasAll(['title']) && isValidSong(incoming());
-      allow update: if isAdmin() && isValidSong(incoming());
+      allow create: if isSignedIn() && incoming().keys().hasAll(['title']) && isValidSong(incoming());
+      allow update: if (isAdmin() || isSignedIn()) && isValidSong(incoming());
       allow delete: if isAdmin();
     }
 

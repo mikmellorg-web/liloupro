@@ -16655,7 +16655,8 @@ function MembersView() {
     });
   }, [user]);
 
-  const isMaster = user?.email === 'mikmellorg@gmail.com';
+  const userEmailLower = (user?.email || '').toLowerCase().trim();
+  const isMaster = userEmailLower === 'mikmellorg@gmail.com' || userEmailLower === 'miqueiasmellopro@gmail.com';
 
   const toggleAdmin = async (member: any) => {
     if (!isMaster) return;

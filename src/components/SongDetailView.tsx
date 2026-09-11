@@ -62,6 +62,7 @@ import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { FootswitchModal, FootswitchConfig, MVAVE_CHOCOLATE_DEFAULT_MAPPINGS } from './FootswitchModal';
 import { getServicePlaylistSongs, getServiceSongs, getServiceSongIds, updateServicePlaylistUrl } from '../utils/servicePlaylistUtils';
+import { fetchCifraClubDirect } from '../utils/cifraClubClientScraper';
 
 
 
@@ -433,13 +434,13 @@ export function SongDetailView({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: rawInput })
-        });
+        }).catch(() => null);
 
-        if (response.ok) {
+        if (response && response.ok) {
           data = await response.json();
         } else {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
+          // Fallback to direct client-side scrape
+          data = await fetchCifraClubDirect(rawInput);
         }
       } else {
         // Support searching by song name or "Artist - Title"
@@ -455,13 +456,16 @@ export function SongDetailView({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: searchTitle, artist: searchArtist })
-        });
+        }).catch(() => null);
 
-        if (searchRes.ok) {
+        if (searchRes && searchRes.ok) {
           data = await searchRes.json();
         } else {
-          const errData = await searchRes.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || `Não foi possível encontrar a música "${rawInput}" no Cifra Club.`);
+          const slugify = (str: string) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+          const sSlug = slugify(searchTitle);
+          const aSlug = searchArtist ? slugify(searchArtist) : '';
+          const candidate = aSlug ? `https://www.cifraclub.com.br/${aSlug}/${sSlug}/` : `https://www.cifraclub.com.br/gospel/${sSlug}/`;
+          data = await fetchCifraClubDirect(candidate);
         }
       }
 

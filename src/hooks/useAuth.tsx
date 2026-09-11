@@ -62,6 +62,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Listen to member changes dynamically
         unsubscribeMember = onSnapshot(memberRef, async (memberSnap) => {
+          const userEmailLower = (currentUser.email || '').toLowerCase().trim();
+          const isMaster = userEmailLower === 'mikmellorg@gmail.com' || userEmailLower === 'miqueiasmellopro@gmail.com';
           let currentMember: any = null;
           
           if (!memberSnap.exists()) {
@@ -70,8 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Membro',
               email: currentUser.email || '',
               photoUrl: currentUser.photoURL || '',
-              roles: [],
-              isAdmin: currentUser.email === 'mikmellorg@gmail.com',
+              roles: isMaster ? ['Coordenador/Líder'] : [],
+              isAdmin: isMaster,
               availability: {},
               churchId: 'semente', // Default to semente
               defaultBibleVersion: 'NAA' // Initial default saved in Firestore for each member!
@@ -84,6 +86,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             currentMember = { id: memberSnap.id, ...memberSnap.data() };
             
+            // Auto-sync master admin flag if logging in with master email
+            if (isMaster && !currentMember.isAdmin) {
+              currentMember.isAdmin = true;
+              try {
+                await setDoc(memberRef, { isAdmin: true }, { merge: true });
+              } catch (err) {
+                console.error("Erro ao sincronizar status master admin no membro:", err);
+              }
+            }
+
             // Auto-sync profile photo from Google Auth if they don't have one in Firestore
             if (!currentMember.photoUrl && currentUser.photoURL) {
               currentMember.photoUrl = currentUser.photoURL;
@@ -118,16 +130,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setMemberData(currentMember);
 
           // Check admin status (Google account or custom admin setting or in profile)
+          const hasLeaderRole = Array.isArray(currentMember.roles) && (
+            currentMember.roles.includes('Coordenador/Líder') ||
+            currentMember.roles.includes('Líder') ||
+            currentMember.roles.includes('Pastor/Ministro')
+          );
+
           try {
             const adminRef = doc(db, 'admins', currentUser.uid);
             const adminSnap = await getDoc(adminRef);
             setIsAdmin(
-              currentUser.email === 'mikmellorg@gmail.com' || 
+              isMaster || 
               adminSnap.exists() || 
-              !!currentMember.isAdmin
+              !!currentMember.isAdmin ||
+              hasLeaderRole
             );
           } catch (adminErr) {
-            setIsAdmin(currentUser.email === 'mikmellorg@gmail.com' || !!currentMember.isAdmin);
+            setIsAdmin(isMaster || !!currentMember.isAdmin || hasLeaderRole);
           }
 
           // Fetch the church config and listen to its changes

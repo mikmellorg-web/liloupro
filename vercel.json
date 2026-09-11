@@ -61,6 +61,24 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/songs/import-cifraclub",
+      "destination": "/api/songs/import-cifraclub"
+    },
+    {
+      "source": "/api/songs/import-cifraclub-search",
+      "destination": "/api/songs/import-cifraclub-search"
+    },
+    {
+      "source": "/api/notifications/send-push",
+      "destination": "/api/notifications/send-push"
+    },
+    {
+      "source": "/((?!api/|.*\\..*).*)$",
+      "destination": "/index.html"
+    }
   ]
 }
 

@@ -62,6 +62,7 @@ import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { FootswitchModal, FootswitchConfig, MVAVE_CHOCOLATE_DEFAULT_MAPPINGS } from './FootswitchModal';
 import { getServicePlaylistSongs, getServiceSongs, getServiceSongIds, updateServicePlaylistUrl } from '../utils/servicePlaylistUtils';
+import { fetchCifraClubDirect } from '../utils/cifraClubClientScraper';
 
 
 
@@ -195,7 +196,7 @@ export default function SongsView({
 
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedArtist, setSelectedArtist] = useState('');
-  const [isAdding, setIsAdding] = useState(initialAdd && isAdmin);
+  const [isAdding, setIsAdding] = useState(initialAdd && (isAdmin || !!user));
   const [modalTab, setModalTab] = useState<'info' | 'lyrics' | 'chords' | 'media'>('info');
   const [isAddingLiturgySong, setIsAddingLiturgySong] = useState(false);
   const [liturgySongSearch, setLiturgySongSearch] = useState('');
@@ -577,13 +578,13 @@ export default function SongsView({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: rawInput })
-        });
+        }).catch(() => null);
 
-        if (response.ok) {
+        if (response && response.ok) {
           data = await response.json();
         } else {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || "Não foi possível importar a cifra do Cifra Club.");
+          // Fallback to direct client-side scrape
+          data = await fetchCifraClubDirect(rawInput);
         }
       } else {
         // Support searching by song name or "Artist - Title"
@@ -599,13 +600,16 @@ export default function SongsView({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: searchTitle, artist: searchArtist })
-        });
+        }).catch(() => null);
 
-        if (searchRes.ok) {
+        if (searchRes && searchRes.ok) {
           data = await searchRes.json();
         } else {
-          const errData = await searchRes.json().catch(() => ({}));
-          throw new Error(errData.details || errData.error || `Não foi possível encontrar a música "${rawInput}" no Cifra Club.`);
+          const slugify = (str: string) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+          const sSlug = slugify(searchTitle);
+          const aSlug = searchArtist ? slugify(searchArtist) : '';
+          const candidate = aSlug ? `https://www.cifraclub.com.br/${aSlug}/${sSlug}/` : `https://www.cifraclub.com.br/gospel/${sSlug}/`;
+          data = await fetchCifraClubDirect(candidate);
         }
       }
 
@@ -661,13 +665,19 @@ export default function SongsView({
     try {
       const sanitizedChords = cleanTablatures(newSong.chords || '');
       const sanitizedLyrics = cleanTablatures(newSong.lyrics || '');
+      const bpmNumber = typeof newSong.bpm === 'number' && !isNaN(newSong.bpm) 
+        ? newSong.bpm 
+        : (parseInt(String(newSong.bpm), 10) || 80);
 
       await addDoc(collection(db, songPath), {
         ...newSong,
+        title: newSong.title.trim(),
+        artist: (newSong.artist || '').trim(),
+        bpm: bpmNumber,
         chords: sanitizedChords,
         lyrics: sanitizedLyrics,
         createdAt: serverTimestamp(),
-        churchId: userChurchId
+        churchId: userChurchId || 'semente'
       });
       if (createNotifications) {
         await createNotifications(
@@ -676,15 +686,20 @@ export default function SongsView({
           'general',
           user?.uid,
           'notifyNewSongs'
-        );
+        ).catch(notifErr => console.warn("Erro ao criar notificação de nova música:", notifErr));
       }
       closeAddingModal();
       setNewSong({ title: '', artist: '', artistImageUrl: '', category: '', timeSignature: '4/4', baseKey: '', lyrics: '', chords: '', bpm: 80, youtube: '', tags: [], audio: [], files: [], driveAudioLink: '', driveFilesLink: '', capo: '' });
       setModalTab('info');
       setTempLink({ name: '', url: '' });
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao cadastrar música. Verifique sua conexão ou permissões.');
+    } catch (error: any) {
+      console.error("Erro ao cadastrar música:", error);
+      const msg = error?.message || String(error);
+      if (msg.includes('permission') || msg.includes('insufficient') || error?.code === 'permission-denied') {
+        alert('Erro de permissão: Por favor, verifique se você está conectado com sua conta para cadastrar músicas no repertório.');
+      } else {
+        alert(`Erro ao cadastrar música: ${msg || 'Verifique sua conexão e tente novamente.'}`);
+      }
       handleFirestoreError(error, OperationType.CREATE, songPath);
     } finally {
       setIsSubmitting(false);
@@ -789,7 +804,7 @@ export default function SongsView({
               </button>
             )}
 
-            {isAdmin && !showLiturgySongs && (
+            {(isAdmin || !!user) && !showLiturgySongs && (
               <Button onClick={() => setIsAdding(true)} className="px-4 py-2 sm:px-6 sm:py-2.5 h-9 sm:h-10 text-[11px] sm:text-sm shadow-xl shadow-brand/20">
                 <Plus size={16} className="sm:w-[18px] sm:h-[18px]" /> Cadastrar Música
               </Button>
