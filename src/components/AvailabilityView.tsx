@@ -1062,61 +1062,51 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           }
         };
 
-        // 1. Coletar dos membros administradores da memória
+        const currentUserId = user?.uid;
+        const currentUserEmail = (user?.email || '').toLowerCase().trim();
+
+        // 1. Coletar apenas 1 token ativo por membro administrador da memória (excluindo quem está salvando)
         adminUsersDocs.forEach(adm => {
-          if (Array.isArray(adm.fcmTokens)) adm.fcmTokens.forEach(addTokenSafe);
-          addTokenSafe(adm.fcmToken);
-          addTokenSafe(adm.lastFcmToken);
+          const admUid = adm.id || adm.uid;
+          const admEmail = (adm.email || '').toLowerCase().trim();
+          if (admUid && admUid === currentUserId) return;
+          if (admEmail && admEmail === currentUserEmail) return;
+
+          const activeToken = adm.lastFcmToken || adm.fcmToken || (Array.isArray(adm.fcmTokens) ? adm.fcmTokens[adm.fcmTokens.length - 1] : null);
+          if (activeToken) {
+            addTokenSafe(activeToken);
+          }
         });
 
-        // 2. Coletar diretamente das coleções do Firestore (fcm_tokens e members) para garantir 100% de entrega
+        // 2. Coletar do Firestore apenas se ainda faltarem tokens para líderes (excluindo o usuário atual)
         const adminUidSet = new Set<string>(adminUsersDocs.map(a => a.id || a.uid).filter(Boolean));
+        if (currentUserId) adminUidSet.delete(currentUserId);
+
         const adminEmailSet = new Set<string>([
           'mikmellorg@gmail.com',
           'miqueiasmellopro@gmail.com',
           ...adminEmailTargets.map(t => (t.email || '').toLowerCase().trim()).filter(Boolean),
           ...adminUsersDocs.map(a => (a.email || '').toLowerCase().trim()).filter(Boolean)
         ]);
+        if (currentUserEmail) adminEmailSet.delete(currentUserEmail);
 
         try {
-          const [fcmSnap, membersSnap] = await Promise.allSettled([
-            getDocs(collection(db, 'fcm_tokens')),
-            getDocs(collection(db, 'members'))
-          ]);
-
-          if (fcmSnap.status === 'fulfilled') {
-            fcmSnap.value.forEach(docSnap => {
+          if (adminTokens.length === 0) {
+            const fcmSnap = await getDocs(collection(db, 'fcm_tokens'));
+            const tokensByUid = new Map<string, string>();
+            fcmSnap.forEach(docSnap => {
               const data = docSnap.data();
               const token = data.token;
               if (!token) return;
               const dataEmail = (data.email || '').toLowerCase().trim();
               const dataUid = data.uid || '';
-              // Se pertencer a algum admin ou email de líder
+              if (dataUid === currentUserId || dataEmail === currentUserEmail) return;
+
               if (adminEmailSet.has(dataEmail) || adminUidSet.has(dataUid)) {
-                addTokenSafe(token);
+                tokensByUid.set(dataUid || dataEmail, token);
               }
             });
-          }
-
-          if (membersSnap.status === 'fulfilled') {
-            membersSnap.value.forEach(docSnap => {
-              const data = docSnap.data();
-              if (isMemberAdmin(data)) {
-                if (Array.isArray(data.fcmTokens)) data.fcmTokens.forEach(addTokenSafe);
-                addTokenSafe(data.fcmToken);
-                addTokenSafe(data.lastFcmToken);
-              }
-            });
-          }
-
-          // Se por ventura nenhum token foi filtrado especificamente, enviar para os aparelhos de fcm_tokens que não sejam do usuário que está marcando
-          if (adminTokens.length === 0 && fcmSnap.status === 'fulfilled') {
-            fcmSnap.value.forEach(docSnap => {
-              const data = docSnap.data();
-              if (data.token && (!user?.uid || data.uid !== user.uid)) {
-                addTokenSafe(data.token);
-              }
-            });
+            tokensByUid.forEach(tok => addTokenSafe(tok));
           }
         } catch (fcmErr) {
           console.warn('[Push Availability] Erro ao consultar fcm_tokens no Firestore:', fcmErr);
@@ -1124,6 +1114,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
         const pushTitle = `📅 Disponibilidade: ${currentUserData?.name || 'Membro'}`;
         const pushBody = `${currentUserData?.name || 'Um membro'} finalizou e salvou a escala de disponibilidade para ${currentDate.toLocaleDateString('pt-BR', { month: 'long' })} (${finishedCount} de ${localActiveMembers.length} marcaram).`;
+        const availabilityTag = `liloupro-avail-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`;
 
         if (adminTokens.length > 0) {
           await sendPushNotification({
@@ -1136,7 +1127,8 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               url: '/?tab=availability',
               title: String(pushTitle),
               body: String(pushBody),
-              timestamp: String(Date.now())
+              timestamp: String(Date.now()),
+              tag: availabilityTag
             }
           });
         }

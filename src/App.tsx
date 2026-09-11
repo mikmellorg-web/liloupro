@@ -2461,7 +2461,7 @@ function MainContent() {
         await Promise.allSettled(creations);
       }
 
-      // 2. Disparar Web Push (FCM) em background para todos os aparelhos registrados
+      // 2. Disparar Web Push (FCM) em background para os aparelhos dos destinatários (1 token ativo por usuário)
       const pushTokens: string[] = [];
       const addTokenSafe = (rawTok: any) => {
         if (typeof rawTok === 'string') {
@@ -2472,40 +2472,31 @@ function MainContent() {
         }
       };
 
-      // Coletar dos membros filtrados da memória
-      (allMembers || []).forEach(m => {
-        if (preferenceKey && m[preferenceKey] === false) return;
-        if (Array.isArray(m.fcmTokens)) {
-          m.fcmTokens.forEach(addTokenSafe);
+      // Mapear apenas os membros-alvo (destinatários válidos sem o autor excluído)
+      const targetUserIds = new Set(targets.map(m => m.uid || m.id).filter(Boolean));
+
+      targets.forEach(m => {
+        // Priorizar o último token registrado ativo do membro para evitar múltiplos disparos no mesmo aparelho
+        const activeToken = m.lastFcmToken || m.fcmToken || (Array.isArray(m.fcmTokens) ? m.fcmTokens[m.fcmTokens.length - 1] : null);
+        if (activeToken) {
+          addTokenSafe(activeToken);
         }
-        addTokenSafe(m.fcmToken);
-        addTokenSafe(m.lastFcmToken);
       });
 
-      // Coletar diretamente das coleções do Firestore para garantir 100% de cobertura
+      // Coletar do Firestore apenas para destinatários que ainda não tenham token carregado em memória
       try {
-        const [membersSnap, fcmTokensSnap] = await Promise.allSettled([
-          getDocs(collection(db, 'members')),
-          getDocs(collection(db, 'fcm_tokens'))
-        ]);
-
-        if (membersSnap.status === 'fulfilled') {
-          membersSnap.value.forEach(docSnap => {
+        if (targetUserIds.size > 0) {
+          const fcmTokensSnap = await getDocs(collection(db, 'fcm_tokens'));
+          const tokensByUid = new Map<string, string>();
+          fcmTokensSnap.forEach(docSnap => {
             const data = docSnap.data();
-            if (preferenceKey && data[preferenceKey] === false) return;
-
-            if (Array.isArray(data.fcmTokens)) {
-              data.fcmTokens.forEach(addTokenSafe);
+            const uid = data.uid;
+            if (uid && targetUserIds.has(uid) && uid !== excludeUserId && data.token) {
+              tokensByUid.set(uid, data.token);
             }
-            addTokenSafe(data.fcmToken);
-            addTokenSafe(data.lastFcmToken);
           });
-        }
-
-        if (fcmTokensSnap.status === 'fulfilled') {
-          fcmTokensSnap.value.forEach(docSnap => {
-            const data = docSnap.data();
-            addTokenSafe(data.token);
+          tokensByUid.forEach((tok) => {
+            addTokenSafe(tok);
           });
         }
       } catch (fcmFetchErr) {
@@ -2517,6 +2508,7 @@ function MainContent() {
 
       if (pushTokens.length > 0) {
         const targetUrl = type === 'service' || preferenceKey === 'notifyNewLiturgy' ? '/?tab=liturgy' : '/';
+        const notificationTag = `liloupro-${type}-${(title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}`;
         try {
           const pushResult = await sendPushNotification({
             tokens: pushTokens,
@@ -2527,7 +2519,8 @@ function MainContent() {
               type: String(type), 
               timestamp: String(Date.now()),
               title: String(title),
-              body: String(content)
+              body: String(content),
+              tag: notificationTag
             }
           });
           pushSentCount = pushResult.sentCount || 0;
@@ -17799,27 +17792,26 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                             return;
                           }
 
-                          // 1. Agenda disparo direto no Service Worker (roda em background mesmo com tela desligada)
-                          await scheduleServiceWorkerNotification({
-                            delayMs: 4000,
-                            title: "LiLouPro • Notificação no Celular",
-                            body: "🎉 Teste de segundo plano com celular fechado funcionando com sucesso!",
-                            url: "/"
-                          });
-
-                          // 2. Dispara também via servidor se houver token FCM ativo
-                          requestFcmToken().then(tok => {
-                            if (tok) {
-                              setTimeout(() => {
-                                sendPushNotification({
-                                  tokens: [tok],
-                                  title: "LiLouPro • Notificação Remota",
-                                  body: "🎉 Notificação remota FCM entregue com sucesso pelo servidor!",
-                                  url: "/"
-                                });
-                              }, 4000);
-                            }
-                          }).catch(() => {});
+                          // Disparo de teste único (se houver token FCM remoto, usa o servidor; senão, agenda direto no Service Worker)
+                          const tok = await requestFcmToken().catch(() => null);
+                          if (tok) {
+                            setTimeout(() => {
+                              sendPushNotification({
+                                tokens: [tok],
+                                title: "LiLouPro • Notificação no Celular",
+                                body: "🎉 Teste com celular fechado entregue com sucesso!",
+                                url: "/",
+                                tag: "liloupro-test-single"
+                              }).catch(() => {});
+                            }, 4000);
+                          } else {
+                            await scheduleServiceWorkerNotification({
+                              delayMs: 4000,
+                              title: "LiLouPro • Notificação no Celular",
+                              body: "🎉 Teste com celular fechado funcionando com sucesso!",
+                              url: "/"
+                            });
+                          }
 
                           alert("🚀 TESTE INICIADO!\n\nBLOQUEIE a tela do celular ou FECHE o aplicativo AGORA.\nEm 4 segundos a notificação vai tocar na tela!");
                         } catch (err: any) {

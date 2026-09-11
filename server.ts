@@ -3568,6 +3568,22 @@ Complete a finalização da música`,
       return { success: false, sentCount: 0 };
     }
 
+    const uniqueTokens = Array.from(new Set(validTokens.filter(t => typeof t === 'string' && t.trim().length > 15)));
+    if (uniqueTokens.length === 0) {
+      return { success: false, sentCount: 0 };
+    }
+
+    let deterministicTag = String(data?.tag || '');
+    if (!deterministicTag || deterministicTag === 'undefined') {
+      let hash = 0;
+      const str = `${payloadTitle}:${payloadBody}`;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      deterministicTag = 'liloupro-' + Math.abs(hash).toString(36);
+    }
+
     // 1. Envio oficial via Firebase Admin SDK (FCM HTTP v1)
     if (getApps().length) {
       try {
@@ -3580,6 +3596,7 @@ Complete a finalização da música`,
             title: payloadTitle,
             body: payloadBody,
             url: url || "/",
+            tag: deterministicTag,
             ...(data || {})
           },
           webpush: {
@@ -3592,13 +3609,14 @@ Complete a finalização da música`,
               body: payloadBody,
               icon: "/pwa-512x512.png?v=4.0",
               badge: "/pwa-192x192.png?v=4.0",
+              tag: deterministicTag,
               vibrate: [200, 100, 200, 100, 200, 100, 400]
             },
             fcmOptions: {
               link: url || "/"
             }
           },
-          tokens: validTokens
+          tokens: uniqueTokens
         };
 
         const response = await getMessaging().sendEachForMulticast(messagePayload);
@@ -3607,7 +3625,7 @@ Complete a finalização da música`,
         const errors: any[] = [];
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
-            errors.push({ token: validTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
+            errors.push({ token: uniqueTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
           }
         });
 

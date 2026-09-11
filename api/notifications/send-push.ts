@@ -89,11 +89,27 @@ export default async function handler(req: any, res: any) {
 
     initFirebaseAdmin();
 
+    // Deduplicar tokens
+    const uniqueTokens = Array.from(new Set(validTokens));
+
+    // Gerar tag determinística para colapso de duplicatas nativo no navegador/SO
+    let deterministicTag = String(data?.tag || '');
+    if (!deterministicTag || deterministicTag === 'undefined') {
+      let hash = 0;
+      const str = `${payloadTitle}:${payloadBody}`;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      deterministicTag = 'liloupro-' + Math.abs(hash).toString(36);
+    }
+
     // Sanitizar data: O Firebase Admin SDK exige estritamente que TODAS as chaves e valores de `data` sejam strings.
     const sanitizedData: Record<string, string> = {
       title: String(payloadTitle),
       body: String(payloadBody),
       url: String(url || '/'),
+      tag: deterministicTag
     };
     if (data && typeof data === 'object') {
       Object.entries(data).forEach(([k, v]) => {
@@ -120,29 +136,30 @@ export default async function handler(req: any, res: any) {
             title: payloadTitle,
             body: payloadBody,
             icon: '/pwa-512x512.png?v=4.0',
-            badge: '/pwa-192x192.png?v=4.0'
+            badge: '/pwa-192x192.png?v=4.0',
+            tag: deterministicTag
           },
           fcmOptions: {
             link: url || '/'
           }
         },
-        tokens: validTokens
+        tokens: uniqueTokens
       };
 
       const response = await getMessaging().sendEachForMulticast(messagePayload);
-      console.log(`[FCM HTTP v1] Disparo para ${validTokens.length} tokens: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
+      console.log(`[FCM HTTP v1] Disparo para ${uniqueTokens.length} tokens: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
 
       const errors: any[] = [];
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
-          errors.push({ token: validTokens[idx].slice(0, 10) + '...', error: resp.error ? resp.error.message : 'Unknown' });
+          errors.push({ token: uniqueTokens[idx].slice(0, 10) + '...', error: resp.error ? resp.error.message : 'Unknown' });
         }
       });
 
       return res.status(200).json({
         success: true,
         sentCount: response.successCount,
-        totalTokens: validTokens.length,
+        totalTokens: uniqueTokens.length,
         errors: errors.length > 0 ? errors : undefined
       });
     }

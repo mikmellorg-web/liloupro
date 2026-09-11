@@ -1,7 +1,32 @@
 /* eslint-disable no-undef */
-// Service worker para Firebase Cloud Messaging (FCM) em segundo plano
+// Service worker para Firebase Cloud Messaging (FCM) em segundo plano - v9.2
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
+
+const shownHistory = new Map();
+
+function getDeterministicTag(tag, title, body) {
+  if (tag && typeof tag === 'string' && tag.trim().length > 0 && !tag.includes('undefined')) {
+    return tag.trim();
+  }
+  const str = `${(title || '').trim().toLowerCase()}:${(body || '').trim().toLowerCase()}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'liloupro-' + Math.abs(hash).toString(36);
+}
+
+function shouldShow(fingerprint) {
+  const now = Date.now();
+  for (const [k, t] of shownHistory.entries()) {
+    if (now - t > 25000) shownHistory.delete(k);
+  }
+  if (shownHistory.has(fingerprint)) return false;
+  shownHistory.set(fingerprint, now);
+  return true;
+}
 
 const firebaseConfig = {
   projectId: "gen-lang-client-0330039755",
@@ -12,20 +37,32 @@ const firebaseConfig = {
   messagingSenderId: "255415345138"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message: ', payload);
   const notificationTitle = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
+  const body = payload.notification?.body || payload.data?.body || 'Nova mensagem no ministério de louvor.';
+  const effectiveTag = getDeterministicTag(payload.data?.tag || payload.notification?.tag, notificationTitle, body);
+
+  if (!shouldShow(effectiveTag)) {
+    console.log('[firebase-messaging-sw.js] Descartando notificação duplicada:', effectiveTag);
+    return;
+  }
+
   const notificationOptions = {
-    body: payload.notification?.body || payload.data?.body || 'Nova mensagem no ministério de louvor.',
-    icon: payload.notification?.icon || '/pwa-512x512.png?v=4.0',
-    badge: payload.notification?.badge || '/pwa-192x192.png?v=4.0',
+    body,
+    icon: payload.notification?.icon || payload.data?.icon || '/pwa-512x512.png?v=4.0',
+    badge: payload.notification?.badge || payload.data?.badge || '/pwa-192x192.png?v=4.0',
+    tag: effectiveTag,
+    renotify: false,
     vibrate: [200, 100, 200, 100, 200, 100, 400],
     data: {
-      url: payload.data?.url || '/'
+      url: payload.data?.url || payload.fcmOptions?.link || '/'
     }
   };
 

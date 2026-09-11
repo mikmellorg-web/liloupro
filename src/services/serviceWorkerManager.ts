@@ -34,6 +34,20 @@ export function registerServiceWorkerAutoUpdate() {
 
   window.addEventListener('load', async () => {
     try {
+      // Clean up any legacy or duplicate service worker registrations (e.g. firebase-messaging-sw.js)
+      try {
+        const allRegistrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of allRegistrations) {
+          const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL || '';
+          if (scriptUrl.includes('firebase-messaging-sw.js')) {
+            console.log('[SW Auto-Update] Desregistrando service worker legado:', scriptUrl);
+            await reg.unregister();
+          }
+        }
+      } catch (cleanErr) {
+        console.warn('[SW Auto-Update] Aviso na limpeza de service workers legados:', cleanErr);
+      }
+
       // Register with updateViaCache: 'none' to bypass browser HTTP cache on sw.js
       const registration = await navigator.serviceWorker.register('/sw.js', {
         updateViaCache: 'none'

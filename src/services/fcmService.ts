@@ -316,18 +316,25 @@ export const sendPushNotification = async (payload: {
   title: string;
   body: string;
   url?: string;
+  tag?: string;
   data?: Record<string, any>;
 }): Promise<{ success: boolean; sentCount: number; errors?: any[] }> => {
-  const { tokens, title, body, url = '/', data = {} } = payload;
+  const { tokens, title, body, url = '/', tag, data = {} } = payload;
   if (!tokens || tokens.length === 0) {
     return { success: true, sentCount: 0 };
   }
 
-  // Filter valid non-empty tokens
-  const validTokens = tokens.filter(t => typeof t === 'string' && t.trim().length > 10);
+  // Filter valid non-empty tokens and deduplicate
+  const validTokens = Array.from(new Set(tokens.filter(t => typeof t === 'string' && t.trim().length > 15)));
   if (validTokens.length === 0) {
     return { success: true, sentCount: 0 };
   }
+
+  const effectiveTag = tag || data?.tag;
+  const mergedData = {
+    ...data,
+    ...(effectiveTag ? { tag: effectiveTag } : {})
+  };
 
   try {
     const response = await fetch('/api/notifications/send-push', {
@@ -340,7 +347,8 @@ export const sendPushNotification = async (payload: {
         title,
         body,
         url,
-        data,
+        tag: effectiveTag,
+        data: mergedData,
       }),
     });
 

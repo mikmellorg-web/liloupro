@@ -1,4 +1,111 @@
-// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.1
+// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.2
+
+// Global in-memory history of recently displayed notification fingerprints to prevent duplicates
+const shownNotificationHistory = new Map();
+
+function generateDeterministicTag(tag, title, body) {
+  if (tag && typeof tag === 'string' && tag.trim().length > 0 && !tag.includes('undefined')) {
+    return tag.trim();
+  }
+  const str = `${(title || '').trim().toLowerCase()}:${(body || '').trim().toLowerCase()}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'liloupro-' + Math.abs(hash).toString(36);
+}
+
+function shouldDisplayNotification(title, body, tag) {
+  const now = Date.now();
+  // Clean entries older than 25 seconds
+  for (const [key, timestamp] of shownNotificationHistory.entries()) {
+    if (now - timestamp > 25000) {
+      shownNotificationHistory.delete(key);
+    }
+  }
+
+  const cleanTitle = (title || '').trim().toLowerCase();
+  const cleanBody = (body || '').trim().toLowerCase();
+  const fingerprint = tag ? `tag:${tag}` : `content:${cleanTitle}|${cleanBody}`;
+
+  if (shownNotificationHistory.has(fingerprint)) {
+    console.log('[sw.js] Ignorando notificação repetida recebida em intervalo curto:', fingerprint);
+    return false;
+  }
+
+  shownNotificationHistory.set(fingerprint, now);
+  return true;
+}
+
+// Unified function to safely display exactly ONE notification per event with badges & actions
+async function displayUniqueNotification({
+  title,
+  body,
+  icon,
+  badge,
+  tag,
+  data,
+  targetUrl
+}) {
+  const finalTitle = title || 'LiLouPro • Notificação';
+  const finalBody = body || 'Nova mensagem no ministério de louvor.';
+  const effectiveTag = generateDeterministicTag(tag, finalTitle, finalBody);
+
+  if (!shouldDisplayNotification(finalTitle, finalBody, effectiveTag)) {
+    return;
+  }
+
+  const finalIcon = icon || '/pwa-512x512.png?v=4.0';
+  const finalBadge = badge || '/pwa-192x192.png?v=4.0';
+  const finalUrl = targetUrl || '/';
+
+  // Increment and persist badge
+  try {
+    const cachedCount = await getBadgeCountFromCache();
+    const newCount = cachedCount + 1;
+    await saveBadgeCountToCache(newCount);
+    await updateAppBadge(newCount);
+  } catch (badgeErr) {
+    console.warn('[sw.js] Badge update warning:', badgeErr);
+  }
+
+  const options = {
+    body: finalBody,
+    icon: finalIcon,
+    badge: finalBadge,
+    tag: effectiveTag,
+    renotify: false, // Critical: do NOT make a new sound or recreate card if tag matches
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200, 100, 400],
+    actions: [
+      { action: 'open', title: '💬 Abrir Mensagem' },
+      { action: 'dismiss', title: 'Fechar' }
+    ],
+    data: { url: finalUrl, ...(data || {}) }
+  };
+
+  try {
+    await self.registration.showNotification(finalTitle, options);
+  } catch (err) {
+    console.warn('[sw.js] Standard showNotification failed, trying fallback:', err);
+    try {
+      await self.registration.showNotification(finalTitle, {
+        body: finalBody,
+        icon: finalIcon,
+        badge: finalBadge,
+        tag: effectiveTag,
+        data: { url: finalUrl }
+      });
+    } catch (fallbackErr) {
+      console.warn('[sw.js] Minimal fallback showNotification:', fallbackErr);
+      await self.registration.showNotification(finalTitle, {
+        body: finalBody,
+        tag: effectiveTag
+      });
+    }
+  }
+}
 
 // Import official Firebase compat libraries for background messaging
 try {
@@ -25,34 +132,28 @@ try {
   messaging.onBackgroundMessage(async (payload) => {
     console.log('[sw.js] Received FCM background message:', payload);
 
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
+    const title = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
     const body = payload.notification?.body || payload.data?.body || 'Nova atualização no ministério de louvor.';
     const icon = payload.notification?.icon || payload.data?.icon || '/pwa-512x512.png?v=4.0';
-    const badge = '/pwa-192x192.png?v=4.0';
+    const badge = payload.notification?.badge || payload.data?.badge || '/pwa-192x192.png?v=4.0';
     const targetUrl = payload.data?.url || payload.fcmOptions?.link || '/';
+    const tag = payload.data?.tag || payload.notification?.tag;
 
-    try {
-      await self.registration.showNotification(notificationTitle, {
-        body,
-        icon,
-        badge,
-        data: { url: targetUrl, ...(payload.data || {}) },
-        tag: payload.data?.tag || 'liloupro-fcm-' + Date.now(),
-        renotify: true,
-        requireInteraction: true
-      });
-    } catch (err) {
-      console.warn('[sw.js] Fallback showNotification:', err);
-      try {
-        await self.registration.showNotification(notificationTitle, { body, icon });
-      } catch (e) {}
-    }
+    await displayUniqueNotification({
+      title,
+      body,
+      icon,
+      badge,
+      tag,
+      data: payload.data || {},
+      targetUrl
+    });
   });
 } catch (err) {
   console.warn('[sw.js] Firebase Cloud Messaging background init deferred:', err);
 }
 
-const CACHE_NAME = 'liloupro-v9.1-fcm-fix';
+const CACHE_NAME = 'liloupro-v9.2-dedup-fix';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';
 
@@ -222,83 +323,38 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  try {
-    const payload = event.data.json();
-    const title = payload.notification?.title || payload.data?.title || payload.title || 'LiLouPro • Nova Notificação';
-    const body = payload.notification?.body || payload.data?.body || payload.body || 'Você tem uma nova mensagem ou atualização no ministério.';
-    const icon = payload.notification?.icon || payload.icon || '/pwa-512x512.png?v=4.0';
-    const badge = payload.notification?.badge || payload.badge || '/pwa-192x192.png?v=4.0';
-    const targetUrl = payload.data?.url || payload.fcmOptions?.link || payload.url || '/';
+  event.waitUntil(
+    (async () => {
+      try {
+        const payload = event.data.json();
+        const title = payload.notification?.title || payload.data?.title || payload.title || 'LiLouPro • Nova Notificação';
+        const body = payload.notification?.body || payload.data?.body || payload.body || 'Você tem uma nova mensagem ou atualização no ministério.';
+        const icon = payload.notification?.icon || payload.icon || '/pwa-512x512.png?v=4.0';
+        const badge = payload.notification?.badge || payload.badge || '/pwa-192x192.png?v=4.0';
+        const targetUrl = payload.data?.url || payload.fcmOptions?.link || payload.url || '/';
+        const tag = payload.data?.tag || payload.notification?.tag || payload.tag;
 
-    const options = {
-      body,
-      icon,
-      badge,
-      tag: payload.tag || 'liloupro-msg-' + Date.now(),
-      renotify: true,
-      requireInteraction: true,
-      vibrate: [200, 100, 200, 100, 200, 100, 400],
-      actions: [
-        { action: 'open', title: '💬 Abrir Mensagem' },
-        { action: 'dismiss', title: 'Fechar' }
-      ],
-      data: { url: targetUrl, ...(payload.data || {}) },
-    };
-
-    // Determine badge count to display:
-    event.waitUntil(
-      (async () => {
-        let badgeCount = payload.badgeCount;
-        if (badgeCount === undefined) {
-          const cachedCount = await getBadgeCountFromCache();
-          badgeCount = cachedCount + 1;
-        }
-
-        await saveBadgeCountToCache(badgeCount);
-        await updateAppBadge(badgeCount);
-        try {
-          await self.registration.showNotification(title, options);
-        } catch (showErr) {
-          console.warn('[sw.js] Standard showNotification failed, trying mobile fallback:', showErr);
-          try {
-            await self.registration.showNotification(title, {
-              body,
-              icon,
-              badge,
-              data: { url: targetUrl }
-            });
-          } catch (mobileErr) {
-            console.warn('[sw.js] Mobile fallback failed, trying minimal notification:', mobileErr);
-            await self.registration.showNotification(title, {
-              body,
-              data: { url: targetUrl }
-            });
-          }
-        }
-      })()
-    );
-  } catch (error) {
-    const text = event.data.text();
-    event.waitUntil(
-      (async () => {
-        const cachedCount = await getBadgeCountFromCache();
-        const badgeCount = cachedCount + 1;
-        await saveBadgeCountToCache(badgeCount);
-        await updateAppBadge(badgeCount);
-        try {
-          await self.registration.showNotification('LiLouPro • Nova Notificação', {
-            body: text,
-            icon: '/luxury_app_icon.jpg?v=2.0',
-            badge: '/luxury_app_icon.jpg?v=2.0',
-            renotify: true,
-            requireInteraction: true
-          });
-        } catch (fallbackErr) {
-          await self.registration.showNotification('LiLouPro • Nova Notificação', { body: text });
-        }
-      })()
-    );
-  }
+        await displayUniqueNotification({
+          title,
+          body,
+          icon,
+          badge,
+          tag,
+          data: payload.data || {},
+          targetUrl
+        });
+      } catch (err) {
+        const text = event.data.text();
+        await displayUniqueNotification({
+          title: 'LiLouPro • Nova Notificação',
+          body: text || 'Nova mensagem no ministério de louvor.',
+          icon: '/pwa-512x512.png?v=4.0',
+          badge: '/pwa-192x192.png?v=4.0',
+          targetUrl: '/'
+        });
+      }
+    })()
+  );
 });
 
 // Handle notification click: open/focus window and set app badge
