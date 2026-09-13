@@ -145,11 +145,11 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
     <AnimatePresence>
       <motion.aside
         id="custom-pwa-install-banner"
-        initial={{ opacity: 0, y: 50, scale: 0.96 }}
+        initial={{ opacity: 0, y: -40, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 40, scale: 0.96 }}
+        exit={{ opacity: 0, y: -40, scale: 0.96 }}
         transition={{ type: 'spring', damping: 24, stiffness: 300 }}
-        className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-5 sm:bottom-5 sm:max-w-md z-[9990] select-none"
+        className="fixed top-3 left-3 right-3 sm:top-4 sm:right-5 sm:left-auto sm:max-w-md z-[90] select-none"
         role="region"
         aria-label="Banner de instalação do aplicativo LiLouPro"
       >

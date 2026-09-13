@@ -2091,6 +2091,17 @@ export default function DashboardView({
             <QuickLink icon={<ThumbsUp />} label="Minha Disponibilidade" color="bg-sky-500/10 border-sky-500/20" onClick={() => onNavigate('availability')} />
             <QuickLink icon={<BookOpen />} label="Liturgia" color="bg-blue-500/10 border-blue-500/20" onClick={() => onNavigate('liturgy')} />
             <QuickLink icon={<Tv />} label="Projeção" subtitle="Letras, cifras e slides" color="bg-emerald-500/10 border-emerald-500/20" onClick={() => onNavigate('projection')} />
+            <QuickLink 
+              icon={<Sparkles className="text-sky-400" />} 
+              label="Assistente Liloupro" 
+              subtitle="Comandos de voz & guias interativos" 
+              color="bg-indigo-500/10 border-indigo-500/20" 
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
+                }
+              }} 
+            />
           </div>
         </div>
 

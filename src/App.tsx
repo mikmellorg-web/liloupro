@@ -1739,6 +1739,7 @@ function MainContent() {
     );
   });
   const [activeTab, setActiveTab] = useState<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>('home');
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlineSyncTime, setOfflineSyncTime] = useState<string | null>(() => localStorage.getItem('liloupro_offline_sync_time'));
   const [isSyncing, setIsSyncing] = useState(false);
@@ -3134,6 +3135,14 @@ function MainContent() {
                 >
                   <NavIcon icon={<Book size={20} />} active={activeTab === 'bible'} onClick={() => { setActiveTab('bible'); setShowMoreMenu(false); }} label="Bíblia Sagrada" isCollapsed={isSidebarCollapsed} subItem />
                   <NavIcon 
+                    icon={<Sparkles size={20} className="text-sky-400 animate-pulse drop-shadow-[0_0_8px_rgba(56,189,248,0.8)] shrink-0" />} 
+                    active={isAssistantOpen} 
+                    onClick={() => { setIsAssistantOpen(true); setShowMoreMenu(false); }} 
+                    label="Assistente Liloupro (IA & Voz) 🎙️" 
+                    isCollapsed={isSidebarCollapsed} 
+                    subItem 
+                  />
+                  <NavIcon 
                     icon={<GraduationCap size={20} className="text-purple-400 dark:text-purple-300 animate-pulse drop-shadow-[0_0_10px_rgba(168,85,247,0.9)] shrink-0" />} 
                     active={activeTab === 'theory'} 
                     onClick={() => { setActiveTab('theory'); setShowMoreMenu(false); }} 
@@ -3392,6 +3401,8 @@ function MainContent() {
       {/* Liloupro Voice and Text Assistant (Active everywhere EXCEPT Focus Mode) */}
       {!isSongFocusMode && (
         <LilouproAssistant 
+          isOpen={isAssistantOpen}
+          onOpenChange={setIsAssistantOpen}
           theme={theme}
           allSongs={allSongs}
           currentSong={selectedSong}
@@ -18069,6 +18080,44 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                >
                  ✨ Reassistir Introdução Animada
                </Button>
+            </Card>
+
+            {/* Assistente Liloupro (IA & Voz) */}
+            <Card className="p-8 space-y-6 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-transparent border-sky-500/20 shadow-lg shadow-sky-500/5">
+               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                 <Mic size={14} className="text-sky-400 animate-pulse" /> Assistente Liloupro (IA & Comandos de Voz)
+               </h3>
+               <p className="text-xs text-text-muted leading-relaxed">
+                 O assistente inteligente auxilia ministros e membros a navegar, buscar letras/cifras, controlar o metrônomo/afinador e consultar guias interativos de cada tela.
+               </p>
+               
+               <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                 <Button
+                   onClick={() => {
+                     if (typeof window !== 'undefined') {
+                       window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
+                     }
+                   }}
+                   className="flex-1 bg-gradient-to-r from-blue-600 to-sky-600 hover:brightness-110 text-white font-black text-xs uppercase tracking-widest h-11 gap-2 flex items-center justify-center rounded-xl shadow-lg shadow-sky-600/20 transition-all select-none border border-sky-400/30 cursor-pointer"
+                 >
+                   <Mic size={16} />
+                   Abrir Assistente Agora
+                 </Button>
+
+                 <Button
+                   variant="secondary"
+                   onClick={() => {
+                     try {
+                       localStorage.setItem('liloupro_assistant_retracted', 'false');
+                       window.dispatchEvent(new CustomEvent('liloupro:reset-assistant-pos'));
+                       alert('Posição do botão do assistente restaurada com sucesso!');
+                     } catch {}
+                   }}
+                   className="border-border text-text-main hover:bg-black/5 dark:hover:bg-white/5 font-black text-xs uppercase tracking-widest h-11 px-4 rounded-xl transition-all"
+                 >
+                   Restaurar Botão Flutuante
+                 </Button>
+               </div>
             </Card>
 
             {/* Custom Church Branding Controls & Live Preview Cards */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
@@ -34,7 +34,15 @@ interface LilouproAssistantProps {
   onOpenHelpCenter?: () => void;
   isAdmin?: boolean;
   currentTab?: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
+
+export const openLilouproAssistant = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
+  }
+};
 
 let assistantMsgCounter = 0;
 const getUniqueAssistantMsgId = (sender: string) => {
@@ -54,10 +62,23 @@ export function LilouproAssistant({
   onOpenMetronome,
   onOpenHelpCenter,
   isAdmin = false,
-  currentTab = 'home'
+  currentTab = 'home',
+  isOpen: isOpenProp,
+  onOpenChange
 }: LilouproAssistantProps) {
   const isLight = theme === 'light';
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isControlled = isOpenProp !== undefined;
+  const isOpen = isControlled ? isOpenProp : internalIsOpen;
+
+  const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    const nextVal = typeof val === 'function' ? val(isOpen) : val;
+    if (!isControlled) {
+      setInternalIsOpen(nextVal);
+    }
+    onOpenChange?.(nextVal);
+  }, [isOpen, isControlled, onOpenChange]);
+
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -88,6 +109,31 @@ export function LilouproAssistant({
       return next;
     });
   };
+
+  // Global listeners for direct programmatic triggering (from header, menus, cards)
+  useEffect(() => {
+    const handleCustomOpen = () => {
+      setIsOpen(true);
+      setIsRetracted(false);
+      try {
+        localStorage.setItem('liloupro_assistant_retracted', 'false');
+      } catch {}
+    };
+
+    const handleResetPos = () => {
+      setIsRetracted(false);
+      try {
+        localStorage.setItem('liloupro_assistant_retracted', 'false');
+      } catch {}
+    };
+
+    window.addEventListener('liloupro:open-assistant', handleCustomOpen);
+    window.addEventListener('liloupro:reset-assistant-pos', handleResetPos);
+    return () => {
+      window.removeEventListener('liloupro:open-assistant', handleCustomOpen);
+      window.removeEventListener('liloupro:reset-assistant-pos', handleResetPos);
+    };
+  }, [setIsOpen]);
 
   // State for Screen Interactive Manual
   const [isInteractiveManualOpen, setIsInteractiveManualOpen] = useState(false);
@@ -1753,7 +1799,7 @@ export function LilouproAssistant({
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.85, x: 30 }}
             transition={{ type: 'spring', damping: 25, stiffness: 320 }}
-            className="fixed z-[95] bottom-20 md:bottom-6 right-3 sm:right-6 select-none print:hidden flex items-center"
+            className="fixed z-[10005] bottom-[76px] sm:bottom-20 md:bottom-6 right-3 sm:right-6 select-none print:hidden flex items-center"
           >
             <div className="relative flex items-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border border-sky-400/30 overflow-hidden shadow-xl">
               {/* Soft animated glass light shimmer */}
@@ -1806,9 +1852,9 @@ export function LilouproAssistant({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 40 }}
             transition={{ type: 'spring', damping: 25, stiffness: 320 }}
-            className="fixed z-[95] bottom-24 md:bottom-12 right-0 select-none print:hidden flex items-center"
+            className="fixed z-[10005] bottom-[86px] sm:bottom-24 md:bottom-12 right-0 select-none print:hidden flex items-center"
           >
-            <div className="relative flex items-center rounded-l-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border-l border-t border-b border-sky-400/30 overflow-hidden pl-1 pr-1.5 py-1 shadow-xl">
+            <div className="relative flex items-center rounded-l-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border-l border-t border-b border-sky-400/30 overflow-hidden pl-1.5 pr-2 py-1.5 shadow-xl">
               {/* Soft animated shimmer */}
               <div className="absolute inset-0 -translate-x-full animate-assistant-shimmer bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
 
@@ -1835,10 +1881,10 @@ export function LilouproAssistant({
                 <div className="relative flex items-center justify-center w-6 h-6 rounded-full bg-slate-950/70 text-sky-300 border border-sky-400/40 shrink-0 shadow-inner group-hover:border-sky-300">
                   <Mic size={13} className="group-hover:scale-110 transition-transform stroke-[2.5]" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-wider hidden xs:inline sm:inline text-white">
-                  Voz
+                <span className="text-[11px] font-black uppercase tracking-wider text-white">
+                  Assistente
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-300 opacity-90" />
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-300 opacity-90 animate-pulse" />
               </button>
             </div>
           </motion.div>
@@ -1848,7 +1894,7 @@ export function LilouproAssistant({
       {/* Main Assistant Modal / Flyout Card */}
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-[200] flex items-end sm:items-end sm:justify-end sm:p-6">
+          <div className="fixed inset-0 z-[10010] flex items-end sm:items-end sm:justify-end sm:p-6">
             {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
