@@ -14,7 +14,8 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Flame, TrendingUp, TrendingDown, Sliders, Layers, Bluetooth, Radio, Mail
+  Flame, TrendingUp, TrendingDown, Sliders, Layers, Bluetooth, Radio, Mail,
+  ArrowUpDown
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
@@ -201,6 +202,7 @@ export default function SongsView({
   const [isAddingLiturgySong, setIsAddingLiturgySong] = useState(false);
   const [liturgySongSearch, setLiturgySongSearch] = useState('');
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
+  const [confirmMoveSong, setConfirmMoveSong] = useState<{ songId: string; direction: 'up' | 'down' } | null>(null);
   const [isEditingTargetPlaylist, setIsEditingTargetPlaylist] = useState(false);
   const [targetPlaylistUrl, setTargetPlaylistUrl] = useState('');
   const [isSavingTargetPlaylist, setIsSavingTargetPlaylist] = useState(false);
@@ -1048,7 +1050,7 @@ export default function SongsView({
                       disabled={songIdx === 0}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleMoveLiturgySong(song.id, 'up');
+                        setConfirmMoveSong({ songId: song.id, direction: 'up' });
                       }}
                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 border border-border flex items-center justify-center hover:bg-brand hover:text-brand-text active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all text-text-muted cursor-pointer shrink-0"
                       title="Mover para cima"
@@ -1060,7 +1062,7 @@ export default function SongsView({
                       disabled={songIdx === filteredSongs.length - 1}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleMoveLiturgySong(song.id, 'down');
+                        setConfirmMoveSong({ songId: song.id, direction: 'down' });
                       }}
                       className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 border border-border flex items-center justify-center hover:bg-brand hover:text-brand-text active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all text-text-muted cursor-pointer shrink-0"
                       title="Mover para baixo"
@@ -1691,6 +1693,58 @@ export default function SongsView({
                 <Button onClick={handleAddSong} className="flex-[2] h-12 shadow-xl shadow-brand/20 font-black uppercase tracking-widest order-1 sm:order-2 bg-brand hover:bg-blue-700 text-white" disabled={isSubmitting}>
                   {isSubmitting ? 'Salvando...' : 'Salvar e Finalizar'}
                 </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmação para alterar a ordem das músicas no culto */}
+      <AnimatePresence>
+        {confirmMoveSong && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => setConfirmMoveSong(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface border border-border rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+                  <ArrowUpDown size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-text-main leading-tight">Mudar ordem?</h3>
+                  <p className="text-xs sm:text-sm text-text-muted mt-0.5">
+                    Deseja mover esta música para {confirmMoveSong.direction === 'up' ? 'cima' : 'baixo'} na sequência do culto?
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setConfirmMoveSong(null)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-border hover:bg-black/5 dark:hover:bg-white/5 text-xs sm:text-sm font-bold text-text-muted transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { songId, direction } = confirmMoveSong;
+                    setConfirmMoveSong(null);
+                    handleMoveLiturgySong(songId, direction);
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-brand text-white hover:bg-blue-700 text-xs sm:text-sm font-black transition-colors shadow-md shadow-brand/20 cursor-pointer"
+                >
+                  Confirmar
+                </button>
               </div>
             </motion.div>
           </div>

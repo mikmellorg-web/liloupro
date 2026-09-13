@@ -319,10 +319,20 @@ export function SongDetailView({
 
       const data = await response.json();
       
-      // Save it automatically to Firestore
-      await updateDoc(doc(db, 'songs', song.id), {
+      // Update state immediately for instant feedback
+      setEditedSong((prev: any) => ({
+        ...prev,
         bibleReferences: data
-      });
+      }));
+
+      // Save it automatically to Firestore
+      try {
+        await updateDoc(doc(db, 'songs', song.id), {
+          bibleReferences: data
+        });
+      } catch (dbErr) {
+        console.warn("Could not persist bibleReferences to Firestore immediately:", dbErr);
+      }
       
     } catch (err: any) {
       console.error("Error analyzing bible references:", err);
@@ -355,10 +365,20 @@ export function SongDetailView({
 
       const data = await response.json();
       
-      // Save it automatically to Firestore
-      await updateDoc(doc(db, 'songs', song.id), {
+      // Update state immediately for instant feedback
+      setEditedSong((prev: any) => ({
+        ...prev,
         themeSuggestions: data
-      });
+      }));
+
+      // Save it automatically to Firestore
+      try {
+        await updateDoc(doc(db, 'songs', song.id), {
+          themeSuggestions: data
+        });
+      } catch (dbErr) {
+        console.warn("Could not persist themeSuggestions to Firestore immediately:", dbErr);
+      }
       
     } catch (err: any) {
       console.error("Error generating theme suggestions:", err);
@@ -396,10 +416,20 @@ export function SongDetailView({
 
       const data = await response.json();
       
-      // Save it automatically to Firestore
-      await updateDoc(doc(db, 'songs', song.id), {
+      // Update state immediately for instant feedback
+      setEditedSong((prev: any) => ({
+        ...prev,
         harmonyAnalysis: data
-      });
+      }));
+
+      // Save it automatically to Firestore
+      try {
+        await updateDoc(doc(db, 'songs', song.id), {
+          harmonyAnalysis: data
+        });
+      } catch (dbErr) {
+        console.warn("Could not persist harmonyAnalysis to Firestore immediately:", dbErr);
+      }
       
     } catch (err: any) {
       console.error("Error analyzing harmony:", err);

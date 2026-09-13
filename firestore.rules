@@ -102,7 +102,10 @@ service cloud.firestore {
         && (data.get('driveAudioLink', null) == null || data.driveAudioLink is string)
         && (data.get('driveFilesLink', null) == null || data.driveFilesLink is string)
         && (data.get('files', null) == null || data.files is list)
-        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
+        && (data.get('bibleReferences', null) == null || data.bibleReferences is map)
+        && (data.get('themeSuggestions', null) == null || data.themeSuggestions is map)
+        && (data.get('harmonyAnalysis', null) == null || data.harmonyAnalysis is map);
     }
 
     function isValidService(data) {
