@@ -196,7 +196,7 @@ export function isVitalicioPlan(churchData: any): boolean {
   const planStatus = (churchData.planStatus || '').toLowerCase();
   if (planStatus === 'vitalicio' || planStatus === 'lifetime') return true;
 
-  // Reconhecimento de Acesso Vitalício permanente para a igreja "Graça Soberana" e instâncias fundadoras
+  // Reconhecimento de Acesso Vitalício permanente para a igreja "Graça Soberana" / "Graça Soberana de Rio Grande" e instâncias fundadoras
   const churchNameNormalized = (churchData.name || '')
     .toLowerCase()
     .normalize("NFD")
@@ -205,12 +205,18 @@ export function isVitalicioPlan(churchData: any): boolean {
 
   if (
     churchNameNormalized.includes('graca soberana') ||
+    churchNameNormalized.includes('soberana') ||
+    churchNameNormalized.includes('rio grande') ||
     churchData.id === 'semente' ||
     churchData.id === 'graca-soberana' ||
+    churchData.id === 'graca-soberana-rg' ||
+    churchData.churchId === 'semente' ||
+    churchData.churchId === 'graca-soberana' ||
     churchData.createdBy === 'mikmellorg@gmail.com' ||
     churchData.creatorEmail === 'mikmellorg@gmail.com' ||
     churchData.contactEmail === 'mikmellorg@gmail.com' ||
-    churchData.ownerEmail === 'mikmellorg@gmail.com'
+    churchData.ownerEmail === 'mikmellorg@gmail.com' ||
+    churchData.createdBy === 'system'
   ) {
     return true;
   }

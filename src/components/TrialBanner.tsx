@@ -5,13 +5,24 @@ import { EffectivePlanResult } from '../services/planService';
 interface TrialBannerProps {
   effectivePlan: EffectivePlanResult;
   onOpenUpgradeModal: () => void;
+  isAdmin?: boolean;
 }
 
 export const TrialBanner: React.FC<TrialBannerProps> = ({
   effectivePlan,
-  onOpenUpgradeModal
+  onOpenUpgradeModal,
+  isAdmin = false
 }) => {
-  if (!effectivePlan.isTrial && !effectivePlan.isExpiredTrial) {
+  // Membros normais NUNCA devem ver contagem de dias grátis nem avisos de cobrança/upgrade
+  if (!isAdmin) {
+    return null;
+  }
+
+  // Igrejas com Plano Vitalício (como a Graça Soberana de Rio Grande) têm acesso permanente e NUNCA exibem aviso de trial
+  if (
+    effectivePlan.planId === 'vitalicio' || 
+    !effectivePlan.isTrial && !effectivePlan.isExpiredTrial
+  ) {
     return null;
   }
 

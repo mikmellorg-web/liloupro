@@ -1845,14 +1845,36 @@ export default function DashboardView({
             </p>
           </div>
         </div>
-        <div className="text-left sm:text-right shrink-0">
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest leading-none mb-1">Status dos Membros</p>
-          <span className="text-xs font-bold text-text-main bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded border border-black/10 dark:border-white/20">● Online</span>
-          {isAdmin && (
-            <div className="mt-2">
-              <span className="text-[10px] font-black text-brand uppercase tracking-widest px-2 py-0.5 bg-brand/10 border border-brand/20 rounded">Modo Administrador</span>
-            </div>
-          )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between sm:justify-end gap-4 shrink-0">
+          {/* Assistente Liloupro com Apresentação */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-2.5 sm:px-3 sm:py-2.5 max-w-lg shadow-sm">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
+                }
+              }}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs shadow-md transition-all cursor-pointer border border-sky-400/30 active:scale-95 shrink-0"
+              title="Abrir Assistente Liloupro (Voz e Texto)"
+            >
+              <Sparkles size={14} className="text-amber-300 animate-pulse shrink-0" />
+              <span>Assistente 🎙️</span>
+            </button>
+            <p className="text-[11px] sm:text-xs text-text-muted leading-relaxed">
+              Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.
+            </p>
+          </div>
+
+          <div className="text-left sm:text-right shrink-0">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest leading-none mb-1">Status dos Membros</p>
+            <span className="text-xs font-bold text-text-main bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded border border-black/10 dark:border-white/20">● Online</span>
+            {isAdmin && (
+              <div className="mt-1.5">
+                <span className="text-[10px] font-black text-brand uppercase tracking-widest px-2 py-0.5 bg-brand/10 border border-brand/20 rounded">Modo Administrador</span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

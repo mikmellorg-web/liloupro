@@ -94,7 +94,8 @@ export function LilouproAssistant({
   // Retractable floating button state (can dock to lateral edge)
   const [isRetracted, setIsRetracted] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('liloupro_assistant_retracted') === 'true';
+      const saved = localStorage.getItem('liloupro_assistant_retracted');
+      return saved !== null ? saved === 'true' : false;
     } catch {
       return false;
     }
@@ -1790,16 +1791,16 @@ export function LilouproAssistant({
 
   return (
     <>
-      {/* Floating Trigger Button (Hidden in Focus Mode, Retractable on Demand) */}
+      {/* Floating Trigger Button (Oculto na tela principal 'home', visível apenas ao navegar para outras telas) */}
       <AnimatePresence mode="wait">
-        {!isRetracted ? (
+        {currentTab !== 'home' && !isRetracted ? (
           <motion.div
             key="assistant-btn-expanded"
             initial={{ opacity: 0, scale: 0.9, x: 20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.85, x: 30 }}
             transition={{ type: 'spring', damping: 25, stiffness: 320 }}
-            className="fixed z-[10005] bottom-[76px] sm:bottom-20 md:bottom-6 right-3 sm:right-6 select-none print:hidden flex items-center"
+            className="fixed z-[10005] bottom-[84px] sm:bottom-22 md:bottom-6 right-3 sm:right-6 select-none print:hidden flex items-center"
           >
             <div className="relative flex items-center rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border border-sky-400/30 overflow-hidden shadow-xl">
               {/* Soft animated glass light shimmer */}
@@ -1845,50 +1846,50 @@ export function LilouproAssistant({
               </button>
             </div>
           </motion.div>
-        ) : (
+        ) : currentTab !== 'home' && isRetracted ? (
           <motion.div
             key="assistant-btn-retracted"
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 40 }}
+            exit={{ opacity: 0, x: 30 }}
             transition={{ type: 'spring', damping: 25, stiffness: 320 }}
             className="fixed z-[10005] bottom-[86px] sm:bottom-24 md:bottom-12 right-0 select-none print:hidden flex items-center"
           >
-            <div className="relative flex items-center rounded-l-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border-l border-t border-b border-sky-400/30 overflow-hidden pl-1.5 pr-2 py-1.5 shadow-xl">
+            <div className="relative flex items-center rounded-l-full bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white font-black assistant-radiant-glow border-l border-t border-b border-sky-400/30 overflow-hidden pl-1 pr-1.5 py-1 shadow-lg">
               {/* Soft animated shimmer */}
               <div className="absolute inset-0 -translate-x-full animate-assistant-shimmer bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
 
-              {/* Expand button */}
+              {/* Expand button (tiny chevron) */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleRetract(false);
                 }}
-                className="p-1 sm:p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white active:scale-90 transition-all flex items-center justify-center"
+                className="w-5 sm:w-6 h-7 hover:bg-white/15 rounded-l-full text-white/80 hover:text-white active:scale-90 transition-all flex items-center justify-center cursor-pointer"
                 title="Expandir botão do Assistente"
+                aria-label="Expandir botão do Assistente"
               >
-                <ChevronLeft size={16} strokeWidth={2.5} />
+                <ChevronLeft size={14} strokeWidth={2.5} />
               </button>
 
-              {/* Compact Trigger Button */}
+              {/* Minimalist Micro Trigger Button */}
               <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-1.5 px-2 py-1.5 sm:py-2 hover:bg-white/10 rounded-xl transition-all cursor-pointer active:scale-95 group"
-                title="Liloupro Assistente (Toque para abrir)"
+                className="relative flex items-center justify-center w-7 h-7 rounded-full bg-slate-950/75 text-sky-300 border border-sky-400/40 hover:border-sky-300 shrink-0 shadow-inner active:scale-95 transition-all group ml-0.5 cursor-pointer"
+                title="Liloupro Assistente (Toque para falar ou digitar)"
+                aria-label="Liloupro Assistente"
               >
-                <div className="relative flex items-center justify-center w-6 h-6 rounded-full bg-slate-950/70 text-sky-300 border border-sky-400/40 shrink-0 shadow-inner group-hover:border-sky-300">
-                  <Mic size={13} className="group-hover:scale-110 transition-transform stroke-[2.5]" />
-                </div>
-                <span className="text-[11px] font-black uppercase tracking-wider text-white">
-                  Assistente
+                <Mic size={13} className="group-hover:scale-110 transition-transform stroke-[2.5]" />
+                <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-60"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-300"></span>
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-300 opacity-90 animate-pulse" />
               </button>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       {/* Main Assistant Modal / Flyout Card */}

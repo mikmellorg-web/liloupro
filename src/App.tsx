@@ -60,7 +60,7 @@ import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { LilouproAssistant } from './components/LilouproAssistant';
 import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { StudyMetronomeModal } from './components/StudyMetronomeModal';
-import { getChurchEffectivePlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
+import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
@@ -1749,6 +1749,10 @@ function MainContent() {
     return getChurchEffectivePlan(churchData);
   }, [churchData]);
 
+  const isVitalicio = useMemo(() => {
+    return isVitalicioPlan(churchData);
+  }, [churchData]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleOnline = () => setIsOnline(true);
@@ -2845,10 +2849,11 @@ function MainContent() {
     )}>
       <DynamicThemeStyle churchData={churchData} />
 
-      {/* Trial / Subscription Status Banner */}
-      {!isSongFocusMode && (
+      {/* Trial / Subscription Status Banner - Exibido APENAS para administradores e NUNCA para igrejas com Acesso Vitalício (ex: Graça Soberana de Rio Grande) */}
+      {!isSongFocusMode && isAdmin && !isVitalicio && effectivePlan.planId !== 'vitalicio' && (
         <TrialBanner 
           effectivePlan={effectivePlan} 
+          isAdmin={isAdmin}
           onOpenUpgradeModal={() => {
             setUpgradeModalResult({
               allowed: false,
@@ -3129,19 +3134,40 @@ function MainContent() {
                   animate={window.innerWidth >= 768 ? { height: 'auto', opacity: 1 } : { y: 0, opacity: 1 }}
                   exit={window.innerWidth >= 768 ? { height: 0, opacity: 0 } : { y: 100, opacity: 0 }}
                   className={cn(
-                    "overflow-hidden flex flex-col gap-1 mt-1 more-menu-container",
-                    "fixed md:relative bottom-16 md:bottom-auto left-4 right-4 md:left-0 md:right-0 bg-slate-900 border border-slate-800 p-4 md:p-3 rounded-2xl md:rounded-xl shadow-2xl z-[60]"
+                    "flex flex-col gap-1.5 mt-1 more-menu-container",
+                    "fixed md:relative bottom-[74px] md:bottom-auto left-3 right-3 md:left-0 md:right-0 max-h-[80vh] overflow-y-auto custom-scrollbar bg-slate-900 border border-slate-800 p-3 rounded-2xl md:rounded-xl shadow-2xl z-[100]"
                   )}
                 >
+                  {/* Assistente Liloupro Destaque no Topo do Menu Mais */}
+                  <button
+                    type="button"
+                    onClick={() => { 
+                      setIsAssistantOpen(true); 
+                      setShowMoreMenu(false); 
+                    }}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-gradient-to-r from-sky-600/30 via-indigo-600/25 to-blue-600/30 border border-sky-400/40 text-white font-bold text-xs hover:brightness-110 active:scale-98 transition-all shadow-md group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/30 flex items-center justify-center text-sky-300 border border-sky-400/50 shrink-0">
+                        <Sparkles size={18} className="animate-pulse text-amber-300" />
+                      </div>
+                      <div className="flex flex-col text-left min-w-0">
+                        <span className="text-xs font-black text-white tracking-tight truncate flex items-center gap-1.5">
+                          Assistente Liloupro 🎙️
+                        </span>
+                        <span className="text-[10px] text-sky-200/80 font-medium truncate">
+                          Voz, cifras, escalas e manuais
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-sky-400 text-slate-950 shrink-0 shadow-sm animate-pulse">
+                      Abrir
+                    </span>
+                  </button>
+
+                  <div className="mx-2 my-1 border-t border-slate-800" />
+
                   <NavIcon icon={<Book size={20} />} active={activeTab === 'bible'} onClick={() => { setActiveTab('bible'); setShowMoreMenu(false); }} label="Bíblia Sagrada" isCollapsed={isSidebarCollapsed} subItem />
-                  <NavIcon 
-                    icon={<Sparkles size={20} className="text-sky-400 animate-pulse drop-shadow-[0_0_8px_rgba(56,189,248,0.8)] shrink-0" />} 
-                    active={isAssistantOpen} 
-                    onClick={() => { setIsAssistantOpen(true); setShowMoreMenu(false); }} 
-                    label="Assistente Liloupro (IA & Voz) 🎙️" 
-                    isCollapsed={isSidebarCollapsed} 
-                    subItem 
-                  />
                   <NavIcon 
                     icon={<GraduationCap size={20} className="text-purple-400 dark:text-purple-300 animate-pulse drop-shadow-[0_0_10px_rgba(168,85,247,0.9)] shrink-0" />} 
                     active={activeTab === 'theory'} 
@@ -15635,11 +15661,11 @@ function CalendarView({
           <div className="w-full max-w-xl text-left mx-auto">
             <ContextualHelp 
               id="calendar"
-              title="Escala: Como Confirmar seu Culto?"
+              title="Escala de Culto"
               description="A Escala do Culto reúne todo o time escalado (músicos, vocalistas e técnicos) e as músicas selecionadas para cada evento da igreja."
               steps={[
                 "Localize o Culto desejado listado abaixo.",
-                "Se você estiver escalado, utilize os botões de confirmação (Sim / Não) para informar sua presença ao líder.",
+                "Consulte os integrantes e suas respectivas funções escaladas para o culto.",
                 "Clique em 'Lista de Músicas' para estudar o repertório específico daquele dia, abrindo cifras ou o player.",
                 "Compartilhe a escala no grupo do WhatsApp da igreja usando o botão 'Compartilhar Escala' ou baixe em PDF."
               ]}
@@ -16109,68 +16135,11 @@ function CalendarView({
                               )}
                               title={isAdmin ? "Clique para edição rápida de função" : undefined}
                             >
-                              <p className="text-xs sm:text-sm font-bold text-text-main leading-relaxed break-words">
+                                <p className="text-xs sm:text-sm font-bold text-text-main leading-relaxed break-words">
                                 <span className="text-text-muted/40 mr-1">/</span>
                                 {assignedRoles.join(' • ')}
                               </p>
                             </div>
-
-                            {/* Confirmation Status Badge & Action Controls */}
-                            {(() => {
-                              const confirmationStatus = service.confirmations?.[mId] || 'pending';
-                              return (
-                                <div className="mt-4 pt-3 border-t border-white/5 flex flex-col gap-2">
-                                  <div className="flex items-center justify-between text-[10px] font-black uppercase">
-                                    <span className="text-text-muted">Presença:</span>
-                                    {confirmationStatus === 'confirmed' && (
-                                      <span className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1 font-black">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                        Confirmado
-                                      </span>
-                                    )}
-                                    {confirmationStatus === 'declined' && (
-                                      <span className="text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20 flex items-center gap-1 font-black">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                        Recusado
-                                      </span>
-                                    )}
-                                    {confirmationStatus === 'pending' && (
-                                      <span className="text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1 font-black">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                        Pendente
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {(member.uid === user?.uid || isAdmin) && (
-                                    <div className="flex gap-1.5 mt-1 no-export">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleConfirmVolunteer(service.id, mId, 'confirmed')}
-                                        className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border ${
-                                          confirmationStatus === 'confirmed'
-                                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-md font-extrabold'
-                                            : 'bg-emerald-500/5 hover:bg-emerald-500/20 border-emerald-500/15 text-emerald-400'
-                                        }`}
-                                      >
-                                        Confirmar
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleConfirmVolunteer(service.id, mId, 'declined')}
-                                        className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border ${
-                                          confirmationStatus === 'declined'
-                                            ? 'bg-rose-600 border-rose-600 text-white shadow-md font-extrabold'
-                                            : 'bg-rose-500/5 hover:bg-rose-500/20 border-rose-500/15 text-rose-400'
-                                        }`}
-                                      >
-                                        Recusar
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
                             
                             {isAdmin && isEditingThis &&
                               <div className="mt-auto pt-3 border-t border-border flex flex-wrap gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity no-export">
