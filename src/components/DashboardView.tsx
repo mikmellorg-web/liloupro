@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { getServicePlaylistSongs } from '../utils/servicePlaylistUtils';
+import { openGoogleCalendar } from '../utils/googleCalendarUtils';
+import { GoogleCalendarIcon } from './GoogleCalendarIcon';
 import { COLOR_PRESETS } from '../App';
 import { toPng } from 'html-to-image';
 import { 
@@ -2096,6 +2098,13 @@ export default function DashboardView({
                     </Button>
                     <Button onClick={() => { setShowLiturgySongs?.(true); onNavigate('songs'); }} className="bg-white text-primary hover:bg-white/90 px-4 sm:px-6 py-3 sm:py-3 text-xs sm:text-[13px] font-black uppercase tracking-tight shadow-xl animate-fade-in col-span-2 sm:col-span-auto w-full sm:w-auto text-center justify-center">
                       MÚSICAS DO CULTO
+                    </Button>
+                    <Button 
+                      onClick={() => openGoogleCalendar(nextService, { allSongs, members: dashboardMembers, user, churchData })} 
+                      className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 px-3.5 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in col-span-2 sm:col-span-auto w-full sm:w-auto text-center justify-center flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
+                    >
+                      <GoogleCalendarIcon size={16} />
+                      <span>Google Agenda</span>
                     </Button>
                   </div>
 

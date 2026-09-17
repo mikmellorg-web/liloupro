@@ -49,6 +49,8 @@ import { SplashIntro } from './SplashIntro';
 import { BibleVersionProvider } from '../contexts/BibleVersionContext';
 import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
+import { GoogleDocsIcon } from './GoogleDocsIcon';
+import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
 
 
 function cn(...inputs: ClassValue[]) {
@@ -1338,10 +1340,11 @@ export default function LiturgyView({
   onStartPlaylist?: (songs: any[]) => void,
   theme?: 'light' | 'dark'
 }) {
-  const { user, isAdmin, memberData } = useAuth();
+  const { user, isAdmin, memberData, churchData } = useAuth();
   const userChurchId = memberData?.churchId || 'semente';
   const [services, setServices] = useState<any[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [isCadernoModalOpen, setIsCadernoModalOpen] = useState(false);
   const liturgyRef = useRef<HTMLDivElement>(null);
 
   const [members, setMembers] = useState<any[]>([]);
@@ -1860,6 +1863,13 @@ export default function LiturgyView({
                 >
                   <FileDown size={18} />
                   Baixar PDF
+                </Button>
+                <Button 
+                  onClick={() => setIsCadernoModalOpen(true)} 
+                  className="bg-[#1a73e8] text-white hover:bg-[#1557b0] px-5 sm:px-6 border-none shadow-md transition-all font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-95"
+                >
+                  <GoogleDocsIcon size={18} />
+                  Criar Caderno no Google Docs
                 </Button>
                 <Button 
                   onClick={handleShareWhatsApp} 
@@ -2715,6 +2725,20 @@ export default function LiturgyView({
           )}
         </div>
       </div>
+
+      {selectedService && (
+        <CadernoGoogleDocsModal
+          isOpen={isCadernoModalOpen}
+          onClose={() => setIsCadernoModalOpen(false)}
+          service={selectedService}
+          options={{
+            allSongs,
+            members,
+            churchData,
+            user
+          }}
+        />
+      )}
     </motion.div>
   );
 }

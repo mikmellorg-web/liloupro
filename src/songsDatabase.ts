@@ -958,5 +958,97 @@ Você é precioso, mais raro que o ouro puro de Ofir`
     };
   }
 
+  // 12. Conversão - Harpa Cristã 15
+  if (normalizedTitle.includes("conversão") || normalizedTitle.includes("conversao") || (normalizedTitle.includes("15") && (normalizedArtist.includes("harpa") || normalizedTitle.includes("harpa")))) {
+    return {
+      title: "Conversão - 15",
+      artist: "Harpa Cristã",
+      key: "E",
+      bpm: 120,
+      timeSignature: "4/4",
+      chords: `[Intro]
+E  B7  E
+
+[Verso 1]
+    E                         B7
+Oh! Quão cego andei e perdido vaguei
+                      E
+Longe, longe do meu Salvador!
+                          A
+Mas da glória desceu e Seu sangue verteu
+     E         B7     E
+Pra salvar um tão pobre pecador
+
+[Refrão]
+       E                   B7
+Foi na cruz, foi na cruz, onde um dia eu vi
+                    E
+Meu pecado castigado em Jesus
+                    A
+Foi ali, pela fé, a paz encontrei
+      E         B7     E
+E de amor me alegro na Sua luz
+
+[Verso 2]
+     E                         B7
+Eu ouvia falar dessa graça sem par
+                     E
+Que do céu trouxe nosso Jesus
+                       A
+Mas eu era surdo ao Seu terno chamar
+       E        B7      E
+Desprezando o penoso sofrer na cruz
+
+[Refrão]
+       E                   B7
+Foi na cruz, foi na cruz, onde um dia eu vi
+                    E
+Meu pecado castigado em Jesus
+                    A
+Foi ali, pela fé, a paz encontrei
+      E         B7     E
+E de amor me alegro na Sua luz
+
+[Verso 3]
+     E                         B7
+Mas um dia senti meus pecados, e vi
+                     E
+Sobre mim o castigo da lei
+                       A
+Mas depressa fugi, em Jesus me escondi
+       E        B7      E
+E refúgio seguro n'Ele achei
+
+[Refrão]
+       E                   B7
+Foi na cruz, foi na cruz, onde um dia eu vi
+                    E
+Meu pecado castigado em Jesus
+                    A
+Foi ali, pela fé, a paz encontrei
+      E         B7     E
+E de amor me alegro na Sua luz`,
+      lyrics: `Oh! Quão cego andei e perdido vaguei
+Longe, longe do meu Salvador!
+Mas da glória desceu e Seu sangue verteu
+Pra salvar um tão pobre pecador
+
+Foi na cruz, foi na cruz, onde um dia eu vi
+Meu pecado castigado em Jesus
+Foi ali, pela fé, a paz encontrei
+E de amor me alegro na Sua luz
+
+Eu ouvia falar dessa graça sem par
+Que do céu trouxe nosso Jesus
+Mas eu era surdo ao Seu terno chamar
+Desprezando o penoso sofrer na cruz
+
+Mas um dia senti meus pecados, e vi
+Sobre mim o castigo da lei
+Mas depressa fugi, em Jesus me escondi
+E refúgio seguro n'Ele achei`
+    };
+  }
+
   return undefined;
 }

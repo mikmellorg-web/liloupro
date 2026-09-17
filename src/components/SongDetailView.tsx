@@ -41,6 +41,7 @@ import {
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { renderSongToPdfFlow } from '../utils/googleDocsCadernoUtils';
 import { exportJsonToExcel } from '../utils/excelExport';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1822,24 +1823,12 @@ export function SongDetailView({
   };
 
   const downloadSongPDF = () => {
-    const doc = new jsPDF();
-    const margin = 15;
-    let y = 20;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text(editedSong.title || 'Música Sem Título', margin, y);
-    y += 10;
-
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(12);
-    doc.text(`Artista: ${editedSong.artist || 'Desconhecido'}`, margin, y);
-    y += 8;
-
-    // Metadata (Key, BPM)
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
     const capoSemitones = getCapoSemitones(editedSong.capo);
     const netTranspose = dbChordsAreInCapoShape
       ? (isCapoEnabled ? transpose : (transpose + capoSemitones))
@@ -1855,95 +1844,37 @@ export function SongDetailView({
       ? `${currentKey} (Shape: ${pdfShapeKey})`
       : currentKey;
 
-    doc.text(`Tom: ${displayKeyText} | BPM: ${editedSong.bpm || '-'} | Compasso: ${editedSong.timeSignature || '4/4'}${editedSong.capo ? ` | ${formatCapoText(editedSong.capo)}` : ''}`, margin, y);
-    y += 8;
-
-    // Line separator
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, y, 195, y);
-    y += 10;
-
-    // Chords/Lyrics - Double Column Format
-    // We use Courier because it is a monospaced font, essential for chord alignment
-    doc.setFont("courier", "normal");
-    doc.setFontSize(8.5);
-    
     const contentToExport = netTranspose === 0 
       ? (detailTab === 'chords' ? (editedSong.chords || '') : (editedSong.lyrics || ''))
       : transposeLyricsAndChords(detailTab === 'chords' ? (editedSong.chords || '') : (editedSong.lyrics || ''), netTranspose);
 
-    const lines = contentToExport.split(/\r?\n/);
-    const lineHeight = 4.2;
-    const pageHeight = doc.internal.pageSize.height;
-
-    const colWidth = 85;
-    const colGap = 10;
-    const col1X = margin;
-    const col2X = margin + colWidth + colGap; // 15 + 85 + 10 = 110
-    
-    let currentCol = 1;
-    let startY = y;
-    const originalStartY = y;
-    
-    let currentPage = 1;
-    const pagesWithCol2 = new Set<number>();
-
-    lines.forEach((line) => {
-      // Check if we need to switch column or add a new page
-      if (y + lineHeight > pageHeight - 15) {
-        if (currentCol === 1) {
-          currentCol = 2;
-          y = startY;
-          pagesWithCol2.add(currentPage);
-        } else {
-          doc.addPage();
-          currentPage++;
-          currentCol = 1;
-          startY = 20; // subsequent pages start higher
-          y = startY;
-        }
-      }
-
-      const isChord = isChordLine(line);
-      if (isChord && detailTab === 'chords') {
-        doc.setFont("courier", "bold");
-        doc.setTextColor(43, 169, 184); // Brand color
-      } else {
-        doc.setFont("courier", "normal");
-        doc.setTextColor(60, 60, 60);
-      }
-
-      // Check current x position based on currentCol
-      const currentX = currentCol === 1 ? col1X : col2X;
-      
-      // Truncate line helper to fit within column width to avoid overlapping other column content
-      let displayLine = line;
-      if (doc.getTextWidth(line) > colWidth) {
-        let temp = line;
-        while (temp.length > 0 && doc.getTextWidth(temp) > colWidth - 2) {
-          temp = temp.slice(0, -1);
-        }
-        displayLine = temp;
-      }
-
-      doc.text(displayLine, currentX, y);
-      y += lineHeight;
+    renderSongToPdfFlow(doc, {
+      song: {
+        title: editedSong.title || 'Música Sem Título',
+        artist: editedSong.artist || 'Desconhecido',
+        key: displayKeyText,
+        bpm: editedSong.bpm || '-',
+        timeSignature: editedSong.timeSignature || '4/4',
+        capo: editedSong.capo
+      },
+      contentToRender: contentToExport,
+      isSingleSong: true
     });
 
-    // Draw center dividers for page layouts that ended up using Column 2
+    // Numeração de páginas no rodapé de todas as páginas geradas
     const totalPages = (doc as any).internal.getNumberOfPages();
+    const pageWidth = 210;
+    const margin = 12;
     for (let i = 1; i <= totalPages; i++) {
-      if (pagesWithCol2.has(i)) {
-        doc.setPage(i);
-        const pStartY = i === 1 ? originalStartY : 20;
-        const dividerX = 105;
-        doc.setDrawColor(225, 225, 230);
-        doc.setLineWidth(0.25);
-        doc.line(dividerX, pStartY, dividerX, pageHeight - 15);
-      }
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`LiLouPro • ${detailTab === 'chords' ? 'Cifra' : 'Letra'}`, margin, 292);
+      doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, 292, { align: 'right' });
     }
 
-    const fileName = `${editedSong.title?.replace(/\s+/g, '_')}_${detailTab === 'chords' ? 'Cifra' : 'Letra'}.pdf`;
+    const fileName = `${(editedSong.title || 'musica').replace(/\s+/g, '_')}_${detailTab === 'chords' ? 'Cifra' : 'Letra'}.pdf`;
     doc.save(fileName);
   };
 

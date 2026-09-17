@@ -741,7 +741,7 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
   return prevProps.chordLine === nextProps.chordLine && prevProps.lyricLine === nextProps.lyricLine;
 });
 
-interface ParsedSectionAndDynamics {
+export interface ParsedSectionAndDynamics {
   isMatch: boolean;
   sections: { type: string; title: string }[];
   dynamics: { type: 'n1' | 'n2' | 'n3' | 'n4' | 'n5' | 'n6' | 'n7' | 'crescendo' | 'decrescendo' | 'acapella' | 'drums' | 'acoustic' | 'pausa' | 'keychange' | 'custom'; label: string }[];
@@ -1197,12 +1197,35 @@ export function parseBracketSubContent(content: string): { isSection: boolean; s
   return null;
 }
 
+/**
+ * Normaliza tags de seção ou dinâmica que contenham letras espaçadas artificialmente,
+ * como "[ I n t r o ]", "[ V e r s o   1 ]" ou "( N 2   B e m   S u a v e )".
+ */
+export function normalizeSpacedTags(line: string): string {
+  if (!line) return '';
+  return line.replace(/(\[[^\]]+\]|\([^)]+\))/g, (match) => {
+    const isBracket = match.startsWith('[');
+    const inner = match.slice(1, -1).trim();
+    const parts = inner.split(/\s{2,}/);
+    const fixedParts = parts.map((p) => {
+      const tokens = p.trim().split(' ');
+      if (tokens.length >= 2 && tokens.every((t) => t.length === 1)) {
+        return tokens.join('');
+      }
+      return p;
+    });
+    const collapsed = fixedParts.join(' ');
+    return isBracket ? `[${collapsed}]` : `(${collapsed})`;
+  });
+}
+
 export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynamics {
   if (!line || !line.trim()) {
     return { isMatch: false, sections: [], dynamics: [], repeats: [], remainingText: '' };
   }
 
-  const rawTrimmed = line.trim();
+  const normalized = normalizeSpacedTags(line);
+  const rawTrimmed = normalized.trim();
 
   // Handle lines WITHOUT brackets or parentheses
   if (!rawTrimmed.includes('[') && !rawTrimmed.includes('(')) {

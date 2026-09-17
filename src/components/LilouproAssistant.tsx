@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
-  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users
+  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findLocalPopularSong } from '../songsDatabase';
 import { parseSpokenBibleCommand, isGeneralBibleRequest } from '../utils/bibleParser';
 import { ScreenInteractiveManualModal, SCREEN_MANUALS } from './ScreenInteractiveManualModal';
+import { GoogleCalendarIcon } from './GoogleCalendarIcon';
+import { GoogleDocsIcon } from './GoogleDocsIcon';
 
 interface Message {
   id: string;
@@ -90,6 +92,36 @@ export function LilouproAssistant({
       return true;
     }
   });
+
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>(() => {
+    try {
+      return (localStorage.getItem('liloupro_assistant_voice_gender') as 'female' | 'male') || 'female';
+    } catch {
+      return 'female';
+    }
+  });
+
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const updateVoices = () => {
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length > 0) {
+        setAvailableVoices(v);
+      }
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
 
   // Retractable floating button state (can dock to lateral edge)
   const [isRetracted, setIsRetracted] = useState<boolean>(() => {
@@ -206,7 +238,7 @@ export function LilouproAssistant({
       timestamp: new Date(),
       steps: [
         'Diga ex: "Como usar esta tela?"',
-        'Diga ex: "Abrir player da música Teu amor não falha"',
+        'Diga ex: "Tocar música Teu amor não falha"',
         'Diga ex: "Abra o afinador do app"',
         'Diga ex: "Abra o metrônomo do app"',
         'Diga ex: "Abrir a bíblia do app no salmo 86"',
@@ -227,8 +259,58 @@ export function LilouproAssistant({
     }
   }, [messages, isOpen, isListening, interimTranscript]);
 
+  // Best natural voice selection algorithm
+  const findBestNaturalVoice = useCallback((gender: 'female' | 'male') => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+    const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
+    const ptVoices = voices.filter(v => v.lang === 'pt-BR' || v.lang.startsWith('pt'));
+    if (ptVoices.length === 0) {
+      return voices[0] || null;
+    }
+
+    const femaleKeywords = [
+      'francisca', 'maria', 'luciana', 'joana', 'yelda', 'camila', 'helena', 
+      'vitória', 'vitoria', 'fernanda', 'leticia', 'letícia', 'female', 'mulher', 
+      'zira', 'google português', 'google portugues'
+    ];
+    const maleKeywords = [
+      'antonio', 'antônio', 'daniel', 'felipe', 'carlos', 'ricardo', 'thiago', 
+      'tiago', 'male', 'homem', 'david', 'george', 'alvaro', 'álvaro', 'bernardo', 'fábio', 'fabio'
+    ];
+
+    const targetKeywords = gender === 'female' ? femaleKeywords : maleKeywords;
+    const oppositeKeywords = gender === 'female' ? maleKeywords : femaleKeywords;
+
+    const scoreVoice = (v: SpeechSynthesisVoice) => {
+      let score = 0;
+      const combined = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+
+      // Prioridade pelo gênero solicitado
+      if (targetKeywords.some(kw => combined.includes(kw))) {
+        score += 80;
+      }
+      if (oppositeKeywords.some(kw => combined.includes(kw))) {
+        score -= 50;
+      }
+
+      // Prioridade alta para vozes naturais / online / neurais de alta fidelidade
+      if (combined.includes('natural') || combined.includes('online')) score += 50;
+      if (combined.includes('neural')) score += 45;
+      if (combined.includes('google')) score += 35;
+      if (combined.includes('premium') || combined.includes('enhanced')) score += 30;
+
+      // Prioridade para pt-BR
+      if (v.lang.toLowerCase().includes('br')) score += 15;
+
+      return score;
+    };
+
+    const sorted = [...ptVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a));
+    return sorted[0] || ptVoices[0];
+  }, [availableVoices]);
+
   // Voice synthesis helper
-  const speak = (textToSpeak: string) => {
+  const speak = (textToSpeak: string, customGender?: 'female' | 'male') => {
     if (!speechSynthesisEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
@@ -242,12 +324,20 @@ export function LilouproAssistant({
 
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = 'pt-BR';
-      utterance.rate = 1.05;
       
-      const voices = window.speechSynthesis.getVoices();
-      const ptVoice = voices.find(v => v.lang === 'pt-BR' || v.lang.startsWith('pt'));
-      if (ptVoice) {
-        utterance.voice = ptVoice;
+      const activeGender = customGender || voiceGender;
+      // Ajuste acústico para eliminar rouquidão e maximizar nitidez
+      if (activeGender === 'female') {
+        utterance.pitch = 1.04;
+        utterance.rate = 1.02;
+      } else {
+        utterance.pitch = 0.93;
+        utterance.rate = 1.0;
+      }
+
+      const bestVoice = findBestNaturalVoice(activeGender);
+      if (bestVoice) {
+        utterance.voice = bestVoice;
       }
       window.speechSynthesis.speak(utterance);
     } catch (e) {
@@ -938,6 +1028,67 @@ export function LilouproAssistant({
       norm.includes('como gerar escala');
 
     if (isQuestionOrHowTo) {
+      // 0. COMO USAR / ADICIONAR NO GOOGLE AGENDA?
+      if (norm.includes('google agenda') || norm.includes('google calendar') || norm.includes('salvar na agenda') || norm.includes('sincronizar agenda')) {
+        setIsLoading(false);
+        const replyText = 'Veja como sincronizar e salvar qualquer culto no seu **Google Agenda** com 1 clique:';
+        const steps = [
+          '1. **Na Tela Inicial**: No card de "Próximo Culto Confirmado", clique no botão **"📅 Google Agenda"**.',
+          '2. **Ou na aba Escalas**: Em qualquer card de culto agendado, ao lado dos botões PDF e WhatsApp, clique no botão azul **"Google Agenda"**.',
+          '3. **Abertura Automática**: O Google Agenda abre diretamente com todos os detalhes prontos: data e hora de início e término, tema do culto, equipe escalada, suas funções na escala e o repertório das músicas com seus respectivos tons.',
+          '4. **Notificações no Celular**: Basta clicar em "Salvar" no Google Agenda e seu celular emitirá lembretes e alertas automáticos antes do culto!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: 'Sincronizar no Google Agenda',
+          actionIcon: <GoogleCalendarIcon size={16} />,
+          actionSuccessMessage: '✓ Abrindo Escalas!',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Você pode salvar qualquer culto no seu Google Agenda com um toque! Basta clicar no botão Google Agenda no card do culto na tela inicial ou na aba de Escalas.');
+        return;
+      }
+
+      // 0.1 COMO CRIAR CADERNO NO GOOGLE DOCS / EXPORTAR GOOGLE DRIVE?
+      if (norm.includes('google doc') || norm.includes('google drive') || norm.includes('caderno') || norm.includes('gerar caderno') || norm.includes('cifras no docs')) {
+        setIsLoading(false);
+        const replyText = 'Veja como gerar o **Caderno Oficial do Culto no Google Docs** com liturgia e todas as cifras completas:';
+        const steps = [
+          '1. **No Card do Culto (Escalas ou Liturgia)**: Localize o culto desejado e clique no botão **"📄 Criar Caderno no Google Docs"** com o ícone oficial do Google Docs.',
+          '2. **Modal Inteligente**: Uma janela exclusiva se abrirá mostrando a quantidade de momentos da liturgia, cifras e voluntários escalados.',
+          '3. **1 Clique para Abrir**: Ao clicar em **"Abrir no Google Docs"**, todo o caderno (cabeçalho da igreja, ordem dos momentos, equipe e cifras completas) é copiado com formatação rica e o Google Docs é aberto automaticamente numa nova aba.',
+          '4. **Basta Colar (Ctrl + V)**: Na página em branco do Google Docs, pressione Ctrl + V para ver todo o caderno perfeitamente estilizado, com tons destacados, notas e cifras prontas para ensaio e impressão!',
+          '5. **Baixar .doc**: Você também pode baixar o arquivo .doc direto para o seu computador ou Google Drive.'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: 'Ver Cultos e Liturgia',
+          actionIcon: <GoogleDocsIcon size={16} />,
+          actionSuccessMessage: '✓ Abrindo Liturgia!',
+          onActionClick: () => {
+            onNavigate('liturgy');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Você pode gerar o caderno oficial no Google Docs com um toque! Basta clicar no botão Criar Caderno no Google Docs no card do culto.');
+        return;
+      }
+
       // 1. COMO AGENDAR UM CULTO / CRIAR CULTO?
       if (
         norm.includes('agendar') ||
@@ -1935,7 +2086,7 @@ export function LilouproAssistant({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 sm:gap-1.5">
                   {/* TTS Voice Toggle */}
                   <button
                     onClick={toggleSpeechSynthesis}
@@ -1948,6 +2099,30 @@ export function LilouproAssistant({
                   >
                     {speechSynthesisEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
                   </button>
+
+                  {/* Voice Switcher (Feminina / Masculina) */}
+                  {speechSynthesisEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = voiceGender === 'female' ? 'male' : 'female';
+                        setVoiceGender(next);
+                        try {
+                          localStorage.setItem('liloupro_assistant_voice_gender', next);
+                        } catch {}
+                        speak(next === 'female' ? 'Voz feminina natural ativada.' : 'Voz masculina natural ativada.', next);
+                      }}
+                      title={`Voz do assistente: ${voiceGender === 'female' ? 'Feminina (Clara)' : 'Masculina (Firme)'}. Toque para alternar.`}
+                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 ${
+                        voiceGender === 'female'
+                          ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30'
+                          : 'bg-blue-500/15 text-sky-400 hover:bg-blue-500/25 border border-blue-500/30'
+                      }`}
+                    >
+                      <User size={13} className="shrink-0" />
+                      <span>{voiceGender === 'female' ? 'Fem' : 'Masc'}</span>
+                    </button>
+                  )}
 
                   {/* Dock to side toggle */}
                   <button

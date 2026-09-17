@@ -31,6 +31,10 @@ import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isCho
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { exportJsonToExcel } from './utils/excelExport';
+import { openGoogleCalendar } from './utils/googleCalendarUtils';
+import { GoogleCalendarIcon } from './components/GoogleCalendarIcon';
+import { GoogleDocsIcon } from './components/GoogleDocsIcon';
+import { CadernoGoogleDocsModal } from './components/CadernoGoogleDocsModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { BibleSearch } from './components/BibleSearch';
@@ -14770,7 +14774,7 @@ function CalendarView({
   createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
   theme?: 'light' | 'dark'
 }) {
-  const { user, isAdmin, memberData } = useAuth();
+  const { user, isAdmin, memberData, churchData } = useAuth();
   const userChurchId = memberData?.churchId || 'semente';
   const [services, setServices] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
@@ -14779,6 +14783,14 @@ function CalendarView({
   const [newService, setNewService] = useState({ title: '', date: '', scales: {}, setlist: [], playlistUrl: '', theme: 'normal' });
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [localScales, setLocalScales] = useState<Record<string, string[]>>({});
+  const [cadernoModalService, setCadernoModalService] = useState<any>(null);
+  const [allSongs, setAllSongs] = useState<any[]>([]);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, 'songs'), (snap) => {
+      setAllSongs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, []);
 
   const roles = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Bateria', 'Baixo', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção'];
 
@@ -15878,6 +15890,20 @@ function CalendarView({
                     >
                       <Share2 size={11} className="sm:w-3.5 sm:h-3.5"/> WhatsApp
                     </button>
+                    <button 
+                      onClick={() => openGoogleCalendar(service, { members, user, churchData })}
+                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-1.5 bg-[#1a73e8] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 shadow-sm hover:scale-[1.02] active:scale-95"
+                      title="Adicionar culto e escala ao Google Agenda"
+                    >
+                      <GoogleCalendarIcon size={13} className="sm:w-3.5 sm:h-3.5" /> Google Agenda
+                    </button>
+                    <button 
+                      onClick={() => setCadernoModalService(service)}
+                      className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-1.5 bg-[#4285F4] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 shadow-sm hover:scale-[1.02] active:scale-95"
+                      title="Criar Caderno Oficial no Google Docs (Liturgia + Cifras)"
+                    >
+                      <GoogleDocsIcon size={13} className="sm:w-3.5 sm:h-3.5" /> Criar Caderno no Google Docs
+                    </button>
                     {isAdmin && (
                       <button 
                         onClick={async (e) => {
@@ -16605,28 +16631,117 @@ function CalendarView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal do Caderno no Google Docs */}
+      {cadernoModalService && (
+        <CadernoGoogleDocsModal
+          isOpen={!!cadernoModalService}
+          onClose={() => setCadernoModalService(null)}
+          service={cadernoModalService}
+          options={{
+            allSongs,
+            members,
+            churchData,
+            user
+          }}
+        />
+      )}
     </motion.div>
   );
 }
 
 function MembersView() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, memberData } = useAuth();
   const [members, setMembers] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newMember, setNewMember] = useState({ name: '', email: '', whatsapp: '', roles: [] as string[], photoUrl: '', birthDate: '' });
   const [isMemberCameraActive, setIsMemberCameraActive] = useState(false);
   const rolesList = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Baixo', 'Bateria', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção', 'Professor Kids', 'Professor Babies'];
 
+  const userChurchId = memberData?.churchId || 'semente';
+
   useEffect(() => {
     if (!user) return;
     const memberPath = 'members';
     return onSnapshot(collection(db, memberPath), (snap) => {
-      setMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allMembers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const filtered = allMembers.filter((m: any) => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
+      setMembers(filtered);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, memberPath);
     });
-  }, [user]);
+  }, [user, userChurchId]);
+
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(collection(db, 'services'), (snap) => {
+      const allServs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const filtered = allServs.filter((s: any) => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
+      setServices(filtered);
+    }, (error) => {
+      console.error("Error fetching services in MembersView:", error);
+    });
+  }, [user, userChurchId]);
+
+  // Cultos futuros a partir de hoje
+  const upcomingServices = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    return services
+      .filter(s => {
+        if (!s.date) return false;
+        let sDate: Date;
+        if (s.date?.toDate) {
+          sDate = s.date.toDate();
+        } else if (s.date instanceof Date) {
+          sDate = s.date;
+        } else {
+          sDate = new Date(s.date);
+        }
+        return !isNaN(sDate.getTime()) && sDate.getTime() >= startOfToday;
+      })
+      .sort((a, b) => {
+        const timeA = (a.date?.toDate ? a.date.toDate() : new Date(a.date)).getTime();
+        const timeB = (b.date?.toDate ? b.date.toDate() : new Date(b.date)).getTime();
+        return timeA - timeB;
+      });
+  }, [services]);
+
+  // Mapeamento rápido do próximo culto em que cada membro está escalado
+  const memberScheduleMap = useMemo(() => {
+    const map = new Map<string, { service: any; date: Date; roles: string[] }>();
+
+    for (const service of upcomingServices) {
+      const scales = service.scales || {};
+      let sDate: Date;
+      if (service.date?.toDate) {
+        sDate = service.date.toDate();
+      } else if (service.date instanceof Date) {
+        sDate = service.date;
+      } else {
+        sDate = new Date(service.date);
+      }
+
+      Object.entries(scales).forEach(([role, ids]) => {
+        const assignedIds = Array.isArray(ids) ? ids : [ids].filter(Boolean);
+        assignedIds.forEach((id: any) => {
+          if (id && typeof id === 'string') {
+            const existing = map.get(id);
+            if (!existing) {
+              map.set(id, { service, date: sDate, roles: [role] });
+            } else if (existing.service.id === service.id && !existing.roles.includes(role)) {
+              existing.roles.push(role);
+            }
+          }
+        });
+      });
+    }
+
+    return map;
+  }, [upcomingServices]);
 
   const userEmailLower = (user?.email || '').toLowerCase().trim();
   const isMaster = userEmailLower === 'mikmellorg@gmail.com' || userEmailLower === 'miqueiasmellopro@gmail.com';
@@ -16734,52 +16849,86 @@ function MembersView() {
       </div>
       
       <div className="grid gap-4">
-        {members.map(member => (
-          <Card key={member.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 border-border bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all group overflow-hidden">
-            <div className="flex items-center gap-4 sm:gap-5">
-               <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-brand/10 dark:bg-white/10 flex items-center justify-center text-text-main dark:text-white font-black text-2xl sm:text-3xl border border-border shadow-sm shrink-0 relative">
-                 <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                   {member.photoUrl ? (
-                     <img 
-                       referrerPolicy="no-referrer"
-                       src={member.photoUrl} 
-                       alt={member.name} 
-                       className="w-full h-full object-cover" 
-                     />
-                   ) : (
-                     member.name?.[0]
-                   )}
-                 </div>
-                 {member.isAdmin && (
-                   <div className="absolute -top-1 -right-1 bg-brand text-white p-1 rounded-full border-2 border-surface shadow-lg z-10" title="Administrador">
-                     <Settings size={10} className="animate-spin-slow" />
+        {members.map(member => {
+          const upcomingSchedule = memberScheduleMap.get(member.id) || (member.uid ? memberScheduleMap.get(member.uid) : undefined);
+          return (
+            <Card 
+              key={member.id} 
+              className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 border-border bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand/10 hover:border-brand/40 group overflow-hidden"
+            >
+              <div className="flex items-center gap-4 sm:gap-5">
+                 <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-brand/10 dark:bg-white/10 flex items-center justify-center text-text-main dark:text-white font-black text-2xl sm:text-3xl border border-border shadow-sm shrink-0 relative transition-all duration-300 group-hover:scale-105 group-hover:ring-4 group-hover:ring-brand/30 group-hover:border-brand/60">
+                   <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                     {member.photoUrl ? (
+                       <img 
+                         referrerPolicy="no-referrer"
+                         src={member.photoUrl} 
+                         alt={member.name} 
+                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" 
+                       />
+                     ) : (
+                       member.name?.[0]
+                     )}
                    </div>
-                 )}
-               </div>
-               <div className="min-w-0">
-                 <div className="flex items-center gap-2">
-                   <p className="font-black text-text-main text-base sm:text-lg tracking-tight leading-tight truncate">{member.name}</p>
                    {member.isAdmin && (
-                     <span className="bg-brand/20 text-brand text-[9px] font-black px-1.5 py-0.5 rounded border border-brand/20 uppercase tracking-widest">Adm</span>
+                     <div className="absolute -top-1 -right-1 bg-brand text-white p-1 rounded-full border-2 border-surface shadow-lg z-10" title="Administrador">
+                       <Settings size={10} className="animate-spin-slow" />
+                     </div>
+                   )}
+                   {upcomingSchedule && (
+                     <div 
+                       className="absolute -bottom-0.5 -right-0.5 bg-emerald-500 text-white p-1 sm:p-1.5 rounded-full border-2 border-surface shadow-md z-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110" 
+                       title={`Escalado para ${upcomingSchedule.service.name || 'Culto'} (${upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})`}
+                     >
+                       <Calendar size={11} className="stroke-[2.5]" />
+                     </div>
                    )}
                  </div>
-                 <div className="flex flex-col gap-0.5 mt-0.5">
-                   <p className="text-[10px] sm:text-xs text-text-main/80 font-medium truncate">{member.email || 'Sem e-mail'}</p>
-                    {member.birthDate && (
-                      <p className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-semibold truncate flex items-center gap-1">
-                        <span>🎂</span>
-                        <span>{formatBirthDate(member.birthDate)}</span>
-                      </p>
-                    )}
-                   {member.whatsapp && (
-                     <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-400 font-medium truncate flex items-center gap-1">
-                       <span className="w-1.5 h-1.5 rounded-full bg-green-500/50"></span>
-                       {member.whatsapp}
-                     </p>
-                   )}
+                 <div className="min-w-0">
+                   <div className="flex flex-wrap items-center gap-2">
+                     <p className="font-black text-text-main text-base sm:text-lg tracking-tight leading-tight truncate group-hover:text-brand transition-colors duration-200">{member.name}</p>
+                     {member.isAdmin && (
+                       <span className="bg-brand/20 text-brand text-[9px] font-black px-1.5 py-0.5 rounded border border-brand/20 uppercase tracking-widest">Adm</span>
+                     )}
+                     {upcomingSchedule && (
+                       <span 
+                         className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-sm group-hover:border-emerald-500/40 transition-colors"
+                         title={`Próxima escala: ${upcomingSchedule.service.name || 'Culto'} em ${upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • ${upcomingSchedule.roles.join(', ')}`}
+                       >
+                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                         <span>Escalado</span>
+                         <span className="text-[9px] font-bold text-emerald-600/80 dark:text-emerald-300/80 hidden xs:inline">
+                           • {upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                         </span>
+                       </span>
+                     )}
+                   </div>
+                   <div className="flex flex-col gap-0.5 mt-0.5">
+                     <p className="text-[10px] sm:text-xs text-text-main/80 font-medium truncate">{member.email || 'Sem e-mail'}</p>
+                     {upcomingSchedule && (
+                       <p className="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-semibold truncate flex items-center gap-1">
+                         <Calendar size={11} className="shrink-0 text-emerald-500" />
+                         <span>
+                           {upcomingSchedule.service.name || 'Culto'} ({upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})
+                           {upcomingSchedule.roles.length > 0 && ` • ${upcomingSchedule.roles.join(', ')}`}
+                         </span>
+                       </p>
+                     )}
+                     {member.birthDate && (
+                       <p className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-semibold truncate flex items-center gap-1">
+                         <span>🎂</span>
+                         <span>{formatBirthDate(member.birthDate)}</span>
+                       </p>
+                     )}
+                     {member.whatsapp && (
+                       <p className="text-[10px] sm:text-xs text-green-600 dark:text-green-400 font-medium truncate flex items-center gap-1">
+                         <span className="w-1.5 h-1.5 rounded-full bg-green-500/50"></span>
+                         {member.whatsapp}
+                       </p>
+                     )}
+                   </div>
                  </div>
-               </div>
-            </div>
+              </div>
             
             <div className="flex items-center gap-2 grow sm:grow-0 justify-end sm:justify-start">
                 {isMaster && member.id !== user?.uid && (
@@ -16853,7 +17002,8 @@ function MembersView() {
               )}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <AnimatePresence>

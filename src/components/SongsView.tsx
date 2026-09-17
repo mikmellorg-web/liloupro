@@ -63,6 +63,7 @@ import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { FootswitchModal, FootswitchConfig, MVAVE_CHOCOLATE_DEFAULT_MAPPINGS } from './FootswitchModal';
 import { getServicePlaylistSongs, getServiceSongs, getServiceSongIds, updateServicePlaylistUrl } from '../utils/servicePlaylistUtils';
+import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
 import { fetchCifraClubDirect } from '../utils/cifraClubClientScraper';
 
 
@@ -206,6 +207,7 @@ export default function SongsView({
   const [isEditingTargetPlaylist, setIsEditingTargetPlaylist] = useState(false);
   const [targetPlaylistUrl, setTargetPlaylistUrl] = useState('');
   const [isSavingTargetPlaylist, setIsSavingTargetPlaylist] = useState(false);
+  const [downloadingCifrasPdf, setDownloadingCifrasPdf] = useState(false);
 
   useEffect(() => {
     if (initialAdd && isAdmin) {
@@ -550,6 +552,18 @@ export default function SongsView({
     }
   };
 
+  const handleDownloadCifrasPDF = () => {
+    if (!targetService) return;
+    setDownloadingCifrasPdf(true);
+    try {
+      downloadCifrasCultoPDF(targetService, { allSongs: songs });
+    } catch (e) {
+      console.error('Erro ao gerar PDF de cifras do culto:', e);
+    } finally {
+      setTimeout(() => setDownloadingCifrasPdf(false), 1200);
+    }
+  };
+
   const artists = Array.from(new Set(songs.map(s => s.artist).filter(Boolean))).sort();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -854,6 +868,17 @@ export default function SongsView({
                    Playlist Externa
                  </button>
                )}
+
+               <button
+                 type="button"
+                 onClick={handleDownloadCifrasPDF}
+                 disabled={downloadingCifrasPdf}
+                 className="flex items-center justify-center gap-1.5 h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white border border-blue-500/30 rounded-lg font-bold uppercase text-[9px] sm:text-[10px] tracking-wider transition-all hover:scale-105 active:scale-95 shadow-md shadow-blue-600/20 cursor-pointer shrink-0 disabled:opacity-50"
+                 title="Baixar todas as cifras do culto em PDF (duas colunas, tamanho 10 em negrito)"
+               >
+                 <FileText size={13} className="text-white shrink-0" />
+                 <span>{downloadingCifrasPdf ? 'Gerando...' : 'Cifras do Culto'}</span>
+               </button>
 
                {isAdmin && !isEditingTargetPlaylist && (
                  <button
