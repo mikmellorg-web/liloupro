@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { getServiceSongIds } from './servicePlaylistUtils';
 import { isChordLine } from '../services/chordService';
 import { findLocalPopularSong } from '../songsDatabase';
-import { parseLineSectionAndDynamics, ParsedSectionAndDynamics, normalizeSpacedTags } from '../components/songsShared';
+import { parseLineSectionAndDynamics, ParsedSectionAndDynamics, normalizeSpacedTags, getDynamicExplanationDetails } from '../components/songsShared';
 
 export interface CadernoOptions {
   allSongs?: any[];
@@ -56,6 +56,80 @@ export function removeBibleVersionTags(text: string): string {
 }
 
 /**
+ * Formata os badges de seção, dinâmica e repetições em HTML compatível com Word e Google Docs,
+ * replicando fielmente as cores, bordas, badges e espaçamentos do PDF ("Cifras do Culto")
+ * e da visualização direta pelo app (SongDetailView).
+ */
+export function formatSectionDynamicsHtml(parsed: ParsedSectionAndDynamics, isTop: boolean = false): string {
+  if (!parsed || !parsed.isMatch) return '';
+
+  const badgesHtml: string[] = [];
+
+  // 1. Badges de Seção ([Intro], [Verso], [Refrão], [Ponte], etc.) - ciano/teal LiLouPro
+  for (const sec of parsed.sections) {
+    const title = sec.title.toUpperCase();
+    badgesHtml.push(
+      `<span style="display: inline-block; padding: 2pt 6pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #eef6f8; color: #0e7490; border: 1pt solid #2ba9b8; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(title)}</span>`
+    );
+  }
+
+  // 2. Badges de Dinâmica (ex: N2 • BEM SUAVE, N6 • FORTE, PAUSA, etc.)
+  for (const dyn of parsed.dynamics) {
+    const cleanLabel = formatDynamicLabelForPdf(dyn.label);
+    if (!cleanLabel) continue;
+
+    const t = dyn.type?.toLowerCase() || '';
+    let bg = '#f1f5f9';
+    let border = '#cbd5e1';
+    let textC = '#334155';
+
+    if (t === 'n1' || t === 'n2' || t === 'sutil' || t === 'suave') {
+      bg = '#ecfdf5';
+      border = '#6ee7b7';
+      textC = '#047857';
+    } else if (t === 'n3' || t === 'n4' || t === 'moderado') {
+      bg = '#f0f9ff';
+      border = '#7dd3fc';
+      textC = '#0369a1';
+    } else if (t === 'n5' || t === 'n6' || t === 'forte' || t === 'meio forte') {
+      bg = '#fff7ed';
+      border = '#fdba74';
+      textC = '#c2410c';
+    } else if (t === 'n7' || t === 'clímax' || t === 'climax') {
+      bg = '#fff1f2';
+      border = '#fda4af';
+      textC = '#be123c';
+    } else if (t === 'pausa' || t === 'stop') {
+      bg = '#fef2f2';
+      border = '#fca5a5';
+      textC = '#b91c1c';
+    }
+
+    badgesHtml.push(
+      `<span style="display: inline-block; padding: 2pt 5pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: ${bg}; color: ${textC}; border: 1pt solid ${border}; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(cleanLabel)}</span>`
+    );
+  }
+
+  // 3. Badges de Repetição (ex: 2X, 4X, BIS)
+  for (const rep of parsed.repeats) {
+    const repLabel = rep.toUpperCase();
+    badgesHtml.push(
+      `<span style="display: inline-block; padding: 2pt 5pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #fef3c7; color: #b45309; border: 1pt solid #fcd34d; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">🔁 ${escapeHtml(repLabel)}</span>`
+    );
+  }
+
+  // 4. Texto remanescente após tags
+  if (parsed.remainingText) {
+    badgesHtml.push(
+      `<span style="font-family: Arial, Helvetica, sans-serif; font-size: 8pt; font-style: italic; font-weight: bold; color: #64748b; margin-left: 4pt; vertical-align: middle;">${escapeHtml(parsed.remainingText)}</span>`
+    );
+  }
+
+  const topMargin = isTop ? '0pt' : '6pt';
+  return `<p class="cifra-section MsoNormal" style="margin: 0pt; margin-top: ${topMargin}; margin-bottom: 3pt; mso-margin-top-alt: ${topMargin}; mso-margin-bottom-alt: 3pt; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">${badgesHtml.join('')}</p>`;
+}
+
+/**
  * Formata um conjunto de linhas de cifra para uma coluna usando parágrafos (<p>)
  * com margens estritamente zeradas (margin: 0pt) e altura de linha compacta (line-height: 1.15).
  * Isso garante que tanto no Google Docs (Ctrl+V) quanto no Microsoft Word (.doc) o espaçamento
@@ -84,16 +158,13 @@ function formatCifraColumnLines(lines: string[]): string {
 
     lastWasEmpty = false;
 
-    // Cabeçalho de seção: [Intro], [Verso 1], [Refrão], [Ponte], etc.
-    const isSectionHeader = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed);
+    // Seção ou dinâmica: detecta usando o mesmo parser do PDF e SongDetailView (parseLineSectionAndDynamics)
+    const norm = normalizeSpacedTags(cleanLine);
+    const parsed = parseLineSectionAndDynamics(norm);
 
-    if (isSectionHeader) {
-      const escaped = escapeHtml(cleanLine).replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    if (parsed.isMatch) {
       const isTop = i === 0 || rendered.length === 0;
-      const topMargin = isTop ? '0pt' : '5pt';
-      rendered.push(
-        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: ${topMargin}; margin-bottom: 1pt; mso-margin-top-alt: ${topMargin}; mso-margin-bottom-alt: 1pt; line-height: 1.15; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; color: #0d9488; white-space: pre;"><b>${escaped}</b></p>`
-      );
+      rendered.push(formatSectionDynamicsHtml(parsed, isTop));
       continue;
     }
 
@@ -160,9 +231,11 @@ function splitCifraIntoTwoColumnsHtml(rawCifra: string): { col1Html: string; col
   const maxIdx = Math.min(total - 4, Math.ceil(total * 0.65));
 
   for (let i = minIdx; i <= maxIdx; i++) {
-    const line = (lines[i] || '').trim();
-    const isSection = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)/i.test(line);
-    const isEmpty = line.length === 0;
+    const rawL = lines[i] || '';
+    const norm = normalizeSpacedTags(rawL);
+    const parsed = parseLineSectionAndDynamics(norm);
+    const isSection = parsed.isMatch || /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)/i.test(rawL.trim());
+    const isEmpty = rawL.trim().length === 0;
 
     if (isSection || isEmpty) {
       const distance = Math.abs(i - targetSplit);
@@ -203,38 +276,39 @@ function renderSongSheetHtml(song: {
 }, index: number = 0): string {
   const { col1Html, col2Html } = splitCifraIntoTwoColumnsHtml(song.chords);
 
+  // O cabeçalho e as duas colunas de cifra são estruturados dentro da MESMA tabela (cifra-song-table).
+  // A linha do cabeçalho (<thead>) possui keep-with-next (page-break-after: avoid) e borda inferior direta,
+  // enquanto a linha das colunas permite divisão suave (mso-row-cant-split: false).
+  // Isso impede que o Word ou Google Docs separem o cabeçalho da música ou criem folhas em branco isoladas.
   return `
   <!-- MÚSICA ${index + 1}: ${escapeHtml(song.title)} -->
-  <!-- Quebra de página limpa e explícita para início da música (evita páginas em branco e não divide o cabeçalho) -->
-  <div style="page-break-before: always; mso-break-type: section-break; clear: both; height: 0; line-height: 0; font-size: 0; margin: 0; padding: 0;">&nbsp;</div>
-
-  <div class="song-sheet" style="margin-top: 0pt; margin-bottom: 24pt; padding: 0;">
-    <!-- CABEÇALHO DA MÚSICA (Padrão visual idêntico ao PDF do aplicativo) -->
-    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 20pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
-      ${escapeHtml(song.title)}
-    </p>
-    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-      Artista: ${escapeHtml(song.artist || 'Desconhecido')}
-    </p>
-    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 4pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 4pt; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-      Tom: <b>${escapeHtml(song.key || '-')}</b>${song.bpm ? ` | BPM: ${escapeHtml(song.bpm)}` : ''}${song.timeSignature ? ` | Compasso: ${escapeHtml(song.timeSignature)}` : ''}
-    </p>
-    <div style="border-bottom: 1.5pt solid #cbd5e1; margin-top: 3pt; margin-bottom: 10pt; height: 1pt; line-height: 1pt; font-size: 1pt; page-break-after: avoid;">&nbsp;</div>
-
-    <!-- CORPO DA CIFRA EM DUAS COLUNAS COMPACTAS (Padrão PDF, com width="100%" e width="50%" explícitos para o Word) -->
-    <table class="cifra-columns-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0; table-layout: fixed; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
-      <tbody>
-        <tr style="vertical-align: top;">
-          <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-right: 12pt; border: none; margin: 0;">
-            ${col1Html}
-          </td>
-          <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-left: 12pt; border: none; margin: 0;">
-            ${col2Html}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>`;
+  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 24pt; padding: 0; table-layout: fixed; page-break-before: always; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
+    <thead>
+      <tr class="cifra-header-row" style="page-break-after: avoid; page-break-inside: avoid; mso-special-format: keep-with-next;">
+        <th colspan="2" style="text-align: left; font-weight: normal; padding: 0; margin: 0; border: none; border-bottom: 1.5pt solid #cbd5e1; padding-bottom: 6pt;">
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
+            ${escapeHtml(song.title)}
+          </p>
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+            Artista: ${escapeHtml(song.artist || 'Desconhecido')}
+          </p>
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+            Tom: <b>${escapeHtml(song.key || '-')}</b>${song.bpm ? ` | BPM: ${escapeHtml(song.bpm)}` : ''}${song.timeSignature ? ` | Compasso: ${escapeHtml(song.timeSignature)}` : ''}
+          </p>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: auto; mso-row-cant-split: false;">
+        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-right: 12pt; border: none; margin: 0;">
+          ${col1Html}
+        </td>
+        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-left: 12pt; border: none; margin: 0;">
+          ${col2Html}
+        </td>
+      </tr>
+    </tbody>
+  </table>`;
 }
 
 /**
@@ -533,6 +607,43 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       line-height: 1.15;
       mso-line-height-rule: exactly;
       white-space: pre;
+    }
+    p.cifra-section {
+      margin: 0pt;
+      margin-top: 6pt;
+      margin-bottom: 3pt;
+      mso-margin-top-alt: 6pt;
+      mso-margin-bottom-alt: 3pt;
+      line-height: 1.25;
+      page-break-after: avoid;
+      mso-pagination: lines-together;
+    }
+    table.cifra-song-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: none;
+      margin: 0;
+      margin-bottom: 24pt;
+      padding: 0;
+      table-layout: fixed;
+      page-break-before: always;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    table.cifra-song-table th, table.cifra-song-table td {
+      border: none;
+      padding: 0;
+      margin: 0;
+    }
+    tr.cifra-header-row {
+      page-break-after: avoid;
+      page-break-inside: avoid;
+      mso-special-format: keep-with-next;
+    }
+    tr.cifra-body-row {
+      vertical-align: top;
+      page-break-inside: auto;
+      mso-row-cant-split: false;
     }
     table.cifra-columns-table {
       width: 100%;
@@ -855,7 +966,7 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
     </tbody>
   </table>
   <div style="font-size: 9.5pt; color: #64748b; font-style: italic; margin-top: 4pt; margin-bottom: 16pt;">
-    * O caderno com todas as cifras completas diagramadas em duas colunas está disponível no botão <b>Baixar (.doc)</b> do LiLouPro.
+    * O caderno com todas as cifras completas diagramadas em duas colunas está disponível no botão <b>Baixar Caderno (.doc)</b> do LiLouPro.
   </div>
 `;
   }

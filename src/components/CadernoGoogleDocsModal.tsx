@@ -163,7 +163,7 @@ export function CadernoGoogleDocsModal({
                 <div className="pt-1.5 mt-1 border-t border-white/20 flex items-start gap-1.5 text-xs text-white">
                   <span className="shrink-0">💡</span>
                   <span className="text-white leading-relaxed">
-                    Para ter todas as cifras completas diagramadas em 2 colunas, use o botão <b className="text-white font-semibold">Baixar (.doc)</b> ou <b className="text-white font-semibold">Cifras do Culto (PDF)</b> abaixo.
+                    Para ter todas as cifras completas diagramadas em 2 colunas, use o botão <b className="text-white font-semibold">Baixar Caderno (.doc)</b> ou <b className="text-white font-semibold">Cifras do Culto (PDF)</b> abaixo.
                   </span>
                 </div>
               </div>
@@ -190,7 +190,7 @@ export function CadernoGoogleDocsModal({
                 title="Baixar arquivo compatível com Word e Google Drive"
               >
                 <Download size={14} className="text-blue-500 shrink-0" />
-                <span>Baixar (.doc)</span>
+                <span>Baixar Caderno (.doc)</span>
               </button>
 
               <button
