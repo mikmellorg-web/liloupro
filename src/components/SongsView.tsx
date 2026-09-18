@@ -15,10 +15,11 @@ import {
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
   Flame, TrendingUp, TrendingDown, Sliders, Layers, Bluetooth, Radio, Mail,
-  ArrowUpDown
+  ArrowUpDown, ShieldAlert
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { ChromaticTunerModal } from './ChromaticTunerModal';
 import { StudyMetronomeModal } from './StudyMetronomeModal';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -113,8 +114,12 @@ export default function SongsView({
   onStartPlaylist?: (songs: any[]) => void,
   theme?: 'light' | 'dark'
 }) {
-  const { user, isAdmin, memberData } = useAuth();
+  const { user, isAdmin, memberData, churchData } = useAuth();
   const userChurchId = memberData?.churchId || 'semente';
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [driveInputUrl, setDriveInputUrl] = useState('');
+  const [isSavingDriveUrl, setIsSavingDriveUrl] = useState(false);
+  const [driveFeedbackMsg, setDriveFeedbackMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [songs, setSongs] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -564,6 +569,52 @@ export default function SongsView({
     }
   };
 
+  const teamDriveUrl: string = (churchData?.teamDriveUrl || churchData?.driveUrl || '').trim();
+
+  const handleOpenTeamDrive = () => {
+    if (teamDriveUrl && teamDriveUrl.startsWith('http')) {
+      window.open(teamDriveUrl, '_blank');
+    } else {
+      setDriveInputUrl(teamDriveUrl || '');
+      setDriveFeedbackMsg(null);
+      setIsDriveModalOpen(true);
+    }
+  };
+
+  const handleSaveTeamDriveUrl = async () => {
+    if (!isAdmin) {
+      setDriveFeedbackMsg({ text: 'Apenas administradores podem atualizar o link do Drive da Equipe.', type: 'error' });
+      return;
+    }
+
+    const cleanUrl = driveInputUrl.trim();
+    if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      setDriveFeedbackMsg({ text: 'O link deve começar com https://', type: 'error' });
+      return;
+    }
+
+    setIsSavingDriveUrl(true);
+    setDriveFeedbackMsg(null);
+
+    try {
+      const churchRef = doc(db, 'churches', userChurchId);
+      await setDoc(churchRef, {
+        teamDriveUrl: cleanUrl,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      setDriveFeedbackMsg({ text: 'Link do Google Drive da Equipe salvo com sucesso!', type: 'success' });
+      setTimeout(() => {
+        setIsDriveModalOpen(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Erro ao salvar Drive da Equipe:', err);
+      setDriveFeedbackMsg({ text: 'Erro ao salvar no banco de dados.', type: 'error' });
+    } finally {
+      setIsSavingDriveUrl(false);
+    }
+  };
+
   const artists = Array.from(new Set(songs.map(s => s.artist).filter(Boolean))).sort();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -819,6 +870,33 @@ export default function SongsView({
                 {showOnlyFavorites ? "Ver Todas" : "Minhas Favoritas"}
               </button>
             )}
+
+            {/* DRIVE DA EQUIPE (Google Drive Oficial) */}
+            <div className="inline-flex items-center rounded-xl shadow-xl border-2 bg-white border-brand hover:border-blue-600 shadow-md dark:shadow-black/20 overflow-hidden transition-all group">
+              <button
+                type="button"
+                onClick={handleOpenTeamDrive}
+                className="px-3 py-2 sm:px-4 sm:py-2.5 font-black uppercase text-[9px] sm:text-[10px] tracking-[0.15em] sm:tracking-[0.2em] flex items-center gap-1.5 sm:gap-2 text-primary hover:bg-blue-50 hover:text-blue-700 transition-all cursor-pointer active:scale-95"
+                title={teamDriveUrl ? "Abrir pasta oficial do Google Drive da Equipe" : "Configurar Google Drive da Equipe"}
+              >
+                <GoogleDriveIcon size={15} className="sm:w-4 sm:h-4 transition-transform group-hover:scale-110 shrink-0" />
+                <span className="font-black text-primary group-hover:text-blue-700 transition-colors">Drive da Equipe</span>
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDriveInputUrl(teamDriveUrl || '');
+                    setDriveFeedbackMsg(null);
+                    setIsDriveModalOpen(true);
+                  }}
+                  className="px-2 py-2 sm:py-2.5 border-l border-brand/30 text-primary hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer"
+                  title="Configurar Link do Google Drive da Equipe"
+                >
+                  <Settings size={12} className="sm:w-3.5 sm:h-3.5" />
+                </button>
+              )}
+            </div>
 
             {(isAdmin || !!user) && !showLiturgySongs && (
               <Button onClick={() => setIsAdding(true)} className="px-4 py-2 sm:px-6 sm:py-2.5 h-9 sm:h-10 text-[11px] sm:text-sm shadow-xl shadow-brand/20">
@@ -1771,6 +1849,148 @@ export default function SongsView({
                   Confirmar
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal do Google Drive da Equipe */}
+      <AnimatePresence>
+        {isDriveModalOpen && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => setIsDriveModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card border border-border rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                    <GoogleDriveIcon size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-text-main leading-tight">Drive da Equipe</h3>
+                    <p className="text-xs text-text-muted">Pasta oficial no Google Drive</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDriveModalOpen(false)}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {teamDriveUrl ? (
+                <div className="space-y-3">
+                  <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-text-main truncate">{teamDriveUrl}</p>
+                      <p className="text-[10px] text-text-muted mt-0.5">Link ativo configurado</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.open(teamDriveUrl, '_blank')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
+                    >
+                      <span>Abrir</span>
+                      <ExternalLink size={12} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-text-main space-y-1">
+                  <p className="font-bold flex items-center gap-1 text-amber-500">
+                    <AlertTriangle size={14} /> Link ainda não definido
+                  </p>
+                  <p className="text-text-muted text-[11px]">
+                    {isAdmin 
+                      ? "Cole abaixo o link da pasta compartilhada do Google Drive criada para a equipe (com acesso para os membros)."
+                      : "Solicite a um líder ou administrador da equipe para cadastrar o link da pasta do Google Drive."}
+                  </p>
+                </div>
+              )}
+
+              {isAdmin ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-text-main block">
+                      {teamDriveUrl ? 'Atualizar link do Google Drive:' : 'Configurar link do Google Drive:'}
+                    </label>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20">
+                      <ShieldAlert size={11} /> Somente Admin
+                    </span>
+                  </div>
+                  <Input
+                    type="url"
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={driveInputUrl}
+                    onChange={(e) => setDriveInputUrl(e.target.value)}
+                    className="h-10 text-xs bg-black/5 dark:bg-white/5 border border-border"
+                  />
+
+                  {driveFeedbackMsg && (
+                    <div className={cn(
+                      "p-2.5 rounded-lg text-xs font-bold flex items-center gap-2",
+                      driveFeedbackMsg.type === 'success' 
+                        ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" 
+                        : "bg-red-500/10 text-red-500 border border-red-500/20"
+                    )}>
+                      {driveFeedbackMsg.type === 'success' ? <Check size={14} /> : <AlertTriangle size={14} />}
+                      <span>{driveFeedbackMsg.text}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setIsDriveModalOpen(false)}
+                      className="flex-1 py-2 px-3 rounded-xl border border-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold text-text-muted transition-colors cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDriveUrl}
+                      onClick={handleSaveTeamDriveUrl}
+                      className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-colors shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingDriveUrl ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>Salvando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save size={13} />
+                          <span>Salvar Link</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-border flex flex-col gap-3">
+                  <div className="flex items-center gap-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-600 dark:text-amber-400 font-medium">
+                    <ShieldAlert size={16} className="shrink-0 text-amber-500" />
+                    <span>Apenas administradores e líderes da equipe têm permissão para cadastrar ou alterar o link do Google Drive.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDriveModalOpen(false)}
+                    className="w-full py-2.5 px-3 rounded-xl border border-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold text-text-muted transition-colors cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

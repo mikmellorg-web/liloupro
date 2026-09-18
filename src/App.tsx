@@ -66,6 +66,7 @@ import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { StudyMetronomeModal } from './components/StudyMetronomeModal';
 import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
+import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
@@ -3436,6 +3437,15 @@ function MainContent() {
           theme={theme}
           allSongs={allSongs}
           currentSong={selectedSong}
+          services={allServices}
+          activeService={activeLiturgyService}
+          onStartPlaylist={handleStartWorshipPlaylist}
+          onDownloadCifrasCulto={(serviceToDownload) => {
+            const svc = serviceToDownload || activeLiturgyService;
+            if (svc) {
+              downloadCifrasCultoPDF(svc, { allSongs });
+            }
+          }}
           onNavigate={(tab) => {
             setActiveTab(tab);
             setShowMoreMenu(false);

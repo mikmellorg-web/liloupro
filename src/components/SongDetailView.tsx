@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { ChromaticTunerModal } from './ChromaticTunerModal';
 import { StudyMetronomeModal } from './StudyMetronomeModal';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -108,7 +109,7 @@ export function SongDetailView({
   initialShowPlayer?: boolean,
   initialPlayerTrigger?: number
 }) {
-  const { user, isAdmin, memberData } = useAuth();
+  const { user, isAdmin, memberData, churchData } = useAuth();
 
   const handleToggleFavorite = async () => {
     if (!user) return;
@@ -4812,49 +4813,41 @@ export function SongDetailView({
               </div>
             )}
             
-            {/* 4. ARQUIVOS & AUDIOS */}
+            {/* 4. DRIVE OFICIAL DA EQUIPE */}
             <div className="pt-3 border-t border-border/60">
-               <h3 className="text-[10px] sm:text-xs font-bold text-text-main uppercase mb-3 text-center sm:text-left tracking-wider">Arquivos & Audios</h3>
-               <div className="p-3 sm:4 bg-blue-500/10 border border-dashed border-blue-500/30 rounded-xl flex flex-col items-center gap-2 sm:3 text-center">
-                  <Volume2 size={20} className="text-text-main opacity-80 sm:w-6 sm:h-6"/>
 
-                  
-                  <input 
-                    type="file" 
-                    ref={audioInputRef} 
-                    className="hidden" 
-                    accept="audio/*"
-                    onChange={(e) => handleFileUpload(e, 'audio')}
-                  />
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={(e) => handleFileUpload(e, 'files')}
-                  />
+               {/* Banner de Acesso Rápido ao Drive Geral se configurado */}
+               {churchData?.teamDriveUrl ? (
+                 <a
+                   href={churchData.teamDriveUrl}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className="flex items-center justify-between p-2.5 mb-3 bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-amber-500/10 border border-blue-500/20 hover:border-blue-500/40 rounded-xl text-xs font-bold text-text-main transition-all group hover:scale-[1.01]"
+                 >
+                   <div className="flex items-center gap-2.5">
+                     <GoogleDriveIcon size={18} className="group-hover:scale-110 transition-transform" />
+                     <div className="text-left">
+                       <p className="text-[11px] font-black leading-tight text-text-main">Drive Oficial da Equipe</p>
+                       <p className="text-[9px] text-text-muted font-normal">Acesse os áudios MP3, vídeos e materiais compartilhados</p>
+                     </div>
+                   </div>
+                   <ExternalLink size={14} className="text-text-muted group-hover:text-text-main shrink-0" />
+                 </a>
+               ) : (
+                 <div className="flex items-center justify-between p-2.5 mb-3 bg-blue-500/5 border border-blue-500/15 rounded-xl text-xs text-text-muted">
+                   <div className="flex items-center gap-2.5">
+                     <GoogleDriveIcon size={18} className="opacity-80 shrink-0" />
+                     <div className="text-left">
+                       <p className="text-[11px] font-bold text-text-main">Drive Oficial da Equipe</p>
+                       <p className="text-[9px] text-text-muted">O link da pasta no Google Drive configurado na aba de Músicas aparecerá aqui para toda a equipe.</p>
+                     </div>
+                   </div>
+                 </div>
+               )}
 
-                  {isAdmin && (
-                    <div className="grid grid-cols-2 gap-2 w-full">
-                    <Button 
-                      variant="primary" 
-                      className="text-[10px] sm:text-xs py-1.5 sm:py-2"
-                      onClick={() => audioInputRef.current?.click()}
-                    >
-                      + Áudio
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      className="bg-black/10 dark:bg-white/10 border-border text-text-main text-[10px] sm:text-xs py-1.5 sm:py-2"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      + Arquivo
-                    </Button>
-                  </div>
-                )}
-               </div>
-
-               {/* File Listing and Management */}
-               <div className="mt-4 space-y-2">
+               {/* File Listing and Management (apenas se houver arquivos previamente vinculados) */}
+               {((editedSong.audio && editedSong.audio.length > 0) || (editedSong.files && editedSong.files.length > 0) || isAnalyzingAudioBpm || detectedBpmMsg) && (
+               <div className="mt-3 space-y-2">
                   {isAnalyzingAudioBpm && (
                     <div className="flex items-center gap-2.5 p-3 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 rounded-xl text-xs select-none shadow-sm animate-pulse">
                       <Activity size={14} className="animate-spin-slow shrink-0" />
@@ -4959,64 +4952,8 @@ export function SongDetailView({
                       ))}
                     </div>
                   )}
-
-                  {/* Google Drive links section */}
-                  <div className="pt-2.5 mt-2 border-t border-white/10 space-y-3">
-                     {/* Google Drive Audio Guides link */}
-                     <div className="space-y-1">
-                        <span className="text-[10px] sm:text-xs font-bold text-text-muted uppercase tracking-wider block">Link do Drive (Guias de Áudio)</span>
-                        {isEditing ? (
-                          <Input 
-                            value={editedSong.driveAudioLink || ''}
-                            onChange={(e) => setEditedSong({...editedSong, driveAudioLink: e.target.value})}
-                            placeholder="Cole o link do Drive para guias"
-                            className="h-9 text-xs p-2 bg-black/10 dark:bg-white/5 border border-border text-text-main"
-                          />
-                        ) : (
-                          editedSong.driveAudioLink ? (
-                            <a 
-                              href={editedSong.driveAudioLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="flex items-center gap-2 p-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold transition-all"
-                            >
-                              <ExternalLink size={14} className="shrink-0" />
-                              <span className="truncate">Acessar Pasta de Guias no Drive</span>
-                            </a>
-                          ) : (
-                            <span className="text-[10px] text-text-muted italic block pl-1">Sem link do Drive cadastrado</span>
-                          )
-                        )}
-                     </div>
-
-                     {/* Google Drive Files link */}
-                     <div className="space-y-1">
-                        <span className="text-[10px] sm:text-xs font-bold text-text-muted uppercase tracking-wider block">Link do Drive (Partituras/Arquivos)</span>
-                        {isEditing ? (
-                          <Input 
-                            value={editedSong.driveFilesLink || ''}
-                            onChange={(e) => setEditedSong({...editedSong, driveFilesLink: e.target.value})}
-                            placeholder="Cole o link do Drive para partituras"
-                            className="h-9 text-xs p-2 bg-black/10 dark:bg-white/5 border border-border text-text-main"
-                          />
-                        ) : (
-                          editedSong.driveFilesLink ? (
-                            <a 
-                              href={editedSong.driveFilesLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="flex items-center gap-2 p-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-bold transition-all"
-                            >
-                              <ExternalLink size={14} className="shrink-0" />
-                              <span className="truncate">Acessar Pasta de Arquivos no Drive</span>
-                            </a>
-                          ) : (
-                            <span className="text-[10px] text-text-muted italic block pl-1">Sem link do Drive cadastrado</span>
-                          )
-                        )}
-                     </div>
-                  </div>
                </div>
+               )}
             </div>
           </Card>
 

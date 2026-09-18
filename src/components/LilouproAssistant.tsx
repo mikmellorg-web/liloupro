@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
-  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users, User
+  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users, User,
+  Play, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { findLocalPopularSong } from '../songsDatabase';
@@ -10,6 +11,8 @@ import { parseSpokenBibleCommand, isGeneralBibleRequest } from '../utils/biblePa
 import { ScreenInteractiveManualModal, SCREEN_MANUALS } from './ScreenInteractiveManualModal';
 import { GoogleCalendarIcon } from './GoogleCalendarIcon';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
+import { getServicePlaylistSongs, getServiceSongs } from '../utils/servicePlaylistUtils';
+import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
 
 interface Message {
   id: string;
@@ -38,6 +41,10 @@ interface LilouproAssistantProps {
   currentTab?: string;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  services?: any[];
+  activeService?: any;
+  onStartPlaylist?: (songs: any[]) => void;
+  onDownloadCifrasCulto?: (service?: any) => void;
 }
 
 export const openLilouproAssistant = () => {
@@ -66,12 +73,49 @@ export function LilouproAssistant({
   isAdmin = false,
   currentTab = 'home',
   isOpen: isOpenProp,
-  onOpenChange
+  onOpenChange,
+  services = [],
+  activeService,
+  onStartPlaylist,
+  onDownloadCifrasCulto
 }: LilouproAssistantProps) {
   const isLight = theme === 'light';
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isControlled = isOpenProp !== undefined;
   const isOpen = isControlled ? isOpenProp : internalIsOpen;
+
+  const targetService = useMemo(() => {
+    if (activeService) return activeService;
+    if (!services || services.length === 0) return null;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const servicesWithDates = services
+      .map(s => {
+        let date;
+        if (s.date?.toDate) date = s.date.toDate();
+        else if (s.date instanceof Date) date = s.date;
+        else date = new Date(s.date);
+        return { ...s, _actualDate: isNaN(date.getTime()) ? new Date(0) : date };
+      })
+      .filter(s => (s.liturgy && s.liturgy.length > 0) || (s.setlist && s.setlist.length > 0))
+      .sort((a, b) => a._actualDate.getTime() - b._actualDate.getTime());
+
+    if (servicesWithDates.length === 0) {
+      const allSorted = [...services]
+        .map(s => {
+          let date = s.date?.toDate ? s.date.toDate() : (s.date instanceof Date ? s.date : new Date(s.date));
+          return { ...s, _actualDate: isNaN(date.getTime()) ? new Date(0) : date };
+        })
+        .sort((a, b) => a._actualDate.getTime() - b._actualDate.getTime());
+      const future = allSorted.find(s => s._actualDate >= startOfToday);
+      return future || allSorted[allSorted.length - 1] || null;
+    }
+
+    const future = servicesWithDates.find(s => s._actualDate >= startOfToday);
+    if (future) return future;
+    return servicesWithDates[servicesWithDates.length - 1] || null;
+  }, [activeService, services]);
 
   const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
     const nextVal = typeof val === 'function' ? val(isOpen) : val;
@@ -237,6 +281,8 @@ export function LilouproAssistant({
       text: 'Olá! Sou o **Liloupro Assistente** 🎙️\nEstou aqui para guiá-lo em qualquer dúvida ou executar comandos de voz pelo app.',
       timestamp: new Date(),
       steps: [
+        'Diga ex: "Tocar playlist do culto"',
+        'Diga ex: "Baixar músicas do culto"',
         'Diga ex: "Como usar esta tela?"',
         'Diga ex: "Tocar música Teu amor não falha"',
         'Diga ex: "Abra o afinador do app"',
@@ -522,7 +568,196 @@ export function LilouproAssistant({
     }
 
     // ==========================================
-    // 1. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
+    // 1. INTENT: TOCAR PLAYLIST DO CULTO (Tocar músicas na ordem)
+    // Ex: "Tocar playlist do culto", "toque a playlist do culto", "tocar musicas do culto", "ouvir playlist do culto", "tocar playlist"
+    // ==========================================
+    const isPlayPlaylistCommand = (
+      (
+        (norm.includes('tocar') || norm.includes('toque') || norm.includes('toca') || norm.includes('ouvir') || norm.includes('ouca') || norm.includes('ouça') || norm.includes('reproduzir') || norm.includes('soltar') || norm.includes('solte') || norm.includes('play') || norm.startsWith('dar play')) &&
+        (
+          norm.includes('playlist do culto') ||
+          norm.includes('playlist de culto') ||
+          norm.includes('playlist culto') ||
+          norm.includes('musicas do culto') ||
+          norm.includes('musica do culto') ||
+          norm.includes('louvores do culto') ||
+          norm.includes('ordem do culto') ||
+          (norm.includes('playlist') && (norm.includes('culto') || norm.includes('hoje') || norm.includes('domingo') || norm.includes('celebracao') || norm.includes('liturgia')))
+        )
+      ) ||
+      norm === 'tocar playlist do culto' ||
+      norm === 'tocar a playlist do culto' ||
+      norm === 'tocar playlist' ||
+      norm === 'playlist do culto' ||
+      norm === 'ouvir playlist do culto' ||
+      norm === 'tocar as musicas do culto' ||
+      norm === 'tocar musicas do culto'
+    );
+
+    if (isPlayPlaylistCommand) {
+      setIsLoading(false);
+
+      if (!targetService) {
+        const replyText = 'Não encontrei nenhum culto agendado no momento para tocar a playlist. Você pode criar ou agendar um culto na aba **Escalas**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Abrir Escalas',
+          actionIcon: <Calendar size={15} />,
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+        speak('Não encontrei nenhum culto agendado no momento.');
+        return;
+      }
+
+      const playlistSongs = getServicePlaylistSongs(targetService, allSongs);
+
+      if (!playlistSongs || playlistSongs.length === 0) {
+        const allLiturgySongs = getServiceSongs(targetService, allSongs);
+        const replyText = allLiturgySongs.length > 0
+          ? `O culto **${targetService.title}** possui ${allLiturgySongs.length} música(s) na liturgia, mas nenhuma possui link do YouTube cadastrado para reprodução. Cadastre os links do YouTube nas músicas para liberar a playlist do culto!`
+          : `O culto **${targetService.title}** ainda não possui músicas vinculadas à liturgia. Acesse a aba **Liturgia** ou **Músicas** para adicionar as músicas do culto.`;
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🎵 Ver Músicas do Culto',
+          actionIcon: <Music size={15} />,
+          onActionClick: () => {
+            onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+
+        speak(allLiturgySongs.length > 0
+          ? 'As músicas do culto não possuem links do YouTube cadastrados para tocar a playlist.'
+          : 'Não há músicas vinculadas à liturgia deste culto.');
+        return;
+      }
+
+      // Tocar a playlist do culto na ordem
+      onStartPlaylist?.(playlistSongs);
+
+      const songsListText = playlistSongs
+        .map((s, idx) => `**${idx + 1}.** ${s.title}${s.artist ? ` — *${s.artist}*` : ''}`)
+        .join('\n');
+
+      const replyText = `Iniciando a playlist do culto **${targetService.title}** com **${playlistSongs.length} música(s)** na ordem oficial da liturgia! 🎵\n\n${songsListText}`;
+      const speakText = `Iniciando a playlist do culto ${targetService.title} com ${playlistSongs.length} músicas na ordem!`;
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: `▶️ Tocar Playlist (${playlistSongs.length} músicas)`,
+        actionIcon: <Play size={15} />,
+        actionSuccessMessage: '✓ Playlist em reprodução!',
+        onActionClick: () => {
+          onStartPlaylist?.(playlistSongs);
+        }
+      });
+
+      speak(speakText);
+      return;
+    }
+
+    // ==========================================
+    // 2. INTENT: BAIXAR MÚSICAS DO CULTO (Baixar o PDF com todas as cifras do culto)
+    // Ex: "Baixar músicas do culto", "baixar cifras do culto", "baixar pdf do culto", "baixar as cifras do culto"
+    // ==========================================
+    const isDownloadCultoSongs = (
+      (
+        (norm.includes('baixar') || norm.includes('baixa') || norm.includes('baixe') || norm.includes('fazer download') || norm.includes('download') || norm.includes('gerar') || norm.includes('exportar') || norm.includes('salvar') || norm.includes('imprimir')) &&
+        (
+          norm.includes('musicas do culto') ||
+          norm.includes('musica do culto') ||
+          norm.includes('cifras do culto') ||
+          norm.includes('cifra do culto') ||
+          norm.includes('pdf do culto') ||
+          norm.includes('pdf de cifras') ||
+          norm.includes('pdf das cifras') ||
+          norm.includes('pdf das musicas') ||
+          norm.includes('pdf com todas as cifras') ||
+          norm.includes('todas as cifras do culto') ||
+          (norm.includes('cifras') && (norm.includes('culto') || norm.includes('liturgia'))) ||
+          (norm.includes('musicas') && (norm.includes('culto') || norm.includes('liturgia')) && (norm.includes('pdf') || norm.includes('cifra') || norm.includes('baixar')))
+        )
+      ) ||
+      norm === 'baixar musicas do culto' ||
+      norm === 'baixar músicas do culto' ||
+      norm === 'baixar cifras do culto' ||
+      norm === 'baixar cifra do culto' ||
+      norm === 'baixar pdf do culto' ||
+      norm === 'pdf do culto' ||
+      norm === 'cifras do culto'
+    );
+
+    if (isDownloadCultoSongs) {
+      setIsLoading(false);
+
+      if (!targetService) {
+        const replyText = 'Não encontrei nenhum culto agendado no momento para baixar as cifras. Crie ou agende um culto na aba **Escalas**!';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Abrir Escalas',
+          actionIcon: <Calendar size={15} />,
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+        speak('Não encontrei nenhum culto agendado no momento.');
+        return;
+      }
+
+      // Executa o download das cifras do culto em PDF
+      try {
+        if (onDownloadCifrasCulto) {
+          onDownloadCifrasCulto(targetService);
+        } else {
+          downloadCifrasCultoPDF(targetService, { allSongs });
+        }
+      } catch (err) {
+        console.error('Erro ao baixar cifras do culto via assistente:', err);
+      }
+
+      const replyText = `Baixando o PDF oficial com **todas as cifras do culto ${targetService.title}**! 📄\n\n• Formatação organizada em 2 colunas para estantes e impressão rápida;\n• Letras e acordes com alta legibilidade em negrito;\n• Músicas completas na ordem exata da liturgia.`;
+      const speakText = `Baixando o PDF com todas as cifras do culto ${targetService.title} em duas colunas!`;
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '📄 Baixar Cifras do Culto (PDF)',
+        actionIcon: <FileText size={15} />,
+        actionSuccessMessage: '✓ PDF de cifras do culto gerado!',
+        onActionClick: () => {
+          if (onDownloadCifrasCulto) {
+            onDownloadCifrasCulto(targetService);
+          } else {
+            downloadCifrasCultoPDF(targetService, { allSongs });
+          }
+        }
+      });
+
+      speak(speakText);
+      return;
+    }
+
+    // ==========================================
+    // 3. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
     // Ex: "abra a bíblia em Marcos 12:20", "abra a bíblia", "salmo 23", "abrir bíblia"
     // ==========================================
     const parsedBible = parseSpokenBibleCommand(text);
