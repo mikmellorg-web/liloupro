@@ -39,6 +39,8 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { BibleSearch } from './components/BibleSearch';
 import { ProjectorDisplay } from './components/ProjectorDisplay';
+import { ObsOverlayDisplay } from './components/ObsOverlayDisplay';
+import { StageDisplay } from './components/StageDisplay';
 import { ProjectionView } from './components/ProjectionView';
 import { ProjectionRemoteView } from './components/ProjectionRemoteView';
 import { ChatView } from './components/ChatView';
@@ -1197,9 +1199,19 @@ function parseYoutubeVideoId(url: string): string | null {
 export default function App() {
   const isProjectionWindow = window.location.search.includes('projection=true');
   const isRemoteWindow = window.location.search.includes('remote=true');
+  const isObsWindow = window.location.search.includes('obs=true') || window.location.search.includes('overlay=true');
+  const isStageWindow = window.location.search.includes('stage=true');
 
   if (isProjectionWindow) {
     return <ProjectorDisplay />;
+  }
+
+  if (isObsWindow) {
+    return <ObsOverlayDisplay />;
+  }
+
+  if (isStageWindow) {
+    return <StageDisplay />;
   }
 
   if (isRemoteWindow) {

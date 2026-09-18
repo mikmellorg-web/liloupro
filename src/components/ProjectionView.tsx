@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { cleanLyricsForProjection } from '../services/chordService';
+import { BroadcastIntegrationsModal } from './BroadcastIntegrationsModal';
 
 // Simple Card component to preserve visual consistency with existing UI
 const Card = ({ children, className }: { children: React.ReactNode, className?: string }) => (
@@ -247,6 +248,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
   const [showLinkPanel, setShowLinkPanel] = useState<boolean>(false);
   const [showEditLyricsPanel, setShowEditLyricsPanel] = useState<boolean>(false);
   const [showRemoteModal, setShowRemoteModal] = useState<boolean>(false);
+  const [showIntegrationsModal, setShowIntegrationsModal] = useState<boolean>(false);
   const [remoteQrDataUrl, setRemoteQrDataUrl] = useState<string>('');
   const [remoteCopied, setRemoteCopied] = useState<boolean>(false);
   const [manualLinkSelection, setManualLinkSelection] = useState<string>('');
@@ -836,6 +838,11 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
       textUppercase,
       fontFamily,
       transitionType,
+      activeSongTitle: activeSong?.title || null,
+      activeSongArtist: activeSong?.artist || null,
+      nextSlideText: slides[activeSlideIdx + 1] ? (typeof slides[activeSlideIdx + 1] === 'string' ? slides[activeSlideIdx + 1] : '') : null,
+      currentSlideIdx: activeSlideIdx,
+      totalSlides: slides.length,
     };
     
     // 1. Storage update (backup)
@@ -1507,6 +1514,14 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
         </div>
 
         <div className="flex flex-wrap gap-2.5">
+          <Button 
+            onClick={() => setShowIntegrationsModal(true)} 
+            className="shadow-md shadow-violet-600/25 py-2 sm:py-2.5 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white shrink-0 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5"
+          >
+            <Radio size={14} className="text-white animate-pulse" />
+            <span>📡 OBS Studio & Holyrics</span>
+          </Button>
+
           <Button 
             onClick={() => setShowRemoteModal(true)} 
             className="shadow-md shadow-amber-500/20 py-2 sm:py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-zinc-950 shrink-0 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5"
@@ -3671,6 +3686,16 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Integrações: OBS Studio e Holyrics */}
+      <BroadcastIntegrationsModal
+        isOpen={showIntegrationsModal}
+        onClose={() => setShowIntegrationsModal(false)}
+        userChurchId={userChurchId}
+        allSongs={allSongs}
+        allServices={allServices}
+        currentServiceId={selectedLiturgyId}
+      />
 
     </motion.div>
   );

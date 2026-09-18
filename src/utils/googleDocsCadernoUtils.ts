@@ -1019,8 +1019,9 @@ export async function copyCadernoAndOpenGoogleDocs(service: any, options: Cadern
     }
   }
 
-  // Abre nova aba do Google Docs direcionando para a conta solicitada
-  const targetEmail = options.targetEmail || 'miqueiasmellopro@gmail.com';
+  // Abre nova aba do Google Docs direcionando para a conta individual do membro logado
+  const memberEmail = options.targetEmail || options.user?.email || (typeof options.user === 'string' ? options.user : '') || '';
+  const targetEmail = memberEmail && memberEmail.includes('@') ? memberEmail.trim() : '';
   const googleDocsUrl = targetEmail
     ? `https://docs.google.com/document/create?authuser=${encodeURIComponent(targetEmail)}`
     : 'https://docs.new';

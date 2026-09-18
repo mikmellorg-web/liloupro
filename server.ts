@@ -4048,28 +4048,22 @@ Diretrizes fundamentais:
     }
   });
 
-  // Vite middleware setup
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const candidateDistPaths = [
-      path.join(process.cwd(), "dist"),
-      path.join(serverDir, "dist"),
-      serverDir,
-    ];
-    let distPath = path.join(process.cwd(), "dist");
-    for (const d of candidateDistPaths) {
-      if (fs.existsSync(path.join(d, "index.html"))) {
-        distPath = d;
-        break;
-      }
+  // Resolve dist directory path
+  const candidateDistPaths = [
+    path.join(process.cwd(), "dist"),
+    path.join(serverDir, "dist"),
+    serverDir,
+  ];
+  let distPath = path.join(process.cwd(), "dist");
+  for (const d of candidateDistPaths) {
+    if (fs.existsSync(path.join(d, "index.html"))) {
+      distPath = d;
+      break;
     }
-    app.use(express.static(distPath, {
+  }
+
+  function serveStaticDist(appInstance: express.Express, targetDist: string) {
+    appInstance.use(express.static(targetDist, {
       setHeaders: (res, filePath) => {
         if (/\.(png|jpe?g|webp|avif|svg|gif|ico)$/i.test(filePath)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -4078,9 +4072,29 @@ Diretrizes fundamentais:
       }
     }));
     // Since Express v5 is used, use *all for wildcard fallback
-    app.get("*all", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    appInstance.get("*all", (req, res) => {
+      res.sendFile(path.join(targetDist, "index.html"));
     });
+  }
+
+  const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
+  const isCjsBundle = typeof __filename !== "undefined" && (__filename.endsWith(".cjs") || __filename.includes("dist"));
+  const isProduction = process.env.NODE_ENV === "production" || isCjsBundle || (hasBuiltDist && process.env.NODE_ENV !== "development");
+
+  if (!isProduction) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      console.warn("[Server] Vite dev server indisponível, usando arquivos estáticos do build:", viteErr);
+      serveStaticDist(app, distPath);
+    }
+  } else {
+    serveStaticDist(app, distPath);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
@@ -4088,4 +4102,7 @@ Diretrizes fundamentais:
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("[Fatal Server Startup Error]:", err);
+  process.exit(1);
+});

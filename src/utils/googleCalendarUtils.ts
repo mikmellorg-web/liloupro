@@ -106,6 +106,11 @@ export function generateGoogleCalendarUrl(service: any, options: CalendarEventOp
     location: location,
   });
 
+  const userEmail = options.user?.email || (typeof options.user === 'string' ? options.user : '');
+  if (userEmail && userEmail.includes('@')) {
+    params.append('authuser', userEmail);
+  }
+
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 

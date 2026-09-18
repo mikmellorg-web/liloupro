@@ -1,6 +1,6 @@
 {
   "name": "LiLouPro",
-  "description": "Sistema completo de gestão para grupos de louvor: escalas, disponibilidade de membros e repertório digital com cifras transponíveis.",
+  "description": "Sistema completo de gestão para ministérios de louvor: escalas, repertório, projeção de letras no telão, Lower Thirds para OBS Studio e integração Holyrics.",
   "requestFramePermissions": ["camera", "microphone", "midi"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

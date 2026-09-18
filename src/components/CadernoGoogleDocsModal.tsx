@@ -34,11 +34,14 @@ export function CadernoGoogleDocsModal({
     });
   }
 
+  const userEmail = (options.user?.email || (typeof options.user === 'string' ? options.user : '') || options.targetEmail || '').trim();
+  const displayAccount = userEmail && userEmail.includes('@') ? userEmail : 'Sua Conta Google Padrão';
+
   const handleOpenDocs = async () => {
     setOpenedDocs(true);
     await copyCadernoAndOpenGoogleDocs(service, {
       ...options,
-      targetEmail: 'miqueiasmellopro@gmail.com'
+      targetEmail: userEmail || undefined
     });
     setTimeout(() => {
       setCopied(true);
@@ -142,8 +145,8 @@ export function CadernoGoogleDocsModal({
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
               <span className="text-[11px] font-semibold text-text-muted">Conta Google destino:</span>
             </div>
-            <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 truncate max-w-[240px]">
-              miqueiasmellopro@gmail.com
+            <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 truncate max-w-[240px]" title={displayAccount}>
+              {displayAccount}
             </span>
           </div>
 
@@ -158,7 +161,7 @@ export function CadernoGoogleDocsModal({
                   Caderno copiado para a área de transferência!
                 </p>
                 <p className="text-white text-xs leading-relaxed">
-                  Abrindo Google Docs na conta <b className="text-white font-semibold">miqueiasmellopro@gmail.com</b>. Pressione <kbd className="px-1.5 py-0.5 bg-white/25 text-white rounded font-mono font-bold text-[11px] border border-white/30">Ctrl + V</kbd> para colar a liturgia, escala e lista de repertório.
+                  Abrindo Google Docs {userEmail ? <>na conta <b className="text-white font-semibold">{userEmail}</b></> : 'no seu navegador'}. Pressione <kbd className="px-1.5 py-0.5 bg-white/25 text-white rounded font-mono font-bold text-[11px] border border-white/30">Ctrl + V</kbd> para colar a liturgia, escala e lista de repertório.
                 </p>
                 <div className="pt-1.5 mt-1 border-t border-white/20 flex items-start gap-1.5 text-xs text-white">
                   <span className="shrink-0">💡</span>
