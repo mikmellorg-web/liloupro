@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Download, Check, ExternalLink, FileText, Music, BookOpen, Users, Sparkles } from 'lucide-react';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
-import { copyCadernoAndOpenGoogleDocs, downloadCadernoWordDoc, downloadCifrasCultoPDF, generateCadernoHtml, getCadernoSongs, type CadernoOptions } from '../utils/googleDocsCadernoUtils';
+import { copyCadernoAndOpenGoogleDocs, downloadCadernoWordDoc, downloadCifrasCultoPDF, generateCadernoHtml, getCadernoSongs, isGoogleEmail, type CadernoOptions } from '../utils/googleDocsCadernoUtils';
+import { GoogleAccountNoticeModal } from './GoogleAccountNoticeModal';
 
 interface CadernoGoogleDocsModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export function CadernoGoogleDocsModal({
   const [openedDocs, setOpenedDocs] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false);
 
   if (!isOpen || !service) return null;
 
@@ -37,7 +39,7 @@ export function CadernoGoogleDocsModal({
   const userEmail = (options.user?.email || (typeof options.user === 'string' ? options.user : '') || options.targetEmail || '').trim();
   const displayAccount = userEmail && userEmail.includes('@') ? userEmail : 'Sua Conta Google Padrão';
 
-  const handleOpenDocs = async () => {
+  const proceedWithOpenDocs = async () => {
     setOpenedDocs(true);
     await copyCadernoAndOpenGoogleDocs(service, {
       ...options,
@@ -47,6 +49,14 @@ export function CadernoGoogleDocsModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 5000);
     }, 400);
+  };
+
+  const handleOpenDocs = async () => {
+    if (userEmail && !isGoogleEmail(userEmail)) {
+      setIsNoticeOpen(true);
+      return;
+    }
+    proceedWithOpenDocs();
   };
 
   const handleDownloadDoc = () => {
@@ -248,6 +258,16 @@ export function CadernoGoogleDocsModal({
           </button>
         </div>
       </div>
+
+      <GoogleAccountNoticeModal
+        isOpen={isNoticeOpen}
+        onClose={() => setIsNoticeOpen(false)}
+        serviceType="docs"
+        userEmail={userEmail}
+        onContinue={() => {
+          proceedWithOpenDocs();
+        }}
+      />
     </div>
   );
 }

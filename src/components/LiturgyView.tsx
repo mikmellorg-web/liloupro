@@ -51,6 +51,7 @@ import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
+import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
 
 
 function cn(...inputs: ClassValue[]) {
@@ -1027,9 +1028,9 @@ const getFormatNameForPdf = (name: string) => {
 };
 
 const Button = ({ 
-  children, onClick, variant = 'primary', className, disabled 
+  children, onClick, variant = 'primary', className, disabled, title 
 }: { 
-  children: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'danger' | 'ghost', className?: string, disabled?: boolean 
+  children: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'danger' | 'ghost', className?: string, disabled?: boolean, title?: string 
 }) => {
   const variants = {
     primary: 'bg-brand text-brand-text hover:brightness-110 shadow-sm shadow-brand/20',
@@ -1042,6 +1043,7 @@ const Button = ({
     <button 
       disabled={disabled}
       onClick={onClick}
+      title={title}
       className={cn(
         "px-4 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none inline-flex items-center justify-center gap-2",
         variants[variant],
@@ -1865,6 +1867,14 @@ export default function LiturgyView({
                   Baixar PDF
                 </Button>
                 <Button 
+                  onClick={() => downloadCifrasCultoPDF(selectedService, { allSongs, members, churchData, user })} 
+                  className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 px-5 sm:px-6 border-none shadow-md transition-all font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-95"
+                  title="Baixar todas as cifras completas do culto em PDF formatadas em 2 colunas"
+                >
+                  <FileText size={18} />
+                  Cifras do Culto (PDF)
+                </Button>
+                <Button 
                   onClick={() => setIsCadernoModalOpen(true)} 
                   className="bg-[#1a73e8] text-white hover:bg-[#1557b0] px-5 sm:px-6 border-none shadow-md transition-all font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-95"
                 >
@@ -2003,6 +2013,26 @@ export default function LiturgyView({
                         <Youtube size={14} fill="#E60000" className="mr-1" />
                         YouTube
                       </Button>
+                    )}
+                    {selectedService.liturgy?.length > 0 && (
+                      <>
+                        <Button 
+                          onClick={() => downloadCifrasCultoPDF(selectedService, { allSongs, members, churchData, user })} 
+                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs px-4 h-9 border-none shadow-md transition-all font-bold rounded-full flex items-center gap-1.5"
+                          title="Cifras do Culto em PDF (2 colunas)"
+                        >
+                          <FileText size={14} />
+                          Cifras do Culto
+                        </Button>
+                        <Button 
+                          onClick={() => setIsCadernoModalOpen(true)} 
+                          className="bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs px-4 h-9 border-none shadow-md transition-all font-bold rounded-full flex items-center gap-1.5"
+                          title="Caderno no Google Docs"
+                        >
+                          <GoogleDocsIcon size={14} />
+                          Google Docs
+                        </Button>
+                      </>
                     )}
                   </div>
 

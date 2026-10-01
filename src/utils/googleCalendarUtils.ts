@@ -107,11 +107,37 @@ export function generateGoogleCalendarUrl(service: any, options: CalendarEventOp
   });
 
   const userEmail = options.user?.email || (typeof options.user === 'string' ? options.user : '');
-  if (userEmail && userEmail.includes('@')) {
-    params.append('authuser', userEmail);
+  if (userEmail && userEmail.includes('@') && isGoogleEmail(userEmail)) {
+    params.append('authuser', userEmail.trim());
   }
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+/**
+ * Verifica se um endereço de e-mail é nativo do Google (@gmail.com ou @googlemail.com)
+ */
+export function isGoogleEmail(email?: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const clean = email.trim().toLowerCase();
+  return clean.endsWith('@gmail.com') || clean.endsWith('@googlemail.com');
+}
+
+/**
+ * Verifica se o usuário autenticado utiliza uma Conta Google (via e-mail @gmail ou login Google)
+ */
+export function isGoogleUser(user: any): boolean {
+  if (!user) return false;
+  const email = (typeof user === 'string' ? user : user?.email || '').trim().toLowerCase();
+  if (isGoogleEmail(email)) return true;
+
+  // Verifica se autenticou com Google no Firebase Auth
+  if (user?.providerData && Array.isArray(user.providerData)) {
+    if (user.providerData.some((p: any) => p?.providerId === 'google.com')) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

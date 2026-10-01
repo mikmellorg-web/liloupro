@@ -709,8 +709,8 @@ export function LiturgyEditor({
       setIsSaving(false);
     }
   };
-  const [newItem, setNewItem] = useState({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'NAA', vocalist: '', duration: '' });
-  const [editItem, setEditItem] = useState({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'NAA', vocalist: '', duration: '' });
+  const [newItem, setNewItem] = useState({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'BLIVRE', vocalist: '', duration: '' });
+  const [editItem, setEditItem] = useState({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'BLIVRE', vocalist: '', duration: '' });
 
   useEffect(() => {
     if (!user) return;
@@ -858,7 +858,7 @@ export function LiturgyEditor({
         updatedAt: new Date().toISOString()
       });
       setAddItemStatus("success");
-      setNewItem({ type: "reading", title: "", content: "", details: "", songId: "", moment: "", bibleVersion: "NAA", vocalist: "", duration: "" });
+      setNewItem({ type: "reading", title: "", content: "", details: "", songId: "", moment: "", bibleVersion: "BLIVRE", vocalist: "", duration: "" });
       setShowCustomMomentInput(false);
       setShowBibleSearch(false);
 
@@ -1101,7 +1101,7 @@ export function LiturgyEditor({
       details: item.details || '', 
       songId: item.songId || '',
       moment: item.moment || '',
-      bibleVersion: item.bibleVersion || 'NAA',
+      bibleVersion: item.bibleVersion === 'TB' ? 'TB' : 'BLIVRE',
       vocalist: item.vocalist || '',
       duration: item.duration || ''
     });
@@ -1654,16 +1654,12 @@ export function LiturgyEditor({
                             <div className="flex items-center gap-1.5 text-[9px] font-black text-text-main/60 uppercase">
                               <span>Versão do Texto:</span>
                               <select
-                                value={newItem.bibleVersion || 'NAA'}
+                                value={newItem.bibleVersion === 'TB' ? 'TB' : 'BLIVRE'}
                                 onChange={e => setNewItem(prev => ({ ...prev, bibleVersion: e.target.value }))}
                                 className="bg-black/20 border border-border rounded px-1.5 py-0.5 text-[9px] font-black uppercase text-text-main outline-none focus:ring-1 focus:ring-brand cursor-pointer"
                               >
-                                <option value="NAA">NAA 2017 (Nova Almeida Atualizada)</option>
-                                <option value="ARA">ARA (Revista & Atu.)</option>
-                                <option value="ARC">ARC (Revista & Corr.)</option>
-                                <option value="NVI">NVI (Internacional)</option>
-                                <option value="NTLH">NTLH (Linguagem Hoje)</option>
-                                <option value="ACF">ACF (Almeida Fiel)</option>
+                                <option value="BLIVRE">Bíblia Livre (BLIVRE)</option>
+                                <option value="TB">Tradução Brasileira — 1917 (TB)</option>
                               </select>
                             </div>
                           )}
@@ -1696,7 +1692,7 @@ export function LiturgyEditor({
                                   ...prev,
                                   title: title || prev.title,
                                   details: text || prev.details,
-                                  bibleVersion: version || prev.bibleVersion || 'NAA'
+                                  bibleVersion: version || prev.bibleVersion || 'BLIVRE'
                                 }));
                               }}
                               onInsertDirect={async ({ title, text, version }) => {
@@ -1715,7 +1711,7 @@ export function LiturgyEditor({
                                   };
                                   const updatedLiturgy = [...liturgy, newLiturgyItem];
                                   await updateDoc(doc(db, 'services', service.id), { liturgy: updatedLiturgy });
-                                  setNewItem({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'NAA', vocalist: '', duration: '' });
+                                  setNewItem({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'BLIVRE', vocalist: '', duration: '' });
                                   setShowBibleSearch(false);
                                 } catch (error) {
                                   console.error("Error inserting directly:", error);
@@ -1967,16 +1963,12 @@ export function LiturgyEditor({
                                 <div className="flex items-center gap-1.5 text-[9px] font-black text-text-main/60 uppercase">
                                   <span>Versão do Texto:</span>
                                   <select
-                                    value={editItem.bibleVersion || 'NAA'}
+                                    value={editItem.bibleVersion === 'TB' ? 'TB' : 'BLIVRE'}
                                     onChange={e => setEditItem(prev => ({ ...prev, bibleVersion: e.target.value }))}
                                     className="bg-black/20 border border-border rounded px-1.5 py-0.5 text-[9px] font-black uppercase text-text-main outline-none focus:ring-1 focus:ring-brand cursor-pointer"
                                   >
-                                    <option value="NAA">NAA 2017 (Nova Almeida Atualizada)</option>
-                                    <option value="ARA">ARA (Revista & Atu.)</option>
-                                    <option value="ARC">ARC (Revista & Corr.)</option>
-                                    <option value="NVI">NVI (Internacional)</option>
-                                    <option value="NTLH">NTLH (Linguagem Hoje)</option>
-                                    <option value="ACF">ACF (Almeida Fiel)</option>
+                                    <option value="BLIVRE">Bíblia Livre (BLIVRE)</option>
+                                    <option value="TB">Tradução Brasileira — 1917 (TB)</option>
                                   </select>
                                 </div>
                               )}
@@ -2009,7 +2001,7 @@ export function LiturgyEditor({
                                       ...prev,
                                       title: title || prev.title,
                                       details: text || prev.details,
-                                      bibleVersion: version || prev.bibleVersion || 'NAA'
+                                      bibleVersion: version || prev.bibleVersion || 'BLIVRE'
                                     }));
                                   }}
                                   onInsertDirect={async ({ title, text, version }) => {

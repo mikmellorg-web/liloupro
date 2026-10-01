@@ -31,10 +31,12 @@ import { transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isCho
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { exportJsonToExcel } from './utils/excelExport';
-import { openGoogleCalendar } from './utils/googleCalendarUtils';
+import { openGoogleCalendar, isGoogleUser } from './utils/googleCalendarUtils';
 import { GoogleCalendarIcon } from './components/GoogleCalendarIcon';
 import { GoogleDocsIcon } from './components/GoogleDocsIcon';
 import { CadernoGoogleDocsModal } from './components/CadernoGoogleDocsModal';
+import { LilouVoiceAssistant } from './components/voice/LilouVoiceAssistant';
+import { GoogleAccountNoticeModal } from './components/GoogleAccountNoticeModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { BibleSearch } from './components/BibleSearch';
@@ -1226,6 +1228,7 @@ export default function App() {
     <BibleVersionProvider>
       <AuthProvider>
         <MainContent />
+        <LilouVoiceAssistant showButton={false} />
       </AuthProvider>
     </BibleVersionProvider>
   );
@@ -2237,7 +2240,6 @@ function MainContent() {
         }
         return { ...s, _actualDate: isNaN(date.getTime()) ? new Date(0) : date };
       })
-      .filter(s => (s.liturgy && s.liturgy.length > 0) || (s.setlist && s.setlist.length > 0))
       .sort((a, b) => a._actualDate.getTime() - b._actualDate.getTime());
 
     if (servicesWithDates.length === 0) return null;
@@ -3300,6 +3302,10 @@ function MainContent() {
               createNotifications={createNotifications}
               onStartPlaylist={handleStartWorshipPlaylist}
               theme={theme}
+              allSongs={allSongs}
+              liturgySongs={activeLiturgySongs}
+              activeLiturgyService={activeLiturgyService}
+              allServices={allServices}
             />
           )}
           {activeTab === 'songs' && selectedSong && (
@@ -14806,6 +14812,7 @@ function CalendarView({
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [localScales, setLocalScales] = useState<Record<string, string[]>>({});
   const [cadernoModalService, setCadernoModalService] = useState<any>(null);
+  const [noticeCalendarService, setNoticeCalendarService] = useState<any>(null);
   const [allSongs, setAllSongs] = useState<any[]>([]);
 
   useEffect(() => {
@@ -15913,7 +15920,13 @@ function CalendarView({
                       <Share2 size={11} className="sm:w-3.5 sm:h-3.5"/> WhatsApp
                     </button>
                     <button 
-                      onClick={() => openGoogleCalendar(service, { members, user, churchData })}
+                      onClick={() => {
+                        if (isGoogleUser(user)) {
+                          openGoogleCalendar(service, { members, user, churchData });
+                        } else {
+                          setNoticeCalendarService(service);
+                        }
+                      }}
                       className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-1.5 bg-[#1a73e8] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20 shadow-sm hover:scale-[1.02] active:scale-95"
                       title="Adicionar culto e escala ao Google Agenda"
                     >
@@ -16665,6 +16678,19 @@ function CalendarView({
             members,
             churchData,
             user
+          }}
+        />
+      )}
+
+      {/* Aviso para contas que não são Google */}
+      {noticeCalendarService && (
+        <GoogleAccountNoticeModal
+          isOpen={!!noticeCalendarService}
+          onClose={() => setNoticeCalendarService(null)}
+          serviceType="calendar"
+          userEmail={user?.email || ''}
+          onContinue={() => {
+            openGoogleCalendar(noticeCalendarService, { members, user, churchData });
           }}
         />
       )}
@@ -17664,7 +17690,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [userName, setUserName] = useState(user?.displayName || '');
   const [userPhotoUrl, setUserPhotoUrl] = useState('');
   const [userBirthDate, setUserBirthDate] = useState('');
-  const [defaultBibleVersion, setDefaultBibleVersion] = useState('NAA');
+  const [defaultBibleVersion, setDefaultBibleVersion] = useState('BLIVRE');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [adminPhone, setAdminPhone] = useState('');
   const [adminPhone2, setAdminPhone2] = useState('');
@@ -17727,7 +17753,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         setUserBirthDate(currentMember.birthDate);
       }
       if (currentMember.defaultBibleVersion) {
-        setDefaultBibleVersion(currentMember.defaultBibleVersion);
+        setDefaultBibleVersion(currentMember.defaultBibleVersion === 'NAA' ? 'BLIVRE' : currentMember.defaultBibleVersion);
       }
       hasInitializedSettingsRef.current = true;
     }
@@ -19177,15 +19203,20 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Versão Padrão da Bíblia</label>
-                  <div className="w-full h-11 bg-black/5 dark:bg-white/5 border border-border text-xs text-sky-400 px-4 rounded-xl flex items-center font-black select-none">
-                    NAA 2017 (Nova Almeida Atualizada - Padrão)
-                  </div>
+                  <select
+                    value={defaultBibleVersion}
+                    onChange={(e) => setDefaultBibleVersion(e.target.value)}
+                    className="w-full h-11 bg-black/5 dark:bg-white/5 border border-border text-xs text-text-main px-4 rounded-xl flex items-center font-bold focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value="BLIVRE">Bíblia Livre (BLIVRE) — Padrão</option>
+                    <option value="TB">Tradução Brasileira — 1917 (TB)</option>
+                  </select>
                 </div>
 
                 <Button 
                   onClick={handleUpdateProfile} 
                   className="w-full mt-2" 
-                  disabled={isSaving || (userName === (user?.displayName || '') && userPhotoUrl === (currentMember?.photoUrl || '') && userBirthDate === (currentMember?.birthDate || '') && defaultBibleVersion === (currentMember?.defaultBibleVersion || 'NAA'))}
+                  disabled={isSaving || (userName === (user?.displayName || '') && userPhotoUrl === (currentMember?.photoUrl || '') && userBirthDate === (currentMember?.birthDate || '') && defaultBibleVersion === (currentMember?.defaultBibleVersion || 'BLIVRE'))}
                 >
                   {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
                   Salvar Alterações

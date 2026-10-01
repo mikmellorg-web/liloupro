@@ -1,485 +1,255 @@
+// LiLouPro Plan and Subscription Management Service
+
+export interface EffectivePlanResult {
+  planId: 'vitalicio' | 'completo' | 'premium' | 'semeadora' | 'gratis' | string;
+  planName: string;
+  plan?: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+  isTrial: boolean;
+  trialDaysLeft: number;
+  isExpiredTrial: boolean;
+  isVitalicio: boolean;
+  isPaidActive: boolean;
+  maxMembers: number;
+  maxSongs: number;
+  features: {
+    projection: boolean;
+    unlimitedSongs: boolean;
+    aiAssistant: boolean;
+    fcmPush: boolean;
+    googleDocsCaderno: boolean;
+    scalesAndAvailability: boolean;
+    customThemes: boolean;
+    [key: string]: boolean;
+  };
+}
+
+export interface ResourceCheckResult {
+  allowed: boolean;
+  resourceType?: 'members' | 'songs' | 'services' | string;
+  currentCount: number;
+  maxAllowed?: number;
+  limit?: number;
+  resourceNameLabel?: string;
+  message?: string;
+  effectivePlan?: EffectivePlanResult;
+}
+
 export interface PlanDefinition {
-  id: 'semeadora' | 'completo' | 'premium' | 'vitalicio';
+  id: string;
   name: string;
-  priceFormatted: string;
+  badge?: string;
   priceMonthly: number;
-  priceAnnualFormatted?: string;
-  description: string;
-  popular?: boolean;
+  priceAnnual: number;
   kiwifyCheckoutUrl?: string;
   kiwifyAnnualCheckoutUrl?: string;
-  limits: {
-    maxActiveMembers: number; // Infinity for unlimited
-    maxSongs: number;
-    maxScalesPerMonth: number;
-    maxLiturgiesPerMonth: number;
-    maxAiUsesPerMonth: number;
-    hasPremiumProjection: boolean;
-    hasMultiCampus: boolean;
-    hasAdvancedStats: boolean;
-    hasAutomations: boolean;
-  };
+  description: string;
+  maxMembers: number;
+  maxSongs: number;
   features: string[];
 }
 
 export const LILOU_PLANS: Record<string, PlanDefinition> = {
-  semeadora: {
-    id: 'semeadora',
-    name: 'Plano Semeadora',
-    priceFormatted: 'R$ 0,00',
-    priceMonthly: 0,
-    description: 'Plano gratuito permanente. Ideal para manter sua igreja funcionando após o período de avaliação.',
-    limits: {
-      maxActiveMembers: 12,
-      maxSongs: 15,
-      maxScalesPerMonth: 5,
-      maxLiturgiesPerMonth: 3,
-      maxAiUsesPerMonth: 5,
-      hasPremiumProjection: false,
-      hasMultiCampus: false,
-      hasAdvancedStats: false,
-      hasAutomations: false
-    },
-    features: [
-      'Até 12 membros ativos',
-      'Até 15 músicas/cifras cadastradas',
-      'Até 5 escalas por mês',
-      'Até 3 liturgias por mês',
-      'Projeção básica no navegador',
-      'Bíblia sagrada integrada',
-      'Inteligência Artificial limitada (5 usos/mês)'
-    ]
-  },
   completo: {
     id: 'completo',
     name: 'Plano Completo',
-    priceFormatted: 'R$ 49,00',
-    priceMonthly: 49.00,
-    priceAnnualFormatted: 'R$ 470,40',
-    description: 'Tudo o que sua igreja precisa para gerenciar todas as liturgias, escalas e projeções sem nenhuma limitação.',
-    popular: true,
-    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/3qXHMCe',
-    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xrEKt4N',
-    limits: {
-      maxActiveMembers: Infinity,
-      maxSongs: Infinity,
-      maxScalesPerMonth: Infinity,
-      maxLiturgiesPerMonth: Infinity,
-      maxAiUsesPerMonth: Infinity,
-      hasPremiumProjection: true,
-      hasMultiCampus: false,
-      hasAdvancedStats: false,
-      hasAutomations: true
-    },
+    badge: 'Mais Popular',
+    priceMonthly: 49,
+    priceAnnual: 470.40,
+    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    description: 'Gestão integral com repertório ilimitado, projeção em tempo real e escalas.',
+    maxMembers: 50,
+    maxSongs: 9999,
     features: [
-      'Membros ilimitados',
-      'Músicas e cifras ilimitadas',
-      'Escalas e liturgias ilimitadas',
-      'Projeção Premium customizável',
-      'Bíblia integrada com busca ultra-rápida',
-      'Inteligência Artificial ilimitada',
-      'Automações e avisos no WhatsApp',
-      'Backup automático na nuvem',
-      'Suporte prioritário e novidades em primeira mão'
+      'Repertório e cifras ilimitadas',
+      'Projeção simultânea em telão e OBS',
+      'Assistente de Voz Lilou Hands-free',
+      'Exportação de Caderno em PDF / Google Docs',
+      'Escalas de ministério e disponibilidades'
+    ]
+  },
+  vitalicio: {
+    id: 'vitalicio',
+    name: 'Plano Vitalício',
+    badge: 'Acesso Eterno',
+    priceMonthly: 697.90,
+    priceAnnual: 697.90,
+    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    description: 'Pague uma única vez e tenha acesso permanente sem mensalidades futuras.',
+    maxMembers: 9999,
+    maxSongs: 9999,
+    features: [
+      'Acesso perpétuo sem renovação periódica',
+      'Todos os recursos presentes e futuros',
+      'Membros e músicas ilimitadas',
+      'Suporte prioritário via WhatsApp'
     ]
   },
   premium: {
     id: 'premium',
     name: 'Plano Premium',
-    priceFormatted: 'R$ 99,00',
-    priceMonthly: 99.00,
-    priceAnnualFormatted: 'R$ 950,40',
-    description: 'Ideal para redes de igrejas, grandes ministérios ou multi-campis que exigem gestão avançada.',
-    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/BlF0RJs',
-    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xlsUZKY',
-    limits: {
-      maxActiveMembers: Infinity,
-      maxSongs: Infinity,
-      maxScalesPerMonth: Infinity,
-      maxLiturgiesPerMonth: Infinity,
-      maxAiUsesPerMonth: Infinity,
-      hasPremiumProjection: true,
-      hasMultiCampus: true,
-      hasAdvancedStats: true,
-      hasAutomations: true
-    },
+    badge: 'Igrejas Grandes',
+    priceMonthly: 99,
+    priceAnnual: 950.40,
+    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    description: 'Para ministérios com múltiplos polos e grande quantidade de integrantes.',
+    maxMembers: 9999,
+    maxSongs: 9999,
     features: [
-      'Tudo do Plano Completo',
-      'Multi-campus e múltiplas congregações',
-      'Dashboard gerencial com estatísticas avançadas',
-      'Relatórios completos de presença e repertório',
-      'Backup avançado e segurança dedicada',
-      'Atendimento VIP prioritário'
+      'Membros ilimitados',
+      'Múltiplas salas de projeção simultâneas',
+      'Integrações avançadas'
     ]
   },
-  vitalicio: {
-    id: 'vitalicio',
-    name: 'Acesso Vitalício',
-    priceFormatted: 'R$ 697,90',
+  semeadora: {
+    id: 'semeadora',
+    name: 'Plano Semeadora',
     priceMonthly: 0,
-    description: 'Condição de lançamento. Pagamento único sem mensalidade, com todas as funções do Plano Completo para sempre.',
-    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
-    limits: {
-      maxActiveMembers: Infinity,
-      maxSongs: Infinity,
-      maxScalesPerMonth: Infinity,
-      maxLiturgiesPerMonth: Infinity,
-      maxAiUsesPerMonth: Infinity,
-      hasPremiumProjection: true,
-      hasMultiCampus: false,
-      hasAdvancedStats: true,
-      hasAutomations: true
-    },
+    priceAnnual: 0,
+    description: 'Plano inicial para pequenas congregações.',
+    maxMembers: 5,
+    maxSongs: 20,
     features: [
-      'Pagamento ÚNICO sem mensalidades futuras',
-      'Voluntários e membros ilimitados',
-      'Músicas, cifras e escalas ilimitadas',
-      'Projeção Premium para telão',
-      'Inteligência Artificial sem restrições',
-      'Automações e avisos no WhatsApp',
-      'Garantia incondicional de 7 dias via Kiwify'
+      'Até 5 membros na equipe',
+      'Até 20 músicas no repertório',
+      'Projeção básica'
     ]
   }
 };
 
-export const TRIAL_DURATION_DAYS = 30;
-
-export interface EffectivePlanResult {
-  planId: 'semeadora' | 'completo' | 'premium' | 'vitalicio';
-  plan: PlanDefinition;
-  isTrial: boolean;
-  trialDaysLeft: number;
-  isExpiredTrial: boolean;
-  statusLabel: string;
-}
-
-/**
- * Calcula os dias restantes de trial de 30 dias a partir da data de criação da igreja.
- */
-export function calculateTrialDaysLeft(createdAtDate: string | Date | number | undefined): number {
-  if (!createdAtDate) return 0;
-  
-  const created = typeof createdAtDate === 'string' || typeof createdAtDate === 'number'
-    ? new Date(createdAtDate)
-    : createdAtDate;
-
-  if (isNaN(created.getTime())) return 0;
-
-  const now = new Date();
-  const diffMs = now.getTime() - created.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const remaining = TRIAL_DURATION_DAYS - diffDays;
-
-  return remaining > 0 ? remaining : 0;
-}
-
-/**
- * Retorna se a igreja possui Acesso Vitalício por qualquer flag ou nome do plano.
- */
 export function isVitalicioPlan(churchData: any): boolean {
   if (!churchData) return false;
-  if (churchData.isLifetime === true || churchData.isVitalicio === true) return true;
-
-  const rawPlanId = (churchData.planId || '').toLowerCase();
-  if (rawPlanId === 'vitalicio' || rawPlanId === 'lifetime') return true;
-
-  const rawPlanName = (churchData.planName || '').toLowerCase();
-  if (
-    rawPlanName.includes('vitalicio') ||
-    rawPlanName.includes('vitalício') ||
-    rawPlanName.includes('lifetime') ||
-    rawPlanName.includes('acesso vitalício')
-  ) {
+  const planId = (churchData.planId || churchData.subscription?.plan || '').toLowerCase();
+  const churchName = (churchData.name || churchData.churchName || '').toLowerCase();
+  
+  if (planId === 'vitalicio' || planId === 'lifetime' || churchData.isVitalicio === true) {
     return true;
   }
-
-  const planStatus = (churchData.planStatus || '').toLowerCase();
-  if (planStatus === 'vitalicio' || planStatus === 'lifetime') return true;
-
-  // Reconhecimento de Acesso Vitalício permanente para a igreja "Graça Soberana" / "Graça Soberana de Rio Grande" e instâncias fundadoras
-  const churchNameNormalized = (churchData.name || '')
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-  if (
-    churchNameNormalized.includes('graca soberana') ||
-    churchNameNormalized.includes('soberana') ||
-    churchNameNormalized.includes('rio grande') ||
-    churchData.id === 'semente' ||
-    churchData.id === 'graca-soberana' ||
-    churchData.id === 'graca-soberana-rg' ||
-    churchData.churchId === 'semente' ||
-    churchData.churchId === 'graca-soberana' ||
-    churchData.createdBy === 'mikmellorg@gmail.com' ||
-    churchData.creatorEmail === 'mikmellorg@gmail.com' ||
-    churchData.contactEmail === 'mikmellorg@gmail.com' ||
-    churchData.ownerEmail === 'mikmellorg@gmail.com' ||
-    churchData.createdBy === 'system'
-  ) {
+  // Igreja pioneira com plano vitalício concedido
+  if (churchName.includes('graça soberana') || churchName.includes('graca soberana')) {
     return true;
   }
-
   return false;
 }
 
-/**
- * Retorna se a igreja possui uma assinatura ativa (mensal/anual/vitalício).
- */
-export function isPaidOrLifetimePlan(churchData: any): boolean {
-  if (!churchData) return false;
-  if (isVitalicioPlan(churchData)) return true;
-
-  const planStatus = (churchData.planStatus || '').toLowerCase();
-  const isPaidActive = planStatus === 'active' || planStatus === 'paid' || planStatus === 'pro';
-
-  if (!isPaidActive) return false;
-
-  // Se tem data de expiração, verificar se não expirou
-  if (churchData.planExpiresAt) {
-    const expDate = new Date(churchData.planExpiresAt);
-    if (!isNaN(expDate.getTime()) && expDate < new Date()) {
-      return false; // Assinatura expirada
-    }
-  }
-
-  return true;
-}
-
-/**
- * Retorna o plano efetivo da igreja considerando se a assinatura paga está ativa,
- * se possui Acesso Vitalício, se está no período de avaliação gratuita de 30 dias,
- * ou se expirou para o Plano Semeadora.
- */
 export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   if (!churchData) {
-    const plan = LILOU_PLANS['semeadora'];
     return {
-      planId: 'semeadora',
-      plan,
-      isTrial: false,
-      trialDaysLeft: 0,
-      isExpiredTrial: true,
-      statusLabel: 'Plano Semeadora (Gratuito)'
+      planId: 'gratis',
+      planName: 'Plano Gratuito',
+      plan: { id: 'gratis', name: 'Plano Gratuito' },
+      isTrial: true,
+      trialDaysLeft: 30,
+      isExpiredTrial: false,
+      isVitalicio: false,
+      isPaidActive: false,
+      maxMembers: 5,
+      maxSongs: 20,
+      features: {
+        projection: true,
+        unlimitedSongs: false,
+        aiAssistant: true,
+        fcmPush: true,
+        googleDocsCaderno: true,
+        scalesAndAvailability: true,
+        customThemes: true
+      }
     };
   }
 
-  const planStatus = (churchData.planStatus || '').toLowerCase();
-  const rawPlanName = (churchData.planName || '').toLowerCase();
-  const rawPlanId = (churchData.planId || '').toLowerCase();
-  const createdAt = churchData.createdAt;
-
-  // 1. Acesso Vitalício
-  const isVitalicio = isVitalicioPlan(churchData);
-  if (isVitalicio) {
-    const plan = LILOU_PLANS['vitalicio'];
+  if (isVitalicioPlan(churchData)) {
     return {
       planId: 'vitalicio',
-      plan,
+      planName: 'Plano Vitalício',
+      plan: { id: 'vitalicio', name: 'Plano Vitalício' },
       isTrial: false,
-      trialDaysLeft: 0,
+      trialDaysLeft: 9999,
       isExpiredTrial: false,
-      statusLabel: 'Acesso Vitalício (Ativo)'
-    };
-  }
-
-  // 2. Assinatura Paga Ativa (Mensal ou Anual)
-  const isPaidActive = planStatus === 'active' || planStatus === 'paid' || planStatus === 'pro';
-
-  if (isPaidActive) {
-    // Verificar se a assinatura expirou
-    if (churchData.planExpiresAt) {
-      const expDate = new Date(churchData.planExpiresAt);
-      if (!isNaN(expDate.getTime()) && expDate < new Date()) {
-        const plan = LILOU_PLANS['semeadora'];
-        return {
-          planId: 'semeadora',
-          plan,
-          isTrial: false,
-          trialDaysLeft: 0,
-          isExpiredTrial: true,
-          statusLabel: 'Assinatura Expirada (Plano Semeadora)'
-        };
+      isVitalicio: true,
+      isPaidActive: true,
+      maxMembers: 9999,
+      maxSongs: 9999,
+      features: {
+        projection: true,
+        unlimitedSongs: true,
+        aiAssistant: true,
+        fcmPush: true,
+        googleDocsCaderno: true,
+        scalesAndAvailability: true,
+        customThemes: true
       }
-    }
-
-    let targetPlanId: 'completo' | 'premium' = 'completo';
-    if (rawPlanName.includes('premium') || rawPlanName.includes('templo') || rawPlanName.includes('multi') || rawPlanId === 'premium') {
-      targetPlanId = 'premium';
-    }
-
-    const plan = LILOU_PLANS[targetPlanId];
-    return {
-      planId: targetPlanId,
-      plan,
-      isTrial: false,
-      trialDaysLeft: 0,
-      isExpiredTrial: false,
-      statusLabel: `Ativo (${plan.name})`
     };
   }
 
-  // 3. Período de Avaliação Gratuita (30 dias do Plano Completo)
-  const daysLeft = calculateTrialDaysLeft(createdAt);
-  const isInTrial = daysLeft > 0 && planStatus !== 'suspended' && planStatus !== 'cancelled';
+  const rawPlanId = (churchData.planId || churchData.subscription?.plan || 'completo').toLowerCase();
+  const createdAt = churchData.createdAt ? new Date(churchData.createdAt).getTime() : Date.now();
+  const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
+  const elapsed = Date.now() - createdAt;
+  const trialDaysLeft = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
+  const isExpired = elapsed > trialDurationMs && !churchData.subscription?.active;
+  const isPaidActive = Boolean(churchData.subscription?.active);
+  const pName = isExpired ? 'Plano Semeadora' : (LILOU_PLANS[rawPlanId]?.name || 'Plano Completo');
 
-  if (isInTrial) {
-    const plan = LILOU_PLANS['completo'];
-    return {
-      planId: 'completo',
-      plan,
-      isTrial: true,
-      trialDaysLeft: daysLeft,
-      isExpiredTrial: false,
-      statusLabel: `Avaliação Gratuita (${daysLeft} dia${daysLeft > 1 ? 's' : ''} restante${daysLeft > 1 ? 's' : ''})`
-    };
-  }
-
-  // 4. Avaliação Expirada -> Migração Automática para Plano Semeadora (Gratuito)
-  const plan = LILOU_PLANS['semeadora'];
   return {
-    planId: 'semeadora',
-    plan,
-    isTrial: false,
-    trialDaysLeft: 0,
-    isExpiredTrial: true,
-    statusLabel: 'Plano Semeadora (Gratuito)'
+    planId: isExpired ? 'semeadora' : rawPlanId,
+    planName: pName,
+    plan: { id: isExpired ? 'semeadora' : rawPlanId, name: pName },
+    isTrial: !isPaidActive && !isExpired,
+    trialDaysLeft,
+    isExpiredTrial: isExpired,
+    isVitalicio: false,
+    isPaidActive,
+    maxMembers: isPaidActive ? 9999 : 50,
+    maxSongs: isPaidActive ? 9999 : 9999,
+    features: {
+      projection: true,
+      unlimitedSongs: true,
+      aiAssistant: true,
+      fcmPush: true,
+      googleDocsCaderno: true,
+      scalesAndAvailability: true,
+      customThemes: true
+    }
   };
 }
 
-export type ResourceType = 'members' | 'songs' | 'scalesThisMonth' | 'liturgiesThisMonth' | 'aiUsesThisMonth' | 'multiCampus';
-
-export interface ResourceCheckResult {
-  allowed: boolean;
-  limit: number;
-  currentCount: number;
-  resourceNameLabel: string;
-  effectivePlan: EffectivePlanResult;
-}
-
-/**
- * Valida se a igreja pode criar ou usar um determinado recurso com base nos limites do plano.
- * NOTA CRÍTICA: Se exceder, NENHUM DADO É APAGADO! Apenas impede a criação de novos itens além do limite.
- */
 export function checkResourceLimit(
   churchData: any,
-  resource: ResourceType,
+  resourceType: 'members' | 'songs' | 'services' | string,
   currentCount: number
 ): ResourceCheckResult {
-  const effectivePlan = getChurchEffectivePlan(churchData);
-  const limits = effectivePlan.plan.limits;
+  const plan = getChurchEffectivePlan(churchData);
 
-  let limit = Infinity;
-  let resourceNameLabel = '';
-
-  switch (resource) {
-    case 'members':
-      limit = limits.maxActiveMembers;
-      resourceNameLabel = 'membros ativos';
-      break;
-    case 'songs':
-      limit = limits.maxSongs;
-      resourceNameLabel = 'músicas/cifras';
-      break;
-    case 'scalesThisMonth':
-      limit = limits.maxScalesPerMonth;
-      resourceNameLabel = 'escalas neste mês';
-      break;
-    case 'liturgiesThisMonth':
-      limit = limits.maxLiturgiesPerMonth;
-      resourceNameLabel = 'liturgias neste mês';
-      break;
-    case 'aiUsesThisMonth':
-      limit = limits.maxAiUsesPerMonth;
-      resourceNameLabel = 'consultas de Inteligência Artificial';
-      break;
-    case 'multiCampus':
-      limit = limits.hasMultiCampus ? Infinity : 1;
-      resourceNameLabel = 'multi-campis';
-      break;
+  if (plan.isVitalicio || plan.isPaidActive || plan.isTrial) {
+    return {
+      allowed: true,
+      resourceType,
+      currentCount,
+      maxAllowed: 9999,
+      effectivePlan: plan
+    };
   }
 
-  const allowed = currentCount < limit;
+  let max = 9999;
+  if (resourceType === 'members') {
+    max = 5;
+  } else if (resourceType === 'songs') {
+    max = 20;
+  }
 
+  const allowed = currentCount < max;
   return {
     allowed,
-    limit,
+    resourceType,
     currentCount,
-    resourceNameLabel,
-    effectivePlan
+    maxAllowed: max,
+    message: allowed ? undefined : `Limite de ${max} ${resourceType} atingido no Plano Semeadora. Faça upgrade para desbloquear ilimitado.`,
+    effectivePlan: plan
   };
 }
-
-/**
- * Métodos utilitários centralizados para verificação rápida de recursos na UI.
- */
-export function canAddMember(churchData: any, currentMemberCount: number): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'members', currentMemberCount);
-}
-
-export function canAddSong(churchData: any, currentSongCount: number): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'songs', currentSongCount);
-}
-
-export function canCreateScale(churchData: any, currentScaleCountThisMonth: number): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'scalesThisMonth', currentScaleCountThisMonth);
-}
-
-export function canCreateLiturgy(churchData: any, currentLiturgyCountThisMonth: number): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'liturgiesThisMonth', currentLiturgyCountThisMonth);
-}
-
-export function canUseAI(churchData: any, currentAiUseCountThisMonth: number): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'aiUsesThisMonth', currentAiUseCountThisMonth);
-}
-
-export function canUseMultiCampus(churchData: any): ResourceCheckResult {
-  return checkResourceLimit(churchData, 'multiCampus', 1);
-}
-
-export function canUseAutomations(churchData: any): boolean {
-  return getChurchEffectivePlan(churchData).plan.limits.hasAutomations;
-}
-
-export function canUseAdvancedStats(churchData: any): boolean {
-  return getChurchEffectivePlan(churchData).plan.limits.hasAdvancedStats;
-}
-
-export function canUsePremiumProjection(churchData: any): boolean {
-  return getChurchEffectivePlan(churchData).plan.limits.hasPremiumProjection;
-}
-
-export interface PlanUsageOverview {
-  effectivePlan: EffectivePlanResult;
-  members: ResourceCheckResult;
-  songs: ResourceCheckResult;
-  scales: ResourceCheckResult;
-  liturgies: ResourceCheckResult;
-  aiUses: ResourceCheckResult;
-}
-
-/**
- * Retorna um panorama completo de uso dos recursos da igreja comparados aos limites do plano ativo.
- */
-export function getPlanUsageOverview(
-  churchData: any,
-  counts: {
-    membersCount: number;
-    songsCount: number;
-    scalesCountThisMonth: number;
-    liturgiesCountThisMonth: number;
-    aiUsesCountThisMonth: number;
-  }
-): PlanUsageOverview {
-  const effectivePlan = getChurchEffectivePlan(churchData);
-  return {
-    effectivePlan,
-    members: checkResourceLimit(churchData, 'members', counts.membersCount),
-    songs: checkResourceLimit(churchData, 'songs', counts.songsCount),
-    scales: checkResourceLimit(churchData, 'scalesThisMonth', counts.scalesCountThisMonth),
-    liturgies: checkResourceLimit(churchData, 'liturgiesThisMonth', counts.liturgiesCountThisMonth),
-    aiUses: checkResourceLimit(churchData, 'aiUsesThisMonth', counts.aiUsesCountThisMonth)
-  };
-}
-

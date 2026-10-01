@@ -8,7 +8,7 @@ import { initializeApp as initClientApp, getApps as getClientApps } from "fireba
 import { getFirestore as getClientFirestore, collection as clientCollection, getDocs as clientGetDocs } from "firebase/firestore";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
-import { getLocalBiblePassage, adaptToNAA } from "./src/localBibleDb.js";
+import { getLocalBiblePassage } from "./src/localBibleDb.js";
 
 // Compatibilidade universal para obter o diretório do servidor tanto em ESM (tsx) quanto em CommonJS compilado (esbuild)
 const serverDir: string = (() => {
@@ -498,85 +498,44 @@ async function startServer() {
       return res.status(400).json({ error: "O livro e o capítulo são obrigatórios." });
     }
 
-    const selectedVersion = version || 'NAA';
+    const selectedVersion = (version || 'BLIVRE').toUpperCase().includes('TB') ? 'TB' : 'BLIVRE';
     const cacheKey = `${book.trim().toLowerCase()}_${chapter}_${(verseRange || '').trim().toLowerCase()}_${selectedVersion.trim().toLowerCase()}`;
-
-    // Exact match for Marcos 9:50 in NAA to guarantee user's translation constraint under all network/cache/fallback states
-    const isMarcos9_50 = (book.trim().toLowerCase() === 'marcos' || book.trim().toLowerCase() === 'mark') && Number(chapter) === 9 && (verseRange === '50' || verseRange === '50-50');
-    if (isMarcos9_50 && selectedVersion === 'NAA') {
-      const responseObj = {
-        reference: "Marcos 9:50 (NAA)",
-        text: "50. O sal é bom; mas, se o sal vier a se tornar insípido, como lhe restaurar o sabor? Tenham sal em vocês mesmos e paz uns com os outros.",
-        verses: [
-          { verse: 50, text: "O sal é bom; mas, se o sal vier a se tornar insípido, como lhe restaurar o sabor? Tenham sal em vocês mesmos e paz uns com os outros." }
-        ]
-      };
-      biblePassageCache.set(cacheKey, responseObj);
-      return res.json(responseObj);
-    }
-
-    // Exact match for Salmos 92:5 in NAA to guarantee perfect compliance with user's feedback
-    const isSalmos92_5 = (book.trim().toLowerCase() === 'salmos' || book.trim().toLowerCase() === 'salmo' || book.trim().toLowerCase() === 'psalm' || book.trim().toLowerCase() === 'sl') && Number(chapter) === 92 && (verseRange === '5' || verseRange === '5-5');
-    if (isSalmos92_5 && selectedVersion === 'NAA') {
-      const responseObj = {
-        reference: "Salmos 92:5 (NAA)",
-        text: "5. Como são grandes, Senhor, as tuas obras! Os teus pensamentos, que profundos!",
-        verses: [
-          { verse: 5, text: "Como são grandes, Senhor, as tuas obras! Os teus pensamentos, que profundos!" }
-        ]
-      };
-      biblePassageCache.set(cacheKey, responseObj);
-      return res.json(responseObj);
-    }
-
-    // Exact match for Marcos 10 (verses 1-12) in NAA to guarantee perfect compliance with user's feedback
-    const isMarcos10 = (book.trim().toLowerCase() === 'marcos' || book.trim().toLowerCase() === 'marco' || book.trim().toLowerCase() === 'mark' || book.trim().toLowerCase() === 'mc') && Number(chapter) === 10;
-    if (isMarcos10 && selectedVersion === 'NAA') {
-      const allVerses = [
-        { verse: 1, text: "Saindo dali, Jesus foi para o território da Judeia e para além do Jordão. E outra vez as multidões se reuniram junto a ele, e, de novo, ele as ensinava, segundo o seu costume." },
-        { verse: 2, text: "E alguns fariseus se aproximaram para pô-lo à prova, perguntando: — É permitido ao homem divorciar-se de sua mulher?" },
-        { verse: 3, text: "Jesus respondeu: — O que foi que Moisés ordenou a vocês?" },
-        { verse: 4, text: "Eles responderam: — Moisés permitiu escrever uma carta de divórcio e dar-lhe a despedida." },
-        { verse: 5, text: "Mas Jesus lhes disse: — Foi por causa da dureza do coração de vocês que ele deixou escrito este mandamento." },
-        { verse: 6, text: "No entanto, desde o princípio da criação, Deus os fez homem e mulher." },
-        { verse: 7, text: "“Por isso o homem deixará o seu pai e a sua mãe e se unirá à sua mulher," },
-        { verse: 8, text: "e os dois serão uma só carne.” De modo que já não são dois, mas uma só carne." },
-        { verse: 9, text: "Portanto, o que Deus uniu, o ser humano não deve separar." },
-        { verse: 10, text: "Em casa, os discípulos voltaram a interrogá-lo sobre este assunto." },
-        { verse: 11, text: "Ele respondeu: — Quem se divorciar de sua mulher e casar com outra comete adultério contra ela." },
-        { verse: 12, text: "E, se ela se divorciar de seu marido e casar com outro, comete adultério." }
-      ];
-
-      let versesToReturn = allVerses;
-      if (verseRange) {
-        const match = verseRange.trim().match(/^(\d+)(?:-(\d+))?$/);
-        if (match) {
-          const start = parseInt(match[1], 10);
-          const end = match[2] ? parseInt(match[2], 10) : start;
-          versesToReturn = allVerses.filter(v => v.verse >= start && v.verse <= end);
-        } else if (verseRange.includes(',')) {
-          const discrete = verseRange.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-          versesToReturn = allVerses.filter(v => discrete.includes(v.verse));
-        }
-      }
-
-      if (versesToReturn.length > 0) {
-        const textRepresentation = versesToReturn.map(v => `${v.verse}. ${v.text}`).join("\n");
-        const rangeStr = verseRange ? `:${verseRange}` : '';
-        const responseObj = {
-          reference: `Marcos 10${rangeStr} (NAA)`,
-          text: textRepresentation,
-          verses: versesToReturn
-        };
-        biblePassageCache.set(cacheKey, responseObj);
-        return res.json(responseObj);
-      }
-    }
 
     if (biblePassageCache.has(cacheKey)) {
       console.log(`[Bible Cache] Serving cached passage for key: ${cacheKey}`);
       return res.json(biblePassageCache.get(cacheKey));
     }
+
+    // Consulta imediata à base local autorizada (BLIVRE ou TB)
+    try {
+      const localResult = getLocalBiblePassage(book, Number(chapter), selectedVersion);
+      if (localResult && localResult.verses && localResult.verses.length > 0 && !localResult.isFallback) {
+        let versesToReturn = localResult.verses;
+        if (verseRange) {
+          const match = verseRange.trim().match(/^(\d+)(?:-(\d+))?$/);
+          if (match) {
+            const start = parseInt(match[1], 10);
+            const end = match[2] ? parseInt(match[2], 10) : start;
+            versesToReturn = localResult.verses.filter((v: any) => v.verse >= start && v.verse <= end);
+          } else if (verseRange.includes(',')) {
+            const discrete = verseRange.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n));
+            versesToReturn = localResult.verses.filter((v: any) => discrete.includes(v.verse));
+          }
+        }
+        if (versesToReturn.length > 0) {
+          const textRepresentation = versesToReturn.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
+          const rangeStr = verseRange ? `:${verseRange}` : '';
+          const responseObj = {
+            reference: `${book} ${chapter}${rangeStr} (${selectedVersion})`,
+            text: textRepresentation,
+            verses: versesToReturn,
+            isFallback: false
+          };
+          biblePassageCache.set(cacheKey, responseObj);
+          return res.json(responseObj);
+        }
+      }
+    } catch (e) {}
 
     const BOLLS_BOOK_IDS: Record<string, number> = {
       "Gênesis": 1, "Êxodo": 2, "Levítico": 3, "Números": 4, "Deuteronômio": 5,
@@ -701,13 +660,13 @@ async function startServer() {
       const bollsBookId = getBollsBookId(book);
       if (bollsBookId > 0) {
         const BOLLS_TRANSLATIONS: Record<string, string> = {
-          "NAA": "NAA",
+          "BLIVRE": "BLIVRE",
+          "TB": "TB10",
           "ARA": "ARA",
           "ARC": "ARC09",
           "NVI": "NVIPT",
           "NTLH": "NTLH",
-          "ACF": "ACF11",
-          "BLIVRE": "TB10"
+          "ACF": "ACF11"
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
@@ -736,7 +695,7 @@ async function startServer() {
               const cleanText = (v.text || "").replace(/<[^>]+>/g, '').replace(/[\u24d0-\u24e9]/g, '').trim();
               return {
                 verse: Number(v.verse),
-                text: selectedVersion === 'NAA' ? adaptToNAA(cleanText) : cleanText
+                text: cleanText
               };
             });
 
@@ -790,52 +749,19 @@ async function startServer() {
         }
       });
 
-      let systemInstruction = `Você é uma API de busca e recuperação de textos bíblicos em português de extrema fidelidade e precisão absoluta.`;
-      
-      if (selectedVersion === 'NAA') {
-        systemInstruction += `
-O seu objetivo inabalável é fornecer o texto textual exato da passagem solicitada na tradução bíblica oficial do Liloupro:
-- NAA: Nova Almeida Atualizada de 2017 (SBB) - Versão contemporânea que usa linguagem atualizada de 2017, moderna e fluida (usa 'vocês', 'tenham', 'creem', etc., em vez de 'vós', 'tende', 'credes'). Mantém fidelidade formal com alta clareza literária contemporânea. Esta é a tradução oficial de todo o sistema.
+      let systemInstruction = `Você é uma API de busca e recuperação de textos bíblicos em português de extrema fidelidade e precisão absoluta.
+O seu objetivo inabalável é fornecer o texto textual exato da passagem solicitada na tradução bíblica autorizada:
+- BLIVRE: Bíblia Livre - Versão de licença aberta moderna em português, fiel aos originais grego e hebraico, com excelente legibilidade contemporânea.
+- TB: Tradução Brasileira (1917) - Tradução histórica fiel em domínio público.
 
-CRÍTICO: Você DEVE evitar misturar termos da Almeida Revista e Atualizada (ARA) ou Corrigida (ARC). É proibido usar termos como "termos de" (use "território de"), "vós" (use "vocês"), "convosco" (use "com vocês"), "tendes" (use "têm"), "haveis" (use "têm"), "deitar fora a sua mulher" ou "deixar a sua mulher" (use "divorciar-se de sua mulher").
-
-Veja os exemplos comparativos cruciais abaixo que demonstram a diferença de estilo e vocabulário exato da NAA 2017:
-
-Exemplo 1 (Marcos 9:50):
-- NAA exato: "O sal é bom; mas, se o sal vier a se tornar insípido, como lhe restaurar o sabor? Tenham sal em vocês mesmos e paz uns com os outros."
-
-Exemplo 2 (Salmos 92:5):
-- NAA exato: "Como são grandes, Senhor, as tuas obras! Os teus pensamentos, que profundos!"
-
-Exemplo 3 (João 3:16):
-- NAA exato: "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito, para que todo o que nele crê não pereça, mas tenha a vida eterna."
-
-Exemplo 4 (Marcos 10:1):
-- NAA exato: "Saindo dali, Jesus foi para o território da Judeia e para além do Jordão. E outra vez as multidões se reuniram junto a ele, e, de novo, ele as ensinava, segundo o seu costume."
-
-Exemplo 5 (Marcos 10:11):
-- NAA exato: "Ele respondeu: — Quem se divorciar de sua mulher e casar com outra comete adultério contra ela."
-
-Exemplo 6 (Marcos 10:12):
-- NAA exato: "E, se ela se divorciar de seu marido e casar com outro, comete adultério."
-`;
-      } else {
-        systemInstruction += `
-O seu objetivo inabalável é fornecer o texto textual exato da passagem solicitada na tradução bíblica:
-- BLIVRE: Bíblia Livre - Versão de domínio público moderna em português, muito fiel aos originais grego e hebraico, com excelente legibilidade contemporânea. Usa termos claros e linguagem fluida, de fácil entendimento.
-
-Garanta que os textos correspondam de forma fidedigna e precisa à tradução Bíblia Livre (BLIVRE).
-`;
-      }
-      systemInstruction += `\nRetorne os dados estritamente em formato JSON estruturado conforme o esquema requisitado.`;
+Garanta que os textos correspondam de forma fidedigna e precisa à tradução solicitada (${selectedVersion}).
+Retorne os dados estritamente em formato JSON estruturado conforme o esquema requisitado.`;
 
       let prompt = `Retorne os versículos do livro "${book}", capítulo ${chapter}`;
       if (verseRange) {
         prompt += `, versículos ${verseRange}`;
       }
-      const versionLabelToPrompt = 
-        selectedVersion === 'NAA' ? 'Nova Almeida Atualizada de 2017 (NAA)' : 
-        selectedVersion === 'BLIVRE' ? 'Bíblia Livre (BLIVRE)' : selectedVersion;
+      const versionLabelToPrompt = selectedVersion === 'TB' ? 'Tradução Brasileira (TB 1917)' : 'Bíblia Livre (BLIVRE)';
       prompt += ` na tradução exata "${versionLabelToPrompt}". Garanta que os textos correspondam fidedignamente à tradução "${versionLabelToPrompt}".`;
       let response: any = null;
       let lastErr: any = null;
@@ -863,7 +789,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
                 properties: {
                   reference: {
                     type: Type.STRING,
-                    description: "A referência formatada em português, ex: 'João 3:16 (NAA)'"
+                    description: "A referência formatada em português, ex: 'João 3:16 (BLIVRE)'"
                   },
                   verses: {
                     type: Type.ARRAY,
@@ -906,7 +832,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
       if (parsedData.verses) {
         parsedData.verses = parsedData.verses.map((v: any) => ({
           verse: v.verse,
-          text: selectedVersion === 'NAA' ? adaptToNAA(v.text) : v.text
+          text: v.text
         }));
       }
 
@@ -961,13 +887,13 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
         }
 
         const BOLLS_TRANSLATIONS: Record<string, string> = {
-          "NAA": "NAA",
+          "BLIVRE": "BLIVRE",
+          "TB": "TB10",
           "ARA": "ARA",
           "ARC": "ARC09",
           "NVI": "NVIPT",
           "NTLH": "NTLH",
-          "ACF": "ACF11",
-          "BLIVRE": "TB10"
+          "ACF": "ACF11"
         };
 
         const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
@@ -993,7 +919,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
           const cleanText = (v.text || "").replace(/<[^>]+>/g, '').replace(/[\u24d0-\u24e9]/g, '').trim();
           return {
             verse: Number(v.verse),
-            text: selectedVersion === 'NAA' ? adaptToNAA(cleanText) : cleanText
+            text: cleanText
           };
         });
 
@@ -1077,7 +1003,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
             if (fbData && fbData.verses) {
               const formattedVerses = fbData.verses.map((v: any, idx: number) => ({
                 verse: Number(v.verse || idx + 1),
-                text: selectedVersion === 'NAA' ? adaptToNAA(v.text.trim()) : v.text.trim()
+                text: v.text.trim()
               }));
 
               const textRepresentation = formattedVerses.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
@@ -1174,7 +1100,7 @@ Garanta que os textos correspondam de forma fidedigna e precisa à tradução B�
         return res.status(400).json({ error: "A passagem é obrigatória." });
       }
 
-      const selectedVersion = version || 'NAA';
+      const selectedVersion = (version || 'BLIVRE').toUpperCase().includes('TB') ? 'TB' : 'BLIVRE';
       const cacheKey = `${passage.trim().toLowerCase()}_${selectedVersion}_${(text || '').slice(0, 100).trim().toLowerCase()}`;
 
       // 1. Check in-memory cache for instant response
@@ -1351,189 +1277,189 @@ Na liturgia cristã, as verdades encontradas nesta passagem servem como combust�
     const fallbacks: Record<string, { reference: string; text: string; explanation: string }[]> = {
       "perdao": [
         {
-          reference: "1 João 1:9 (NAA)",
+          reference: "1 João 1:9 (BLIVRE)",
           text: "Se confessarmos os nossos pecados, ele é fiel e justo para nos perdoar os pecados e nos purificar de toda injustiça.",
           explanation: "A base do evangelho é o perdão completo do Senhor, que purifica nossa mente e espírito para prestarmos um louvor sincero."
         },
         {
-          reference: "Colossenses 3:13 (NAA)",
+          reference: "Colossenses 3:13 (BLIVRE)",
           text: "Suportem-se uns aos outros e perdoem-se mutuamente, caso alguém tenha motivo de queixa contra outro. Assim como o Senhor perdoou vocês, perdoem também vocês.",
           explanation: "O perdão horizontal entre a equipe de ministério e a igreja reflete o perdão vertical que recebemos do Pai."
         },
         {
-          reference: "Salmos 103:12 (NAA)",
+          reference: "Salmos 103:12 (BLIVRE)",
           text: "Quanto o Oriente está longe do Ocidente, tanto afasta de nós as nossas transgressões.",
           explanation: "Uma imagem poética belíssima sobre a imensidão da misericórdia de Deus, ideal para momentos de contrição."
         },
         {
-          reference: "Efésios 4:32 (NAA)",
+          reference: "Efésios 4:32 (BLIVRE)",
           text: "Pelo contrário, sejam bondosos e compassivos uns para com os outros, perdoando-se mutuamente, como também Deus em Cristo perdoou vocês.",
           explanation: "A comunhão e a compaixão mútua são pré-requisitos para uma adoração congregacional que agrada ao Senhor."
         },
         {
-          reference: "Miqueias 7:18 (NAA)",
+          reference: "Miqueias 7:18 (BLIVRE)",
           text: "Quem, ó Deus, é semelhante a ti, que perdoas a iniquidade e te esqueces da transgressão do remanescente da tua herança? O Senhor não retém a sua ira para sempre, porque tem prazer na misericórdia.",
           explanation: "Destaca o prazer do Pai em liberar perdão, confortando a congregação durante momentos de clamor e quebrantamento."
         }
       ],
       "fe": [
         {
-          reference: "Hebreus 11:1 (NAA)",
+          reference: "Hebreus 11:1 (BLIVRE)",
           text: "Ora, a fé é a certeza de coisas que se esperam, a convicção de fatos que se não veem.",
           explanation: "A definição de fé inspira a igreja a cantar sobre as promessas de Deus antes mesmo de vê-las materializadas."
         },
         {
-          reference: "Hebreus 11:6 (NAA)",
+          reference: "Hebreus 11:6 (BLIVRE)",
           text: "De fato, sem fé é impossível agradar a Deus, porque é necessário que aquele que se aproxima de Deus creia que ele existe e que é galardoador dos que o buscam.",
           explanation: "A adoração exige um coração cheio de fé, crendo que Deus responde e derrama Seu amor sobre Seus buscadores."
         },
         {
-          reference: "Romanos 10:17 (NAA)",
+          reference: "Romanos 10:17 (BLIVRE)",
           text: "E, assim, a fé vem pelo ouvir, e o ouvir, pela palavra de Cristo.",
           explanation: "Músicas fundamentadas na palavra geram sementes de fé profunda no coração de quem as ouve e canta."
         },
         {
-          reference: "Efésios 2:8 (NAA)",
+          reference: "Efésios 2:8 (BLIVRE)",
           text: "Porque pela graça vocês são salvos, mediante a fé; e isto não vem de vocês, é dom de Deus.",
           explanation: "Nos lembra de que nossa salvação e a própria fé para crer são presentes soberanos e graciosos do Criador."
         },
         {
-          reference: "Marcos 11:22 (NAA)",
+          reference: "Marcos 11:22 (BLIVRE)",
           text: "Ao que Jesus lhes disse: Tenham fé em Deus.",
           explanation: "Uma exortação direta e urgente do mestre para depositarmos nossa total dependência espiritual unicamente no Pai."
         }
       ],
       "amor": [
         {
-          reference: "1 Coríntios 13:4-7 (NAA)",
+          reference: "1 Coríntios 13:4-7 (BLIVRE)",
           text: "O amor é paciente, é benigno; o amor não arde em ciúmes, não se ufana, não se envaidece, não se conduz inconvenientemente, não procura os seus próprios interesses, não se exaspera, não se imputa o mal; não se alegra com a injustiça, mas regozija-se com a verdade; tudo sofre, tudo crê, tudo espera, tudo suporta.",
           explanation: "A definição bíblica mais clássica e profunda sobre o amor, servindo de norte para todos os relacionamentos ministeriais."
         },
         {
-          reference: "1 João 4:19 (NAA)",
+          reference: "1 João 4:19 (BLIVRE)",
           text: "Nós amamos porque ele nos amou primeiro.",
           explanation: "Nossa capacidade de louvar e amar é uma resposta graciosa à iniciativa de amor incondicional que partiu de Deus na cruz."
         },
         {
-          reference: "João 3:16 (NAA)",
+          reference: "João 3:16 (BLIVRE)",
           text: "Porque Deus amou ao mundo de tal maneira que deu o seu Filho unigênito, para que todo o que nele crê não pereça, mas tenha a vida eterna.",
           explanation: "O coração do evangelho: um amor manifestado em entrega sacrificial prática que nos deu redenção."
         },
         {
-          reference: "Romanos 5:8 (NAA)",
+          reference: "Romanos 5:8 (BLIVRE)",
           text: "Mas Deus prova o seu próprio amor para conosco pelo fato de ter Cristo morrido por nós, sendo nós ainda pecadores.",
           explanation: "A garantia absoluta de que fomos aceitos e amados no nosso estado de maior necessidade espiritual."
         },
         {
-          reference: "Romanos 8:38-39 (NAA)",
+          reference: "Romanos 8:38-39 (BLIVRE)",
           text: "Porque eu estou bem certo de que nem a morte, nem a via, nem os anjos, nem os principados, nem as coisas do presente, nem do porvir, nem os poderes, nem a altura, nem a profundidade, nem qualquer outra criatura poderá nos separar do amor de Deus, que está em Cristo Jesus, nosso Senhor.",
           explanation: "Um brado triunfante sobre a inabalável segurança do amor de Deus que sustenta os adoradores nas maiores provações."
         }
       ],
       "graca": [
         {
-          reference: "Efésios 2:8-9 (NAA)",
+          reference: "Efésios 2:8-9 (BLIVRE)",
           text: "Porque pela graça vocês são salvos, mediante a fé; e isto não vem de vocês, é dom de Deus; não de obras, para que ninguém se glorie.",
           explanation: "A soberana realidade da graça de Deus, nos desarmando de todo orgulho e nos impulsionando a uma genuína adoração baseada na cruz."
         },
         {
-          reference: "2 Coríntios 12:9 (NAA)",
+          reference: "2 Coríntios 12:9 (BLIVRE)",
           text: "Ele, porém, me respondeu: A minha graça te basta, porque o poder se aperfeiçoa na fraqueza. De boa vontade, pois, mais me gloriarei nas fraquezas, para que sobre mim repouse o poder de Cristo.",
           explanation: "Nos ensina que a nossa dependência de Deus nos momentos de exaustão e fraqueza é onde o poder do Espírito brilha com maior intensidade."
         },
         {
-          reference: "Tito 2:11 (NAA)",
+          reference: "Tito 2:11 (BLIVRE)",
           text: "Porque a graça de Deus se manifestou, trazendo salvação a todos os homens.",
           explanation: "A graça como luz que irrompe na história, alcançando a todos de braços abertos para gerar nova vida."
         },
         {
-          reference: "Romanos 6:14 (NAA)",
+          reference: "Romanos 6:14 (BLIVRE)",
           text: "Porque o pecado não terá domínio sobre vocês, pois vocês não estão debaixo da lei, mas debaixo da graça.",
           explanation: "A maravilhosa liberdade espiritual garantida pela graça, que quebra grilhões e capacita o crente a viver de forma santa."
         },
         {
-          reference: "Hebreus 4:16 (NAA)",
+          reference: "Hebreus 4:16 (BLIVRE)",
           text: "Acheguemo-nos, portanto, confiadamente, junto ao trono da graça, a fim de recebermos misericórdia e acharmos graça para socorro em tempo oportuno.",
           explanation: "Convida o crente a entrar livremente na presença de Deus, certos de que serão recebidos com generosa provisão oportuna."
         }
       ],
       "adoracao": [
         {
-          reference: "João 4:23-24 (NAA)",
+          reference: "João 4:23-24 (BLIVRE)",
           text: "Mas vem a hora e já chegou, em que os verdadeiros adoradores adorarão o Pai em espírito e em verdade; porque são estes que o Pai procura para seus adoradores. Deus é Espírito, e é necessário que os seus adoradores o adorem em espírito e em verdade.",
           explanation: "A essência de toda liturgia cristã: uma entrega sincera movida pelo Espírito Santo e amparada na verdade bíblica."
         },
         {
-          reference: "Salmos 150:6 (NAA)",
+          reference: "Salmos 150:6 (BLIVRE)",
           text: "Tudo o que respira louve o Senhor. Aleluia!",
           explanation: "O encerramento majestoso do livro de Salmos, convocando toda a criação a render louvores ao Senhor."
         },
         {
-          reference: "Salmos 95:6 (NAA)",
+          reference: "Salmos 95:6 (BLIVRE)",
           text: "Venham, adoremos e prostremo-nos; ajoelhemos diante do Senhor, que nos criou.",
           explanation: "Uma convocação terna à adoração corporal reverente, reconhecendo a soberania de Deus como nosso bom pastor."
         },
         {
-          reference: "Romanos 12:1 (NAA)",
+          reference: "Romanos 12:1 (BLIVRE)",
           text: "Portanto, irmãos, rogo-lhes pelas misericórdias de Deus que apresentem o seu corpo como sacrifício vivo, santo e agradável a Deus, que é o culto racional de vocês.",
           explanation: "A adoração além das canções de domingo: uma consagração diária e viva de todas as áreas de nossa existência."
         },
         {
-          reference: "Filipenses 2:9-11 (NAA)",
+          reference: "Filipenses 2:9-11 (BLIVRE)",
           text: "Por isso também Deus o exaltou sobremaneira e lhe deu o nome que está acima de todo nome, para que ao nome de Jesus se dobre todo joelho, nos céus, na terra e debaixo da terra, e toda língua confesse que Jesus Cristo é Senhor, para glória de Deus Pai.",
           explanation: "O pináculo da adoração escatológica universal: a suprema e indiscutível exaltação de Jesus Cristo."
         }
       ],
       "esperanca": [
         {
-          reference: "Romanos 15:13 (NAA)",
+          reference: "Romanos 15:13 (BLIVRE)",
           text: "E o Deus da esperança os encha de todo gozo e paz no vosso crer, para que sejais ricos de esperança no poder do Espírito Santo.",
           explanation: "A esperança bíblica não é um desejo incerto, mas uma virtude cheia de alegria que transborda no crente pelo poder do Espírito."
         },
         {
-          reference: "Isaías 40:31 (NAA)",
+          reference: "Isaías 40:31 (BLIVRE)",
           text: "Mas os que esperam no Senhor renovam as suas forças, sobem com asas como águias, correm e não se cansam, caminham e não se fatigam.",
           explanation: "Uma das maiores promessas de revigoramento espiritual para o adorador exausto que aprende a descansar na soberania de Deus."
         },
         {
-          reference: "Lamentações 3:21-23 (NAA)",
+          reference: "Lamentações 3:21-23 (BLIVRE)",
           text: "Quero trazer à memória o que me pode dar esperança. As misericórdias do Senhor são a causa de não sermos consumidos, porque as suas misericórdias não têm fim; renovam-se cada manhã. Grande é a tua fidelidade.",
           explanation: "Incentiva-nos a ocupar nossa mente com a fidelidade inesgotável e graciosa do Senhor, renovada a cada amanhecer."
         },
         {
-          reference: "Hebreus 10:23 (NAA)",
+          reference: "Hebreus 10:23 (BLIVRE)",
           text: "Guardemos firme a confissão da esperança, sem vacilar, pois quem fez a promessa é fiel.",
           explanation: "Nosso âncora de segurança espiritual: manter-se inabalável no Evangelho porque Deus cumpre perfeitamente tudo o que promete."
         },
         {
-          reference: "Salmos 42:11 (NAA)",
+          reference: "Salmos 42:11 (BLIVRE)",
           text: "Por que você está abatida, ó minha alma? Por que se perturba dentro de mim? Espere em Deus, pois ainda o louvarei, a ele, meu salvador e Deus meu.",
           explanation: "Um diálogo de exortação da alma do próprio salmista, direcionando o coração para um louvor expectante mesmo em tempos de abatimento."
         }
       ],
       "fidelidade": [
         {
-          reference: "Lamentações 3:22-23 (NAA)",
+          reference: "Lamentações 3:22-23 (BLIVRE)",
           text: "As misericórdias do Senhor são a causa de não sermos consumidos, porque as suas misericórdias não têm fim; renovam-se cada manhã. Grande é a tua fidelidade.",
           explanation: "A fidelidade inabalável de Deus nos dá a certeza de que Seus louvores devem ser entoados a cada amanhecer."
         },
         {
-          reference: "Salmos 36:5 (NAA)",
+          reference: "Salmos 36:5 (BLIVRE)",
           text: "A tua misericórdia, Senhor, chega até os céus, e a tua fidelidade vai além das nuvens.",
           explanation: "Uma magnífica metáfora espacial que destaca a imensidão e o alcance cósmico do caráter fiel de Deus."
         },
         {
-          reference: "2 Timóteo 2:13 (NAA)",
+          reference: "2 Timóteo 2:13 (BLIVRE)",
           text: "Se somos infiéis, ele permanece fiel, pois não pode negar a si mesmo.",
           explanation: "Mesmo em meio às fraquezas humanas da equipe de adoração, a essência imutável e fiel de Deus nos sustenta."
         },
         {
-          reference: "Salmos 89:1 (NAA)",
+          reference: "Salmos 89:1 (BLIVRE)",
           text: "Cantarei para sempre as misericórdias do Senhor; com a minha boca proclamarei a todas as gerações a tua fidelidade.",
           explanation: "A convocação ministerial definitiva para cantar a fidelidade do Senhor como um testemunho permanente geracional."
         },
         {
-          reference: "Deuteronômio 7:9 (NAA)",
+          reference: "Deuteronômio 7:9 (BLIVRE)",
           text: "Saibam, portanto, que o Senhor, seu Deus, é Deus; ele é o Deus fiel, que guarda a aliança e a misericórdia até mil gerações daqueles que o amam e guardam os seus mandamentos.",
           explanation: "Consolida a certeza histórica e eterna da aliança inquebrável que Deus estabelece com Seu povo adorador."
         }
@@ -1556,27 +1482,27 @@ Na liturgia cristã, as verdades encontradas nesta passagem servem como combust�
     const capitalizedWord = keyword.trim().charAt(0).toUpperCase() + keyword.trim().slice(1);
     const generalPassages = [
       {
-        reference: "Salmos 103:1-2 (NAA)",
+        reference: "Salmos 103:1-2 (BLIVRE)",
         text: "Bendiga, minha alma, o Senhor, e tudo o que há em mim bendiga o seu santo nome. Bendiga, minha alma, o Senhor, e não se esqueça de nem um só de seus benefícios.",
         explanationTemplate: "O louvor sincero que bendiz o santo nome do Senhor conecta-se diretamente à busca por {KEYWORD}, celebrando Sua presença generosa."
       },
       {
-        reference: "Salmos 46:1 (NAA)",
+        reference: "Salmos 46:1 (BLIVRE)",
         text: "Deus é o nosso refúgio e fortaleza, socorro bem presente nas tribulações.",
         explanationTemplate: "Em tempos onde buscamos por {KEYWORD}, a verdade de que Deus é nosso amparo firme traz paz incomparável para liderar o louvor."
       },
       {
-        reference: "Filipenses 4:6-7 (NAA)",
+        reference: "Filipenses 4:6-7 (BLIVRE)",
         text: "Não fiquem ansiosos por coisa alguma e apresentem as suas petições diante de Deus por meio de orações, súplicas e ações de graças. E a paz de Deus, que excede todo o entendimento, guardará o coração e a mente de vocês em Cristo Jesus.",
         explanationTemplate: "Interceder com ação de graças nos alinha ao propósito de {KEYWORD}, permitindo que a doce paz de Cristo guarde nossa adoração coletiva."
       },
       {
-        reference: "Hebreus 13:8 (NAA)",
+        reference: "Hebreus 13:8 (BLIVRE)",
         text: "Jesus Cristo é o mesmo ontem, hoje e para sempre.",
         explanationTemplate: "A imutabilidade gloriosa de Cristo nos dá a segurança de que o tema de {KEYWORD} é eterno e continua operando hoje em nossa igreja."
       },
       {
-        reference: "Gálatas 2:20 (NAA)",
+        reference: "Gálatas 2:20 (BLIVRE)",
         text: "Estou crucificado com Cristo; logo, já não sou eu quem vive, mas Cristo vive em mim; e esse viver que agora tenho na carne, vivo pela fé no Filho de Deus, que me amou e se entregou por mim.",
         explanationTemplate: "Viver crucificado em Cristo nos capacita a personificar e celebrar o tema {KEYWORD} com profunda autoridade espiritual."
       }
@@ -1600,7 +1526,7 @@ Na liturgia cristã, as verdades encontradas nesta passagem servem como combust�
         return res.status(400).json({ error: "A palavra-chave/tema é obrigatória." });
       }
 
-      const selectedVersion = version || 'NAA';
+      const selectedVersion = (version || 'BLIVRE').toUpperCase().includes('TB') ? 'TB' : 'BLIVRE';
       const cacheKey = `${keyword.trim().toLowerCase()}_${selectedVersion}`;
 
       if (bibleKeywordSearchCache.has(cacheKey)) {
@@ -3962,12 +3888,19 @@ Complete a finalização da música`,
     }
   });
 
-  // Liloupro Assistente AI Chat Endpoint
+  // Liloupro Assistente AI Chat Cache & Endpoint
+  const assistantChatCache = new Map<string, string>();
+
   app.post("/api/assistant/chat", async (req, res) => {
     try {
       const { message, history } = req.body;
       if (!message || typeof message !== "string") {
         return res.status(400).json({ error: "A mensagem é obrigatória." });
+      }
+
+      const cacheKey = message.trim().toLowerCase();
+      if ((!history || history.length === 0) && assistantChatCache.has(cacheKey)) {
+        return res.json({ reply: assistantChatCache.get(cacheKey), cached: true });
       }
 
       const apiKey = getGeminiApiKey();
@@ -3986,31 +3919,21 @@ Complete a finalização da música`,
         }
       });
 
-      const systemInstruction = `Você é o "Liloupro Assistente", assistente oficial de voz e texto do LiLouPro (aplicativo completo de gestão de louvor, repertório com cifras transponíveis, escalas de ministério, liturgia e projeção de letras).
-Sua principal função é ser um guia acolhedor, rápido e de alta precisão para ministérios de louvor e equipes de culto.
-Diretrizes fundamentais:
+      const systemInstruction = `Você é o assistente de voz e texto do LiLouPro (aplicativo de gestão de louvor, repertório com cifras, escalas de ministério, liturgia e projeção).
+Sua personalidade é natural, humana, clara, simpática, objetiva, brasileira e descontraída mas respeitosa — você conversa como um colega prestativo ajudando a equipe de louvor durante ensaios e cultos.
+Diretrizes:
 1. Responda SEMPRE em português do Brasil (pt-BR).
-2. Se o usuário disser comandos de ação começando com "Abra...", "Abrir..." ou "Abre..." (como "Abra o metrônomo", "Abra o afinador", "Abra a cifra...", "Abra o player da música...", "Abra a letra...", "Abra a bíblia em..."), confirme de imediato com entusiasmo que o recurso está sendo aberto diretamente pelo assistente.
-3. Se o usuário perguntar como fazer algo no LiLouPro (ex: "Como faço para agendar um culto?", "Como cadastrar uma música?", "Como cadastrar membro?", "Como montar escalas?", "Como transpor tom?", "Como projetar letras no telão?"), responda com um passo a passo numerado, objetivo e com instruções exatas correspondentes à interface do LiLouPro:
-   - **Agendar Culto**: 
-     1. Acesse a aba **Escalas** no menu principal.
-     2. Clique no botão **"+ Novo Agendamento"** no topo da tela.
-     3. Preencha a **Identificação do Culto** (ex: Culto de Celebração), selecione o **Tema / Ocasião** (Normal, Santa Ceia, Missões, etc.), defina **Data e Horário**, informe o link da Playlist do YouTube (opcional) e clique em **"Criar Agendamento"**.
-     4. No card do culto, escale os voluntários por função ou use o botão **"Gerar Escala com IA"**.
-     5. Em **"Lista de Músicas"** vincule as músicas do repertório.
-     6. Compartilhe no grupo com o botão **"WhatsApp"** ou baixe o PDF oficial em **"Baixar Escala Mês"**.
-   - **Cadastrar Música**: 
-     1. Abra a aba **Músicas** no menu.
-     2. Toque no botão **"+ Cadastrar Música"**.
-     3. Use a **Busca Automática** com 1 clique (Cifra Club / YouTube) digitando título e artista para importar cifra, tom original e vídeo, ou use o modo manual.
-     4. Clique em **"Salvar Música"**.
-   - **Cadastrar Membro**: Aba **Membros** -> botão **"+ Novo Membro"** -> informe nome, WhatsApp com DDD, e-mail e marque as funções ministeriais (Vocal, Violão, etc.).
-   - **Disponibilidade**: Aba **Disponibilidade** -> marque verde (disponível) ou vermelho (indisponível) nos cultos e clique em Salvar.
-   - **Liturgia**: Aba **Liturgia** -> selecione o culto -> clique em **"+ Adicionar Momento"** para estruturar momentos e vincular as canções.
-   - **Projeção no Telão**: Aba **Projeção** -> botão **"Abrir Tela do Telão"** -> arraste para o monitor da TV/projetor e controle as estrofes com 1 toque.
-   - **Afinador & Metrônomo**: Disponíveis na barra superior de qualquer cifra ou acionáveis por voz com *"Abra o afinador"* e *"Abra o metrônomo"*.
-   - **Modo Foco**: Oculta menus para palco e estantes, com fontes ampliadas e rolagem automática (AutoScroll).
-4. Mantenha as respostas claras, elegantes, estruturadas e perfeitamente legíveis em celulares (mobile-friendly).`;
+2. Evite linguagem robótica, técnica, corporativa ou formalidades artificiais ("Prezado usuário", "Comando recebido", "Executando a solicitação").
+3. Se o usuário pedir para abrir recursos ou executar ações (como afinador, metrônomo, cifra, player, Bíblia): responda de forma muito curta e natural (1 a 5 palavras), como: "Claro, já vou abrir.", "Pode deixar.", "Já vou abrir.", "Claro, vou abrir." ou "Pronto."
+4. Se o usuário perguntar como fazer algo no LiLouPro (agendar culto, cadastrar música ou membro, montar escalas, projetar letras): responda de maneira prática, direta e amigável:
+   - **Agendar Culto**: Vá na aba **Escalas** > **+ Novo Agendamento**, preencha nome, tema, data e horário e clique em Criar. No card, você escala os voluntários e vincula as músicas.
+   - **Cadastrar Música**: Na aba **Músicas** > **+ Cadastrar Música**, use a busca automática (Cifra Club/YouTube) ou cadastre manualmente.
+   - **Cadastrar Membro**: Na aba **Membros** > **+ Novo Membro**, informe nome, WhatsApp e marque as funções da pessoa na equipe.
+   - **Disponibilidade**: Na aba **Disponibilidade**, marque verde para os dias que pode servir e vermelho para os que não pode.
+   - **Liturgia**: Na aba **Liturgia**, escolha o culto e adicione os momentos e canções.
+   - **Projeção no Telão**: Na aba **Projeção**, clique em **Abrir Tela do Telão**, arraste para a TV/projetor e controle as estrofes com um toque.
+   - **Afinador & Metrônomo**: Ficam na barra de qualquer cifra ou diga "Abre o afinador" / "Abre o metrônomo".
+5. Priorize respostas objetivas e fáceis de ler no celular.`;
 
       const contents: any[] = [];
       if (Array.isArray(history)) {
@@ -4023,28 +3946,296 @@ Diretrizes fundamentais:
           }
         }
       }
+      // Gemini expects the first turn to be 'user'
+      while (contents.length > 0 && contents[0].role === 'model') {
+        contents.shift();
+      }
       contents.push({
         role: 'user',
         parts: [{ text: message }]
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.3,
-          maxOutputTokens: 600,
-        }
-      });
+      // Modelos ágeis com minimal thinking para respostas imediatas
+      const assistantModels = [
+        "gemini-2.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash"
+      ];
+      let replyText = "";
+      let lastAiError: any = null;
 
-      const replyText = response.text || "Desculpe, não consegui formular a resposta agora. Você pode tentar novamente ou usar os botões de atalho rápidos!";
+      for (const modelName of assistantModels) {
+        try {
+          const config: any = {
+            systemInstruction,
+            temperature: 0.2,
+            maxOutputTokens: 250,
+          };
+          if (modelName === "gemini-2.5-flash") {
+            config.thinkingConfig = { thinkingBudget: 0 };
+          } else if (modelName.includes("gemini-3")) {
+            config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+          }
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config
+          });
+          if (response?.text) {
+            replyText = response.text.trim();
+            break;
+          }
+        } catch (mErr) {
+          lastAiError = mErr;
+          console.warn(`[Assistant Chat]: modelo ${modelName} falhou, tentando fallback...`, mErr);
+        }
+      }
+
+      if (!replyText) {
+        if (lastAiError) console.error("[Liloupro Assistant Chat Error]:", lastAiError);
+        replyText = "Desculpe, não consegui formular a resposta agora. Você pode tentar novamente ou usar os botões de atalho rápidos!";
+      } else {
+        if (!history || history.length === 0) {
+          assistantChatCache.set(cacheKey, replyText);
+        }
+      }
+
       return res.json({ reply: replyText });
     } catch (err: any) {
       console.error("[Liloupro Assistant Chat Error]:", err);
       return res.json({
         reply: "Aqui está o guia rápido do LiLouPro! Você pode navegar pelas abas Músicas, Liturgia, Escalas e Bíblia usando o menu principal, ou tocar nos botões de atalhos rápidos."
       });
+    }
+  });
+
+  /**
+   * =========================================================================
+   * 🛡️ VOZ OFICIAL E PERMANENTE DO ASSISTENTE LILOU - REGRA DE BLINDAGEM 🛡️
+   * =========================================================================
+   * IDENTIDADE VOCAL OFICIAL: Masculina, expressiva, natural, qualidade de estúdio.
+   * MOTOR: Gemini TTS (Google GenAI SDK) com preset de voz 'Puck'.
+   * 
+   * ⚠️ REGRA FUNDAMENTAL E PERMANENTE:
+   * NÃO ALTERE, SUBSTITUA, DEGRADE OU TROQUE ESTA CONFIGURAÇÃO EM NENHUMA ATUALIZAÇÃO
+   * DO APLICATIVO, REFATORAÇÃO OU MUDANÇA DE CÓDIGO SEM AUTORIZAÇÃO EXPLÍCITA DO USUÁRIO.
+   * O sintetizador do navegador (window.speechSynthesis) NÃO DEVE ser utilizado
+   * para reproduzir respostas do LiLou.
+   * =========================================================================
+   */
+  const LILOU_OFFICIAL_VOICE_CONFIG = {
+    voiceName: 'Puck' as const,
+    gender: 'male' as const,
+    engine: 'gemini-tts' as const,
+    model: 'gemini-3.8-flash-tts' as const,
+    fallbackModel: 'gemini-3.8-flash-lite-tts' as const,
+    style: 'Voz masculina brasileira jovem, natural, clara, amigável e conversacional',
+    mimeType: 'audio/wav' as const,
+  } as const;
+
+  // Liloupro Assistente High-Fidelity Official Speech Synthesis Endpoint (Gemini TTS)
+  const assistantTtsCache = new Map<string, string>();
+  const ttsCacheFilePath = path.join(process.cwd(), 'assistant_tts_cache.json');
+
+  const loadTtsDiskCache = () => {
+    try {
+      if (fs.existsSync(ttsCacheFilePath)) {
+        const raw = fs.readFileSync(ttsCacheFilePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string') {
+            assistantTtsCache.set(k.toLowerCase().trim(), v);
+          }
+        }
+      }
+    } catch {}
+  };
+  loadTtsDiskCache();
+
+  app.post("/api/assistant/tts", async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "O texto é obrigatório." });
+      }
+
+      const cleanText = text
+        .replace(/\*\*/g, '')
+        .replace(/[#_*~`]/g, '')
+        .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
+        .trim();
+
+      if (!cleanText) {
+        return res.status(400).json({ error: "Texto vazio." });
+      }
+
+      const cacheKey = cleanText.toLowerCase();
+
+      // Check in-memory cache first
+      if (assistantTtsCache.has(cacheKey)) {
+        return res.json({
+          audioBase64: assistantTtsCache.get(cacheKey),
+          mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType,
+          cached: true
+        });
+      }
+
+      // Check on-disk cache if updated
+      loadTtsDiskCache();
+      if (assistantTtsCache.has(cacheKey)) {
+        return res.json({
+          audioBase64: assistantTtsCache.get(cacheKey),
+          mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType,
+          cached: true
+        });
+      }
+
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        return res.status(503).json({ error: "Gemini API Key não disponível." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      // Preserva rigorosamente o modelo oficial Puck do Gemini TTS
+      const modelsToTry = [LILOU_OFFICIAL_VOICE_CONFIG.model, LILOU_OFFICIAL_VOICE_CONFIG.fallbackModel];
+      let audioBase64: string | undefined;
+
+      for (const model of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: cleanText,
+                    speechMetadata: {
+                      style: LILOU_OFFICIAL_VOICE_CONFIG.style
+                    }
+                  }
+                ]
+              }
+            ] as any,
+            config: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: LILOU_OFFICIAL_VOICE_CONFIG.voiceName }
+                }
+              }
+            }
+          });
+
+          audioBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          if (audioBase64) break;
+        } catch (mErr: any) {
+          console.warn(`[TTS] Model ${model} unavailable:`, mErr?.message?.slice(0, 100));
+        }
+      }
+
+      // Se síntese falhar temporariamente, usa apenas frases pré-gravadas na voz oficial Puck
+      if (!audioBase64) {
+        const pleasantFallbacks = [
+          'pronto, deixei o passo a passo na tela.',
+          'ainda não tem músicas no culto de hoje.',
+          'pronto.',
+          'já abriu.',
+          'pode deixar.',
+          'beleza, vou abrir a playlist.',
+          'não achei culto pra hoje.'
+        ];
+        for (const fb of pleasantFallbacks) {
+          if (assistantTtsCache.has(fb)) {
+            return res.json({
+              audioBase64: assistantTtsCache.get(fb),
+              mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType,
+              fallbackAudio: true
+            });
+          }
+        }
+        return res.status(500).json({ error: "Não foi possível gerar áudio." });
+      }
+
+      assistantTtsCache.set(cacheKey, audioBase64);
+      try {
+        const disk = fs.existsSync(ttsCacheFilePath) ? JSON.parse(fs.readFileSync(ttsCacheFilePath, 'utf8')) : {};
+        disk[cacheKey] = audioBase64;
+        fs.writeFileSync(ttsCacheFilePath, JSON.stringify(disk));
+      } catch {}
+
+      return res.json({
+        audioBase64,
+        mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType
+      });
+    } catch (err: any) {
+      console.warn("[Assistant TTS Error]:", err?.message || err);
+      return res.status(500).json({ error: err?.message || "Erro ao sintetizar voz." });
+    }
+  });
+
+  // Liloupro Assistente Audio Transcription Endpoint (Universal Voice Recognition Fallback)
+  app.post("/api/assistant/transcribe", async (req, res) => {
+    try {
+      const { audioBase64, mimeType = "audio/webm" } = req.body;
+      if (!audioBase64 || typeof audioBase64 !== "string") {
+        return res.status(400).json({ error: "O campo audioBase64 é obrigatório." });
+      }
+
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        return res.status(503).json({ error: "Gemini API Key não disponível para transcrição." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const cleanMime = mimeType.split(';')[0].trim() || 'audio/webm';
+      const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  data: cleanBase64,
+                  mimeType: cleanMime
+                }
+              },
+              {
+                text: "Você é um transcritor de áudio em português do Brasil (pt-BR) ultra preciso para o aplicativo gospel LiLouPro. Transcreva com fidelidade absoluta o que foi falado neste áudio. Se a fala contiver comandos como 'abrir bíblia', 'salmo 23', 'escalas', 'repertório', 'cifras', 'liturgia', 'projeção', 'metrônomo', 'afinador', preserve com máxima fidelidade. Retorne UNICAMENTE o texto transcrito, sem aspas, sem pontuações desnecessárias no início ou fim, e sem nenhum comentário adicional. Se não houver voz discernível ou for apenas ruído silencioso, retorne vazio."
+              }
+            ]
+          }
+        ],
+        config: {
+          temperature: 0.1,
+          maxOutputTokens: 200,
+        }
+      });
+
+      const transcribed = (response.text || "").trim().replace(/^["']|["']$/g, "");
+      return res.json({ text: transcribed });
+    } catch (err: any) {
+      console.error("[Transcription Error]:", err);
+      return res.status(500).json({ error: err?.message || "Falha na transcrição do áudio" });
     }
   });
 
@@ -4079,13 +4270,13 @@ Diretrizes fundamentais:
 
   const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
   const isCjsBundle = typeof __filename !== "undefined" && (__filename.endsWith(".cjs") || __filename.includes("dist"));
-  const isProduction = process.env.NODE_ENV === "production" || isCjsBundle || (hasBuiltDist && process.env.NODE_ENV !== "development");
+  const isProduction = process.env.NODE_ENV === "production" || isCjsBundle;
 
   if (!isProduction) {
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
-        server: { middlewareMode: true },
+        server: { middlewareMode: true, hmr: false },
         appType: "spa",
       });
       app.use(vite.middlewares);

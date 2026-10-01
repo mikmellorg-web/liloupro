@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, BookOpen, Check, Copy, AlertCircle, RefreshCw, Sparkles, ChevronDown } from 'lucide-react';
-import { getLocalBiblePassage, adaptToNAA } from '../localBibleDb';
+import { getLocalBiblePassage, getBiblePassageAsync } from '../localBibleDb';
 import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
 
@@ -158,7 +158,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
   const [searchTab, setSearchTab] = useState<'text' | 'select'>('text');
   const [searchText, setSearchText] = useState('');
   const { memberData } = useAuth();
-  const [bibleVersion, setBibleVersion] = useState<'NAA' | 'NVI' | 'ARC'>('NAA');
+  const [bibleVersion, setBibleVersion] = useState<'BLIVRE' | 'TB'>('BLIVRE');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   
   useEffect(() => {
@@ -282,33 +282,45 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
     let data: any = null;
     let fallbackUsed = false;
 
-    // 1. Try our high-fidelity Gemini-powered Bible API that respects the exact chosen version (NAA, ARA, ARC, NVI, NTLH, ACF)
+    // 1. Try local authorized Bible datasets (BLIVRE and TB)
     try {
-      const response = await fetch("/api/bible/passage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          book: portugueseName,
-          chapter,
-          verseRange,
-          version: bibleVersion
-        })
-      });
-
-      if (response.ok) {
-        const jsonData = await response.json();
-        const isDemoMessage = jsonData && !!jsonData.isDemo;
-        if (isDemoMessage) {
-          console.warn("Local Bible API returned demo instructions. Forcing bible-api.com fallback.");
-        } else {
-          data = jsonData;
-          fallbackUsed = !!jsonData.isFallback;
-        }
-      } else {
-        console.warn(`Local Bible API returned status ${response.status}. Attempting bible-api.com fallback.`);
+      const localResult = await getBiblePassageAsync(portugueseName, chapter, bibleVersion);
+      if (localResult && localResult.verses && localResult.verses.length > 0) {
+        const filteredVerses = filterVersesByRange(localResult.verses, verseRange);
+        data = {
+          verses: filteredVerses,
+          isFallback: localResult.isFallback,
+          warning: localResult.warning
+        };
       }
-    } catch (err) {
-      console.warn("Error calling local Bible API, falling back to bible-api.com:", err);
+    } catch (localErr) {
+      console.warn("Local dataset error, trying API fallback:", localErr);
+    }
+
+    if (!data) {
+      try {
+        const response = await fetch("/api/bible/passage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            book: portugueseName,
+            chapter,
+            verseRange,
+            version: bibleVersion
+          })
+        });
+
+        if (response.ok) {
+          const jsonData = await response.json();
+          const isDemoMessage = jsonData && !!jsonData.isDemo;
+          if (!isDemoMessage) {
+            data = jsonData;
+            fallbackUsed = !!jsonData.isFallback;
+          }
+        }
+      } catch (err) {
+        console.warn("Error calling local Bible API:", err);
+      }
     }
 
     // 2. Fallback to the third-party bible-api.com (defaulting to Almeida)
@@ -357,13 +369,6 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
       }
     }
 
-    if (data && data.verses && bibleVersion === 'NAA') {
-      data.verses = data.verses.map((v: any) => ({
-        ...v,
-        text: adaptToNAA(v.text)
-      }));
-    }
-    
     // Format the reference representation
     let finalRef = `${portugueseName} ${chapter}`;
     if (verseRange) {
@@ -429,7 +434,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
           <BookOpen size={18} className="text-brand" />
           <div>
             <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-brand">Assistente Bíblico Integrado</h4>
-            <p className="text-[9px] text-text-muted uppercase tracking-widest leading-none mt-1">Busca Rápida de Versículos (Filtros NAA, NVI, ARC)</p>
+            <p className="text-[9px] text-text-muted uppercase tracking-widest leading-none mt-1">Busca Rápida de Versículos (Filtros BLIVRE, TB)</p>
           </div>
         </div>
         {onClose && (
@@ -488,7 +493,7 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
                 onClick={() => setDropdownOpen(false)} 
               />
               <div className="absolute right-0 mt-1.5 w-full bg-zinc-950 border border-white/10 rounded-xl shadow-xl p-1.5 z-50 flex flex-col gap-1 min-w-[110px] animate-in fade-in slide-in-from-top-2 duration-150">
-                {(['NAA', 'NVI', 'ARC'] as const).map((v) => (
+                {(['BLIVRE', 'TB'] as const).map((v) => (
                   <button
                     key={v}
                     type="button"

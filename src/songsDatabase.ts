@@ -7,6 +7,7 @@ export interface PopularSong {
   chords: string;
   lyrics: string;
   youtube?: string;
+  category?: string;
 }
 
 export function findLocalPopularSong(title: string, artist: string): PopularSong | undefined {
@@ -1050,5 +1051,356 @@ E refúgio seguro n'Ele achei`
     };
   }
 
+  // 13. A Ele a Glória
+  if (normalizedTitle.includes("a ele a glória") || normalizedTitle.includes("a ele a gloria")) {
+    return {
+      title: "A Ele a Glória",
+      artist: "Diante do Trono",
+      key: "G",
+      bpm: 68,
+      timeSignature: "4/4",
+      chords: `[Intro]
+G  D/F#  Em7  C9
+
+[Verso]
+G           D/F#        Em7
+Porque d'Ele e por Ele
+          C9
+Para Ele são todas as coisas
+G           D/F#        Em7
+Porque d'Ele e por Ele
+          C9
+Para Ele são todas as coisas
+
+[Refrão]
+G           D/F#
+A Ele a glória
+Em7         C9
+A Ele a glória
+G           D/F#
+A Ele a glória
+Em7   D/F#  C9      G
+Pra sempre, amém`,
+      lyrics: `Porque d'Ele e por Ele
+Para Ele são todas as coisas
+Porque d'Ele e por Ele
+Para Ele são todas as coisas
+
+A Ele a glória
+A Ele a glória
+A Ele a glória
+Pra sempre, amém`
+    };
+  }
+
+  // 14. Alto Preço
+  if (normalizedTitle.includes("alto preço") || normalizedTitle.includes("alto preco")) {
+    return {
+      title: "Alto Preço",
+      artist: "Asaph Borba",
+      key: "G",
+      bpm: 76,
+      timeSignature: "4/4",
+      category: "Redenção/Ação de Graças",
+      chords: `[Intro]
+G  C  D  G
+
+[Verso]
+G                Em
+Não foi com ouro nem com prata
+      C              D
+Que Jesus nos resgatou
+G            Em
+Foi com Seu sangue derramado
+       C          D
+Que a vida nos doou
+
+[Refrão]
+   C          D/C
+Se nós nos amamos
+       Bm7         Em7
+Deus habita entre nós
+    Am7           D
+E o Seu amor em todos nós
+       G
+Se aperfeiçoa`,
+      lyrics: `Não foi com ouro nem com prata
+Que Jesus nos resgatou
+Foi com Seu sangue derramado
+Que a vida nos doou
+
+Se nós nos amamos
+Deus habita entre nós
+E o Seu amor em todos nós
+Se aperfeiçoa`
+    };
+  }
+
+  // 15. Bendito seja Deus e Pai
+  if (normalizedTitle.includes("bendito seja deus e pai")) {
+    return {
+      title: "Bendito seja Deus e Pai",
+      artist: "Graça Soberana",
+      key: "D",
+      bpm: 72,
+      timeSignature: "4/4",
+      category: "Consumação/Resposta",
+      chords: `[Intro]
+D  G  D/F#  A
+
+[Verso 1]
+D              G
+Bendito seja Deus e Pai
+      Bm7            A
+Do Senhor Jesus, o Cristo
+D             G
+Por Sua grande compaixão
+       Bm7          A
+Nova vida concedeu
+
+[Refrão]
+G           D
+Glória, aleluia
+Bm7         A
+Cristo ressurgiu
+G           D
+Glória, aleluia
+Bm7    A      D
+Vida nova nos deu`,
+      lyrics: `Bendito seja Deus e Pai
+Do Senhor Jesus, o Cristo
+Por Sua grande compaixão
+Nova vida concedeu
+
+Glória, aleluia
+Cristo ressurgiu
+Glória, aleluia
+Vida nova nos deu`
+    };
+  }
+
+  // 16. Canção do Apocalipse
+  if (normalizedTitle.includes("canção do apocalipse") || normalizedTitle.includes("cancao do apocalipse")) {
+    return {
+      title: "Canção do Apocalipse",
+      artist: "Diante do Trono",
+      key: "D",
+      bpm: 64,
+      timeSignature: "4/4",
+      category: "Consumação/Resposta",
+      chords: `[Intro]
+D  Am7  C  G
+
+[Verso]
+D                       Am7
+Digno é o Cordeiro que foi morto
+C                         G
+Santo, Santo é Ele
+D                   Am7
+Um novo cântico ao que se assenta
+C                     G
+Sobre o trono no céu
+
+[Refrão]
+D
+Santo, Santo, Santo
+Am7
+Deus Todo-Poderoso
+C
+Que era, e é
+          G
+E há de vir`,
+      lyrics: `Digno é o Cordeiro que foi morto
+Santo, Santo é Ele
+Um novo cântico ao que se assenta
+Sobre o trono no céu
+
+Santo, Santo, Santo
+Deus Todo-Poderoso
+Que era, e é
+E há de vir`
+    };
+  }
+
+  // 17. Cantai Ao Senhor
+  if (normalizedTitle.includes("cantai ao senhor")) {
+    return {
+      title: "Cantai Ao Senhor",
+      artist: "Paulo César Baruk",
+      key: "A",
+      bpm: 104,
+      timeSignature: "4/4",
+      chords: `[Intro]
+A  D/A  E/A  D/A
+
+[Verso]
+A           D/A        E/A         D/A
+Cantai ao Senhor um cântico novo
+A           D/A        E/A         D/A
+Cantai ao Senhor todas as terras
+A          F#m7      D        E
+Cantai ao Senhor, bendizei o Seu nome
+Bm7           E             A
+Proclamai a Sua salvação
+
+[Refrão]
+A            D
+Porque grande é o Senhor
+Bm7        E
+Digno de louvor
+A            D
+Mais temível do que todos os deuses
+Bm7    E        A
+Exaltado para sempre`,
+      lyrics: `Cantai ao Senhor um cântico novo
+Cantai ao Senhor todas as terras
+Cantai ao Senhor, bendizei o Seu nome
+Proclamai a Sua salvação
+
+Porque grande é o Senhor
+Digno de louvor
+Mais temível do que todos os deuses
+Exaltado para sempre`
+    };
+  }
+
+  // 18. É o Teu Povo
+  if (normalizedTitle.includes("é o teu povo") || normalizedTitle.includes("e o teu povo")) {
+    return {
+      title: "É o Teu Povo",
+      artist: "IPALPHA",
+      key: "E",
+      bpm: 70,
+      timeSignature: "4/4",
+      category: "CRIAÇÃO/ADORAÇÃO",
+      chords: `[Intro]
+E  B/D#  C#m7  A9
+
+[Verso]
+E            B/D#
+É o Teu povo reunido
+C#m7           A9
+Para adorar Teu santo nome
+E            B/D#
+Reconhecemos Tua glória
+C#m7          A9
+Criador de todo o universo
+
+[Refrão]
+E         B
+Santo és, Senhor Deus
+C#m7      A9
+Digno de honra e louvor`,
+      lyrics: `É o Teu povo reunido
+Para adorar Teu santo nome
+Reconhecemos Tua glória
+Criador de todo o universo
+
+Santo és, Senhor Deus
+Digno de honra e louvor`
+    };
+  }
+
+  // 19. Perdão e Graça
+  if (normalizedTitle.includes("perdão e graça") || normalizedTitle.includes("perdao e graca")) {
+    return {
+      title: "Perdão e Graça",
+      artist: "Vineyard",
+      key: "G",
+      bpm: 68,
+      timeSignature: "4/4",
+      category: "QUEDA/CONFISSÃO",
+      chords: `[Intro]
+G  C/G  G  C/G
+
+[Verso]
+G           C/G
+Perdão e graça encontrei
+Em7         D
+Na Tua cruz me prostrei
+G           C/G
+Meus erros todos deixo aqui
+Em7          D        C
+Pois Teu perdão me restaurou
+
+[Refrão]
+G           D
+Tua graça é maior que a dor
+Em7         C
+Teu amor me resgatou`,
+      lyrics: `Perdão e graça encontrei
+Na Tua cruz me prostrei
+Meus erros todos deixo aqui
+Pois Teu perdão me restaurou
+
+Tua graça é maior que a dor
+Teu amor me resgatou`
+    };
+  }
+
+  // 20. Tudo pra tua gloria
+  if (normalizedTitle.includes("tudo pra tua gloria") || normalizedTitle.includes("tudo para tua glória") || normalizedTitle.includes("tudo pra tua glória")) {
+    return {
+      title: "Tudo pra tua gloria",
+      artist: "Graça Soberana",
+      key: "C",
+      bpm: 74,
+      timeSignature: "4/4",
+      category: "REDENÇÃO/AÇÃO DE GRAÇAS",
+      chords: `[Intro]
+C  G/B  Am7  F9
+
+[Verso]
+C           G/B
+Tudo o que tenho e sou
+Am7         F9
+Consagro a Ti, Jesus
+C           G/B
+Minha vida, meu caminhar
+Am7        F9
+Tudo pra Tua glória
+
+[Refrão]
+C         G
+Glória ao Salvador
+Am7       F
+Redentor, Senhor`,
+      lyrics: `Tudo o que tenho e sou
+Consagro a Ti, Jesus
+Minha vida, meu caminhar
+Tudo pra Tua glória
+
+Glória ao Salvador
+Redentor, Senhor`
+    };
+  }
+
   return undefined;
+}
+
+export const DEFAULT_LOCAL_SONGS: PopularSong[] = [
+  findLocalPopularSong("A Ele a Glória", "Diante do Trono")!,
+  findLocalPopularSong("Alto Preço", "Asaph Borba")!,
+  findLocalPopularSong("Bendito seja Deus e Pai", "Graça Soberana")!,
+  findLocalPopularSong("Bondade de Deus", "Isaías Saad")!,
+  findLocalPopularSong("Canção do Apocalipse", "Diante do Trono")!,
+  findLocalPopularSong("Cantai Ao Senhor", "Paulo César Baruk")!,
+  findLocalPopularSong("É o Teu Povo", "IPALPHA")!,
+  findLocalPopularSong("Perdão e Graça", "Vineyard")!,
+  findLocalPopularSong("Tudo pra tua gloria", "Graça Soberana")!,
+  findLocalPopularSong("Santos Pra Sempre", "Gabriel Guedes")!,
+  findLocalPopularSong("Ousado Amor", "Isaías Saad")!,
+  findLocalPopularSong("Caminho no Deserto", "Soraya Moraes")!,
+  findLocalPopularSong("Lugar Secreto", "Gabriela Rocha")!,
+  findLocalPopularSong("Aclame ao Senhor", "Diante do Trono")!,
+  findLocalPopularSong("A Casa É Sua", "Casa Worship")!,
+  findLocalPopularSong("Me Atraiu", "Gabriela Rocha")!,
+  findLocalPopularSong("Cristo És Incomparável", "Morada")!,
+  findLocalPopularSong("Teu Amor Não Falha", "Nívea Soares")!,
+  findLocalPopularSong("Raridade", "Anderson Freire")!,
+  findLocalPopularSong("Conversão", "Harpa Cristã")!
+].filter(Boolean);
+
+export function getAllLocalPopularSongs(): PopularSong[] {
+  return DEFAULT_LOCAL_SONGS;
 }

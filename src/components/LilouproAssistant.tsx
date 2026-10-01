@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Sparkles, Mic, MicOff, Send, X, Volume2, VolumeX, RotateCcw, 
   BookOpen, Music, Calendar, Plus, ChevronRight, ChevronLeft, HelpCircle,
-  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users, User,
+  Tv, Maximize2, Check, ArrowRight, Loader2, Bot, Layers, CheckCircle2, Radio, Timer, Users,
   Play, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,6 +13,30 @@ import { GoogleCalendarIcon } from './GoogleCalendarIcon';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
 import { getServicePlaylistSongs, getServiceSongs } from '../utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
+
+/**
+ * =========================================================================
+ * 🛡️ VOZ OFICIAL E PERMANENTE DO ASSISTENTE LILOU - REGRA DE BLINDAGEM 🛡️
+ * =========================================================================
+ * IDENTIDADE VOCAL: Masculina, expressiva, natural, qualidade de estúdio.
+ * MOTOR: Gemini TTS (Google GenAI) com preset de voz 'Puck'.
+ * 
+ * ⚠️ REGRA FUNDAMENTAL E PERMANENTE:
+ * NÃO ALTERE, SUBSTITUA, DEGRADE OU TROQUE ESTA CONFIGURAÇÃO EM NENHUMA ATUALIZAÇÃO
+ * DO APLICATIVO, REFATORAÇÃO OU MUDANÇA DE CÓDIGO SEM AUTORIZAÇÃO EXPLÍCITA DO USUÁRIO.
+ * O sintetizador robótico nativo do navegador (window.speechSynthesis) NÃO DEVE
+ * ser utilizado para reproduzir as respostas do LiLou.
+ * =========================================================================
+ */
+export const LILOU_OFFICIAL_VOICE_CONFIG = {
+  voiceName: 'Puck' as const,
+  gender: 'male' as const,
+  engine: 'gemini-tts' as const,
+  model: 'gemini-3.8-flash-tts' as const,
+  fallbackModel: 'gemini-3.8-flash-lite-tts' as const,
+  style: 'Voz masculina brasileira jovem, natural, clara, amigável e conversacional',
+  mimeType: 'audio/wav' as const,
+} as const;
 
 interface Message {
   id: string;
@@ -58,6 +82,116 @@ const getUniqueAssistantMsgId = (sender: string) => {
   assistantMsgCounter += 1;
   return `${sender}-${Date.now()}-${assistantMsgCounter}-${Math.random().toString(36).substring(2, 8)}`;
 };
+
+/**
+ * Detecta se uma transcrição contém as palavras-chave de ativação:
+ * "Oi Lilou", "Ok Lilou", "Oi Lioi", "Ok Lioi", "Ei Lilou", "Lilou", "Olá Lilou", etc.
+ * e extrai qualquer comando que tenha sido dito imediatamente depois.
+ */
+export function checkLilouWakeWord(transcript: string): { detected: boolean; commandAfter: string } {
+  if (!transcript || typeof transcript !== 'string') return { detected: false, commandAfter: '' };
+
+  const norm = transcript
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!norm || norm.length < 3) return { detected: false, commandAfter: '' };
+
+  // Prefixos comuns em português com todas as grafias e variações fonéticas ("Oi Lilou", "OK Lilou", "E aí Lilou", etc.)
+  const prefixes = '(?:oi|oie|ola|ok|okay|oq|oque|o\\s+que|ei|hey|heey|he|fala|opa|alo|alou|e\\s+ai|eai|eaí|iai|iae|ou|ae|eae)';
+  // Variações fonéticas de reconhecimento de fala para "Lilou" e "Liloupro"
+  const lilouVariants = '(?:liloupro|lilou\\s+pro|lilopro|lilo\\s+pro|lilou|li\\s+lou|lioi|liou|lio|lilo|li\\s+lo|lilu|li\\s+lu|lilow|liloo|lillou|lee\\s+lou|lili|nilou|lelou|leilou|laylou|milou|liluo|lilum|lilon|lelo|lile|lulu|lou)';
+
+  // 1. Prefixo + Lilou/Lioi (ex: "oi lilou ...", "ok lilou ...", "e ai lilou ...")
+  const prefixedRegex = new RegExp(`(?:^|\\b)${prefixes}\\s+${lilouVariants}(?:\\b|\\s+|$)(.*)`, 'i');
+  const matchPrefixed = norm.match(prefixedRegex);
+  if (matchPrefixed) {
+    return {
+      detected: true,
+      commandAfter: (matchPrefixed[1] || '').trim()
+    };
+  }
+
+  // 2. Apenas o nome Lilou / Liloupro (ex: "lilou toca tal música", "lilou abre a bíblia")
+  const directRegex = new RegExp(`(?:^|\\b)${lilouVariants}(?:\\b|\\s+|$)(.*)`, 'i');
+  const matchDirect = norm.match(directRegex);
+  if (matchDirect) {
+    return {
+      detected: true,
+      commandAfter: (matchDirect[1] || '').trim()
+    };
+  }
+
+  return { detected: false, commandAfter: '' };
+}
+
+// Respostas dinâmicas e naturais para o assistente (tom humano, curto e sem afetações)
+const GREETING_VARIATIONS = [
+  'Oi! Pode falar.',
+  'Oi! Tô aqui.',
+  'Pode falar.',
+  'Claro, pode falar.',
+  'Oi! Como posso ajudar?'
+];
+
+function getRandomGreeting(): string {
+  const idx = Math.floor(Math.random() * GREETING_VARIATIONS.length);
+  return GREETING_VARIATIONS[idx];
+}
+
+const NOT_UNDERSTOOD_VARIATIONS = [
+  'Não entendi. Pode repetir?',
+  'Não peguei essa. Pode falar de novo?',
+  'Pode repetir pra mim?',
+  'Não consegui ouvir. Repete aí?'
+];
+
+function getRandomNotUnderstood(): string {
+  const idx = Math.floor(Math.random() * NOT_UNDERSTOOD_VARIATIONS.length);
+  return NOT_UNDERSTOOD_VARIATIONS[idx];
+}
+
+const ACTION_OPENING_VARIATIONS = [
+  'Claro, já vou abrir.',
+  'Pode deixar.',
+  'Já vou abrir.',
+  'Claro, vou abrir.',
+  'Claro.',
+  'Vamos lá.',
+  'Pode deixar comigo.'
+];
+
+function getRandomOpening(resourceName?: string): string {
+  if (resourceName) {
+    const specific = [
+      `Claro, já vou abrir ${resourceName}.`,
+      `Pode deixar, abrindo ${resourceName}.`,
+      `Claro, vou abrir ${resourceName}.`,
+      `Já vou abrir ${resourceName}.`,
+      'Pode deixar.',
+      'Claro.'
+    ];
+    return specific[Math.floor(Math.random() * specific.length)];
+  }
+  return ACTION_OPENING_VARIATIONS[Math.floor(Math.random() * ACTION_OPENING_VARIATIONS.length)];
+}
+
+const ACTION_DONE_VARIATIONS = [
+  'Pronto.',
+  'Já abriu.',
+  'Feito.',
+  'Pronto, pode usar.',
+  'Já está aberto.'
+];
+
+function getRandomDone(): string {
+  const idx = Math.floor(Math.random() * ACTION_DONE_VARIATIONS.length);
+  return ACTION_DONE_VARIATIONS[idx];
+}
 
 export function LilouproAssistant({
   theme,
@@ -137,36 +271,6 @@ export function LilouproAssistant({
     }
   });
 
-  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>(() => {
-    try {
-      return (localStorage.getItem('liloupro_assistant_voice_gender') as 'female' | 'male') || 'female';
-    } catch {
-      return 'female';
-    }
-  });
-
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    const updateVoices = () => {
-      const v = window.speechSynthesis.getVoices();
-      if (v && v.length > 0) {
-        setAvailableVoices(v);
-      }
-    };
-
-    updateVoices();
-    window.speechSynthesis.onvoiceschanged = updateVoices;
-
-    return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-    };
-  }, []);
-
   // Retractable floating button state (can dock to lateral edge)
   const [isRetracted, setIsRetracted] = useState<boolean>(() => {
     try {
@@ -204,10 +308,24 @@ export function LilouproAssistant({
       } catch {}
     };
 
+    const handleCustomVoiceOpen = () => {
+      setIsOpen(true);
+      setIsRetracted(false);
+      try {
+        localStorage.setItem('liloupro_assistant_retracted', 'false');
+      } catch {}
+      // Inicia a escuta visual e transcrição instantânea no painel
+      setTimeout(() => {
+        startListening();
+      }, 750);
+    };
+
     window.addEventListener('liloupro:open-assistant', handleCustomOpen);
+    window.addEventListener('liloupro:open-assistant-voice', handleCustomVoiceOpen);
     window.addEventListener('liloupro:reset-assistant-pos', handleResetPos);
     return () => {
       window.removeEventListener('liloupro:open-assistant', handleCustomOpen);
+      window.removeEventListener('liloupro:open-assistant-voice', handleCustomVoiceOpen);
       window.removeEventListener('liloupro:reset-assistant-pos', handleResetPos);
     };
   }, [setIsOpen]);
@@ -278,25 +396,55 @@ export function LilouproAssistant({
     {
       id: 'welcome',
       sender: 'assistant',
-      text: 'Olá! Sou o **Liloupro Assistente** 🎙️\nEstou aqui para guiá-lo em qualquer dúvida ou executar comandos de voz pelo app.',
+      text: 'Oi! Pode falar 🎙️\nO que você precisa agora no LiLouPro?',
       timestamp: new Date(),
       steps: [
+        'Diga "Oi Lilou" ou "Ok Lilou" para chamar por voz a qualquer momento',
+        'Diga ex: "Abre o afinador"',
+        'Diga ex: "Abre o metrônomo"',
         'Diga ex: "Tocar playlist do culto"',
-        'Diga ex: "Baixar músicas do culto"',
-        'Diga ex: "Como usar esta tela?"',
-        'Diga ex: "Tocar música Teu amor não falha"',
-        'Diga ex: "Abra o afinador do app"',
-        'Diga ex: "Abra o metrônomo do app"',
-        'Diga ex: "Abrir a bíblia do app no salmo 86"',
-        'Pergunte ex: "Como faço para agendar um culto?"',
-        'Pergunte ex: "Como cadastrar uma música nova no app?"'
+        'Diga ex: "Abre a cifra de [música]"',
+        'Diga ex: "Abre a Bíblia no Salmo 23"'
       ]
     }
   ]);
 
+  // Wake Word ("Oi Lilou" / "Ok Lilou") State & Refs
+  const [wakeWordEnabled, setWakeWordEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('liloupro_assistant_wakeword') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(false);
+
+  const wakeWordRecognitionRef = useRef<any>(null);
+  const wakeWordRestartTimeoutRef = useRef<any>(null);
+  const isListeningRef = useRef<boolean>(isListening);
+  const wakeWordEnabledRef = useRef<boolean>(wakeWordEnabled);
+  const isOpenRef = useRef<boolean>(isOpen);
+  const isHandlingWakeRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  useEffect(() => {
+    wakeWordEnabledRef.current = wakeWordEnabled;
+  }, [wakeWordEnabled]);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const latestInterimRef = useRef<string>('');
+  const wakeWordDebounceTimeoutRef = useRef<any>(null);
+  const silenceTimeoutRef = useRef<any>(null);
+  const turnOffAllListeningRef = useRef<(() => void) | null>(null);
 
   // Auto-scroll messages to bottom
   useEffect(() => {
@@ -305,91 +453,102 @@ export function LilouproAssistant({
     }
   }, [messages, isOpen, isListening, interimTranscript]);
 
-  // Best natural voice selection algorithm
-  const findBestNaturalVoice = useCallback((gender: 'female' | 'male') => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
-    const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
-    const ptVoices = voices.filter(v => v.lang === 'pt-BR' || v.lang.startsWith('pt'));
-    if (ptVoices.length === 0) {
-      return voices[0] || null;
+  // Audio player ref for high-fidelity Gemini TTS male voice (Voz Oficial Puck)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsClientCacheRef = useRef<Map<string, string>>(new Map());
+
+  /**
+   * Função oficial de reprodução vocal do LiLou.
+   * Utiliza exclusivamente o motor Gemini TTS com a voz de estúdio 'Puck'.
+   * 
+   * REGRA DE BLINDAGEM: window.speechSynthesis NUNCA deve ser utilizado como fallback.
+   * Se o serviço de TTS estiver temporariamente indisponível, a voz robótica do navegador
+   * não deve substituir silenciosamente a voz oficial.
+   */
+  const speak = useCallback((textToSpeak: string, onEnded?: () => void) => {
+    if (!speechSynthesisEnabled || typeof window === 'undefined') {
+      if (onEnded) onEnded();
+      return;
     }
 
-    const femaleKeywords = [
-      'francisca', 'maria', 'luciana', 'joana', 'yelda', 'camila', 'helena', 
-      'vitória', 'vitoria', 'fernanda', 'leticia', 'letícia', 'female', 'mulher', 
-      'zira', 'google português', 'google portugues'
-    ];
-    const maleKeywords = [
-      'antonio', 'antônio', 'daniel', 'felipe', 'carlos', 'ricardo', 'thiago', 
-      'tiago', 'male', 'homem', 'david', 'george', 'alvaro', 'álvaro', 'bernardo', 'fábio', 'fabio'
-    ];
+    // Cancela qualquer reprodução em andamento imediatamente
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
+      currentAudioRef.current = null;
+    }
 
-    const targetKeywords = gender === 'female' ? femaleKeywords : maleKeywords;
-    const oppositeKeywords = gender === 'female' ? maleKeywords : femaleKeywords;
+    // Garante que o sintetizador nativo do navegador não interfira
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
 
-    const scoreVoice = (v: SpeechSynthesisVoice) => {
-      let score = 0;
-      const combined = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+    // Limpa tags e markdown para uma pronúncia limpa e natural
+    const clean = textToSpeak
+      .replace(/\*\*/g, '')
+      .replace(/[#_*~`]/g, '')
+      .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
+      .trim();
+    if (!clean) {
+      if (onEnded) onEnded();
+      return;
+    }
 
-      // Prioridade pelo gênero solicitado
-      if (targetKeywords.some(kw => combined.includes(kw))) {
-        score += 80;
+    const attachAndPlay = (audio: HTMLAudioElement) => {
+      currentAudioRef.current = audio;
+      if (onEnded) {
+        audio.onended = () => {
+          onEnded();
+        };
       }
-      if (oppositeKeywords.some(kw => combined.includes(kw))) {
-        score -= 50;
-      }
-
-      // Prioridade alta para vozes naturais / online / neurais de alta fidelidade
-      if (combined.includes('natural') || combined.includes('online')) score += 50;
-      if (combined.includes('neural')) score += 45;
-      if (combined.includes('google')) score += 35;
-      if (combined.includes('premium') || combined.includes('enhanced')) score += 30;
-
-      // Prioridade para pt-BR
-      if (v.lang.toLowerCase().includes('br')) score += 15;
-
-      return score;
+      audio.play().catch((err) => {
+        console.warn("[LiLou Voice]: Reprodução de áudio:", err);
+        if (onEnded) onEnded();
+      });
     };
 
-    const sorted = [...ptVoices].sort((a, b) => scoreVoice(b) - scoreVoice(a));
-    return sorted[0] || ptVoices[0];
-  }, [availableVoices]);
-
-  // Voice synthesis helper
-  const speak = (textToSpeak: string, customGender?: 'female' | 'male') => {
-    if (!speechSynthesisEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      // Clean markdown and symbols for clean spoken audio
-      const clean = textToSpeak
-        .replace(/\*\*/g, '')
-        .replace(/[#_*~`]/g, '')
-        .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
-        .trim();
-      if (!clean) return;
-
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = 'pt-BR';
-      
-      const activeGender = customGender || voiceGender;
-      // Ajuste acústico para eliminar rouquidão e maximizar nitidez
-      if (activeGender === 'female') {
-        utterance.pitch = 1.04;
-        utterance.rate = 1.02;
-      } else {
-        utterance.pitch = 0.93;
-        utterance.rate = 1.0;
+    const cacheKey = clean.toLowerCase();
+    const cached = ttsClientCacheRef.current.get(cacheKey);
+    if (cached) {
+      try {
+        const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${cached}`);
+        attachAndPlay(audio);
+        return;
+      } catch (err) {
+        console.warn("[LiLou Voice]: Falha ao instanciar áudio cache:", err);
+        if (onEnded) onEnded();
+        return;
       }
-
-      const bestVoice = findBestNaturalVoice(activeGender);
-      if (bestVoice) {
-        utterance.voice = bestVoice;
-      }
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn("Speech synthesis error:", e);
     }
-  };
+
+    // Requisita a síntese de estúdio oficial Puck no Gemini TTS
+    fetch('/api/assistant/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean })
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`TTS server error: ${res.status}`);
+        const data = await res.json();
+        if (data?.audioBase64) {
+          ttsClientCacheRef.current.set(cacheKey, data.audioBase64);
+          const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${data.audioBase64}`);
+          attachAndPlay(audio);
+        } else {
+          if (onEnded) onEnded();
+        }
+      })
+      .catch((err) => {
+        // REGRA DE BLINDAGEM: window.speechSynthesis NUNCA assume como fallback.
+        // Preserva a identidade vocal sem ruído mecânico ou robótico.
+        console.warn("[LiLou Voice]: Síntese temporariamente indisponível. Fallback robótico estritamente bloqueado:", err);
+        if (onEnded) onEnded();
+      });
+  }, [speechSynthesisEnabled]);
 
   const toggleSpeechSynthesis = () => {
     setSpeechSynthesisEnabled(prev => {
@@ -397,8 +556,17 @@ export function LilouproAssistant({
       try {
         localStorage.setItem('liloupro_assistant_tts', String(next));
       } catch {}
-      if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+      if (!next) {
+        if (currentAudioRef.current) {
+          try {
+            currentAudioRef.current.pause();
+            currentAudioRef.current.currentTime = 0;
+          } catch {}
+          currentAudioRef.current = null;
+        }
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
       }
       return next;
     });
@@ -419,6 +587,13 @@ export function LilouproAssistant({
       return;
     }
 
+    // Interromper a escuta por wake word para não competir pelo microfone
+    if (wakeWordRecognitionRef.current) {
+      try {
+        wakeWordRecognitionRef.current.abort();
+      } catch {}
+    }
+
     try {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
@@ -432,10 +607,40 @@ export function LilouproAssistant({
 
       recognition.onstart = () => {
         setIsListening(true);
+        isListeningRef.current = true;
         setInterimTranscript('');
+        latestInterimRef.current = '';
+
+        // Se o usuário não falar nada por 6.5 segundos, desliga o microfone automaticamente
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = setTimeout(() => {
+          if (!latestInterimRef.current || !latestInterimRef.current.trim()) {
+            turnOffAllListeningRef.current?.();
+          }
+        }, 6500);
       };
 
       recognition.onresult = (event: any) => {
+        // Se houver áudio do assistente ainda tocando no momento em que a fala do usuário é detectada,
+        // interrompe o áudio imediatamente para priorizar a voz do usuário e evitar que o microfone capture o som do alto-falante.
+        // Nunca descarta a transcrição do usuário por causa de referências residuais de áudio.
+        if (currentAudioRef.current) {
+          const audio = currentAudioRef.current;
+          if (!audio.paused && !audio.ended && audio.currentTime > 0 && audio.currentTime < (audio.duration || Infinity)) {
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+            } catch {}
+          }
+          currentAudioRef.current = null;
+        }
+
+        if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch {}
+        }
+
         let interim = '';
         let final = '';
 
@@ -448,12 +653,31 @@ export function LilouproAssistant({
         }
 
         if (interim) {
+          latestInterimRef.current = interim;
           setInterimTranscript(interim);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('liloupro:voice-sound-detected', { detail: { soundDetected: true } }));
+          }
+          // Reinicia o timer de silêncio para dar tempo de terminar o comando
+          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (!latestInterimRef.current || !latestInterimRef.current.trim()) {
+              turnOffAllListeningRef.current?.();
+            }
+          }, 4500);
         }
 
         if (final) {
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+          latestInterimRef.current = '';
           setInterimTranscript(final);
           stopListening();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('liloupro:voice-command-captured', { detail: { command: final } }));
+          }
           handleProcessInput(final);
         }
       };
@@ -461,12 +685,20 @@ export function LilouproAssistant({
       recognition.onerror = (event: any) => {
         console.warn("Speech recognition error:", event.error);
         setIsListening(false);
+        isListeningRef.current = false;
         setInterimTranscript('');
-        if (event.error === 'not-allowed') {
+        latestInterimRef.current = '';
+        turnOffAllListeningRef.current?.();
+
+        // Se o erro for de microfone (comum em iframes de preview ou navegadores sem permissão),
+        // abre o painel do assistente para oferecer botões rápidos e campo de texto direto
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
+          setIsOpen(true);
+          setIsRetracted(false);
           addMessage({
             id: getUniqueAssistantMsgId('assistant'),
             sender: 'assistant',
-            text: 'O acesso ao microfone foi negado. Habilite a permissão de áudio nas configurações do seu navegador ou digite sua dúvida no campo de texto!',
+            text: '🎙️ **Microfone não acessível nesta janela (comum em telas de preview/iframe)**.\n\nVocê pode tocar em qualquer um dos **botões de atalho rápido abaixo** (🎯 Afinador, ⏱️ Metrônomo, 👥 Escalas, 📖 Bíblia, 🗓️ Liturgia) ou digitar qualquer comando no campo de texto para executar tudo perfeitamente!',
             timestamp: new Date()
           });
         }
@@ -474,6 +706,20 @@ export function LilouproAssistant({
 
       recognition.onend = () => {
         setIsListening(false);
+        isListeningRef.current = false;
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+        if (latestInterimRef.current && latestInterimRef.current.trim()) {
+          const textToProcess = latestInterimRef.current.trim();
+          latestInterimRef.current = '';
+          setInterimTranscript('');
+          handleProcessInput(textToProcess);
+        } else {
+          // Usuário não quis falar nada (silêncio) -> desliga o microfone completamente
+          turnOffAllListeningRef.current?.();
+        }
       };
 
       recognitionRef.current = recognition;
@@ -528,13 +774,86 @@ export function LilouproAssistant({
     setIsLoading(true);
 
     let norm = normalize(text);
-    // Normalize speech recognition phonetic variations in Portuguese
+    // Se a mensagem contém o gatilho "Oi Lilou" / "Ok Lilou" / "E aí Lilou" seguido de um comando na mesma fala,
+    // extrai o comando para processamento direto
+    const wakeCheck = checkLilouWakeWord(text);
+    if (wakeCheck.detected && wakeCheck.commandAfter) {
+      norm = normalize(wakeCheck.commandAfter);
+    }
+
+    // Normaliza variações fonéticas comuns de transcrição de voz em português
     norm = norm
       .replace(/\babril\b/g, 'abrir')
       .replace(/\babri\b/g, 'abrir')
       .replace(/\babriu\b/g, 'abrir')
       .replace(/\btoqua\b/g, 'toca')
       .replace(/\btoqui\b/g, 'toque');
+
+    // Remove prefixos de saudação ou nomes do assistente que acompanham o comando (ex: "e aí lilou abre o afinador", "liloupro toca Raridade")
+    const strippedCommand = norm
+      .replace(/^(?:oi|oie|ola|ok|okay|oq|oque|ei|hey|heey|fala|opa|alo|alou|e\s+ai|eai|eaí|iai|iae|ou|ae|eae)\s+(?:liloupro|lilou\s+pro|lilopro|lilou|li\s+lou|lioi|liou|lio|lilo|lilu|lillou|lelou|leilou|lili|milou|lulu|lou)\s+/i, '')
+      .replace(/^(?:liloupro|lilou\s+pro|lilopro|lilou|li\s+lou|lioi|liou|lio|lilo|lilu|lillou|lelou|leilou|lili|milou|lulu|lou)\s+/i, '')
+      .replace(/^(?:por\s+favor|faz\s+favor|por\s+gentileza|gentileza|poderia|pode|da\s+pra|voce\s+pode|favor|quero|queria|gostaria\s+de)\s+/i, '')
+      .replace(/\s+(?:por\s+favor|obrigado|valeu|brigado)$/i, '')
+      .trim();
+
+    if (strippedCommand && strippedCommand.length >= 2) {
+      norm = strippedCommand;
+    }
+
+    // ==========================================
+    // 00. INTENT: SAUDAÇÃO & WAKE RESPONSE ("Oi Lilou", "Ok Lilou", "Oi Lioi", "Olá", "Oi")
+    // ==========================================
+    const isGreetingIntent = (
+      norm === 'oi lilou' ||
+      norm === 'ok lilou' ||
+      norm === 'e ai lilou' ||
+      norm === 'eai lilou' ||
+      norm === 'ola lilou' ||
+      norm === 'ei lilou' ||
+      norm === 'lilou' ||
+      norm === 'liloupro' ||
+      norm === 'lioi' ||
+      norm === 'oi liou' ||
+      norm === 'ok liou' ||
+      norm === 'oi lilu' ||
+      norm === 'ok lilu' ||
+      norm === 'oi lilo' ||
+      norm === 'ok lilo' ||
+      norm === 'oi' ||
+      norm === 'ola' ||
+      norm === 'bom dia' ||
+      norm === 'boa tarde' ||
+      norm === 'boa noite' ||
+      norm === 'fala lilou' ||
+      norm === 'opa lilou' ||
+      norm === 'tudo bem' ||
+      norm === 'oi tudo bem' ||
+      (wakeCheck.detected && !wakeCheck.commandAfter)
+    );
+
+    if (isGreetingIntent) {
+      setIsLoading(false);
+      const greetingSpoken = getRandomGreeting();
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: `🎙️ **${greetingSpoken}**`,
+        timestamp: new Date(),
+        steps: [
+          'Diga: "Abre o afinador"',
+          'Diga: "Abre o metrônomo"',
+          'Diga: "Abre a cifra de [música]"',
+          'Diga: "Tocar playlist do culto"',
+          'Diga: "Abre a Bíblia no Salmo 23"'
+        ]
+      });
+      speak(greetingSpoken);
+      setTimeout(() => {
+        startListening();
+      }, 400);
+      return;
+    }
 
     // ==========================================
     // 0. INTENT: COMO USAR ESTA TELA / MANUAL INTERATIVO DA TELA
@@ -564,6 +883,215 @@ export function LilouproAssistant({
     if (isHowToUseScreen) {
       setIsLoading(false);
       handleAskHowToUseThisScreen();
+      return;
+    }
+
+    // ==========================================
+    // 0A. INTENT: TOCAR PRÓXIMA MÚSICA / PRÓXIMO LOUVOR
+    // Ex: "tocar próxima música", "próxima música", "tocar próximo louvor", "próximo louvor", "pular música"
+    // ==========================================
+    const isNextSongCommand = (
+      norm.includes('proxima musica') ||
+      norm.includes('proximo louvor') ||
+      norm.includes('tocar proxima') ||
+      norm.includes('tocar o proximo') ||
+      norm.includes('proxima do culto') ||
+      norm.includes('proxima da lista') ||
+      norm.includes('pular musica') ||
+      norm.includes('passar musica')
+    );
+
+    if (isNextSongCommand) {
+      setIsLoading(false);
+      const serviceSongs = targetService ? getServiceSongs(targetService, allSongs) : [];
+      
+      if (serviceSongs.length === 0) {
+        const replyText = 'Ainda não temos músicas cadastradas no culto de hoje.';
+        const speakText = 'Ainda não tem músicas no culto de hoje.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Abrir Liturgia',
+          onActionClick: () => {
+            onNavigate('liturgy');
+            setIsOpen(false);
+          }
+        });
+        speak(speakText);
+        return;
+      }
+
+      // Encontra a próxima música em relação à atual ou a primeira
+      let nextSong = serviceSongs[0];
+      if (currentSong) {
+        const currentIndex = serviceSongs.findIndex(s => s.id === currentSong.id);
+        if (currentIndex >= 0 && currentIndex + 1 < serviceSongs.length) {
+          nextSong = serviceSongs[currentIndex + 1];
+        }
+      }
+
+      const replyText = `Tocando **"${nextSong.title}"** ${nextSong.artist ? `(${nextSong.artist})` : ''}.`;
+      const speakText = `Beleza, vou abrir ${nextSong.title}.`;
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: `▶️ Ouvir "${nextSong.title}"`,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onOpenSong(nextSong, { showPlayer: true });
+          setIsOpen(false);
+        }
+      });
+      speak(speakText);
+
+      setTimeout(() => {
+        onOpenSong(nextSong, { showPlayer: true });
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
+
+    // ==========================================
+    // 0B. INTENT: QUANTOS MEMBROS NA ESCALA DE HOJE?
+    // Ex: "quantos membros na escala de hoje?", "quem está escalado hoje?", "escala de hoje", "voluntários de hoje"
+    // ==========================================
+    const isScaleTodayCommand = (
+      (norm.includes('quantos membros') || norm.includes('quem esta') || norm.includes('quem tá') || norm.includes('quantas pessoas') || norm.includes('qual a escala') || norm.includes('ver escala') || norm.includes('mostrar escala') || norm.includes('membros na escala')) &&
+      (norm.includes('hoje') || norm.includes('de hoje') || norm.includes('proximo culto') || norm.includes('deste culto') || norm.includes('do culto'))
+    ) || norm === 'quantos membros na escala de hoje' || norm === 'escala de hoje';
+
+    if (isScaleTodayCommand) {
+      setIsLoading(false);
+      if (!targetService) {
+        const replyText = 'Não encontrei nenhum culto agendado para hoje. Quer ver as **Escalas**?';
+        const speakText = 'Não achei culto pra hoje.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '👥 Ver Escalas',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+        speak(speakText);
+        return;
+      }
+
+      const scales = targetService.scales || {};
+      const uniqueMemberIds = new Set();
+      const rolesSummary = [];
+
+      Object.entries(scales).forEach(([role, ids]) => {
+        if (Array.isArray(ids)) {
+          ids.forEach(id => {
+            if (id && typeof id === 'string') uniqueMemberIds.add(id);
+          });
+          if (ids.length > 0) rolesSummary.push(`${role}: ${ids.length}`);
+        } else if (ids && typeof ids === 'string') {
+          uniqueMemberIds.add(ids);
+          rolesSummary.push(`${role}: 1`);
+        }
+      });
+
+      const memberCount = uniqueMemberIds.size;
+      const serviceTitle = targetService.title || 'Culto';
+
+      let replyText = '';
+      let speakText = '';
+
+      if (memberCount > 0) {
+        replyText = `Hoje no **${serviceTitle}**, temos **${memberCount} pessoa(s) na escala**:\n${rolesSummary.length > 0 ? `\n• ${rolesSummary.slice(0, 5).join('\n• ')}` : ''}`;
+        speakText = `Hoje temos ${memberCount} ${memberCount === 1 ? 'pessoa' : 'pessoas'} na escala.`;
+      } else {
+        replyText = `O culto **${serviceTitle}** ainda está sem membros escalados.`;
+        speakText = 'Esse culto ainda está sem escala.';
+      }
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '👥 Abrir Escala Completa',
+        onActionClick: () => {
+          onNavigate('calendar');
+          setIsOpen(false);
+        }
+      });
+      speak(speakText);
+      return;
+    }
+
+    // ==========================================
+    // 0C. INTENT: ABRIR CIFRA DO PRÓXIMO LOUVOR / PRÓXIMA CIFRA
+    // Ex: "abrir cifra do próximo louvor", "cifra do próximo louvor", "abrir cifra da próxima música", "ver próxima cifra"
+    // ==========================================
+    const isNextChordsCommand = (
+      (norm.includes('cifra') || norm.includes('tom') || norm.includes('acordes')) &&
+      (norm.includes('proximo louvor') || norm.includes('proxima musica') || norm.includes('proxima') || norm.includes('da liturgia') || norm.includes('do culto'))
+    ) || norm === 'abrir cifra do proximo louvor';
+
+    if (isNextChordsCommand) {
+      setIsLoading(false);
+      const serviceSongs = targetService ? getServiceSongs(targetService, allSongs) : [];
+
+      if (serviceSongs.length === 0) {
+        const replyText = 'A liturgia de hoje ainda não tem músicas cadastradas.';
+        const speakText = 'A liturgia de hoje ainda não tem músicas cadastradas.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Abrir Liturgia',
+          onActionClick: () => {
+            onNavigate('liturgy');
+            setIsOpen(false);
+          }
+        });
+        speak(speakText);
+        return;
+      }
+
+      // Encontra a próxima música em relação à atual ou a primeira
+      let nextSong = serviceSongs[0];
+      if (currentSong) {
+        const currentIndex = serviceSongs.findIndex(s => s.id === currentSong.id);
+        if (currentIndex >= 0 && currentIndex + 1 < serviceSongs.length) {
+          nextSong = serviceSongs[currentIndex + 1];
+        }
+      }
+
+      const songTone = nextSong.key ? `no tom **${nextSong.key}**` : '';
+      const replyText = `Abrindo a cifra de **"${nextSong.title}"** ${songTone}.`;
+      const speakText = `Claro, vou abrir ${nextSong.title}.`;
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: `🎼 Ver Cifra de "${nextSong.title}"`,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onOpenSong(nextSong);
+          setIsOpen(false);
+        }
+      });
+      speak(speakText);
+
+      setTimeout(() => {
+        onOpenSong(nextSong);
+        setIsOpen(false);
+      }, 900);
       return;
     }
 
@@ -637,8 +1165,8 @@ export function LilouproAssistant({
         });
 
         speak(allLiturgySongs.length > 0
-          ? 'As músicas do culto não possuem links do YouTube cadastrados para tocar a playlist.'
-          : 'Não há músicas vinculadas à liturgia deste culto.');
+          ? 'As músicas do culto ainda não têm áudio cadastrado.'
+          : 'Não há músicas na liturgia deste culto.');
         return;
       }
 
@@ -649,8 +1177,8 @@ export function LilouproAssistant({
         .map((s, idx) => `**${idx + 1}.** ${s.title}${s.artist ? ` — *${s.artist}*` : ''}`)
         .join('\n');
 
-      const replyText = `Iniciando a playlist do culto **${targetService.title}** com **${playlistSongs.length} música(s)** na ordem oficial da liturgia! 🎵\n\n${songsListText}`;
-      const speakText = `Iniciando a playlist do culto ${targetService.title} com ${playlistSongs.length} músicas na ordem!`;
+      const replyText = `Iniciando a playlist do culto **${targetService.title}** (${playlistSongs.length} músicas):\n\n${songsListText}`;
+      const speakText = 'Beleza, vou abrir a playlist.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -659,7 +1187,7 @@ export function LilouproAssistant({
         timestamp: new Date(),
         actionLabel: `▶️ Tocar Playlist (${playlistSongs.length} músicas)`,
         actionIcon: <Play size={15} />,
-        actionSuccessMessage: '✓ Playlist em reprodução!',
+        actionSuccessMessage: getRandomDone(),
         onActionClick: () => {
           onStartPlaylist?.(playlistSongs);
         }
@@ -732,8 +1260,8 @@ export function LilouproAssistant({
         console.error('Erro ao baixar cifras do culto via assistente:', err);
       }
 
-      const replyText = `Baixando o PDF oficial com **todas as cifras do culto ${targetService.title}**! 📄\n\n• Formatação organizada em 2 colunas para estantes e impressão rápida;\n• Letras e acordes com alta legibilidade em negrito;\n• Músicas completas na ordem exata da liturgia.`;
-      const speakText = `Baixando o PDF com todas as cifras do culto ${targetService.title} em duas colunas!`;
+      const replyText = `Gerando o PDF com as cifras do culto **${targetService.title}**.`;
+      const speakText = 'Pode deixar, gerando o PDF.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -742,7 +1270,7 @@ export function LilouproAssistant({
         timestamp: new Date(),
         actionLabel: '📄 Baixar Cifras do Culto (PDF)',
         actionIcon: <FileText size={15} />,
-        actionSuccessMessage: '✓ PDF de cifras do culto gerado!',
+        actionSuccessMessage: getRandomDone(),
         onActionClick: () => {
           if (onDownloadCifrasCulto) {
             onDownloadCifrasCulto(targetService);
@@ -772,9 +1300,9 @@ export function LilouproAssistant({
       if (parsedBible) {
         const { bookName, chapter, verse, displayText } = parsedBible;
         const verseText = verse !== undefined ? `, versículo **${verse}**` : '';
-        const speechVerse = verse !== undefined ? `, versículo ${verse}` : '';
-        const replyText = `Abrindo a Bíblia do Liloupro no livro de **${bookName}**, capítulo **${chapter}**${verseText}!`;
-        const speakText = `Abrindo a Bíblia do Liloupro em ${bookName}, capítulo ${chapter}${speechVerse}.`;
+        const speechVerse = verse !== undefined ? ` versículo ${verse}` : '';
+        const replyText = `Abrindo a Bíblia em **${bookName} ${chapter}**${verseText}.`;
+        const speakText = `Claro, abrindo ${bookName} ${chapter}${speechVerse}.`;
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -783,7 +1311,7 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: `📖 Abrir ${displayText}`,
           actionIcon: <BookOpen size={15} />,
-          actionSuccessMessage: `✓ Bíblia aberta em ${displayText}!`,
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenBible(bookName, chapter, verse);
             setIsOpen(false);
@@ -799,7 +1327,8 @@ export function LilouproAssistant({
 
         return;
       } else {
-        const replyText = 'Abrindo a Bíblia Sagrada do Liloupro!';
+        const replyText = 'Claro, abrindo a **Bíblia**.';
+        const speakText = 'Claro.';
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -807,14 +1336,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '📖 Acessar Bíblia',
           actionIcon: <BookOpen size={15} />,
-          actionSuccessMessage: '✓ Bíblia aberta com sucesso!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('bible');
             setIsOpen(false);
           }
         });
 
-        speak(replyText);
+        speak(speakText);
 
         setTimeout(() => {
           onNavigate('bible');
@@ -827,19 +1356,14 @@ export function LilouproAssistant({
 
     // ==========================================
     // 2. INTENT: AFINADOR CROMÁTICO (LiLouPro Tuner)
-    // Ex: "Abra o afinador do app", "abra o afinador", "afinar violão", "afinador"
+    // Ex: "Abra o afinador do app", "abra o afinador", "afinar violão", "afinador", "afinar", "quero afinar"
     // ==========================================
     if (
       norm.includes('afinador') ||
-      norm.includes('afinar violao') ||
-      norm.includes('afinar instrumento') ||
-      norm.includes('afinar meu violao') ||
-      norm.includes('afinar meu instrumento') ||
-      norm.includes('afinar guitarra') ||
-      norm.includes('afinar baixo') ||
-      norm.includes('afinar o baixo') ||
-      norm.includes('afinar a guitarra') ||
-      norm.includes('afinar o violao')
+      norm.includes('afinar') ||
+      norm.includes('afinacao') ||
+      norm === 'afinador' ||
+      norm === 'afinar'
     ) {
       setIsLoading(false);
 
@@ -868,27 +1392,27 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎯 Abrir Afinador Cromático',
           actionIcon: <Radio size={15} />,
-          actionSuccessMessage: '✓ Afinador aberto com sucesso!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenTuner?.();
             setIsOpen(false);
           }
         });
 
-        speak('O afinador cromático fica na barra de ferramentas das cifras, ou você pode abri-lo agora tocando no botão.');
+        speak('O afinador fica na barra da cifra ou toque no botão pra abrir.');
         return;
       } else {
-        const replyText = 'Abrindo o **Afinador Cromático** do LiLouPro com detecção precisa por microfone!';
-        const speakText = 'Abrindo o afinador cromático do aplicativo!';
+        const replyText = 'Claro, já vou abrir o **Afinador**.';
+        const speakText = 'Claro, já vou abrir.';
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
           text: replyText,
           timestamp: new Date(),
-          actionLabel: '🎯 Abrir Afinador Cromático',
+          actionLabel: '🎯 Abrir Afinador',
           actionIcon: <Radio size={15} />,
-          actionSuccessMessage: '✓ Afinador aberto com sucesso!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenTuner?.();
             setIsOpen(false);
@@ -914,7 +1438,11 @@ export function LilouproAssistant({
       norm.includes('metronomo') ||
       norm.includes('pedal de ritmo') ||
       norm.includes('marcador de tempo') ||
-      (norm.includes('ritmo') && (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')))
+      norm.includes('bpm') ||
+      norm === 'metronomo' ||
+      norm === 'ritmo' ||
+      norm === 'bpm' ||
+      (norm.includes('ritmo') && (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.includes('bota') || norm.includes('coloca') || norm.includes('iniciar')))
     ) {
       setIsLoading(false);
 
@@ -925,13 +1453,13 @@ export function LilouproAssistant({
       ) && !norm.includes('abra') && !norm.includes('abrir') && !norm.includes('abre') && !norm.includes('iniciar');
 
       if (isPurelyQuestion) {
-        const replyText = 'O **Metrônomo Interativo** do LiLouPro fica na barra de ferramentas das cifras e também pode ser aberto a qualquer momento:';
+        const replyText = 'O **Metrônomo** fica na barra de ferramentas das cifras e também pode ser aberto a qualquer momento:';
         const steps = [
           '1. Toque em qualquer música para abrir a cifra.',
           '2. Na barra de ferramentas, toque no botão do **Metrônomo (BPM)**.',
           '3. Ajuste o andamento (BPM), fórmula de compasso (4/4, 3/4, 6/8, 2/4) e divisões rítmicas.',
           '4. Use o botão **Tap Tempo** para encontrar a velocidade batendo o dedo.',
-          '5. Ou abra-o instantaneamente dizendo: *"Abra o metrônomo do app"*.'
+          '5. Ou abra-o instantaneamente dizendo: *"Abra o metrônomo"*.'
         ];
 
         addMessage({
@@ -942,18 +1470,18 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '⏱️ Abrir Metrônomo',
           actionIcon: <Timer size={15} />,
-          actionSuccessMessage: '✓ Metrônomo aberto!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenMetronome?.();
             setIsOpen(false);
           }
         });
 
-        speak('O metrônomo fica nas cifras ou você pode abri-lo agora mesmo!');
+        speak('O metrônomo fica nas cifras ou toque no botão pra abrir.');
         return;
       } else {
-        const replyText = 'Abrindo o **Metrônomo Interativo** do LiLouPro com controle de BPM, Tap Tempo e fórmulas de compasso!';
-        const speakText = 'Abrindo o metrônomo do aplicativo!';
+        const replyText = 'Pode deixar, abrindo o **Metrônomo**.';
+        const speakText = 'Pode deixar.';
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -962,7 +1490,7 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '⏱️ Abrir Metrônomo',
           actionIcon: <Timer size={15} />,
-          actionSuccessMessage: '✓ Metrônomo aberto com sucesso!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenMetronome?.();
             setIsOpen(false);
@@ -981,16 +1509,89 @@ export function LilouproAssistant({
     }
 
     // ==========================================
+    // 3B. INTENT: PRÓXIMO CULTO / DATA E HORÁRIO DO CULTO
+    // Ex: "qual o próximo culto?", "quando é o próximo culto?", "próximo culto", "próximo agendamento"
+    // ==========================================
+    const isNextServiceIntent = (
+      norm.includes('proximo culto') ||
+      norm.includes('quando e o culto') ||
+      norm.includes('quando e o proximo') ||
+      norm.includes('qual o proximo culto') ||
+      norm.includes('qual o culto') ||
+      norm.includes('data do culto') ||
+      norm.includes('horario do culto') ||
+      norm.includes('proximo agendamento') ||
+      norm === 'proximo culto' ||
+      norm === 'culto'
+    );
+
+    if (isNextServiceIntent) {
+      setIsLoading(false);
+      if (!targetService) {
+        const replyText = 'Não encontrei nenhum culto agendado no momento. Você pode criar um novo culto na aba **Escalas**!';
+        const speakText = 'Não achei culto agendado pra hoje.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '🗓️ Abrir Escalas',
+          onActionClick: () => {
+            onNavigate('calendar');
+            setIsOpen(false);
+          }
+        });
+        speak(speakText);
+        return;
+      }
+
+      const serviceTitle = targetService.title || 'Culto';
+      let dateString = '';
+      if (targetService._actualDate && !isNaN(targetService._actualDate.getTime()) && targetService._actualDate.getTime() > 0) {
+        dateString = targetService._actualDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+      } else if (targetService.date) {
+        dateString = String(targetService.date);
+      }
+      const timeString = targetService.time ? ` às ${targetService.time}` : '';
+      const replyText = `O próximo culto é **"${serviceTitle}"**${dateString ? ` agendado para **${dateString}**${timeString}` : ''}.`;
+      const speakText = `O próximo culto é ${serviceTitle}.`;
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '📅 Ver na Liturgia',
+        actionIcon: <Calendar size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('liturgy');
+          setIsOpen(false);
+        }
+      });
+      speak(speakText);
+      return;
+    }
+
+    // ==========================================
     // 4. INTENT: PROJEÇÃO / TELÃO (Abertura Direta)
-    // Ex: "abra a projeção", "abrir telão", "abra o modo projeção", "abra os slides"
+    // Ex: "abra a projeção", "abrir telão", "abra o modo projeção", "abra os slides", "telão", "projeção"
     // ==========================================
     if (
-      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
-      (norm.includes('projecao') || norm.includes('telao') || norm.includes('slides') || norm.includes('letras na tv') || norm.includes('modo projecao'))
+      norm.includes('projecao') ||
+      norm.includes('telao') ||
+      norm.includes('slides') ||
+      norm.includes('letras na tv') ||
+      norm.includes('modo projecao') ||
+      norm.includes('projetor') ||
+      norm === 'telao' ||
+      norm === 'projecao' ||
+      norm === 'abrir telao' ||
+      norm === 'abrir projecao'
     ) {
       setIsLoading(false);
-      const replyText = 'Abrindo o modo de **Projeção para Telão e TV**!';
-      const speakText = 'Abrindo a tela de projeção!';
+      const replyText = 'Pode deixar, abrindo a **Projeção**.';
+      const speakText = 'Pode deixar.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -999,7 +1600,7 @@ export function LilouproAssistant({
         timestamp: new Date(),
         actionLabel: '📺 Ir para Projeção',
         actionIcon: <Tv size={15} />,
-        actionSuccessMessage: '✓ Projeção aberta!',
+        actionSuccessMessage: getRandomDone(),
         onActionClick: () => {
           onNavigate('projection');
           setIsOpen(false);
@@ -1011,22 +1612,26 @@ export function LilouproAssistant({
       setTimeout(() => {
         onNavigate('projection');
         setIsOpen(false);
-      }, 1000);
+      }, 900);
 
       return;
     }
 
     // ==========================================
     // 5. INTENT: LITURGIA / CULTOS (Abertura Direta)
-    // Ex: "abra a liturgia", "abrir cultos", "abra os cultos", "abra o culto"
+    // Ex: "abra a liturgia", "abrir cultos", "liturgia", "ordem do culto", "ver liturgia"
     // ==========================================
     if (
-      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
-      (norm.includes('liturgia') || norm.includes('culto') || norm.includes('cultos') || norm.includes('ordem do culto'))
+      norm.includes('liturgia') ||
+      norm.includes('ordem do culto') ||
+      norm.includes('programacao do culto') ||
+      norm === 'liturgia' ||
+      norm === 'abrir liturgia' ||
+      norm === 'ver liturgia'
     ) {
       setIsLoading(false);
-      const replyText = 'Abrindo a aba de **Liturgia e Cultos**!';
-      const speakText = 'Abrindo liturgia e cultos!';
+      const replyText = 'Claro, abrindo a **Liturgia**.';
+      const speakText = 'Claro, vou abrir.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -1035,7 +1640,7 @@ export function LilouproAssistant({
         timestamp: new Date(),
         actionLabel: '📅 Ir para Liturgia',
         actionIcon: <Calendar size={15} />,
-        actionSuccessMessage: '✓ Liturgia aberta!',
+        actionSuccessMessage: getRandomDone(),
         onActionClick: () => {
           onNavigate('liturgy');
           setIsOpen(false);
@@ -1047,22 +1652,29 @@ export function LilouproAssistant({
       setTimeout(() => {
         onNavigate('liturgy');
         setIsOpen(false);
-      }, 1000);
+      }, 900);
 
       return;
     }
 
     // ==========================================
     // 6. INTENT: ESCALAS / CALENDÁRIO (Abertura Direta)
-    // Ex: "abra as escalas", "abrir escalas", "abra o calendário", "abra os voluntários"
+    // Ex: "abra as escalas", "abrir escalas", "escalas", "escala", "ver escalas", "voluntários"
     // ==========================================
     if (
-      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ir para') || norm.startsWith('acessar')) &&
-      (norm.includes('escala') || norm.includes('escalas') || norm.includes('calendario') || norm.includes('voluntarios') || norm.includes('escalados'))
+      norm.includes('escala') ||
+      norm.includes('escalas') ||
+      norm.includes('calendario') ||
+      norm.includes('voluntarios') ||
+      norm.includes('escalados') ||
+      norm === 'escalas' ||
+      norm === 'escala' ||
+      norm === 'abrir escalas' ||
+      norm === 'ver escalas'
     ) {
       setIsLoading(false);
-      const replyText = 'Abrindo a gestão de **Escalas e Calendário**!';
-      const speakText = 'Abrindo escalas e calendário!';
+      const replyText = 'Pode deixar, abrindo as **Escalas**.';
+      const speakText = 'Pode deixar.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -1071,7 +1683,7 @@ export function LilouproAssistant({
         timestamp: new Date(),
         actionLabel: '👥 Ir para Escalas',
         actionIcon: <Calendar size={15} />,
-        actionSuccessMessage: '✓ Escalas abertas!',
+        actionSuccessMessage: getRandomDone(),
         onActionClick: () => {
           onNavigate('calendar');
           setIsOpen(false);
@@ -1083,24 +1695,75 @@ export function LilouproAssistant({
       setTimeout(() => {
         onNavigate('calendar');
         setIsOpen(false);
-      }, 1000);
+      }, 900);
+
+      return;
+    }
+
+    // ==========================================
+    // 6B. INTENT: ABRIR REPERTÓRIO / MÚSICAS (Abertura Direta)
+    // Ex: "abrir músicas", "ver músicas", "repertório", "todas as músicas", "abrir repertório"
+    // ==========================================
+    if (
+      (
+        norm === 'musicas' ||
+        norm === 'musica' ||
+        norm === 'repertorio' ||
+        norm === 'abrir musicas' ||
+        norm === 'ver musicas' ||
+        norm === 'abrir repertorio' ||
+        norm === 'ver repertorio' ||
+        norm === 'todas as musicas' ||
+        norm === 'lista de musicas' ||
+        ((norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('ver') || norm.startsWith('ir para')) && (norm.includes('repertorio') || norm.includes('todas as musicas') || norm.includes('lista de musicas')))
+      ) && !norm.includes('cadastrar') && !norm.includes('adicionar') && !norm.includes('nova') && !norm.includes('tocar')
+    ) {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo o **Repertório de Músicas**.';
+      const speakText = 'Claro, abrindo o repertório.';
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '🎵 Ir para Músicas',
+        actionIcon: <Music size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('songs');
+          setIsOpen(false);
+        }
+      });
+
+      speak(speakText);
+
+      setTimeout(() => {
+        onNavigate('songs');
+        setIsOpen(false);
+      }, 900);
 
       return;
     }
 
     // ==========================================
     // 7. INTENT: CADASTRO DE NOVA MÚSICA (Abertura Direta)
-    // Ex: "abra cadastrar música", "abra nova música", "adicionar música", "cadastrar música"
+    // Ex: "cadastrar música", "nova música", "adicionar música", "cadastrar cifra"
     // ==========================================
     if (
-      (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre') || norm.startsWith('adicionar') || norm.startsWith('cadastrar')) &&
-      (norm.includes('cadastrar musica') || norm.includes('cadastro de musica') || norm.includes('nova musica') || norm.includes('adicionar musica') || norm.includes('adicionar cifra'))
+      norm.includes('cadastrar musica') ||
+      norm.includes('cadastro de musica') ||
+      norm.includes('nova musica') ||
+      norm.includes('adicionar musica') ||
+      norm.includes('adicionar cifra') ||
+      norm === 'cadastrar musica' ||
+      norm === 'nova musica'
     ) {
       const isQuestion = norm.startsWith('como') || norm.startsWith('onde');
       if (!isQuestion) {
         setIsLoading(false);
-        const replyText = 'Abrindo o formulário para **Cadastrar Nova Música**!';
-        const speakText = 'Abrindo o cadastro de nova música!';
+        const replyText = 'Claro, abrindo o cadastro de **Nova Música**.';
+        const speakText = 'Claro, já vou abrir.';
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -1109,7 +1772,7 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '➕ Cadastrar Música',
           actionIcon: <Plus size={15} />,
-          actionSuccessMessage: '✓ Formulário aberto!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenAddSong();
             setIsOpen(false);
@@ -1121,107 +1784,214 @@ export function LilouproAssistant({
         setTimeout(() => {
           onOpenAddSong();
           setIsOpen(false);
-        }, 1000);
+        }, 900);
 
         return;
       }
     }
 
     // ==========================================
-    // 8. INTENT: TEORIA / MEMBROS / CHAT / AJUDA (Abertura Direta)
+    // 8. INTENT: NAVEGAÇÃO DIRETA (Membros, Disponibilidade, Teoria, Chat, Tela Inicial, Configurações, Ajuda)
     // ==========================================
-    if (norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')) {
-      if (norm.includes('teoria') || norm.includes('dicionario') || norm.includes('estudo')) {
-        setIsLoading(false);
-        const replyText = 'Abrindo a aba de **Teoria Musical e Dicionário de Acordes**!';
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: '🎼 Teoria Musical',
-          actionIcon: <Music size={15} />,
-          onActionClick: () => {
-            onNavigate('theory');
-            setIsOpen(false);
-          }
-        });
-        speak('Abrindo teoria musical!');
-        setTimeout(() => {
-          onNavigate('theory');
-          setIsOpen(false);
-        }, 1000);
-        return;
-      }
-
-      if (norm.includes('membros') || norm.includes('equipe') || norm.includes('musicos') || norm.includes('integrantes')) {
-        setIsLoading(false);
-        const replyText = 'Abrindo a gestão de **Membros e Equipe de Louvor**!';
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: '👥 Ver Membros',
-          actionIcon: <Calendar size={15} />,
-          onActionClick: () => {
-            onNavigate('members');
-            setIsOpen(false);
-          }
-        });
-        speak('Abrindo equipe e membros!');
-        setTimeout(() => {
+    if (
+      norm.includes('membros') ||
+      norm.includes('equipe') ||
+      norm.includes('musicos') ||
+      norm.includes('integrantes') ||
+      norm.includes('voluntarios') ||
+      norm === 'membros' ||
+      norm === 'equipe'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo **Membros** da equipe.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '👥 Ver Membros',
+        actionIcon: <Calendar size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
           onNavigate('members');
           setIsOpen(false);
-        }, 1000);
-        return;
-      }
+        }
+      });
+      speak('Pode deixar.');
+      setTimeout(() => {
+        onNavigate('members');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
 
-      if (norm.includes('chat') || norm.includes('mensagens') || norm.includes('bate papo')) {
-        setIsLoading(false);
-        const replyText = 'Abrindo o **Chat da Equipe de Louvor**!';
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: '💬 Ir para Chat',
-          actionIcon: <Bot size={15} />,
-          onActionClick: () => {
-            onNavigate('chat');
-            setIsOpen(false);
-          }
-        });
-        speak('Abrindo o chat da equipe!');
-        setTimeout(() => {
+    if (
+      norm.includes('disponibilidade') ||
+      norm.includes('minha disponibilidade') ||
+      norm.includes('agenda de disponibilidade') ||
+      norm === 'disponibilidade'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo a tela de **Disponibilidade**.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '🗓️ Ver Disponibilidade',
+        actionIcon: <Calendar size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('availability');
+          setIsOpen(false);
+        }
+      });
+      speak('Pode deixar.');
+      setTimeout(() => {
+        onNavigate('availability');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
+
+    if (
+      norm === 'inicio' ||
+      norm === 'tela inicial' ||
+      norm.includes('ir para o inicio') ||
+      norm.includes('ir para tela inicial') ||
+      norm === 'home' ||
+      norm === 'dashboard'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Voltando para a **Tela Inicial**.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '🏠 Tela Inicial',
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('home');
+          setIsOpen(false);
+        }
+      });
+      speak('Pode deixar.');
+      setTimeout(() => {
+        onNavigate('home');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
+
+    if (
+      norm.includes('teoria') ||
+      norm.includes('dicionario') ||
+      norm.includes('estudo') ||
+      norm === 'teoria'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo **Teoria Musical**.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '🎼 Teoria Musical',
+        actionIcon: <Music size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('theory');
+          setIsOpen(false);
+        }
+      });
+      speak('Claro, já vou abrir.');
+      setTimeout(() => {
+        onNavigate('theory');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
+
+    if (
+      norm.includes('chat') ||
+      norm.includes('mensagens da equipe') ||
+      norm.includes('bate papo') ||
+      norm === 'chat'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo o **Chat** da equipe.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '💬 Ir para Chat',
+        actionIcon: <Bot size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
           onNavigate('chat');
           setIsOpen(false);
-        }, 1000);
-        return;
-      }
+        }
+      });
+      speak('Já vou abrir.');
+      setTimeout(() => {
+        onNavigate('chat');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
 
-      if (norm.includes('ajuda') || norm.includes('suporte') || norm.includes('central de ajuda')) {
-        setIsLoading(false);
-        const replyText = 'Abrindo a **Central de Ajuda e Suporte**!';
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: replyText,
-          timestamp: new Date(),
-          actionLabel: '❓ Central de Ajuda',
-          actionIcon: <HelpCircle size={15} />,
-          onActionClick: () => {
-            onOpenHelpCenter?.();
-            setIsOpen(false);
-          }
-        });
-        speak('Abrindo a central de ajuda!');
-        setTimeout(() => {
+    if (
+      norm.includes('configuracoes') ||
+      norm.includes('configuracao') ||
+      norm.includes('ajustes') ||
+      norm === 'configuracoes'
+    ) {
+      setIsLoading(false);
+      const replyText = 'Abrindo as **Configurações**.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '⚙️ Configurações',
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
+          onNavigate('settings');
+          setIsOpen(false);
+        }
+      });
+      speak('Pode deixar.');
+      setTimeout(() => {
+        onNavigate('settings');
+        setIsOpen(false);
+      }, 900);
+      return;
+    }
+
+    if (norm.includes('ajuda') || norm.includes('suporte') || norm.includes('central de ajuda') || norm === 'ajuda') {
+      setIsLoading(false);
+      const replyText = 'Claro, abrindo a **Central de Ajuda**.';
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: replyText,
+        timestamp: new Date(),
+        actionLabel: '❓ Central de Ajuda',
+        actionIcon: <HelpCircle size={15} />,
+        actionSuccessMessage: getRandomDone(),
+        onActionClick: () => {
           onOpenHelpCenter?.();
           setIsOpen(false);
-        }, 1000);
-        return;
-      }
+        }
+      });
+      speak('Pode deixar.');
+      setTimeout(() => {
+        onOpenHelpCenter?.();
+        setIsOpen(false);
+      }, 900);
+      return;
     }
 
     // ==========================================
@@ -1282,14 +2052,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: 'Sincronizar no Google Agenda',
           actionIcon: <GoogleCalendarIcon size={16} />,
-          actionSuccessMessage: '✓ Abrindo Escalas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('calendar');
             setIsOpen(false);
           }
         });
 
-        speak('Você pode salvar qualquer culto no seu Google Agenda com um toque! Basta clicar no botão Google Agenda no card do culto na tela inicial ou na aba de Escalas.');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1313,14 +2083,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: 'Ver Cultos e Liturgia',
           actionIcon: <GoogleDocsIcon size={16} />,
-          actionSuccessMessage: '✓ Abrindo Liturgia!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('liturgy');
             setIsOpen(false);
           }
         });
 
-        speak('Você pode gerar o caderno oficial no Google Docs com um toque! Basta clicar no botão Criar Caderno no Google Docs no card do culto.');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1352,14 +2122,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🗓️ Ir para Escalas e Agendar Culto',
           actionIcon: <Calendar size={15} />,
-          actionSuccessMessage: '✓ Abrindo tela de Escalas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('calendar');
             setIsOpen(false);
           }
         });
 
-        speak('Para agendar um culto, vá na aba Escalas e clique em Novo Agendamento. Preencha o nome, tema, data e horário, e clique em Criar Agendamento. Depois, no card do culto, você escala os voluntários e vincula o repertório de músicas!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1386,14 +2156,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '➕ Cadastrar Nova Música Agora',
           actionIcon: <Plus size={15} />,
-          actionSuccessMessage: '✓ Abrindo cadastro de músicas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenAddSong();
             setIsOpen(false);
           }
         });
 
-        speak('Para cadastrar uma música, abra a aba Músicas e clique em Cadastrar Música. Você pode usar a busca automática integrada para importar a cifra, letra e tom com um toque!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1420,14 +2190,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '👥 Ir para Membros',
           actionIcon: <Users size={15} />,
-          actionSuccessMessage: '✓ Abrindo lista de membros!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('members');
             setIsOpen(false);
           }
         });
 
-        speak('Para cadastrar um membro, vá na aba Membros, clique em Novo Membro, preencha os dados e selecione as funções ministeriais que ele exerce na equipe!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1457,14 +2227,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '📅 Marcar Minha Disponibilidade',
           actionIcon: <Calendar size={15} />,
-          actionSuccessMessage: '✓ Abrindo tela de disponibilidade!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('availability');
             setIsOpen(false);
           }
         });
 
-        speak('Para marcar disponibilidade, abra a aba Disponibilidade, marque verde para os dias que você pode servir e vermelho para os que não pode, depois clique em Salvar!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1494,14 +2264,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '📋 Ir para Liturgia',
           actionIcon: <Layers size={15} />,
-          actionSuccessMessage: '✓ Abrindo liturgia!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('liturgy');
             setIsOpen(false);
           }
         });
 
-        speak('Para montar a liturgia, acesse a aba Liturgia, selecione o culto e adicione os momentos da celebração vinculando as músicas do repertório!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1532,14 +2302,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '📺 Abrir Painel de Projeção',
           actionIcon: <Tv size={15} />,
-          actionSuccessMessage: '✓ Abrindo projeção!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('projection');
             setIsOpen(false);
           }
         });
 
-        speak('Para projetar letras, abra a aba Projeção, clique em Abrir Tela do Telão, arraste para a TV e toque nas estrofes para transmitir ao vivo!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1570,14 +2340,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎵 Ver Repertório de Músicas',
           actionIcon: <Music size={15} />,
-          actionSuccessMessage: '✓ Abrindo músicas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('songs');
             setIsOpen(false);
           }
         });
 
-        speak('Para mudar o tom, abra a música e use os botões mais e menos de semitom no topo da tela. Todos os acordes e diagramas mudam instantaneamente!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1604,14 +2374,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🤖 Ir para Escalas e Usar IA',
           actionIcon: <Bot size={15} />,
-          actionSuccessMessage: '✓ Abrindo escalas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('calendar');
             setIsOpen(false);
           }
         });
 
-        speak('Para gerar escala com IA, vá na aba Escalas e clique no botão Gerar Escala com IA. A inteligência cruza as disponibilidades e funções dos voluntários automaticamente!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1641,14 +2411,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🗓️ Ir para Escalas',
           actionIcon: <Calendar size={15} />,
-          actionSuccessMessage: '✓ Abrindo escalas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('calendar');
             setIsOpen(false);
           }
         });
 
-        speak('Para compartilhar a escala, acesse a aba Escalas e use o botão WhatsApp para enviar ao grupo da equipe ou Baixar Escala Mês para gerar o PDF!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1674,14 +2444,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎯 Abrir Afinador do App',
           actionIcon: <Radio size={15} />,
-          actionSuccessMessage: '✓ Afinador aberto!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenTuner?.();
             setIsOpen(false);
           }
         });
 
-        speak('Para afinar, abra o afinador pelo assistente ou pela cifra, toque a corda do instrumento e acompanhe o ponteiro até ficar verde no centro!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1713,14 +2483,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '⏱️ Abrir Metrônomo do App',
           actionIcon: <Timer size={15} />,
-          actionSuccessMessage: '✓ Metrônomo aberto!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenMetronome?.();
             setIsOpen(false);
           }
         });
 
-        speak('Para usar o metrônomo, diga abra o metrônomo ou abra pela cifra, ajuste o BPM ou dê toques no botão Tap Tempo para calcular o andamento da música!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1750,14 +2520,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎵 Ver Repertório de Músicas',
           actionIcon: <Music size={15} />,
-          actionSuccessMessage: '✓ Abrindo músicas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('songs');
             setIsOpen(false);
           }
         });
 
-        speak('O Modo Foco remove menus para estantes de partitura, com fontes ampliadas e rolagem automática ajustável para tocar no palco sem distrações!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1785,14 +2555,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '📖 Acessar Bíblia Sagrada',
           actionIcon: <BookOpen size={15} />,
-          actionSuccessMessage: '✓ Abrindo Bíblia!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('bible');
             setIsOpen(false);
           }
         });
 
-        speak('Para ler ou projetar a Bíblia, peça qualquer versículo por voz como "abra a bíblia em Salmo 23" ou clique no botão projetar ao lado do versículo!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
 
@@ -1821,14 +2591,14 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎵 Ver Músicas',
           actionIcon: <Music size={15} />,
-          actionSuccessMessage: '✓ Abrindo músicas!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('songs');
             setIsOpen(false);
           }
         });
 
-        speak('Para ensaiar, abra o Player da música dizendo "Tocar música" ou pela barra da cifra, e toque junto com o vídeo e áudio oficial!');
+        speak('Pronto, deixei o passo a passo na tela.');
         return;
       }
     }
@@ -1854,7 +2624,16 @@ export function LilouproAssistant({
       norm.includes('toca musica') ||
       norm.includes('dar play');
 
+    const matchesAnyKnownSong = !isQuestionOrHowTo && (
+      allSongs.some(s => {
+        const t = normalize(s.title || '');
+        return t === norm || (norm.length >= 4 && (t.startsWith(norm) || norm.startsWith(t)));
+      }) ||
+      Boolean(findLocalPopularSong(norm, ""))
+    );
+
     const isSongCommand = !isQuestionOrHowTo && (
+      matchesAnyKnownSong ||
       norm.startsWith('abra') ||
       norm.startsWith('abrir') ||
       norm.startsWith('abre') ||
@@ -1937,8 +2716,8 @@ export function LilouproAssistant({
       if (isPlayerMode && (!cleanQuery || cleanQuery === 'player' || cleanQuery === 'musica' || cleanQuery === 'musicas' || cleanQuery === 'tal')) {
         if (currentSong) {
           setIsLoading(false);
-          const replyText = `Tocando **"${currentSong.title}"** no player de áudio e vídeo!`;
-          const speakText = `Tocando ${currentSong.title} no player!`;
+          const replyText = `Tocando **"${currentSong.title}"** no player.`;
+          const speakText = `Tocando ${currentSong.title}.`;
           addMessage({
             id: getUniqueAssistantMsgId('assistant'),
             sender: 'assistant',
@@ -1946,7 +2725,7 @@ export function LilouproAssistant({
             timestamp: new Date(),
             actionLabel: `▶️ Tocar Música: ${currentSong.title}`,
             actionIcon: <Volume2 size={15} />,
-            actionSuccessMessage: `✓ Player de ${currentSong.title} iniciado!`,
+            actionSuccessMessage: '✓ Pronto!',
             onActionClick: () => {
               onOpenSong(currentSong, {
                 focusMode: isFocusMode,
@@ -1970,7 +2749,7 @@ export function LilouproAssistant({
           return;
         } else {
           setIsLoading(false);
-          const replyText = 'Qual música você gostaria de tocar? Diga por exemplo: *"Tocar música Teu amor não falha"* ou *"Abrir player da música Bondade de Deus"*.';
+          const replyText = 'Qual música você gostaria de tocar? Diga por exemplo: *"Tocar música Teu amor não falha"*.';
           addMessage({
             id: getUniqueAssistantMsgId('assistant'),
             sender: 'assistant',
@@ -1978,13 +2757,13 @@ export function LilouproAssistant({
             timestamp: new Date(),
             actionLabel: '🎵 Ver Músicas',
             actionIcon: <Music size={15} />,
-            actionSuccessMessage: '✓ Repertório aberto!',
+            actionSuccessMessage: '✓ Pronto!',
             onActionClick: () => {
               onNavigate('songs');
               setIsOpen(false);
             }
           });
-          speak('Qual música você gostaria de tocar?');
+          speak('Qual música você quer tocar?');
           return;
         }
       }
@@ -1992,7 +2771,7 @@ export function LilouproAssistant({
       // If user just requested opening the general songbook
       if (!cleanQuery || cleanQuery === 'cifra' || cleanQuery === 'cifras' || cleanQuery === 'musica' || cleanQuery === 'musicas' || cleanQuery === 'repertorio') {
         setIsLoading(false);
-        const replyText = 'Abrindo o repertório de **Músicas e Cifras**!';
+        const replyText = 'Claro, abrindo o **Repertório**.';
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -2000,13 +2779,13 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '🎵 Ir para Músicas',
           actionIcon: <Music size={15} />,
-          actionSuccessMessage: '✓ Repertório aberto!',
+          actionSuccessMessage: '✓ Pronto!',
           onActionClick: () => {
             onNavigate('songs');
             setIsOpen(false);
           }
         });
-        speak('Abrindo o repertório de músicas e cifras!');
+        speak('Claro, abrindo o repertório.');
         setTimeout(() => {
           onNavigate('songs');
           setIsOpen(false);
@@ -2058,9 +2837,22 @@ export function LilouproAssistant({
         const focusText = isFocusMode ? ' no **Modo Foco**' : '';
         const scrollText = scrollSpeed !== undefined ? ` com **rolagem automática (${scrollSpeed}x)**` : '';
         const isTocarCommand = norm.startsWith('tocar') || norm.startsWith('toque') || norm.startsWith('toca') || norm.startsWith('play') || norm.startsWith('reproduzir');
-        const actionVerb = isTocarCommand ? 'Tocando' : (isPlayerMode ? 'Abrindo o player de' : (isLyricsOnly ? 'Abrindo a letra de' : 'Abrindo a cifra de'));
-        const replyText = `${actionVerb} **"${foundSong.title}"**${focusText}${scrollText}!`;
-        const speakText = `${actionVerb} ${foundSong.title}!`;
+        let speakText = '';
+        let replyText = '';
+
+        if (isTocarCommand) {
+          speakText = `Beleza, vou abrir ${foundSong.title}.`;
+          replyText = `Tocando **"${foundSong.title}"**${focusText}${scrollText}.`;
+        } else if (isPlayerMode) {
+          speakText = 'Já vou abrir o player.';
+          replyText = `Abrindo o player de **"${foundSong.title}"**${focusText}${scrollText}.`;
+        } else if (isLyricsOnly) {
+          speakText = 'Claro, vou abrir a letra.';
+          replyText = `Abrindo a letra de **"${foundSong.title}"**${focusText}${scrollText}.`;
+        } else {
+          speakText = 'Claro, vou abrir.';
+          replyText = `Abrindo a cifra de **"${foundSong.title}"**${focusText}${scrollText}.`;
+        }
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -2069,7 +2861,7 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: isTocarCommand ? `▶️ Tocar Música: ${foundSong.title}` : (isPlayerMode ? `▶️ Abrir Player: ${foundSong.title}` : `🎵 Abrir ${foundSong.title}`),
           actionIcon: isPlayerMode ? <Volume2 size={15} /> : <Music size={15} />,
-          actionSuccessMessage: `✓ ${isPlayerMode ? 'Player' : (isLyricsOnly ? 'Letra' : 'Cifra')} de ${foundSong.title} aberto${isFocusMode ? ' em Modo Foco' : ''}!`,
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenSong(foundSong, {
               focusMode: isFocusMode,
@@ -2105,7 +2897,7 @@ export function LilouproAssistant({
         norm.includes('player')
       ) {
         setIsLoading(false);
-        const replyText = `Não encontrei a música **"${cleanQuery}"** no repertório. Deseja cadastrá-la agora mesmo?`;
+        const replyText = `Não achei **"${cleanQuery}"** no repertório. Quer cadastrar agora?`;
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -2113,13 +2905,13 @@ export function LilouproAssistant({
           timestamp: new Date(),
           actionLabel: '➕ Cadastrar Nova Música',
           actionIcon: <Plus size={15} />,
-          actionSuccessMessage: '✓ Cadastro iniciado!',
+          actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onOpenAddSong();
             setIsOpen(false);
           }
         });
-        speak(`Não encontrei a música ${cleanQuery} no repertório. Você pode cadastrá-la com um toque.`);
+        speak(`Não achei ${cleanQuery} no repertório. Quer cadastrar?`);
         return;
       }
     }
@@ -2128,9 +2920,12 @@ export function LilouproAssistant({
     // 9. GENERAL / AI FALLBACK (Via Gemini API ou Local Expert Guide)
     // ==========================================
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           history: messages.slice(-4).map(m => ({
@@ -2139,20 +2934,22 @@ export function LilouproAssistant({
           }))
         })
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
-        const aiReply = data.reply || "Estou aqui para ajudar com qualquer dúvida do LiLouPro! Tente me perguntar como agendar um culto, cadastrar músicas ou abrir uma cifra.";
-        
-        setIsLoading(false);
-        addMessage({
-          id: getUniqueAssistantMsgId('assistant'),
-          sender: 'assistant',
-          text: aiReply,
-          timestamp: new Date()
-        });
-        speak(aiReply);
-        return;
+        const aiReply = data.reply;
+        if (aiReply) {
+          setIsLoading(false);
+          addMessage({
+            id: getUniqueAssistantMsgId('assistant'),
+            sender: 'assistant',
+            text: aiReply,
+            timestamp: new Date()
+          });
+          speak(aiReply);
+          return;
+        }
       }
     } catch (apiErr) {
       console.warn("AI Assistant chat fetch failed, using local guide:", apiErr);
@@ -2160,7 +2957,8 @@ export function LilouproAssistant({
 
     // Local graceful answer if network or API unreachable
     setIsLoading(false);
-    const fallbackText = `Entendi sua dúvida sobre **"${text}"**.\nNo LiLouPro você tem acesso rápido a:\n• **Músicas**: Repertório, transposição de tom e diagramas.\n• **Liturgia & Escalas**: Agendamento de cultos e escalação da equipe.\n• **Bíblia**: Leitura completa offline de todos os 66 livros e Salmos.\n• **Projeção**: Transmissão em tempo real de letras no telão.`;
+    const notUnderstoodMsg = getRandomNotUnderstood();
+    const fallbackText = `**${notUnderstoodMsg}**\nVocê pode me pedir ações como:\n• "Abre o afinador"\n• "Abre o metrônomo"\n• "Abre a cifra de [música]"\n• "Abre o player"\n• "Abre a Bíblia no Salmo 23"`;
 
     addMessage({
       id: getUniqueAssistantMsgId('assistant'),
@@ -2168,18 +2966,411 @@ export function LilouproAssistant({
       text: fallbackText,
       timestamp: new Date()
     });
-    speak('Aqui está o guia rápido do Liloupro. Você pode navegar pelo menu ou tocar nas opções sugeridas!');
+    speak(notUnderstoodMsg);
   };
 
   const handleQuickChip = (chipText: string) => {
     handleProcessInput(chipText);
   };
 
+  // Web Audio chime para ativação do Wake Word ("Oi Lilou")
+  const lastChimeTimeRef = useRef<number>(0);
+  const playWakeChime = useCallback(() => {
+    const nowMs = Date.now();
+    // Previne repetição / loop: se tocou há menos de 1800ms, ignora
+    if (nowMs - lastChimeTimeRef.current < 1800) {
+      return;
+    }
+    lastChimeTimeRef.current = nowMs;
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.setValueAtTime(880, now + 0.08); // A5
+
+      gainNode.gain.setValueAtTime(0.16, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.28);
+
+      setTimeout(() => {
+        try { ctx.close(); } catch {}
+      }, 350);
+    } catch {
+      // Falha silenciosa no AudioContext
+    }
+  }, []);
+
+  // Manipulador acionado quando as palavras-chave "Oi Lilou" ou "Ok Lilou" são detectadas
+  const handleWakeWordTriggered = useCallback((commandAfter: string) => {
+    if (isHandlingWakeRef.current) return;
+    isHandlingWakeRef.current = true;
+
+    playWakeChime();
+
+    // Abrir o assistente se estiver fechado
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('liloupro:voice-sound-detected', { detail: { soundDetected: true } }));
+      window.dispatchEvent(new CustomEvent('liloupro:voice-command-captured', { detail: { command: commandAfter || 'Oi Lilou' } }));
+    }
+
+    if (!isOpenRef.current) {
+      setIsOpen(true);
+      setIsRetracted(false);
+    }
+
+    const greetingSpoken = getRandomGreeting();
+
+    if (!commandAfter || commandAfter.trim().length < 2) {
+      // Usuário disse apenas "Oi Lilou", "Ok Lilou", "E aí Lilou"
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: `🎙️ **${greetingSpoken}**`,
+        timestamp: new Date(),
+        steps: [
+          'Diga: "Abre o afinador"',
+          'Diga: "Abre o metrônomo"',
+          'Diga: "Abre a cifra de [música]"',
+          'Diga: "Tocar playlist do culto"',
+          'Diga: "Abre a Bíblia no Salmo 23"'
+        ]
+      });
+
+      // Fala a saudação com a voz oficial Puck e, logo que terminar, abre o microfone para escutar o comando
+      speak(greetingSpoken, () => {
+        isHandlingWakeRef.current = false;
+        startListening();
+      });
+    } else {
+      // Usuário disse "Oi Lilou" + comando direto (ex: "Oi Lilou abre o afinador")
+      isHandlingWakeRef.current = false;
+      addMessage({
+        id: getUniqueAssistantMsgId('user'),
+        sender: 'user',
+        text: commandAfter.trim(),
+        timestamp: new Date()
+      });
+
+      handleProcessInput(commandAfter.trim());
+    }
+  }, [playWakeChime, setIsOpen, speak, startListening, handleProcessInput]);
+
+  const stopWakeWordListening = useCallback(() => {
+    if (wakeWordDebounceTimeoutRef.current) {
+      clearTimeout(wakeWordDebounceTimeoutRef.current);
+      wakeWordDebounceTimeoutRef.current = null;
+    }
+    if (wakeWordRestartTimeoutRef.current) {
+      clearTimeout(wakeWordRestartTimeoutRef.current);
+      wakeWordRestartTimeoutRef.current = null;
+    }
+    if (wakeWordRecognitionRef.current) {
+      try {
+        wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.abort();
+      } catch {}
+      wakeWordRecognitionRef.current = null;
+    }
+    setIsWakeWordActive(false);
+  }, []);
+
+  // Desliga completamente todos os microfones, escutas e estados
+  const turnOffAllListening = useCallback(() => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    stopWakeWordListening();
+    setWakeWordEnabled(false);
+    wakeWordEnabledRef.current = false;
+    try {
+      localStorage.setItem('liloupro_assistant_wakeword', 'false');
+    } catch {}
+    setIsWakeWordActive(false);
+    setIsListening(false);
+    isListeningRef.current = false;
+    setInterimTranscript('');
+    latestInterimRef.current = '';
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('liloupro:wakeword-change', { detail: { enabled: false } }));
+      window.dispatchEvent(new CustomEvent('liloupro:voice-sound-detected', { detail: { soundDetected: false } }));
+    }
+  }, [stopWakeWordListening]);
+
+  useEffect(() => {
+    turnOffAllListeningRef.current = turnOffAllListening;
+  }, [turnOffAllListening]);
+
+  const startWakeWordListening = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const isAudioSpeaking = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
+    if (isListeningRef.current || isAudioSpeaking || (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)) {
+      return;
+    }
+
+    try {
+      if (wakeWordRecognitionRef.current) {
+        try { 
+          wakeWordRecognitionRef.current.onend = null;
+          wakeWordRecognitionRef.current.abort(); 
+        } catch {}
+      }
+
+      const rec = new SpeechRecognition();
+      rec.lang = 'pt-BR';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 3;
+
+      rec.onstart = () => {
+        setIsWakeWordActive(true);
+      };
+
+      rec.onresult = (event: any) => {
+        // Ignora áudio se o próprio sintetizador ou player de áudio estiver falando ou se já estiver processando
+        const isPlayingNow = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
+        if (isPlayingNow || (typeof window !== 'undefined' && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
+          return;
+        }
+        if (isHandlingWakeRef.current || isListeningRef.current) {
+          return;
+        }
+
+        // Checa todas as alternativas retornadas pelo reconhecimento de fala
+        let candidates: string[] = [];
+        for (let i = 0; i < event.results.length; ++i) {
+          const res = event.results[i];
+          if (!res) continue;
+          for (let j = 0; j < res.length; ++j) {
+            const transcript = res[j]?.transcript?.trim();
+            if (transcript) candidates.push(transcript);
+          }
+        }
+
+        let fullTranscript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          fullTranscript += ' ' + (event.results[i][0]?.transcript || '');
+        }
+        fullTranscript = fullTranscript.trim();
+        if (fullTranscript) candidates.push(fullTranscript);
+
+        if (fullTranscript && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('liloupro:voice-sound-detected', { detail: { soundDetected: true } }));
+        }
+
+        let matchResult = { detected: false, commandAfter: '' };
+        for (const candidate of candidates) {
+          const check = checkLilouWakeWord(candidate);
+          if (check.detected) {
+            matchResult = check;
+            break;
+          }
+        }
+
+        if (matchResult.detected) {
+          const commandAfter = matchResult.commandAfter;
+          // Se o comando já foi dito na mesma frase (ex: "Oi Lilou abre o afinador")
+          if (commandAfter && commandAfter.trim().length >= 2) {
+            if (wakeWordDebounceTimeoutRef.current) {
+              clearTimeout(wakeWordDebounceTimeoutRef.current);
+              wakeWordDebounceTimeoutRef.current = null;
+            }
+            try {
+              rec.onend = null;
+              rec.abort();
+            } catch {}
+            setIsWakeWordActive(false);
+            if (wakeWordRestartTimeoutRef.current) {
+              clearTimeout(wakeWordRestartTimeoutRef.current);
+              wakeWordRestartTimeoutRef.current = null;
+            }
+            handleWakeWordTriggered(commandAfter);
+            return;
+          }
+
+          // Se apenas o gatilho foi ouvido, aguarda 250ms para ativação rápida
+          if (!wakeWordDebounceTimeoutRef.current) {
+            wakeWordDebounceTimeoutRef.current = setTimeout(() => {
+              wakeWordDebounceTimeoutRef.current = null;
+              try {
+                rec.onend = null;
+                rec.abort();
+              } catch {}
+              setIsWakeWordActive(false);
+              handleWakeWordTriggered('');
+            }, 250);
+          }
+        }
+      };
+
+      rec.onerror = (event: any) => {
+        if (event.error === 'not-allowed') {
+          console.warn('Microfone não autorizado para escuta de wake word.');
+          setWakeWordEnabled(false);
+          try { localStorage.setItem('liloupro_assistant_wakeword', 'false'); } catch {}
+        }
+        setIsWakeWordActive(false);
+      };
+
+      rec.onend = () => {
+        setIsWakeWordActive(false);
+        if (wakeWordRestartTimeoutRef.current) {
+          clearTimeout(wakeWordRestartTimeoutRef.current);
+        }
+        wakeWordRestartTimeoutRef.current = setTimeout(() => {
+          if (wakeWordEnabledRef.current && !isListeningRef.current && !isHandlingWakeRef.current) {
+            startWakeWordListening();
+          }
+        }, 60);
+      };
+
+      wakeWordRecognitionRef.current = rec;
+      rec.start();
+    } catch (err) {
+      console.warn('Falha ao iniciar reconhecimento por wake word:', err);
+      setIsWakeWordActive(false);
+    }
+  }, [handleWakeWordTriggered]);
+
+  // Efeito para manter o reconhecimento de Wake Word ativo quando habilitado
+  useEffect(() => {
+    if (wakeWordEnabled && !isListening) {
+      startWakeWordListening();
+    } else {
+      stopWakeWordListening();
+    }
+
+    return () => {
+      stopWakeWordListening();
+    };
+  }, [wakeWordEnabled, isListening, startWakeWordListening, stopWakeWordListening]);
+
+  // Alternar o Modo Wake Word ("Oi Lilou")
+  const toggleWakeWord = useCallback(() => {
+    setWakeWordEnabled(prev => {
+      const next = !prev;
+      if (!next) {
+        turnOffAllListening();
+        return false;
+      }
+      try {
+        localStorage.setItem('liloupro_assistant_wakeword', 'true');
+      } catch {}
+
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('liloupro:wakeword-change', { detail: { enabled: true } }));
+        }
+      }, 0);
+
+      playWakeChime();
+      startListening();
+      return true;
+    });
+  }, [playWakeChime, startListening, turnOffAllListening]);
+
+  useEffect(() => {
+    const handleMicAction = () => {
+      // Se qualquer modo de escuta ou microfone estiver ativo, desliga completamente
+      const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive;
+      if (isCurrentlyActive) {
+        turnOffAllListening();
+      } else {
+        setWakeWordEnabled(true);
+        wakeWordEnabledRef.current = true;
+        try {
+          localStorage.setItem('liloupro_assistant_wakeword', 'true');
+        } catch {}
+        playWakeChime();
+        startListening();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('liloupro:wakeword-change', { detail: { enabled: true } }));
+        }
+      }
+    };
+
+    const handleStartListen = () => {
+      handleMicAction();
+    };
+
+    window.addEventListener('liloupro:mic-tap', handleMicAction);
+    window.addEventListener('liloupro:toggle-wakeword', handleMicAction);
+    window.addEventListener('liloupro:start-listening', handleStartListen);
+    return () => {
+      window.removeEventListener('liloupro:mic-tap', handleMicAction);
+      window.removeEventListener('liloupro:toggle-wakeword', handleMicAction);
+      window.removeEventListener('liloupro:start-listening', handleStartListen);
+    };
+  }, [playWakeChime, startListening, turnOffAllListening, isWakeWordActive]);
+
   return (
     <>
-      {/* Floating Trigger Button (Oculto na tela principal 'home', visível apenas ao navegar para outras telas) */}
+      {/* Floating Active Voice Pill across all screens when listening with drawer closed */}
+      <AnimatePresence>
+        {!isOpen && isListening && (
+          <motion.div
+            initial={{ y: -50, opacity: 0, scale: 0.92 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -50, opacity: 0, scale: 0.92 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 350 }}
+            className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-[10008] max-w-[94vw] sm:max-w-md pointer-events-auto"
+          >
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-slate-950/95 backdrop-blur-md border border-sky-400/60 shadow-2xl shadow-sky-500/30 text-white select-none">
+              <div className="relative flex items-center justify-center w-7 h-7 rounded-full bg-sky-500/25 text-sky-400 shrink-0">
+                <span className="absolute inset-0 rounded-full animate-ping bg-sky-400/40" />
+                <Mic size={15} className="relative z-10 animate-pulse text-sky-300 stroke-[2.5]" />
+              </div>
+              <div className="flex flex-col min-w-0 pr-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
+                  LiLou Ouvindo
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                </span>
+                <span className="text-xs font-bold text-slate-100 truncate max-w-[210px] sm:max-w-[290px]">
+                  {interimTranscript || 'Pode falar seu comando...'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  turnOffAllListening();
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors ml-1 cursor-pointer"
+                title="Desligar microfone"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Trigger Button (Acesso rápido e retrátil ao Liloupro Assistente) */}
       <AnimatePresence mode="wait">
-        {currentTab !== 'home' && !isRetracted ? (
+        {!isRetracted ? (
           <motion.div
             key="assistant-btn-expanded"
             initial={{ opacity: 0, scale: 0.9, x: 20 }}
@@ -2209,6 +3400,13 @@ export function LilouproAssistant({
 
                 <Sparkles size={12} className="text-sky-300 opacity-80 shrink-0" />
 
+                {wakeWordEnabled && (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/40 text-amber-200 text-[9px] font-black tracking-wider uppercase">
+                    <Radio size={9} className="animate-pulse text-amber-300" />
+                    <span>"Oi Lilou"</span>
+                  </span>
+                )}
+
                 <span className="flex h-2 w-2 relative ml-0.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-60"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-300"></span>
@@ -2232,7 +3430,7 @@ export function LilouproAssistant({
               </button>
             </div>
           </motion.div>
-        ) : currentTab !== 'home' && isRetracted ? (
+        ) : isRetracted ? (
           <motion.div
             key="assistant-btn-retracted"
             initial={{ opacity: 0, x: 30 }}
@@ -2322,6 +3520,32 @@ export function LilouproAssistant({
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-1.5">
+                  {/* Wake Word ("Oi Lilou") Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={toggleWakeWord}
+                    title={
+                      wakeWordEnabled 
+                        ? "Modo de escuta ativa 'Oi Lilou' ligado. Diga 'Oi Lilou' ou 'Ok Lilou' a qualquer momento. Toque para desligar." 
+                        : "Ligar modo de escuta 'Oi Lilou' (permite chamar o assistente dizendo 'Oi Lilou' ou 'Ok Lilou' sem as mãos)"
+                    }
+                    className={`flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 border ${
+                      wakeWordEnabled
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-amber-500/10'
+                        : isLight
+                          ? 'bg-slate-100 text-slate-500 border-slate-200 hover:text-slate-800'
+                          : 'bg-slate-800/80 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                    }`}
+                  >
+                    <Radio size={13} className={wakeWordEnabled ? 'animate-pulse text-amber-400' : ''} />
+                    <span className="hidden xs:inline">"Oi Lilou"</span>
+                    <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded-full ${
+                      wakeWordEnabled ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-700/60 text-slate-400'
+                    }`}>
+                      {wakeWordEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
                   {/* TTS Voice Toggle */}
                   <button
                     onClick={toggleSpeechSynthesis}
@@ -2335,30 +3559,6 @@ export function LilouproAssistant({
                     {speechSynthesisEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
                   </button>
 
-                  {/* Voice Switcher (Feminina / Masculina) */}
-                  {speechSynthesisEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = voiceGender === 'female' ? 'male' : 'female';
-                        setVoiceGender(next);
-                        try {
-                          localStorage.setItem('liloupro_assistant_voice_gender', next);
-                        } catch {}
-                        speak(next === 'female' ? 'Voz feminina natural ativada.' : 'Voz masculina natural ativada.', next);
-                      }}
-                      title={`Voz do assistente: ${voiceGender === 'female' ? 'Feminina (Clara)' : 'Masculina (Firme)'}. Toque para alternar.`}
-                      className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 ${
-                        voiceGender === 'female'
-                          ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30'
-                          : 'bg-blue-500/15 text-sky-400 hover:bg-blue-500/25 border border-blue-500/30'
-                      }`}
-                    >
-                      <User size={13} className="shrink-0" />
-                      <span>{voiceGender === 'female' ? 'Fem' : 'Masc'}</span>
-                    </button>
-                  )}
-
                   {/* Dock to side toggle */}
                   <button
                     onClick={() => toggleRetract()}
@@ -2371,6 +3571,13 @@ export function LilouproAssistant({
                   {/* Reset Chat */}
                   <button
                     onClick={() => {
+                      if (currentAudioRef.current) {
+                        try {
+                          currentAudioRef.current.pause();
+                          currentAudioRef.current.currentTime = 0;
+                        } catch {}
+                        currentAudioRef.current = null;
+                      }
                       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
                         window.speechSynthesis.cancel();
                       }
@@ -2391,6 +3598,13 @@ export function LilouproAssistant({
                   <button
                     onClick={() => {
                       stopListening();
+                      if (currentAudioRef.current) {
+                        try {
+                          currentAudioRef.current.pause();
+                          currentAudioRef.current.currentTime = 0;
+                        } catch {}
+                        currentAudioRef.current = null;
+                      }
                       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
                         window.speechSynthesis.cancel();
                       }
@@ -2503,42 +3717,76 @@ export function LilouproAssistant({
                   );
                 })}
 
-                {/* Real-time Listening Wave & Live Transcript */}
+                {/* Indicativo Visual Dinâmico: Ouvindo + Transcrição Instantânea */}
                 {isListening && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={`p-4 rounded-2xl border ${
+                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className={`p-4 rounded-2xl border shadow-xl ${
                       isLight 
-                        ? 'bg-sky-50/90 border-sky-300 text-slate-900' 
-                        : 'bg-blue-950/40 border-blue-500/40 text-sky-200'
-                    } flex flex-col items-center justify-center gap-2.5 text-center`}
+                        ? 'bg-gradient-to-b from-blue-50 to-indigo-50/80 border-blue-300 text-slate-900' 
+                        : 'bg-gradient-to-b from-slate-900/95 to-blue-950/90 border-blue-500/50 text-sky-100 shadow-blue-500/10'
+                    } flex flex-col gap-3`}
                   >
-                    <div className="flex items-center gap-1.5 h-6">
-                      <span className="w-1.5 h-3 bg-sky-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                      <span className="w-1.5 h-6 bg-sky-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                      <span className="w-1.5 h-4 bg-sky-500 rounded-full animate-bounce"></span>
-                      <span className="w-1.5 h-7 bg-sky-500 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
-                      <span className="w-1.5 h-3 bg-sky-500 rounded-full animate-bounce [animation-delay:-0.35s]"></span>
+                    {/* Header com radar visual e status */}
+                    <div className="flex items-center justify-between gap-2 border-b border-blue-500/20 pb-2">
+                      <div className="flex items-center gap-2">
+                        {/* Radar pulsante de áudio */}
+                        <div className="relative flex items-center justify-center w-7 h-7 rounded-full bg-blue-500/20 text-blue-400">
+                          <span className="absolute inset-0 rounded-full bg-blue-500/40 animate-ping" />
+                          <Mic size={15} className="relative z-10 animate-pulse text-blue-400" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                            Lilou ouvindo agora...
+                          </span>
+                          <p className="text-[11px] text-slate-400">Fale naturalmente o que você precisa</p>
+                        </div>
+                      </div>
+
+                      {/* Equalizador dinâmico de barras de voz */}
+                      <div className="flex items-center gap-1 h-5 px-2 py-1 rounded-lg bg-blue-950/50 border border-blue-500/30">
+                        <span className="w-1 h-3 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                        <span className="w-1 h-5 bg-sky-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                        <span className="w-1 h-4 bg-emerald-400 rounded-full animate-bounce"></span>
+                        <span className="w-1 h-6 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+                        <span className="w-1 h-3 bg-sky-400 rounded-full animate-bounce [animation-delay:-0.35s]"></span>
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="font-black text-xs uppercase tracking-wider text-sky-400 animate-pulse">
-                        Ouvindo... Fale seu comando ou dúvida
-                      </p>
-                      {interimTranscript && (
-                        <p className="text-xs italic font-medium opacity-90">
+                    {/* Transcrição Instantânea em Tempo Real */}
+                    <div className={`p-3 rounded-xl border min-h-[48px] flex items-center gap-2 ${
+                      isLight 
+                        ? 'bg-white border-blue-200 text-slate-800' 
+                        : 'bg-slate-950/80 border-blue-500/30 text-white'
+                    }`}>
+                      <span className="text-blue-400 font-bold shrink-0 text-xs">Você:</span>
+                      {interimTranscript ? (
+                        <p className="text-sm font-semibold text-emerald-400 dark:text-emerald-300 leading-snug flex-1 break-words animate-pulse">
                           "{interimTranscript}"
+                          <span className="inline-block w-1.5 h-4 ml-1 bg-emerald-400 animate-ping align-middle" />
+                        </p>
+                      ) : (
+                        <p className="text-xs italic text-slate-400 dark:text-slate-400 flex-1">
+                          Aguardando sua fala... Comece a falar!
                         </p>
                       )}
                     </div>
 
-                    <button
-                      onClick={stopListening}
-                      className="text-[11px] px-3 py-1 rounded-full bg-slate-900 text-white hover:bg-slate-800 font-bold border border-slate-700"
-                    >
-                      Toque para Concluir
-                    </button>
+                    {/* Botão de conclusão rápida */}
+                    <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+                      <span className="text-slate-400 text-[10px]">
+                        {interimTranscript ? '✓ Transcrição ativa em tempo real' : 'Microfone captando áudio'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={stopListening}
+                        className="px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] shadow-sm active:scale-95 transition-all cursor-pointer"
+                      >
+                        Enviar agora
+                      </button>
+                    </div>
                   </motion.div>
                 )}
 
@@ -2574,6 +3822,43 @@ export function LilouproAssistant({
                 <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider shrink-0 ml-1">
                   Dúvidas:
                 </span>
+                {/* New Natural Voice & Quick Actions */}
+                <button
+                  type="button"
+                  onClick={() => handleQuickChip('Tocar próxima música')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
+                    isLight 
+                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100 text-emerald-900' 
+                      : 'bg-emerald-950/70 border-emerald-500/50 hover:bg-emerald-900/80 text-emerald-300'
+                  }`}
+                  title="Comando de voz: 'Tocar próxima música'"
+                >
+                  ⏭️ Tocar próxima música
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickChip('Quantos membros na escala de hoje?')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
+                    isLight 
+                      ? 'bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-900' 
+                      : 'bg-purple-950/70 border-purple-500/50 hover:bg-purple-900/80 text-purple-300'
+                  }`}
+                  title="Comando de voz: 'Quantos membros na escala de hoje?'"
+                >
+                  👥 Membros na escala de hoje?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickChip('Abrir cifra do próximo louvor')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
+                    isLight 
+                      ? 'bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-900' 
+                      : 'bg-amber-950/70 border-amber-500/50 hover:bg-amber-900/80 text-amber-300'
+                  }`}
+                  title="Comando de voz: 'Abrir cifra do próximo louvor'"
+                >
+                  🎼 Cifra do próximo louvor
+                </button>
                 <button
                   onClick={() => handleQuickChip('Como faço para agendar um culto?')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
@@ -2625,6 +3910,26 @@ export function LilouproAssistant({
                   ⏱️ Metrônomo
                 </button>
                 <button
+                  onClick={() => handleQuickChip('Abra o repertório de músicas')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                    isLight 
+                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  🎵 Repertório
+                </button>
+                <button
+                  onClick={() => handleQuickChip('Tocar playlist do culto')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                    isLight 
+                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  ▶️ Playlist
+                </button>
+                <button
                   onClick={() => handleQuickChip('Abra as escalas')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
@@ -2633,16 +3938,6 @@ export function LilouproAssistant({
                   }`}
                 >
                   👥 Escalas
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra a bíblia no Salmo 23')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  📖 Salmo 23
                 </button>
                 <button
                   onClick={() => handleQuickChip('Abra a liturgia')}
@@ -2655,6 +3950,16 @@ export function LilouproAssistant({
                   🗓️ Liturgia
                 </button>
                 <button
+                  onClick={() => handleQuickChip('Abra a bíblia no Salmo 23')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                    isLight 
+                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  📖 Salmo 23
+                </button>
+                <button
                   onClick={() => handleQuickChip('Abra a projeção')}
                   className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
                     isLight 
@@ -2663,6 +3968,26 @@ export function LilouproAssistant({
                   }`}
                 >
                   📺 Projeção
+                </button>
+                <button
+                  onClick={() => handleQuickChip('Abra os membros')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                    isLight 
+                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  👥 Membros
+                </button>
+                <button
+                  onClick={() => handleQuickChip('Abra a disponibilidade')}
+                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
+                    isLight 
+                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  🗓️ Disponibilidade
                 </button>
               </div>
 

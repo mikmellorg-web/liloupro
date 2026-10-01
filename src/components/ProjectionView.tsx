@@ -1158,81 +1158,6 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
           // Its verses/text is stored in `item.details` or `item.content`.
           // We can split it into slides!
           let lyrics = item.details || item.content || '';
-          
-          // Specific correction for Marcos 10:1-12 NAA 2017 text
-          const isMarcos10 = item.title && (
-            item.title.toLowerCase().includes('marcos 10') || 
-            item.title.toLowerCase().includes('mc 10')
-          ) && (
-            item.title.includes('1-12') || 
-            item.title.includes('1 a 12') ||
-            (lyrics && lyrics.includes('divorciar') && lyrics.includes('Moisés'))
-          );
-
-          const isSalmo92 = item.title && (
-            item.title.toLowerCase().includes('salmo 92') ||
-            item.title.toLowerCase().includes('salmos 92') ||
-            item.title.toLowerCase().includes('sl 92')
-          ) && (
-            item.title.includes('1-5') ||
-            item.title.includes('1 a 5') ||
-            (lyrics && (lyrics.includes('render graças') || lyrics.includes('ó Altíssimo') || lyrics.includes('dez cordas')))
-          );
-
-          const isFilipenses4 = item.title && (
-            item.title.toLowerCase().includes('filipenses 4') ||
-            item.title.toLowerCase().includes('fp 4') ||
-            item.title.toLowerCase().includes('philippians 4') ||
-            item.title.toLowerCase().includes('phil 4')
-          ) && (
-            item.title.includes('4-7') ||
-            item.title.includes('4 a 7') ||
-            (lyrics && (lyrics.includes('Alegrem-se') || lyrics.includes('moderação') || lyrics.includes('preocupados') || lyrics.includes('excede todo') || lyrics.includes('alegrai-vos')))
-          );
-
-          if (isMarcos10) {
-            lyrics = `1. Saindo dali, Jesus foi para o território da Judeia e para além do Jordão. E outra vez as multidões se reuniram junto a ele, e, de novo, ele as ensinava, segundo o seu costume.
-
-2. E, aproximando-se alguns fariseus, o puseram à prova, perguntando: — É lícito ao marido repudiar a sua mulher?
-
-3. Jesus respondeu: — O que foi que Moisés ordenou a vocês?
-
-4. Eles disseram: — Moisés permitiu escrever uma carta de divórcio e repudiar.
-
-5. Mas Jesus lhes disse: — Foi por causa da dureza do coração de vocês que Moisés deixou escrito esse mandamento.
-
-6. Porém, desde o princípio da criação, Deus os fez homem e mulher.
-
-7. "Por isso o homem deixará o seu pai e a sua mãe e se unirá à sua mulher,
-
-8. tornando-se os dois uma só carne." De modo que já não são mais dois, porém uma só carne.
-
-9. Portanto, que ninguém separe o que Deus ajuntou.
-
-10. Em casa, os discípulos voltaram a fazer perguntas sobre esse assunto.
-
-11. E Jesus lhes disse: — Quem repudiar a sua mulher e casar com outra comete adultério contra aquela.
-
-12. E, se ela repudiar o seu marido e casar com outro, comete adultério.`;
-          } else if (isSalmo92) {
-            lyrics = `1. Bom é render graças ao Senhor e cantar louvores ao teu nome, ó Altíssimo,
-
-2. anunciar de manhã a tua misericórdia e, durante as noites, a tua fidelidade,
-
-3. com instrumentos de dez cordas, ao som da lira e com a solenidade da harpa.
-
-4. Pois me alegraste, Senhor, com os teus feitos; exultarei nas obras das tuas mãos.
-
-5. Como são grandes, Senhor, as tuas obras! Os teus pensamentos, que profundos!`;
-          } else if (isFilipenses4) {
-            lyrics = `4. Alegrem-se sempre no Senhor; outra vez digo: alegrem-se!
-
-5. Que a moderação de vocês seja conhecida por todos. Perto está o Senhor.
-
-6. Não fiquem preocupados com coisa alguma, mas, em tudo, sejam conhecidos diante de Deus os pedidos de vocês, pela oração e pela súplica, com ações de graças.
-
-7. E a paz de Deus, que excede todo entendimento, guardará o coração e a mente de vocês em Cristo Jesus.`;
-          }
 
           let artistLabel = 'Leitura Bíblica';
           if (item.type === 'speech') artistLabel = 'Ministração/Palavra';
@@ -1294,7 +1219,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
             title: resolvedTitle,
             artist: artistLabel,
             type: resolvedType,
-            bibleVersion: item.bibleVersion || 'NAA',
+            bibleVersion: item.bibleVersion || 'BLIVRE',
             lyrics: lyrics || 'Este item da liturgia não possui conteúdo de texto cadastrado.',
             isPlaceholder: false,
             isLiturgyItem: true,
@@ -1836,9 +1761,9 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
                     const bibleItem = {
                       id: `bible-temp-${Date.now()}`,
                       title: data.title || 'Texto Bíblico',
-                      artist: `Bíblia (${data.version || 'NAA'})`,
+                      artist: `Bíblia (${data.version || 'BLIVRE'})`,
                       type: 'reading',
-                      bibleVersion: data.version || 'NAA',
+                      bibleVersion: data.version || 'BLIVRE',
                       lyrics: data.text,
                       isLiturgyItem: true,
                       liturgyItemId: `bible-temp-${Date.now()}`

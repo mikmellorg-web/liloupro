@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Lock, ShieldCheck, CheckCircle2, ArrowRight, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
-import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db, auth, createUserWithEmailAndPassword, updateProfile } from '../lib/firebase';
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
+import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
+import { auth, db } from '../lib/firebase';
+import { confirmPasswordReset } from 'firebase/auth';
 
 interface SetPasswordViewProps {
   token: string;
-  onPasswordSetSuccess: (email: string) => void;
+  onPasswordSetSuccess: () => void;
   onGoToLogin: () => void;
 }
 
@@ -15,224 +15,140 @@ export const SetPasswordView: React.FC<SetPasswordViewProps> = ({
   onPasswordSetSuccess,
   onGoToLogin
 }) => {
-  const [loadingToken, setLoadingToken] = useState(true);
-  const [tokenData, setTokenData] = useState<any>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
-
-  const [newPassword, setNewPassword] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    async function verifyToken() {
-      if (!token) {
-        setTokenError('Link de definição de senha inválido ou ausente.');
-        setLoadingToken(false);
-        return;
-      }
-
-      try {
-        if (!db) {
-          throw new Error('Banco de dados indisponível.');
-        }
-
-        const tokenRef = doc(db, 'password_tokens', token);
-        const snap = await getDoc(tokenRef);
-
-        if (!snap.exists()) {
-          setTokenError('Este link para definição de senha é inválido ou já foi utilizado.');
-          setLoadingToken(false);
-          return;
-        }
-
-        const data = snap.data();
-        const expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
-
-        if (expiresAt && expiresAt < new Date()) {
-          setTokenError('Este link expirou (válido por 24h). Por favor, solicite um novo link de redefinição de senha.');
-          setLoadingToken(false);
-          return;
-        }
-
-        setTokenData(data);
-      } catch (err: any) {
-        setTokenError(err?.message || 'Erro ao validar token de segurança.');
-      } finally {
-        setLoadingToken(false);
-      }
-    }
-
-    verifyToken();
-  }, [token]);
-
-  const handleSubmitPassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
-
-    if (newPassword.length < 6) {
-      setFormError('A senha deve conter no mínimo 6 caracteres.');
+    if (!password || password.length < 6) {
+      setError('A senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('As senhas digitadas não coincidem.');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      setFormError('As senhas digitadas não coincidem.');
-      return;
-    }
-
-    setSubmitting(true);
+    setLoading(true);
+    setError(null);
 
     try {
-      const email = tokenData.email;
-      const userName = tokenData.userName || tokenData.churchName || 'Líder de Louvor';
-
-      // 1. Criar usuário no Firebase Auth com a senha escolhida
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, email, newPassword);
-        if (userCred.user) {
-          await updateProfile(userCred.user, { displayName: userName });
-        }
-      } catch (authErr: any) {
-        // Se o usuário já existia no Auth (ex: cadastro prévio)
-        if (authErr?.code === 'auth/email-already-in-use') {
-          console.warn('Usuário já existe no Auth. Registrando atualização.');
-        } else {
-          throw authErr;
-        }
+      if (auth && token) {
+        await confirmPasswordReset(auth, token, password);
       }
-
-      // 2. Apagar o token de uso único por segurança
-      if (db) {
-        try {
-          await deleteDoc(doc(db, 'password_tokens', token));
-        } catch (delErr) {
-          console.error('Erro ao deletar token consumido:', delErr);
-        }
-      }
-
       setSuccess(true);
       setTimeout(() => {
-        onPasswordSetSuccess(email);
+        onPasswordSetSuccess();
       }, 1500);
-
     } catch (err: any) {
-      setFormError(err?.message || 'Erro ao salvar a nova senha. Tente novamente.');
+      console.error('[SetPasswordView] Erro ao redefinir senha:', err);
+      // Fornecer mensagem clara em português
+      if (err.code === 'auth/invalid-action-code') {
+        setError('O link de recuperação expirou ou já foi utilizado. Solicite um novo link.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('A senha informada é muito fraca. Escolha uma senha mais segura.');
+      } else {
+        setError(err.message || 'Não foi possível definir a nova senha.');
+      }
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden"
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md bg-slate-900 border border-slate-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-sm"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Header Branding */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/20 text-brand text-[10px] font-black uppercase tracking-wider border border-brand/30">
-            <Sparkles size={14} className="text-emerald-400" />
-            Configuração Inicial de Segurança
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <Lock size={20} />
           </div>
-
-          <h1 className="text-2xl font-black text-white tracking-tight">
-            Criar Minha Senha
-          </h1>
-          <p className="text-xs text-slate-400">
-            Defina sua senha de acesso ao LiLouPro para a sua igreja.
-          </p>
+          <div>
+            <h1 className="text-lg font-bold text-white tracking-tight">Definir Nova Senha</h1>
+            <p className="text-xs text-slate-400">LiLouPro - Gestão de Louvor & Culto</p>
+          </div>
         </div>
 
-        {loadingToken ? (
-          <div className="py-12 text-center space-y-3">
-            <Loader2 className="w-8 h-8 text-brand animate-spin mx-auto" />
-            <p className="text-xs text-slate-400">Validando token seguro de acesso...</p>
-          </div>
-        ) : tokenError ? (
-          <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl space-y-3 text-center">
-            <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
-            <p className="text-xs text-red-200">{tokenError}</p>
-            <button
-              onClick={onGoToLogin}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-            >
-              Ir para Tela de Login
-            </button>
-          </div>
-        ) : success ? (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl text-center space-y-3">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-            <h3 className="text-lg font-bold text-emerald-300">Senha Criada com Sucesso!</h3>
-            <p className="text-xs text-emerald-100/90">
-              Sua conta está ativada e pronta. Redirecionando para o sistema...
-            </p>
+        {success ? (
+          <div className="text-center py-6 space-y-3">
+            <CheckCircle2 size={48} className="text-emerald-400 mx-auto animate-bounce" />
+            <h3 className="text-base font-semibold text-white">Senha alterada com sucesso!</h3>
+            <p className="text-xs text-slate-300">Redirecionando você para a tela de login...</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmitPassword} className="space-y-4">
-            <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl space-y-1">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Conta de E-mail</span>
-              <span className="text-xs font-mono font-bold text-brand">{tokenData?.email}</span>
-            </div>
-
-            {formError && (
-              <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl text-xs text-red-300">
-                {formError}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 block">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Nova Senha (mínimo 6 caracteres)
               </label>
               <div className="relative">
                 <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs font-mono text-white focus:outline-none focus:border-brand"
+                  className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80 pr-10"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-300 block">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Confirmar Nova Senha
               </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs font-mono text-white focus:outline-none focus:border-brand"
-                  required
-                />
-              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80"
+                required
+              />
             </div>
 
             <button
               type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 rounded-xl bg-brand hover:brightness-110 text-slate-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-brand/20 disabled:opacity-50"
+              disabled={loading}
+              className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-semibold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Salvando Senha...
-                </>
+              {loading ? (
+                <span>Salvando nova senha...</span>
               ) : (
                 <>
-                  <ShieldCheck size={16} />
-                  Salvar Senha e Acessar LiLouPro
+                  <span>Salvar e Acessar Conta</span>
                   <ArrowRight size={16} />
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={onGoToLogin}
+              className="w-full py-2 text-center text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Voltar para o Login
             </button>
           </form>
         )}
@@ -240,3 +156,5 @@ export const SetPasswordView: React.FC<SetPasswordViewProps> = ({
     </div>
   );
 };
+
+export default SetPasswordView;

@@ -19,6 +19,7 @@ import {
 import { Music2 } from './MusicIcon';
 import { BossPedalIcon } from './BossPedalIcon';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
+import { GoogleDriveModal } from './GoogleDriveModal';
 import { ChromaticTunerModal } from './ChromaticTunerModal';
 import { StudyMetronomeModal } from './StudyMetronomeModal';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -531,6 +532,8 @@ export function SongDetailView({
     return {
       ...song,
       bpm: safeBpm,
+      artistImageUrl: song?.artistImageUrl || song?.customImageUrl || song?.coverImage || '',
+      customImageUrl: song?.artistImageUrl || song?.customImageUrl || song?.coverImage || '',
       audio: song.audio || [],
       files: song.files || [],
       chords: initialChords,
@@ -545,6 +548,7 @@ export function SongDetailView({
     const initialBpm = Number(song?.bpm);
     return !isNaN(initialBpm) && initialBpm > 0 ? initialBpm : 80;
   });
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
 
   // Initialize complete states when song ID changes
   useEffect(() => {
@@ -556,6 +560,8 @@ export function SongDetailView({
     setEditedSong({
       ...song,
       bpm: parsedBpm,
+      artistImageUrl: song?.artistImageUrl || song?.customImageUrl || song?.coverImage || '',
+      customImageUrl: song?.artistImageUrl || song?.customImageUrl || song?.coverImage || '',
       audio: song.audio || [],
       files: song.files || [],
       chords: chordsData,
@@ -1701,6 +1707,8 @@ export function SongDetailView({
 
       const finalData = { 
         ...editedSong,
+        artistImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
+        customImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         chords: sanitizedChords,
         lyrics: sanitizedLyrics
       };
@@ -2760,7 +2768,7 @@ export function SongDetailView({
                   <div className="flex items-center gap-2 flex-1 min-w-[200px]">
                     <Input 
                       value={editedSong.artistImageUrl || ''} 
-                      onChange={e => setEditedSong({...editedSong, artistImageUrl: e.target.value})}
+                      onChange={e => setEditedSong({...editedSong, artistImageUrl: e.target.value, customImageUrl: e.target.value})}
                       className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-9 text-xs flex-1"
                       placeholder="URL da Imagem do Artista"
                     />
@@ -2780,7 +2788,11 @@ export function SongDetailView({
                             const reader = new FileReader();
                             reader.onload = (uploadEvent) => {
                               const base64 = uploadEvent.target?.result as string;
-                              setEditedSong({...editedSong, artistImageUrl: base64});
+                              setEditedSong(prev => ({
+                                ...prev,
+                                artistImageUrl: base64,
+                                customImageUrl: base64
+                              }));
                             };
                             reader.readAsDataURL(file);
                           }
@@ -4818,29 +4830,110 @@ export function SongDetailView({
 
                {/* Banner de Acesso Rápido ao Drive Geral se configurado */}
                {churchData?.teamDriveUrl ? (
-                 <a
-                   href={churchData.teamDriveUrl}
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   className="flex items-center justify-between p-2.5 mb-3 bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-amber-500/10 border border-blue-500/20 hover:border-blue-500/40 rounded-xl text-xs font-bold text-text-main transition-all group hover:scale-[1.01]"
+                 <div className="flex items-center justify-between p-2.5 mb-3 bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-amber-500/10 border border-blue-500/20 hover:border-blue-500/40 rounded-xl text-xs font-bold text-text-main transition-all group">
+                   <a
+                     href={churchData.teamDriveUrl}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     className="flex items-center gap-2.5 flex-1 min-w-0"
+                   >
+                     <GoogleDriveIcon size={18} className="group-hover:scale-110 transition-transform shrink-0" />
+                     <div className="text-left min-w-0">
+                       <p className="text-[11px] font-black leading-tight text-text-main flex items-center gap-1.5">
+                         Drive Oficial da Equipe <ExternalLink size={11} className="text-blue-400" />
+                       </p>
+                       <p className="text-[9px] text-text-muted font-normal truncate">Acesse os áudios MP3, vídeos e materiais compartilhados</p>
+                     </div>
+                   </a>
+                   {isAdmin && (
+                     <button
+                       type="button"
+                       onClick={() => setIsDriveModalOpen(true)}
+                       className="px-2 py-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-text-muted hover:text-text-main text-[10px] font-bold transition-colors shrink-0"
+                       title="Configurar pasta do Drive"
+                     >
+                       Configurar
+                     </button>
+                   )}
+                 </div>
+               ) : (
+                 <button
+                   type="button"
+                   onClick={() => setIsDriveModalOpen(true)}
+                   className="w-full flex items-center justify-between p-2.5 mb-3 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-text-muted transition-all text-left group"
                  >
                    <div className="flex items-center gap-2.5">
-                     <GoogleDriveIcon size={18} className="group-hover:scale-110 transition-transform" />
+                     <GoogleDriveIcon size={18} className="opacity-80 group-hover:scale-110 transition-transform shrink-0" />
                      <div className="text-left">
-                       <p className="text-[11px] font-black leading-tight text-text-main">Drive Oficial da Equipe</p>
-                       <p className="text-[9px] text-text-muted font-normal">Acesse os áudios MP3, vídeos e materiais compartilhados</p>
+                       <p className="text-[11px] font-bold text-blue-400">Drive Oficial da Equipe</p>
+                       <p className="text-[9px] text-text-muted">Clique aqui para conectar a pasta do Google Drive com áudios e partituras.</p>
                      </div>
                    </div>
-                   <ExternalLink size={14} className="text-text-muted group-hover:text-text-main shrink-0" />
-                 </a>
-               ) : (
-                 <div className="flex items-center justify-between p-2.5 mb-3 bg-blue-500/5 border border-blue-500/15 rounded-xl text-xs text-text-muted">
-                   <div className="flex items-center gap-2.5">
-                     <GoogleDriveIcon size={18} className="opacity-80 shrink-0" />
-                     <div className="text-left">
-                       <p className="text-[11px] font-bold text-text-main">Drive Oficial da Equipe</p>
-                       <p className="text-[9px] text-text-muted">O link da pasta no Google Drive configurado na aba de Músicas aparecerá aqui para toda a equipe.</p>
-                     </div>
+                   <span className="text-[10px] font-bold text-blue-500 bg-blue-500/15 px-2 py-0.5 rounded-full shrink-0">
+                     Conectar
+                   </span>
+                 </button>
+               )}
+
+               {/* Links específicos desta música no Google Drive */}
+               {(editedSong.driveAudioLink || editedSong.driveFilesLink) && (
+                 <div className="space-y-1.5 mb-3">
+                   {editedSong.driveAudioLink && (
+                     <a
+                       href={editedSong.driveAudioLink}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="flex items-center justify-between p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-all"
+                     >
+                       <div className="flex items-center gap-2">
+                         <GoogleDriveIcon size={15} />
+                         <span>Áudio / Ensaio no Drive</span>
+                       </div>
+                       <ExternalLink size={12} />
+                     </a>
+                   )}
+                   {editedSong.driveFilesLink && (
+                     <a
+                       href={editedSong.driveFilesLink}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="flex items-center justify-between p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-all"
+                     >
+                       <div className="flex items-center gap-2">
+                         <GoogleDriveIcon size={15} />
+                         <span>Partitura / Cifra no Drive</span>
+                       </div>
+                       <ExternalLink size={12} />
+                     </a>
+                   )}
+                 </div>
+               )}
+
+               {/* Edição de Links do Google Drive para a Música */}
+               {isEditing && (
+                 <div className="p-3 mb-3 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
+                   <p className="text-[10px] font-black uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                     <GoogleDriveIcon size={14} /> Links Desta Música no Google Drive
+                   </p>
+                   <div>
+                     <label className="text-[10px] text-text-muted font-bold block mb-1">Link do Áudio / Multitrack (Drive):</label>
+                     <input 
+                       type="url"
+                       value={editedSong.driveAudioLink || ''}
+                       onChange={(e) => setEditedSong({ ...editedSong, driveAudioLink: e.target.value })}
+                       placeholder="https://drive.google.com/file/d/..."
+                       className="w-full px-3 py-1.5 text-xs rounded-lg bg-black/20 dark:bg-black/40 border border-border text-text-main placeholder:text-text-muted/60"
+                     />
+                   </div>
+                   <div>
+                     <label className="text-[10px] text-text-muted font-bold block mb-1">Link da Partitura / Arquivos (Drive):</label>
+                     <input 
+                       type="url"
+                       value={editedSong.driveFilesLink || ''}
+                       onChange={(e) => setEditedSong({ ...editedSong, driveFilesLink: e.target.value })}
+                       placeholder="https://drive.google.com/file/d/..."
+                       className="w-full px-3 py-1.5 text-xs rounded-lg bg-black/20 dark:bg-black/40 border border-border text-text-main placeholder:text-text-muted/60"
+                     />
                    </div>
                  </div>
                )}
@@ -6552,6 +6645,14 @@ export function SongDetailView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal Google Drive da Equipe */}
+      <GoogleDriveModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        churchData={churchData}
+        isAdmin={isAdmin}
+      />
     </motion.div>
   );
 }

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Copy, Check, Sparkles, BookOpen, Trash2, ArrowRight, CornerDownLeft, AlertCircle, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getLocalBiblePassage, adaptToNAA } from '../localBibleDb';
+import { getLocalBiblePassage } from '../localBibleDb';
 import { parseBibleReference } from './BibleSearch';
 import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
 
 const TRANSLATIONS = [
-  { id: 'NAA', name: 'NAA 2017 (Nova Almeida Atualizada)' }
+  { id: 'BLIVRE', name: 'Bíblia Livre (BLIVRE)' },
+  { id: 'TB', name: 'Tradução Brasileira — 1917 (TB)' }
 ];
 
 const QUICK_SUGGESTIONS = [
@@ -21,7 +22,7 @@ const QUICK_SUGGESTIONS = [
 export function QuickBibleSearch() {
   const [query, setQuery] = useState('');
   const { memberData } = useAuth();
-  const [translation, setTranslation] = useState<string>('NAA');
+  const [translation, setTranslation] = useState<string>('BLIVRE');
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -186,13 +187,6 @@ export function QuickBibleSearch() {
 
       // Populate results and update cache
       if (apiData && apiData.verses) {
-        if (selectedTranslation === 'NAA') {
-          apiData.verses = apiData.verses.map((v: any) => ({
-            ...v,
-            text: adaptToNAA(v.text)
-          }));
-        }
-        
         const finalRef = `${book.name} ${chapter}${verseRange ? ':' + verseRange : ''} (${selectedTranslation})`;
         setResult({
           reference: finalRef,
@@ -293,7 +287,7 @@ export function QuickBibleSearch() {
             </button>
           </div>
 
-          {/* Translation selector with NAA, NVI, ARC as a dropdown */}
+          {/* Translation selector (BLIVRE / TB) */}
           <div className="relative w-full sm:w-36 shrink-0 select-none">
             <button
               type="button"
@@ -312,7 +306,7 @@ export function QuickBibleSearch() {
                   onClick={() => setDropdownOpen(false)} 
                 />
                 <div className="absolute right-0 top-full mt-1.5 w-full bg-zinc-950 border border-border rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 min-w-[120px]">
-                  {(['NAA', 'NVI', 'ARC'] as const).map((v) => (
+                  {(['BLIVRE', 'TB'] as const).map((v) => (
                     <button
                       key={v}
                       type="button"

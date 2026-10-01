@@ -294,9 +294,15 @@ service cloud.firestore {
 
     // Song Rules
     match /songs/{songId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn() && incoming().keys().hasAll(['title']) && isValidSong(incoming());
       allow update: if (isAdmin() || isSignedIn()) && isValidSong(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /churches/{churchId}/songs/{songId} {
+      allow get, list: if true;
+      allow create, update: if isSignedIn();
       allow delete: if isAdmin();
     }
 

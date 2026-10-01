@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isAdmin: isMaster,
               availability: {},
               churchId: 'semente', // Default to semente
-              defaultBibleVersion: 'NAA' // Initial default saved in Firestore for each member!
+              defaultBibleVersion: 'BLIVRE' // Initial default saved in Firestore for each member
             };
             try {
               await setDoc(memberRef, currentMember);
@@ -106,11 +106,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
 
-            // Auto-assign default Bible version if they don't have one
-            if (!currentMember.defaultBibleVersion) {
-              currentMember.defaultBibleVersion = 'NAA';
+            // Auto-assign default Bible version if they don't have one or migrate legacy NAA to BLIVRE
+            if (!currentMember.defaultBibleVersion || currentMember.defaultBibleVersion === 'NAA') {
+              currentMember.defaultBibleVersion = 'BLIVRE';
               try {
-                await setDoc(memberRef, { defaultBibleVersion: 'NAA' }, { merge: true });
+                await setDoc(memberRef, { defaultBibleVersion: 'BLIVRE' }, { merge: true });
               } catch (err) {
                 console.error("Erro ao definir tradução padrão da bíblia:", err);
               }

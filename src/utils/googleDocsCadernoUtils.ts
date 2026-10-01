@@ -3,6 +3,8 @@ import { getServiceSongIds } from './servicePlaylistUtils';
 import { isChordLine } from '../services/chordService';
 import { findLocalPopularSong } from '../songsDatabase';
 import { parseLineSectionAndDynamics, ParsedSectionAndDynamics, normalizeSpacedTags, getDynamicExplanationDetails } from '../components/songsShared';
+import { isGoogleEmail } from './googleCalendarUtils';
+export { isGoogleEmail };
 
 export interface CadernoOptions {
   allSongs?: any[];
@@ -1021,7 +1023,8 @@ export async function copyCadernoAndOpenGoogleDocs(service: any, options: Cadern
 
   // Abre nova aba do Google Docs direcionando para a conta individual do membro logado
   const memberEmail = options.targetEmail || options.user?.email || (typeof options.user === 'string' ? options.user : '') || '';
-  const targetEmail = memberEmail && memberEmail.includes('@') ? memberEmail.trim() : '';
+  const isGoogle = isGoogleEmail(memberEmail);
+  const targetEmail = memberEmail && memberEmail.includes('@') && isGoogle ? memberEmail.trim() : '';
   const googleDocsUrl = targetEmail
     ? `https://docs.google.com/document/create?authuser=${encodeURIComponent(targetEmail)}`
     : 'https://docs.new';

@@ -126,6 +126,21 @@ export function getArtistImage(artist?: string) {
   if (normalized.includes('harpa') || normalized.includes('harpa cristã')) {
     return 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=150&auto=format&fit=crop&q=80'; // warm classical acoustic vibe
   }
+  if (normalized.includes('ipalpha') || normalized.includes('ip alpha')) {
+    return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=150&auto=format&fit=crop&q=80'; // dynamic church collective worship
+  }
+  if (normalized.includes('vineyard')) {
+    return 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150&auto=format&fit=crop&q=80'; // intimate vineyard worship band
+  }
+  if (normalized.includes('asaph borba') || normalized.includes('asaph')) {
+    return 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150&auto=format&fit=crop&q=80'; // seasoned acoustic praise leader
+  }
+  if (normalized.includes('graça soberana') || normalized.includes('graca soberana') || normalized.includes('sovereign grace')) {
+    return 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=150&auto=format&fit=crop&q=80'; // classic reformed congregational worship
+  }
+  if (normalized.includes('baruk') || normalized.includes('paulo césar baruk') || normalized.includes('paulo cesar baruk')) {
+    return 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=150&auto=format&fit=crop&q=80'; // dynamic gospel vocalist
+  }
   if (normalized.includes('thalles roberto') || normalized.includes('talles roberto')) {
     return 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=150&auto=format&fit=crop&q=80'; // highly energetic stage presence
   }

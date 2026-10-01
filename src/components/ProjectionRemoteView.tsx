@@ -580,7 +580,7 @@ export function ProjectionRemoteView({
           title: resolvedTitle,
           artist: artistLabel,
           type: item.type || 'moment',
-          bibleVersion: item.bibleVersion || 'NAA',
+          bibleVersion: item.bibleVersion || 'BLIVRE',
           lyrics: lyrics || 'Este item da liturgia não possui conteúdo de texto cadastrado.',
           isLiturgyItem: true,
           liturgyItemId: itemId,
@@ -752,7 +752,7 @@ export function ProjectionRemoteView({
   // Project Bible verse
   const handleProjectBibleVerse = () => {
     const reference = `${bibleBook} ${bibleChapter}:${bibleVerse}`;
-    const fullSlideText = `"${bibleText}"\n\n— ${reference} (NAA)`;
+    const fullSlideText = `"${bibleText}"\n\n— ${reference} (BLIVRE)`;
     
     updateSession({
       activeSongId: 'bible-verse',

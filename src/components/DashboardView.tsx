@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { getServicePlaylistSongs } from '../utils/servicePlaylistUtils';
-import { openGoogleCalendar } from '../utils/googleCalendarUtils';
+import { openGoogleCalendar, isGoogleUser } from '../utils/googleCalendarUtils';
 import { GoogleCalendarIcon } from './GoogleCalendarIcon';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
+import { GoogleAccountNoticeModal } from './GoogleAccountNoticeModal';
 import { COLOR_PRESETS } from '../App';
 import { toPng } from 'html-to-image';
 import { 
@@ -16,7 +18,7 @@ import {
   Play, Pause, BookOpen, Book, Quote, GripVertical, Timer, ChevronsDown, RefreshCcw,
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
-  AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle, Compass
+  AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle, Compass, Radio
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -1353,8 +1355,87 @@ export default function DashboardView({
 }) {
   const { user, memberData, isAdmin, churchData } = useAuth();
   const userChurchId = memberData?.churchId || 'semente';
+  const teamDriveUrl = (churchData?.teamDriveUrl || churchData?.driveUrl || '').trim();
+
+  const handleOpenDrive = () => {
+    if (teamDriveUrl) {
+      const finalUrl = teamDriveUrl.startsWith('http') ? teamDriveUrl : `https://${teamDriveUrl}`;
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      window.open('https://drive.google.com', '_blank', 'noopener,noreferrer');
+    }
+  };
   const [nextService, setNextService] = useState<any>(null);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
+  const [isCalendarNoticeOpen, setIsCalendarNoticeOpen] = useState(false);
+  const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(false);
+  const [isSoundDetected, setIsSoundDetected] = useState<boolean>(false);
+  const [isCommandCaptured, setIsCommandCaptured] = useState<boolean>(false);
+  const soundTimeoutRef = useRef<any>(null);
+  const commandTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const handleWakeChange = (e: any) => {
+      setTimeout(() => {
+        if (!isMounted) return;
+        if (e.detail && typeof e.detail.enabled === 'boolean') {
+          setIsWakeWordActive(e.detail.enabled);
+        } else {
+          try {
+            setIsWakeWordActive(localStorage.getItem('liloupro_assistant_wakeword') === 'true');
+          } catch {}
+        }
+      }, 0);
+    };
+
+    const handleSoundDetected = (e: any) => {
+      setTimeout(() => {
+        if (!isMounted) return;
+        const detected = e?.detail?.soundDetected !== false;
+        if (detected) {
+          setIsSoundDetected(true);
+          if (soundTimeoutRef.current) clearTimeout(soundTimeoutRef.current);
+          soundTimeoutRef.current = setTimeout(() => {
+            if (isMounted) setIsSoundDetected(false);
+          }, 1400);
+        } else {
+          if (soundTimeoutRef.current) clearTimeout(soundTimeoutRef.current);
+          soundTimeoutRef.current = setTimeout(() => {
+            if (isMounted) setIsSoundDetected(false);
+          }, 450);
+        }
+      }, 0);
+    };
+
+    const handleCommandCaptured = (e: any) => {
+      setTimeout(() => {
+        if (!isMounted) return;
+        setIsCommandCaptured(true);
+        setIsSoundDetected(true);
+        if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
+        commandTimeoutRef.current = setTimeout(() => {
+          if (isMounted) {
+            setIsCommandCaptured(false);
+            setIsSoundDetected(false);
+          }
+        }, 2200);
+      }, 0);
+    };
+
+    window.addEventListener('liloupro:wakeword-change', handleWakeChange);
+    window.addEventListener('liloupro:voice-sound-detected', handleSoundDetected);
+    window.addEventListener('liloupro:voice-command-captured', handleCommandCaptured);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('liloupro:wakeword-change', handleWakeChange);
+      window.removeEventListener('liloupro:voice-sound-detected', handleSoundDetected);
+      window.removeEventListener('liloupro:voice-command-captured', handleCommandCaptured);
+      if (soundTimeoutRef.current) clearTimeout(soundTimeoutRef.current);
+      if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -1815,14 +1896,14 @@ export default function DashboardView({
         exit={{ opacity: 0, y: -10 }}
         className="space-y-4 sm:space-y-5"
       >
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 sm:gap-4 overflow-hidden">
-        <div className="flex items-center gap-4 max-w-full">
+      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
+        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
           {churchData?.logoUrl && (
             <img 
               referrerPolicy="no-referrer"
               src={churchData.logoUrl} 
               className={cn(
-                "w-14 h-14 shrink-0 border border-border/40",
+                "w-12 h-12 sm:w-14 sm:h-14 shrink-0 border border-border/40",
                 churchData.logoFit === 'cover' ? "object-cover" : "object-contain",
                 churchData.logoRadius === 'rounded-none' ? "rounded-none" :
                 churchData.logoRadius === 'rounded-lg' ? "rounded-lg" :
@@ -1840,16 +1921,16 @@ export default function DashboardView({
               alt="Logo Igreja" 
             />
           )}
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-text-main">Olá, {memberData?.name?.split(' ')[0]} 👋</h1>
-            <p className="text-text-muted dark:text-white text-sm sm:text-base mt-1 font-semibold">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-text-main tracking-tight">Olá, {memberData?.name?.split(' ')[0]} 👋</h1>
+            <p className="text-text-muted dark:text-white text-sm sm:text-base mt-1 font-semibold leading-snug">
               {churchData?.name ? `Bem-vindo ao portal da ${churchData.name}` : "Bem-vindo ao LiLouPro"}
             </p>
           </div>
         </div>
-        <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0">
+        <div className="flex flex-col items-start xl:items-end gap-1.5 w-full xl:w-auto shrink-0">
           {/* Assistente Liloupro com Apresentação */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 max-w-xl shadow-sm">
+          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 xl:max-w-xl shadow-sm">
             <button
               type="button"
               onClick={() => {
@@ -1863,9 +1944,95 @@ export default function DashboardView({
               <Sparkles size={15} className="text-amber-300 animate-pulse shrink-0" />
               <span>Assistente 🎙️</span>
             </button>
-            <p className="text-xs sm:text-sm text-text-muted leading-relaxed">
-              Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.
-            </p>
+            <div className="text-xs sm:text-sm text-text-muted leading-relaxed space-y-1">
+              <p>
+                Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.
+              </p>
+              <div className="text-[11px] sm:text-xs text-sky-600 dark:text-sky-400 font-medium flex flex-wrap items-center gap-2 pt-0.5">
+                <span className="inline-flex items-center gap-1 font-bold bg-sky-500/10 dark:bg-sky-400/10 px-1.5 py-0.5 rounded border border-sky-500/20 text-[10px] uppercase tracking-wider">💡 Dica</span>
+                <span>ative a escuta do assistente e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong></span>
+                
+                {/* Microfone Elegante e Estiloso com Indicação Visual e Piscar ao Captar Comando */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('liloupro:mic-tap'));
+                    }
+                  }}
+                  className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-200 active:scale-95 cursor-pointer border shadow-md overflow-hidden ${
+                    isCommandCaptured
+                      ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400 text-slate-950 border-emerald-300 ring-4 ring-emerald-300 animate-pulse shadow-emerald-500/50 scale-105'
+                      : isSoundDetected
+                      ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 animate-pulse shadow-amber-500/40'
+                      : isWakeWordActive
+                      ? 'bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 text-white border-sky-400/50 ring-2 ring-sky-400/40 shadow-sky-500/30'
+                      : 'bg-slate-900/80 hover:bg-slate-800 text-sky-400 hover:text-sky-300 border-sky-500/30 hover:border-sky-400/60 shadow-sm'
+                  }`}
+                  title={
+                    isCommandCaptured
+                      ? "Comando captado com sucesso! Processando..."
+                      : isSoundDetected
+                      ? "Microfone captando o som da sua voz agora!"
+                      : isWakeWordActive
+                      ? "Pronto para ouvir! Fale seu comando ou diga 'Oi Lilou'."
+                      : "Ativar microfone de voz do Liloupro Assistente"
+                  }
+                >
+                  {/* Shimmer suave */}
+                  <div className="absolute inset-0 -translate-x-full animate-assistant-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+
+                  {/* Ícone de Microfone Estiloso 🎙️ */}
+                  <div className={`relative flex items-center justify-center w-5 h-5 rounded-full transition-all ${
+                    isCommandCaptured
+                      ? 'bg-slate-950 text-emerald-400 scale-110'
+                      : isSoundDetected
+                      ? 'bg-slate-950 text-amber-300 animate-bounce'
+                      : isWakeWordActive
+                      ? 'bg-slate-950/60 text-sky-200 shadow-inner'
+                      : 'bg-sky-500/15 text-sky-400'
+                  }`}>
+                    <Mic size={13} strokeWidth={2.5} className={isCommandCaptured || isSoundDetected ? 'animate-pulse' : ''} />
+                  </div>
+
+                  <span>
+                    {isCommandCaptured
+                      ? 'Comando Captado! 🎙️'
+                      : isSoundDetected
+                      ? 'Captando Voz...'
+                      : isWakeWordActive
+                      ? 'Pronto p/ Ouvir'
+                      : 'Microfone 🎙️'}
+                  </span>
+
+                  {/* Indicador de estado: radar/ponto pulsante */}
+                  <span className="relative flex h-2 w-2 ml-0.5">
+                    {(isCommandCaptured || isSoundDetected || isWakeWordActive) && (
+                      <span
+                        className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                          isCommandCaptured
+                            ? 'bg-slate-950 duration-300'
+                            : isSoundDetected
+                            ? 'bg-slate-950'
+                            : 'bg-emerald-400'
+                        }`}
+                      />
+                    )}
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${
+                        isCommandCaptured
+                          ? 'bg-slate-950'
+                          : isSoundDetected
+                          ? 'bg-slate-950'
+                          : isWakeWordActive
+                          ? 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                          : 'bg-sky-500/50'
+                      }`}
+                    />
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Status dos Membros e Modo ADM logo abaixo do assistente */}
@@ -2100,7 +2267,13 @@ export default function DashboardView({
                       MÚSICAS DO CULTO
                     </Button>
                     <Button 
-                      onClick={() => openGoogleCalendar(nextService, { allSongs, members: dashboardMembers, user, churchData })} 
+                      onClick={() => {
+                        if (isGoogleUser(user)) {
+                          openGoogleCalendar(nextService, { allSongs, members: dashboardMembers, user, churchData });
+                        } else {
+                          setIsCalendarNoticeOpen(true);
+                        }
+                      }} 
                       className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 px-3.5 sm:px-5 py-2.5 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-tight shadow-xl animate-fade-in col-span-2 sm:col-span-auto w-full sm:w-auto text-center justify-center flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
                     >
                       <GoogleCalendarIcon size={16} />
@@ -2139,6 +2312,13 @@ export default function DashboardView({
                   window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
                 }
               }} 
+            />
+            <QuickLink 
+              icon={<GoogleDriveIcon size={24} />} 
+              label="Google Drive da Equipe" 
+              subtitle={teamDriveUrl ? "Pasta oficial da equipe" : "Arquivos e mídias da equipe"} 
+              color="bg-blue-500/10 border-blue-500/20" 
+              onClick={handleOpenDrive} 
             />
           </div>
         </div>
@@ -2475,6 +2655,16 @@ export default function DashboardView({
         </aside>
       </div>
     </motion.div>
+
+    <GoogleAccountNoticeModal
+      isOpen={isCalendarNoticeOpen}
+      onClose={() => setIsCalendarNoticeOpen(false)}
+      serviceType="calendar"
+      userEmail={user?.email || ''}
+      onContinue={() => {
+        openGoogleCalendar(nextService, { allSongs, members: dashboardMembers, user, churchData });
+      }}
+    />
     </>
   );
 }
