@@ -154,7 +154,23 @@ export async function forceCheckForAppUpdates(): Promise<{ updated: boolean; mes
       return { updated: true, message: 'Baixando nova versão... O aplicativo será recarregado em instantes.' };
     }
 
-    return { updated: false, message: 'Você já está utilizando a versão mais recente do aplicativo.' };
+    // Se o usuário tocou manualmente em Atualizar, limpa caches legados e força recarga limpa
+    try {
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        for (const key of cacheKeys) {
+          if (key !== 'app-badge-store') {
+            await caches.delete(key);
+          }
+        }
+      }
+    } catch {}
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
+
+    return { updated: true, message: 'Aplicativo atualizado com sucesso! Recarregando...' };
   } catch (error: any) {
     console.error('[SW Auto-Update] Erro ao verificar atualizações:', error);
     return { updated: false, message: 'Não foi possível verificar atualizações no momento.' };

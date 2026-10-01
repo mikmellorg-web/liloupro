@@ -17853,7 +17853,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
            <p className="text-text-muted text-sm">Personalize sua experiência no aplicativo.</p>
          </div>
          <div className="bg-brand/10 text-brand px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-brand/20 shadow-sm">
-           LiLouPro - v2.6.0
+           LiLouPro - v2.7.0
          </div>
        </div>
 
@@ -19766,7 +19766,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                  <div className="flex justify-between items-center border-b border-border pb-3">
                    <span className="text-xs font-bold text-text-muted uppercase">Versão do App</span>
                    <div className="flex items-center gap-2">
-                     <span className="text-[10px] font-black text-text-main">2.6.0</span>
+                     <span className="text-[10px] font-black text-text-main">2.7.0</span>
                      <button 
                        onClick={checkForUpdates}
                        disabled={isCheckingUpdate}

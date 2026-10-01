@@ -1,4 +1,4 @@
-// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.2
+// Service Worker with support for background Web Push Notifications, Firebase Cloud Messaging, Badging, Luxury Icon & Automatic Seamless Update - v9.3
 
 // Global in-memory history of recently displayed notification fingerprints to prevent duplicates
 const shownNotificationHistory = new Map();
@@ -153,7 +153,7 @@ try {
   console.warn('[sw.js] Firebase Cloud Messaging background init deferred:', err);
 }
 
-const CACHE_NAME = 'liloupro-v9.2-dedup-fix';
+const CACHE_NAME = 'liloupro-v9.3-live-update';
 const BADGE_CACHE_NAME = 'app-badge-store';
 const BADGE_CACHE_PATH = '/unread-badge-count';
 
