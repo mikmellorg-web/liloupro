@@ -587,16 +587,35 @@ export function LilouproAssistant({
       return;
     }
 
-    // Interromper a escuta por wake word para não competir pelo microfone
+    // Marca imediatamente o estado síncrono para impedir qualquer corrida de wake word
+    setIsListening(true);
+    isListeningRef.current = true;
+
+    // Cancela qualquer timer de reinício de wake word pendente
+    if (wakeWordRestartTimeoutRef.current) {
+      clearTimeout(wakeWordRestartTimeoutRef.current);
+      wakeWordRestartTimeoutRef.current = null;
+    }
+
+    // Interromper com segurança a escuta por wake word removendo handlers primeiro para evitar novo ciclo
     if (wakeWordRecognitionRef.current) {
       try {
+        wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.onerror = null;
         wakeWordRecognitionRef.current.abort();
       } catch {}
+      wakeWordRecognitionRef.current = null;
+      setIsWakeWordActive(false);
     }
 
     try {
       if (recognitionRef.current) {
-        recognitionRef.current.abort();
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.abort();
+        } catch {}
+        recognitionRef.current = null;
       }
 
       const recognition = new SpeechRecognition();
@@ -707,6 +726,7 @@ export function LilouproAssistant({
       recognition.onend = () => {
         setIsListening(false);
         isListeningRef.current = false;
+        recognitionRef.current = null;
         if (silenceTimeoutRef.current) {
           clearTimeout(silenceTimeoutRef.current);
           silenceTimeoutRef.current = null;
@@ -717,8 +737,13 @@ export function LilouproAssistant({
           setInterimTranscript('');
           handleProcessInput(textToProcess);
         } else {
-          // Usuário não quis falar nada (silêncio) -> desliga o microfone completamente
-          turnOffAllListeningRef.current?.();
+          // Usuário não falou nada no comando: se wake word estiver habilitado, volta para escuta de wake word sem loop
+          if (wakeWordEnabledRef.current) {
+            setIsListening(false);
+            isListeningRef.current = false;
+          } else {
+            turnOffAllListeningRef.current?.();
+          }
         }
       };
 
@@ -3080,6 +3105,7 @@ export function LilouproAssistant({
     if (wakeWordRecognitionRef.current) {
       try {
         wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.onerror = null;
         wakeWordRecognitionRef.current.abort();
       } catch {}
       wakeWordRecognitionRef.current = null;
@@ -3096,6 +3122,7 @@ export function LilouproAssistant({
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
         recognitionRef.current.abort();
       } catch {}
       recognitionRef.current = null;
@@ -3128,16 +3155,30 @@ export function LilouproAssistant({
     if (!SpeechRecognition) return;
 
     const isAudioSpeaking = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
-    if (isListeningRef.current || isAudioSpeaking || (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)) {
+    if (
+      !wakeWordEnabledRef.current ||
+      isListeningRef.current ||
+      isHandlingWakeRef.current ||
+      Boolean(recognitionRef.current) ||
+      isAudioSpeaking ||
+      (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)
+    ) {
       return;
     }
 
     try {
+      if (wakeWordRestartTimeoutRef.current) {
+        clearTimeout(wakeWordRestartTimeoutRef.current);
+        wakeWordRestartTimeoutRef.current = null;
+      }
+
       if (wakeWordRecognitionRef.current) {
         try { 
           wakeWordRecognitionRef.current.onend = null;
+          wakeWordRecognitionRef.current.onerror = null;
           wakeWordRecognitionRef.current.abort(); 
         } catch {}
+        wakeWordRecognitionRef.current = null;
       }
 
       const rec = new SpeechRecognition();
@@ -3201,8 +3242,10 @@ export function LilouproAssistant({
             }
             try {
               rec.onend = null;
+              rec.onerror = null;
               rec.abort();
             } catch {}
+            wakeWordRecognitionRef.current = null;
             setIsWakeWordActive(false);
             if (wakeWordRestartTimeoutRef.current) {
               clearTimeout(wakeWordRestartTimeoutRef.current);
@@ -3218,9 +3261,15 @@ export function LilouproAssistant({
               wakeWordDebounceTimeoutRef.current = null;
               try {
                 rec.onend = null;
+                rec.onerror = null;
                 rec.abort();
               } catch {}
+              wakeWordRecognitionRef.current = null;
               setIsWakeWordActive(false);
+              if (wakeWordRestartTimeoutRef.current) {
+                clearTimeout(wakeWordRestartTimeoutRef.current);
+                wakeWordRestartTimeoutRef.current = null;
+              }
               handleWakeWordTriggered('');
             }, 250);
           }
@@ -3228,24 +3277,56 @@ export function LilouproAssistant({
       };
 
       rec.onerror = (event: any) => {
-        if (event.error === 'not-allowed') {
+        setIsWakeWordActive(false);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           console.warn('Microfone não autorizado para escuta de wake word.');
           setWakeWordEnabled(false);
+          wakeWordEnabledRef.current = false;
           try { localStorage.setItem('liloupro_assistant_wakeword', 'false'); } catch {}
         }
-        setIsWakeWordActive(false);
+        if (event.error === 'aborted' || event.error === 'audio-capture') {
+          if (wakeWordRestartTimeoutRef.current) {
+            clearTimeout(wakeWordRestartTimeoutRef.current);
+            wakeWordRestartTimeoutRef.current = null;
+          }
+        }
       };
 
       rec.onend = () => {
         setIsWakeWordActive(false);
         if (wakeWordRestartTimeoutRef.current) {
           clearTimeout(wakeWordRestartTimeoutRef.current);
+          wakeWordRestartTimeoutRef.current = null;
         }
+
+        // Se este listener já foi substituído por outro ou anulado voluntariamente, não reinicia
+        if (wakeWordRecognitionRef.current !== rec) {
+          return;
+        }
+
+        // Se o modo wake word foi desativado, ou se estamos escutando comando ativo, ou processando gatilho
+        if (
+          !wakeWordEnabledRef.current ||
+          isListeningRef.current ||
+          isHandlingWakeRef.current ||
+          Boolean(recognitionRef.current)
+        ) {
+          return;
+        }
+
+        // Reinício controlado e suave (1200ms) sem loop cego de 60ms para evitar bips sucessivos
         wakeWordRestartTimeoutRef.current = setTimeout(() => {
-          if (wakeWordEnabledRef.current && !isListeningRef.current && !isHandlingWakeRef.current) {
+          wakeWordRestartTimeoutRef.current = null;
+          if (
+            wakeWordEnabledRef.current &&
+            !isListeningRef.current &&
+            !isHandlingWakeRef.current &&
+            !recognitionRef.current &&
+            wakeWordRecognitionRef.current === rec
+          ) {
             startWakeWordListening();
           }
-        }, 60);
+        }, 1200);
       };
 
       wakeWordRecognitionRef.current = rec;
@@ -3277,6 +3358,7 @@ export function LilouproAssistant({
         turnOffAllListening();
         return false;
       }
+      wakeWordEnabledRef.current = true;
       try {
         localStorage.setItem('liloupro_assistant_wakeword', 'true');
       } catch {}
@@ -3287,16 +3369,15 @@ export function LilouproAssistant({
         }
       }, 0);
 
-      playWakeChime();
       startListening();
       return true;
     });
-  }, [playWakeChime, startListening, turnOffAllListening]);
+  }, [startListening, turnOffAllListening]);
 
   useEffect(() => {
     const handleMicAction = () => {
       // Se qualquer modo de escuta ou microfone estiver ativo, desliga completamente
-      const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive;
+      const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive || Boolean(recognitionRef.current);
       if (isCurrentlyActive) {
         turnOffAllListening();
       } else {
@@ -3305,7 +3386,6 @@ export function LilouproAssistant({
         try {
           localStorage.setItem('liloupro_assistant_wakeword', 'true');
         } catch {}
-        playWakeChime();
         startListening();
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('liloupro:wakeword-change', { detail: { enabled: true } }));
@@ -3325,7 +3405,7 @@ export function LilouproAssistant({
       window.removeEventListener('liloupro:toggle-wakeword', handleMicAction);
       window.removeEventListener('liloupro:start-listening', handleStartListen);
     };
-  }, [playWakeChime, startListening, turnOffAllListening, isWakeWordActive]);
+  }, [startListening, turnOffAllListening, isWakeWordActive]);
 
   return (
     <>
