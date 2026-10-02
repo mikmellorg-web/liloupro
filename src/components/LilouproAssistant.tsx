@@ -425,6 +425,7 @@ export function LilouproAssistant({
   const wakeWordEnabledRef = useRef<boolean>(wakeWordEnabled);
   const isOpenRef = useRef<boolean>(isOpen);
   const isHandlingWakeRef = useRef<boolean>(false);
+  const isSpeakingRef = useRef<boolean>(false);
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -494,19 +495,25 @@ export function LilouproAssistant({
       .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
       .trim();
     if (!clean) {
+      isSpeakingRef.current = false;
       if (onEnded) onEnded();
       return;
     }
 
+    // Marca o estado de fala como true de forma síncrona imediata antes do fetch da rede,
+    // eliminando a janela cega contra ativações indevidas de SpeechRecognition
+    isSpeakingRef.current = true;
+
     const attachAndPlay = (audio: HTMLAudioElement) => {
       currentAudioRef.current = audio;
-      if (onEnded) {
-        audio.onended = () => {
-          onEnded();
-        };
-      }
+      isSpeakingRef.current = true;
+      audio.onended = () => {
+        isSpeakingRef.current = false;
+        if (onEnded) onEnded();
+      };
       audio.play().catch((err) => {
         console.warn("[LiLou Voice]: Reprodução de áudio:", err);
+        isSpeakingRef.current = false;
         if (onEnded) onEnded();
       });
     };
@@ -520,6 +527,7 @@ export function LilouproAssistant({
         return;
       } catch (err) {
         console.warn("[LiLou Voice]: Falha ao instanciar áudio cache:", err);
+        isSpeakingRef.current = false;
         if (onEnded) onEnded();
         return;
       }
@@ -539,6 +547,7 @@ export function LilouproAssistant({
           const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${data.audioBase64}`);
           attachAndPlay(audio);
         } else {
+          isSpeakingRef.current = false;
           if (onEnded) onEnded();
         }
       })
@@ -546,6 +555,7 @@ export function LilouproAssistant({
         // REGRA DE BLINDAGEM: window.speechSynthesis NUNCA assume como fallback.
         // Preserva a identidade vocal sem ruído mecânico ou robótico.
         console.warn("[LiLou Voice]: Síntese temporariamente indisponível. Fallback robótico estritamente bloqueado:", err);
+        isSpeakingRef.current = false;
         if (onEnded) onEnded();
       });
   }, [speechSynthesisEnabled]);
@@ -575,6 +585,7 @@ export function LilouproAssistant({
   // Initialize Speech Recognition
   const startListening = () => {
     if (typeof window === 'undefined') return;
+    if (isSpeakingRef.current) return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       addMessage({
@@ -873,10 +884,9 @@ export function LilouproAssistant({
           'Diga: "Abre a Bíblia no Salmo 23"'
         ]
       });
-      speak(greetingSpoken);
-      setTimeout(() => {
+      speak(greetingSpoken, () => {
         startListening();
-      }, 400);
+      });
       return;
     }
 
@@ -3156,6 +3166,7 @@ export function LilouproAssistant({
 
     const isAudioSpeaking = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
     if (
+      isSpeakingRef.current ||
       !wakeWordEnabledRef.current ||
       isListeningRef.current ||
       isHandlingWakeRef.current ||
