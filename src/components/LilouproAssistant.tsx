@@ -144,10 +144,10 @@ function getRandomGreeting(): string {
 }
 
 const NOT_UNDERSTOOD_VARIATIONS = [
-  'Não entendi. Pode repetir?',
-  'Não peguei essa. Pode falar de novo?',
+  'Não entendi o que você falou. Pode repetir?',
+  'Não entendi. Pode falar de novo?',
   'Pode repetir pra mim?',
-  'Não consegui ouvir. Repete aí?'
+  'Não consegui ouvir. Pode falar novamente?'
 ];
 
 function getRandomNotUnderstood(): string {
@@ -426,6 +426,9 @@ export function LilouproAssistant({
   const isOpenRef = useRef<boolean>(isOpen);
   const isHandlingWakeRef = useRef<boolean>(false);
   const isSpeakingRef = useRef<boolean>(false);
+  const isManualMicSessionActiveRef = useRef<boolean>(false);
+  const pendingActionRef = useRef<{ type: 'confirm_add_song'; songTitle?: string } | null>(null);
+  const startListeningRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -467,8 +470,21 @@ export function LilouproAssistant({
    * não deve substituir silenciosamente a voz oficial.
    */
   const speak = useCallback((textToSpeak: string, onEnded?: () => void) => {
+    const finishSpeechAndResume = () => {
+      isSpeakingRef.current = false;
+      if (onEnded) {
+        onEnded();
+      } else if (isManualMicSessionActiveRef.current) {
+        setTimeout(() => {
+          if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current) {
+            startListeningRef.current?.();
+          }
+        }, 120);
+      }
+    };
+
     if (!speechSynthesisEnabled || typeof window === 'undefined') {
-      if (onEnded) onEnded();
+      finishSpeechAndResume();
       return;
     }
 
@@ -495,8 +511,7 @@ export function LilouproAssistant({
       .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
       .trim();
     if (!clean) {
-      isSpeakingRef.current = false;
-      if (onEnded) onEnded();
+      finishSpeechAndResume();
       return;
     }
 
@@ -508,13 +523,11 @@ export function LilouproAssistant({
       currentAudioRef.current = audio;
       isSpeakingRef.current = true;
       audio.onended = () => {
-        isSpeakingRef.current = false;
-        if (onEnded) onEnded();
+        finishSpeechAndResume();
       };
       audio.play().catch((err) => {
         console.warn("[LiLou Voice]: Reprodução de áudio:", err);
-        isSpeakingRef.current = false;
-        if (onEnded) onEnded();
+        finishSpeechAndResume();
       });
     };
 
@@ -527,8 +540,7 @@ export function LilouproAssistant({
         return;
       } catch (err) {
         console.warn("[LiLou Voice]: Falha ao instanciar áudio cache:", err);
-        isSpeakingRef.current = false;
-        if (onEnded) onEnded();
+        finishSpeechAndResume();
         return;
       }
     }
@@ -547,16 +559,14 @@ export function LilouproAssistant({
           const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${data.audioBase64}`);
           attachAndPlay(audio);
         } else {
-          isSpeakingRef.current = false;
-          if (onEnded) onEnded();
+          finishSpeechAndResume();
         }
       })
       .catch((err) => {
         // REGRA DE BLINDAGEM: window.speechSynthesis NUNCA assume como fallback.
         // Preserva a identidade vocal sem ruído mecânico ou robótico.
         console.warn("[LiLou Voice]: Síntese temporariamente indisponível. Fallback robótico estritamente bloqueado:", err);
-        isSpeakingRef.current = false;
-        if (onEnded) onEnded();
+        finishSpeechAndResume();
       });
   }, [speechSynthesisEnabled]);
 
@@ -766,6 +776,8 @@ export function LilouproAssistant({
     }
   };
 
+  startListeningRef.current = startListening;
+
   const stopListening = () => {
     if (recognitionRef.current) {
       try {
@@ -835,6 +847,76 @@ export function LilouproAssistant({
 
     if (strippedCommand && strippedCommand.length >= 2) {
       norm = strippedCommand;
+    }
+
+    // ==========================================
+    // 00. RESPOSTA A PERGUNTA PENDENTE / CONVERSAÇÃO CONTÍNUA (ex: "Você quer cadastrar?")
+    // ==========================================
+    if (pendingActionRef.current?.type === 'confirm_add_song') {
+      const fullNorm = normalize(text);
+      const isNo = (
+        norm.includes('nao') ||
+        norm.includes('deixa') ||
+        norm.includes('cancela') ||
+        norm.includes('cancelar') ||
+        norm.includes('precisa') ||
+        fullNorm.includes('nao') ||
+        norm === 'n'
+      );
+      const isYes = (
+        norm.includes('sim') ||
+        norm.includes('quero') ||
+        norm.includes('cadastr') ||
+        norm.includes('pode') ||
+        norm.includes('bora') ||
+        norm.includes('com certeza') ||
+        norm.includes('positivo') ||
+        norm.includes('claro') ||
+        fullNorm.includes('sim') ||
+        fullNorm.includes('quero') ||
+        fullNorm.includes('cadastr') ||
+        norm === 's'
+      );
+
+      if (isNo) {
+        pendingActionRef.current = null;
+        setIsLoading(false);
+        const replyText = 'Tudo bem! Se precisar de outra música ou cifra, é só me chamar.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date()
+        });
+        speak(replyText);
+        return;
+      } else if (isYes) {
+        pendingActionRef.current = null;
+        setIsLoading(false);
+        const replyText = 'Beleza! Abrindo a tela para você cadastrar a música.';
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: '➕ Cadastrar Nova Música',
+          actionIcon: <Plus size={15} />,
+          actionSuccessMessage: '✓ Aberto!',
+          onActionClick: () => {
+            onOpenAddSong();
+            setIsOpen(false);
+          }
+        });
+        speak(replyText);
+        setTimeout(() => {
+          onOpenAddSong();
+          setIsOpen(false);
+        }, 1000);
+        return;
+      } else {
+        // Se o usuário falou outro comando (ex: "Abre o afinador"), limpa a pergunta pendente e prossegue normalmente
+        pendingActionRef.current = null;
+      }
     }
 
     // ==========================================
@@ -1449,6 +1531,7 @@ export function LilouproAssistant({
           actionIcon: <Radio size={15} />,
           actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
+            turnOffAllListening();
             onOpenTuner?.();
             setIsOpen(false);
           }
@@ -1457,6 +1540,7 @@ export function LilouproAssistant({
         speak(speakText);
 
         setTimeout(() => {
+          turnOffAllListening();
           onOpenTuner?.();
           setIsOpen(false);
         }, 1000);
@@ -2798,7 +2882,9 @@ export function LilouproAssistant({
               setIsOpen(false);
             }
           });
-          speak('Qual música você quer tocar?');
+          speak('Qual música você quer tocar?', () => {
+            startListening();
+          });
           return;
         }
       }
@@ -2926,13 +3012,18 @@ export function LilouproAssistant({
         norm.startsWith('abra') ||
         norm.startsWith('abrir') ||
         norm.startsWith('abre') ||
+        norm.startsWith('tocar') ||
+        norm.startsWith('toque') ||
+        norm.startsWith('toca') ||
+        norm.startsWith('play') ||
+        norm.startsWith('reproduzir') ||
         norm.includes('cifra') ||
         norm.includes('musica') ||
         norm.includes('letra') ||
         norm.includes('player')
       ) {
         setIsLoading(false);
-        const replyText = `Não achei **"${cleanQuery}"** no repertório. Quer cadastrar agora?`;
+        const replyText = `Não achei **"${cleanQuery}"** no repertório. Você quer cadastrar?`;
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -2942,11 +3033,15 @@ export function LilouproAssistant({
           actionIcon: <Plus size={15} />,
           actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
+            pendingActionRef.current = null;
             onOpenAddSong();
             setIsOpen(false);
           }
         });
-        speak(`Não achei ${cleanQuery} no repertório. Quer cadastrar?`);
+        pendingActionRef.current = { type: 'confirm_add_song', songTitle: cleanQuery };
+        speak(`Não achei ${cleanQuery} no repertório. Você quer cadastrar?`, () => {
+          startListening();
+        });
         return;
       }
     }
@@ -3001,7 +3096,9 @@ export function LilouproAssistant({
       text: fallbackText,
       timestamp: new Date()
     });
-    speak(notUnderstoodMsg);
+    speak(notUnderstoodMsg, () => {
+      startListening();
+    });
   };
 
   const handleQuickChip = (chipText: string) => {
@@ -3125,6 +3222,7 @@ export function LilouproAssistant({
 
   // Desliga completamente todos os microfones, escutas e estados
   const turnOffAllListening = useCallback(() => {
+    isManualMicSessionActiveRef.current = false;
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
@@ -3137,6 +3235,7 @@ export function LilouproAssistant({
       } catch {}
       recognitionRef.current = null;
     }
+    pendingActionRef.current = null;
     stopWakeWordListening();
     setWakeWordEnabled(false);
     wakeWordEnabledRef.current = false;
@@ -3170,6 +3269,7 @@ export function LilouproAssistant({
       !wakeWordEnabledRef.current ||
       isListeningRef.current ||
       isHandlingWakeRef.current ||
+      isManualMicSessionActiveRef.current ||
       Boolean(recognitionRef.current) ||
       isAudioSpeaking ||
       (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)
@@ -3370,6 +3470,7 @@ export function LilouproAssistant({
         return false;
       }
       wakeWordEnabledRef.current = true;
+      isManualMicSessionActiveRef.current = true;
       try {
         localStorage.setItem('liloupro_assistant_wakeword', 'true');
       } catch {}
@@ -3388,10 +3489,11 @@ export function LilouproAssistant({
   useEffect(() => {
     const handleMicAction = () => {
       // Se qualquer modo de escuta ou microfone estiver ativo, desliga completamente
-      const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive || Boolean(recognitionRef.current);
+      const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive || isManualMicSessionActiveRef.current || Boolean(recognitionRef.current);
       if (isCurrentlyActive) {
         turnOffAllListening();
       } else {
+        isManualMicSessionActiveRef.current = true;
         setWakeWordEnabled(true);
         wakeWordEnabledRef.current = true;
         try {
