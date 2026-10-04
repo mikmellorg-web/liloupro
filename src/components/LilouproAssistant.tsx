@@ -48,6 +48,9 @@ interface Message {
   actionIcon?: React.ReactNode;
   onActionClick?: () => void;
   actionSuccessMessage?: string;
+  secondaryActionLabel?: string;
+  secondaryActionIcon?: React.ReactNode;
+  onSecondaryActionClick?: () => void;
 }
 
 interface LilouproAssistantProps {
@@ -427,7 +430,12 @@ export function LilouproAssistant({
   const isHandlingWakeRef = useRef<boolean>(false);
   const isSpeakingRef = useRef<boolean>(false);
   const isManualMicSessionActiveRef = useRef<boolean>(false);
-  const pendingActionRef = useRef<{ type: 'confirm_add_song'; songTitle?: string } | null>(null);
+  const pendingActionRef = useRef<{ 
+    type: 'confirm_add_song' | 'disambiguate_song_bible'; 
+    songTitle?: string;
+    pendingSong?: any;
+    pendingBible?: { bookName: string; chapter: number; verse?: number; displayText: string };
+  } | null>(null);
   const startListeningRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -849,6 +857,9 @@ export function LilouproAssistant({
       norm = strippedCommand;
     }
 
+    // Versão limpa sem pontuações para análise robusta de intenções
+    const cleanNorm = norm.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, ' ').replace(/\s+/g, ' ').trim();
+
     // ==========================================
     // 00. RESPOSTA A PERGUNTA PENDENTE / CONVERSAÇÃO CONTÍNUA (ex: "Você quer cadastrar?")
     // ==========================================
@@ -919,6 +930,76 @@ export function LilouproAssistant({
       }
     }
 
+    if (pendingActionRef.current?.type === 'disambiguate_song_bible') {
+      const { pendingSong, pendingBible } = pendingActionRef.current;
+      const isMusicChoice = (
+        norm.includes('musica') ||
+        norm.includes('cifra') ||
+        norm.includes('louvor') ||
+        norm.includes('cancao') ||
+        norm.includes('tocar') ||
+        norm.includes('ouvir')
+      );
+      const isBibleChoice = (
+        norm.includes('biblia') ||
+        norm.includes('capitulo') ||
+        norm.includes('passagem') ||
+        norm.includes('livro') ||
+        norm.includes('ler')
+      );
+
+      if (isMusicChoice && pendingSong) {
+        pendingActionRef.current = null;
+        setIsLoading(false);
+        const replyText = `Abrindo a música **"${pendingSong.title}"**.`;
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: `🎵 Abrir ${pendingSong.title}`,
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: getRandomDone(),
+          onActionClick: () => {
+            onOpenSong(pendingSong);
+            setIsOpen(false);
+          }
+        });
+        speak(`Abrindo a música ${pendingSong.title}.`);
+        setTimeout(() => {
+          onOpenSong(pendingSong);
+          setIsOpen(false);
+        }, 900);
+        return;
+      } else if (isBibleChoice && pendingBible) {
+        pendingActionRef.current = null;
+        setIsLoading(false);
+        const { bookName, chapter, verse, displayText } = pendingBible;
+        const replyText = `Abrindo a Bíblia em **${displayText}**.`;
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          timestamp: new Date(),
+          actionLabel: `📖 Abrir ${displayText}`,
+          actionIcon: <BookOpen size={15} />,
+          actionSuccessMessage: getRandomDone(),
+          onActionClick: () => {
+            onOpenBible(bookName, chapter, verse);
+            setIsOpen(false);
+          }
+        });
+        speak(`Abrindo a Bíblia em ${displayText}.`);
+        setTimeout(() => {
+          onOpenBible(bookName, chapter, verse);
+          setIsOpen(false);
+        }, 900);
+        return;
+      } else {
+        pendingActionRef.current = null;
+      }
+    }
+
     // ==========================================
     // 00. INTENT: SAUDAÇÃO & WAKE RESPONSE ("Oi Lilou", "Ok Lilou", "Oi Lioi", "Olá", "Oi")
     // ==========================================
@@ -969,6 +1050,51 @@ export function LilouproAssistant({
       speak(greetingSpoken, () => {
         startListening();
       });
+      return;
+    }
+
+    // ==========================================
+    // 00B. INTENT: AGRADECIMENTO AO ASSISTENTE ("Obrigado, Lilou", "Valeu, Lilou", "Muito obrigado")
+    // ==========================================
+    const isGratitudeIntent = (
+      /^((muito\s+)?obrigad[oa]|valeu(\s+mesmo)?|brigad[oa]|gratidao|agradeco|agradecido)(\s+(lilou(pro)?|amigo|pela\s+ajuda|demais|viu))?$/i.test(cleanNorm) ||
+      cleanNorm === 'obrigado' ||
+      cleanNorm === 'obrigada' ||
+      cleanNorm === 'muito obrigado' ||
+      cleanNorm === 'muito obrigada' ||
+      cleanNorm === 'valeu' ||
+      cleanNorm === 'valeu mesmo' ||
+      cleanNorm === 'valeu lilou' ||
+      cleanNorm === 'obrigado lilou' ||
+      cleanNorm === 'obrigada lilou' ||
+      cleanNorm === 'obrigado pela ajuda' ||
+      cleanNorm === 'obrigada pela ajuda' ||
+      cleanNorm === 'valeu pela ajuda' ||
+      cleanNorm === 'brigado' ||
+      cleanNorm === 'brigada' ||
+      cleanNorm === 'brigado lilou' ||
+      cleanNorm === 'brigada lilou'
+    );
+
+    if (isGratitudeIntent) {
+      setIsLoading(false);
+      const GRATITUDE_RESPONSES = [
+        "Por nada! Tô aqui pra ajudar.",
+        "De nada! Sempre que precisar.",
+        "Disponha! Tô por aqui.",
+        "Imagina! Tô aqui pra ajudar.",
+        "Por nada! Pode contar comigo."
+      ];
+      const randomResponse = GRATITUDE_RESPONSES[Math.floor(Math.random() * GRATITUDE_RESPONSES.length)];
+
+      addMessage({
+        id: getUniqueAssistantMsgId('assistant'),
+        sender: 'assistant',
+        text: `🤝 **${randomResponse}**`,
+        timestamp: new Date()
+      });
+
+      speak(randomResponse);
       return;
     }
 
@@ -1405,16 +1531,94 @@ export function LilouproAssistant({
     // 3. INTENT: ABRIR BÍBLIA (Passagem específica ou leitor geral)
     // Ex: "abra a bíblia em Marcos 12:20", "abra a bíblia", "salmo 23", "abrir bíblia"
     // ==========================================
-    const parsedBible = parseSpokenBibleCommand(text);
-    const isGeneralBible = !parsedBible && (
+    // Identificação de intenção explicitamente musical (tem prioridade absoluta sobre referências bíblicas)
+    const hasExplicitMusicIntent = (
+      /\b(toca|tocar|toque|toquem|reproduz|reproduza|reproduzir|dar\s+play|play|ouvir|solta|soltar)\b/i.test(cleanNorm) ||
+      /\b(cifra|cifras|acordes?|tablatura|letra\s+da\s+musica|letra\s+de|letra|player|video\s+clip|cancao|louvor)\b/i.test(cleanNorm) ||
+      /\b(abra|abrir|abre|mostra|mostrar|mostre|ver|veja)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|louvor|faixa|player)\b/i.test(cleanNorm) ||
+      /\bquero\s+(a\s+|o\s+)?(cifra|letra|musica|ouvir|tocar)\b/i.test(cleanNorm)
+    );
+
+    // Identificação de intenção explicitamente bíblica
+    const hasExplicitBibleIntent = (
+      /\b(na\s+biblia|pela\s+biblia|na\s+escritura|nas\s+escrituras)\b/i.test(cleanNorm) ||
+      /\b(ler|leia|leiam|leitura|versiculo|capitulo)\b/i.test(cleanNorm) ||
+      /\b(biblia\s+sagrada|livro\s+de|evangelho\s+segundo|evangelho\s+de|epistola|carta\s+aos)\b/i.test(cleanNorm) ||
+      /\b(abra|abrir|abre)\s+(a\s+)?(biblia|escritura|palavra)\b/i.test(cleanNorm)
+    );
+
+    // Se o comando tiver intenção claramente musical, NÃO consome como Bíblia (prioridade musical)
+    const parsedBible = !hasExplicitMusicIntent ? parseSpokenBibleCommand(text) : null;
+    const isGeneralBible = !hasExplicitMusicIntent && !parsedBible && (
       isGeneralBibleRequest(text) ||
-      ((norm.startsWith('abra') || norm.startsWith('abrir') || norm.startsWith('abre')) && (norm.includes('biblia') || norm.includes('escritura')))
+      ((cleanNorm.startsWith('abra') || cleanNorm.startsWith('abrir') || cleanNorm.startsWith('abre')) && (cleanNorm.includes('biblia') || cleanNorm.includes('escritura')))
     );
 
     if (parsedBible || isGeneralBible) {
-      setIsLoading(false);
-
       if (parsedBible) {
+        // Se NÃO há intenção bíblica explícita (ex: o usuário disse apenas "Abre Isaías 53"):
+        // Verifica se existe ambiguidade real (uma música com esse título no repertório)
+        if (!hasExplicitBibleIntent) {
+          const candidateTitle = cleanNorm
+            .replace(/^(abra|abrir|abre|ver|veja|mostra|mostrar|mostre)\s+/i, '')
+            .trim();
+
+          const matchingSong = allSongs.find(s => {
+            const t = normalize(s.title || '');
+            return t === candidateTitle || t === normalize(parsedBible.displayText) || (candidateTitle.length >= 4 && t.startsWith(candidateTitle));
+          }) || (findLocalPopularSong(candidateTitle, "") ? {
+            id: `popular-${candidateTitle.replace(/\s+/g, '-')}`,
+            title: candidateTitle.charAt(0).toUpperCase() + candidateTitle.slice(1)
+          } : null);
+
+          if (matchingSong) {
+            // Ambiguidade real: existe tanto a música quanto a passagem bíblica
+            setIsLoading(false);
+            const replyText = 'Você quer a música ou o capítulo da Bíblia?';
+            const speakText = 'Você quer a música ou o capítulo da Bíblia?';
+
+            pendingActionRef.current = {
+              type: 'disambiguate_song_bible',
+              pendingSong: matchingSong,
+              pendingBible: {
+                bookName: parsedBible.bookName,
+                chapter: parsedBible.chapter,
+                verse: parsedBible.verse,
+                displayText: parsedBible.displayText
+              }
+            };
+
+            addMessage({
+              id: getUniqueAssistantMsgId('assistant'),
+              sender: 'assistant',
+              text: replyText,
+              timestamp: new Date(),
+              actionLabel: `🎵 Música: ${matchingSong.title}`,
+              actionIcon: <Music size={15} />,
+              actionSuccessMessage: getRandomDone(),
+              onActionClick: () => {
+                pendingActionRef.current = null;
+                onOpenSong(matchingSong);
+                setIsOpen(false);
+              },
+              secondaryActionLabel: `📖 Bíblia: ${parsedBible.displayText}`,
+              secondaryActionIcon: <BookOpen size={15} />,
+              onSecondaryActionClick: () => {
+                pendingActionRef.current = null;
+                onOpenBible(parsedBible.bookName, parsedBible.chapter, parsedBible.verse);
+                setIsOpen(false);
+              }
+            });
+
+            speak(speakText, () => {
+              startListening();
+            });
+            return;
+          }
+        }
+
+        // Sem ambiguidade ou com intenção explicitamente bíblica: abre a Bíblia
+        setIsLoading(false);
         const { bookName, chapter, verse, displayText } = parsedBible;
         const verseText = verse !== undefined ? `, versículo **${verse}**` : '';
         const speechVerse = verse !== undefined ? ` versículo ${verse}` : '';
@@ -1444,6 +1648,7 @@ export function LilouproAssistant({
 
         return;
       } else {
+        setIsLoading(false);
         const replyText = 'Claro, abrindo a **Bíblia**.';
         const speakText = 'Claro.';
         addMessage({
@@ -2764,6 +2969,10 @@ export function LilouproAssistant({
       norm.startsWith('ver') ||
       norm.startsWith('ouvir') ||
       norm.startsWith('reproduzir') ||
+      norm.startsWith('mostra') ||
+      norm.startsWith('mostrar') ||
+      norm.startsWith('mostre') ||
+      norm.startsWith('quero') ||
       norm.includes('cifra') ||
       norm.includes('musica') ||
       norm.includes('cancao') ||
@@ -2821,10 +3030,11 @@ export function LilouproAssistant({
         .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|acesse|acessar|iniciar|solte|soltar)\s+player\s+/i, '')
         .replace(/^(o\s+|a\s+)?player\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)/i, '')
         .replace(/^(o\s+|a\s+)?player\s+/i, '')
-        // Then strip "tocar musica", "tocar a musica", "toque musica", "toque", "tocar", "ouvir", "reproduzir", "play"
-        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)?/i, '')
-        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+/i, '')
-        .replace(/^(abra|abrir|abre|ver|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?/i, '')
+        // Then strip "tocar musica", "tocar a musica", "toque musica", "toque", "tocar", "ouvir", "reproduzir", "play", "mostra", "quero a cifra"
+        .replace(/^(quero\s+(a\s+|o\s+)?(cifra|letra|musica)\s+(de\s+|da\s+|do\s+)?|quero\s+(ouvir|tocar)\s+)/i, '')
+        .replace(/^(abra|abrir|abre|ver|veja|mostra|mostrar|mostre|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)?/i, '')
+        .replace(/^(abra|abrir|abre|ver|veja|mostra|mostrar|mostre|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?(cifra|letra|musica|cancao|faixa|som|audio|video)\s+/i, '')
+        .replace(/^(abra|abrir|abre|ver|veja|mostra|mostrar|mostre|toque|tocar|toca|ouvir|reproduzir|dar\s+play|play|acesse|acessar)\s+(a\s+|o\s+)?/i, '')
         .replace(/^(cifra|letra|musica|cancao|faixa)\s+(da\s+musica\s+|de\s+musica\s+|da\s+|do\s+|de\s+)/i, '')
         .replace(/^(cifra|letra|musica|cancao|faixa)\s+/i, '')
         .replace(/^[::\s\-–—"']+|["']+$/g, '')
@@ -2926,12 +3136,16 @@ export function LilouproAssistant({
       }
       // 3. Substring match on title or artist
       if (!foundSong) {
-        foundSong = allSongs.find(s => {
-          const titleNorm = normalize(s.title || '');
-          const artistNorm = normalize(s.artist || '');
-          return titleNorm.includes(cleanQuery) || cleanQuery.includes(titleNorm) || 
-                 (artistNorm && (artistNorm.includes(cleanQuery) || cleanQuery.includes(artistNorm)));
-        });
+        // Protege contra palavras comuns conversacionais isoladas gerando falsos positivos (ex: "obrigado" não deve casar "Obrigado Jesus pelo seu sangue")
+        const isCommonConversationalWord = ['obrigado', 'obrigada', 'valeu', 'brigado', 'grato', 'gratidao', 'tks', 'thanks'].includes(cleanQuery);
+        if (!isCommonConversationalWord && cleanQuery.length >= 3) {
+          foundSong = allSongs.find(s => {
+            const titleNorm = normalize(s.title || '');
+            const artistNorm = normalize(s.artist || '');
+            return titleNorm.includes(cleanQuery) || cleanQuery.includes(titleNorm) || 
+                   (artistNorm && (artistNorm.includes(cleanQuery) || cleanQuery.includes(artistNorm)));
+          });
+        }
       }
 
       // If not in allSongs, check built-in popular songs database (e.g. Teu Amor Não Falha)
@@ -3890,9 +4104,9 @@ export function LilouproAssistant({
                           </div>
                         )}
 
-                        {/* Interactive Direct Action Button */}
+                        {/* Interactive Direct Action Button(s) */}
                         {msg.actionLabel && msg.onActionClick && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-700/40">
+                          <div className={`mt-3 pt-2.5 border-t border-slate-700/40 ${msg.secondaryActionLabel ? 'space-y-2' : ''}`}>
                             <button
                               onClick={() => {
                                 msg.onActionClick?.();
@@ -3903,6 +4117,19 @@ export function LilouproAssistant({
                               <span>{msg.actionLabel}</span>
                               <ArrowRight size={13} strokeWidth={3} className="ml-auto" />
                             </button>
+
+                            {msg.secondaryActionLabel && msg.onSecondaryActionClick && (
+                              <button
+                                onClick={() => {
+                                  msg.onSecondaryActionClick?.();
+                                }}
+                                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-500/25 active:scale-95 cursor-pointer"
+                              >
+                                {msg.secondaryActionIcon}
+                                <span>{msg.secondaryActionLabel}</span>
+                                <ArrowRight size={13} strokeWidth={3} className="ml-auto" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
