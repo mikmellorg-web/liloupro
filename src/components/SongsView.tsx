@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Music, Star, ChevronRight, Zap, Settings, Mic, X, 
   ExternalLink, Sparkles, FolderOpen, Save, Play, FileText, Youtube,
-  ChevronUp, ChevronDown, Trash2, Calendar, Clock
+  ChevronUp, ChevronDown, Trash2, Calendar, Clock, ArrowUpDown
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -209,6 +209,13 @@ export function SongsView({
 
   // Modal de Adicionar Música Diretamente ao Culto Atual
   const [isAddToServiceModalOpen, setIsAddToServiceModalOpen] = useState(false);
+
+  // Pergunta de confirmação para mudança de ordem nas Músicas do Culto
+  const [reorderConfirm, setReorderConfirm] = useState<{
+    index: number;
+    direction: 'up' | 'down';
+    songTitle: string;
+  } | null>(null);
 
   // Determinar o culto ativo para a seção "Músicas do Culto"
   const currentService = useMemo(() => {
@@ -577,7 +584,7 @@ export function SongsView({
   };
 
   // Funções de reordenação litúrgica (Mover para Cima / Baixo)
-  const handleMoveSongUp = async (index: number) => {
+  const executeMoveSongUp = async (index: number) => {
     if (index <= 0) return;
     const newList = [...orderedLiturgySongs];
     const temp = newList[index];
@@ -601,7 +608,7 @@ export function SongsView({
     }
   };
 
-  const handleMoveSongDown = async (index: number) => {
+  const executeMoveSongDown = async (index: number) => {
     if (index >= orderedLiturgySongs.length - 1) return;
     const newList = [...orderedLiturgySongs];
     const temp = newList[index];
@@ -623,6 +630,16 @@ export function SongsView({
         console.warn('Erro ao salvar nova ordem no culto:', err);
       }
     }
+  };
+
+  const handleMoveSongUp = (index: number, songTitle: string) => {
+    if (index <= 0) return;
+    setReorderConfirm({ index, direction: 'up', songTitle });
+  };
+
+  const handleMoveSongDown = (index: number, songTitle: string) => {
+    if (index >= orderedLiturgySongs.length - 1) return;
+    setReorderConfirm({ index, direction: 'down', songTitle });
   };
 
   // Remover música da liturgia
@@ -1093,7 +1110,7 @@ export function SongsView({
                       <button
                         type="button"
                         disabled={isFirst}
-                        onClick={() => handleMoveSongUp(index)}
+                        onClick={() => handleMoveSongUp(index, song.title)}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
                           isFirst 
                             ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
@@ -1108,7 +1125,7 @@ export function SongsView({
                       <button
                         type="button"
                         disabled={isLast}
-                        onClick={() => handleMoveSongDown(index)}
+                        onClick={() => handleMoveSongDown(index, song.title)}
                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
                           isLast 
                             ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
@@ -1663,6 +1680,58 @@ export function SongsView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Mudar a ordem? */}
+      {reorderConfirm && (
+        <div 
+          className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 notranslate" 
+          translate="no"
+          onClick={() => setReorderConfirm(null)}
+        >
+          <div 
+            className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-5 sm:p-6 max-w-xs w-full shadow-2xl space-y-4 text-center animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 mx-auto rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner">
+              <ArrowUpDown size={22} />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Mudar a ordem?
+              </h3>
+              <p className="text-xs text-slate-400 font-medium truncate px-2">
+                "{reorderConfirm.songTitle}"
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setReorderConfirm(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wide cursor-pointer transition-all active:scale-95 min-h-[44px]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { index, direction } = reorderConfirm;
+                  setReorderConfirm(null);
+                  if (direction === 'up') {
+                    executeMoveSongUp(index);
+                  } else {
+                    executeMoveSongDown(index);
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wide shadow-lg shadow-blue-600/30 cursor-pointer transition-all active:scale-95 min-h-[44px]"
+              >
+                Sim
+              </button>
+            </div>
           </div>
         </div>
       )}
