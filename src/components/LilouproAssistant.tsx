@@ -13,6 +13,7 @@ import { GoogleCalendarIcon } from './GoogleCalendarIcon';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
 import { getServicePlaylistSongs, getServiceSongs } from '../utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
+import { useAuth } from '../hooks/useAuth';
 
 /**
  * =========================================================================
@@ -133,17 +134,31 @@ export function checkLilouWakeWord(transcript: string): { detected: boolean; com
 }
 
 // Respostas dinâmicas e naturais para o assistente (tom humano, curto e sem afetações)
-const GREETING_VARIATIONS = [
+const GENERIC_GREETING_VARIATIONS = [
   'Oi! Pode falar.',
   'Oi! Tô aqui.',
   'Pode falar.',
-  'Claro, pode falar.',
+  'Opa! Tô aqui. Pode falar.',
   'Oi! Como posso ajudar?'
 ];
 
-function getRandomGreeting(): string {
-  const idx = Math.floor(Math.random() * GREETING_VARIATIONS.length);
-  return GREETING_VARIATIONS[idx];
+function getRandomGreeting(userName?: string): string {
+  const name = userName?.trim();
+  if (name) {
+    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+    const personalizedVariations = [
+      `Opa, ${formattedName}! Tô aqui. Pode falar.`,
+      `Oi, ${formattedName}! Tô aqui. Como posso ajudar?`,
+      `Fala, ${formattedName}! Tô te ouvindo.`,
+      `Opa, ${formattedName}! Pode falar.`,
+      `Oi, ${formattedName}! Tô aqui.`
+    ];
+    const idx = Math.floor(Math.random() * personalizedVariations.length);
+    return personalizedVariations[idx];
+  }
+
+  const idx = Math.floor(Math.random() * GENERIC_GREETING_VARIATIONS.length);
+  return GENERIC_GREETING_VARIATIONS[idx];
 }
 
 const NOT_UNDERSTOOD_VARIATIONS = [
@@ -216,6 +231,17 @@ export function LilouproAssistant({
   onStartPlaylist,
   onDownloadCifrasCulto
 }: LilouproAssistantProps) {
+  const { memberData, user } = useAuth();
+
+  // Extrai o primeiro nome do membro autenticado (prioridade: memberData.name > user.displayName)
+  const userFirstName = useMemo(() => {
+    const rawName = memberData?.name || user?.displayName || '';
+    const trimmed = rawName.trim();
+    if (!trimmed) return '';
+    const firstWord = trimmed.split(/\s+/)[0] || '';
+    return firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : '';
+  }, [memberData?.name, user?.displayName]);
+
   const isLight = theme === 'light';
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isControlled = isOpenProp !== undefined;
@@ -1033,7 +1059,7 @@ export function LilouproAssistant({
 
     if (isGreetingIntent) {
       setIsLoading(false);
-      const greetingSpoken = getRandomGreeting();
+      const greetingSpoken = getRandomGreeting(userFirstName);
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
         sender: 'assistant',
@@ -3377,7 +3403,7 @@ export function LilouproAssistant({
       setIsRetracted(false);
     }
 
-    const greetingSpoken = getRandomGreeting();
+    const greetingSpoken = getRandomGreeting(userFirstName);
 
     if (!commandAfter || commandAfter.trim().length < 2) {
       // Usuário disse apenas "Oi Lilou", "Ok Lilou", "E aí Lilou"
@@ -3412,7 +3438,7 @@ export function LilouproAssistant({
 
       handleProcessInput(commandAfter.trim());
     }
-  }, [playWakeChime, setIsOpen, speak, startListening, handleProcessInput]);
+  }, [playWakeChime, setIsOpen, speak, startListening, handleProcessInput, userFirstName]);
 
   const stopWakeWordListening = useCallback(() => {
     if (wakeWordDebounceTimeoutRef.current) {
