@@ -142,23 +142,25 @@ const GENERIC_GREETING_VARIATIONS = [
   'Oi! Como posso ajudar?'
 ];
 
-function getRandomGreeting(userName?: string): string {
+function getPersonalizedGreetingVariations(userName?: string): string[] {
   const name = userName?.trim();
   if (name) {
     const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-    const personalizedVariations = [
+    return [
       `Opa, ${formattedName}! Tô aqui. Pode falar.`,
       `Oi, ${formattedName}! Tô aqui. Como posso ajudar?`,
       `Fala, ${formattedName}! Tô te ouvindo.`,
       `Opa, ${formattedName}! Pode falar.`,
       `Oi, ${formattedName}! Tô aqui.`
     ];
-    const idx = Math.floor(Math.random() * personalizedVariations.length);
-    return personalizedVariations[idx];
   }
+  return GENERIC_GREETING_VARIATIONS;
+}
 
-  const idx = Math.floor(Math.random() * GENERIC_GREETING_VARIATIONS.length);
-  return GENERIC_GREETING_VARIATIONS[idx];
+function getRandomGreeting(userName?: string): string {
+  const variations = getPersonalizedGreetingVariations(userName);
+  const idx = Math.floor(Math.random() * variations.length);
+  return variations[idx];
 }
 
 const NOT_UNDERSTOOD_VARIATIONS = [
@@ -494,6 +496,68 @@ export function LilouproAssistant({
   // Audio player ref for high-fidelity Gemini TTS male voice (Voz Oficial Puck)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsClientCacheRef = useRef<Map<string, string>>(new Map());
+  const prefetchedUserNameRef = useRef<string>('');
+  const prefetchingUserNameRef = useRef<string>('');
+
+  // Pré-aquecimento (prefetch) em segundo plano das 5 saudações personalizadas do usuário autenticado
+  useEffect(() => {
+    if (!userFirstName) return;
+    // Se o prefetch para este usuário já foi concluído ou já está em andamento, não duplica
+    if (prefetchedUserNameRef.current === userFirstName) return;
+    if (prefetchingUserNameRef.current === userFirstName) return;
+
+    prefetchingUserNameRef.current = userFirstName;
+
+    const prefetchGreetings = async () => {
+      try {
+        const greetings = getPersonalizedGreetingVariations(userFirstName);
+
+        // Execução paralela controlada via Promise.allSettled
+        await Promise.allSettled(
+          greetings.map(async (greeting) => {
+            const cleanText = greeting
+              .replace(/\*\*/g, '')
+              .replace(/[#_*~`]/g, '')
+              .replace(/🎙️|🎵|📖|🗓️|➕|📺|✓/g, '')
+              .trim();
+            const cacheKey = cleanText.toLowerCase();
+
+            // Se já está no cache local em memória, não faz requisição redundante
+            if (ttsClientCacheRef.current.has(cacheKey)) {
+              return;
+            }
+
+            try {
+              const res = await fetch('/api/assistant/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: cleanText })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data?.audioBase64 && !ttsClientCacheRef.current.has(cacheKey)) {
+                  ttsClientCacheRef.current.set(cacheKey, data.audioBase64);
+                }
+              }
+            } catch {
+              // Falha silenciosa individual: não trava as outras frases nem o prefetch
+            }
+          })
+        );
+
+        // Marca como concluído somente após o término de todas as saudações
+        prefetchedUserNameRef.current = userFirstName;
+      } catch {
+        // Falha controlada geral
+      } finally {
+        if (prefetchingUserNameRef.current === userFirstName) {
+          prefetchingUserNameRef.current = '';
+        }
+      }
+    };
+
+    prefetchGreetings();
+  }, [userFirstName]);
 
   /**
    * Função oficial de reprodução vocal do LiLou.
