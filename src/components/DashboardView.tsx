@@ -1930,7 +1930,7 @@ export default function DashboardView({
         </div>
         <div className="flex flex-col items-start xl:items-end gap-1.5 w-full xl:w-auto shrink-0">
           {/* Assistente Liloupro com Apresentação */}
-          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 xl:max-w-xl shadow-sm">
+          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 xl:max-w-2xl shadow-sm">
             <button
               type="button"
               onClick={() => {
@@ -1948,11 +1948,11 @@ export default function DashboardView({
               <p>
                 Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.
               </p>
-              <div className="text-[11px] sm:text-xs text-sky-600 dark:text-sky-400 font-medium flex flex-wrap items-center gap-2 pt-0.5">
-                <span className="inline-flex items-center gap-1 font-bold bg-sky-500/10 dark:bg-sky-400/10 px-1.5 py-0.5 rounded border border-sky-500/20 text-[10px] uppercase tracking-wider">💡 Dica</span>
-                <span>ative a escuta do assistente e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong></span>
+              <div className="text-[11px] sm:text-xs text-sky-600 dark:text-sky-400 font-medium flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2 pt-0.5">
+                <span className="inline-flex items-center gap-1 font-bold bg-sky-500/10 dark:bg-sky-400/10 px-1.5 py-0.5 rounded border border-sky-500/20 text-[10px] uppercase tracking-wider shrink-0">💡 Dica</span>
+                <span className="shrink-0">ative a escuta do assistente e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong></span>
                 
-                {/* Microfone Elegante e Estiloso com Indicação Visual e Piscar ao Captar Comando */}
+                {/* Microfone Elegante e Compacto MIC ao final da frase */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1960,14 +1960,14 @@ export default function DashboardView({
                       window.dispatchEvent(new CustomEvent('liloupro:mic-tap'));
                     }
                   }}
-                  className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-200 active:scale-95 cursor-pointer border shadow-md overflow-hidden ${
+                  className={`relative inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 active:scale-95 cursor-pointer border shadow-sm overflow-hidden shrink-0 ${
                     isCommandCaptured
-                      ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400 text-slate-950 border-emerald-300 ring-4 ring-emerald-300 animate-pulse shadow-emerald-500/50 scale-105'
+                      ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400 text-slate-950 border-emerald-300 ring-2 ring-emerald-300 animate-pulse shadow-emerald-500/50 scale-105'
                       : isSoundDetected
                       ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 animate-pulse shadow-amber-500/40'
                       : isWakeWordActive
                       ? 'bg-gradient-to-r from-sky-500 via-indigo-600 to-sky-600 text-white border-sky-400/50 ring-2 ring-sky-400/40 shadow-sky-500/30'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-sky-400 hover:text-sky-300 border-sky-500/30 hover:border-sky-400/60 shadow-sm'
+                      : 'bg-slate-900/80 hover:bg-slate-800 text-sky-400 hover:text-sky-300 border-sky-500/30 hover:border-sky-400/60'
                   }`}
                   title={
                     isCommandCaptured
@@ -1983,7 +1983,7 @@ export default function DashboardView({
                   <div className="absolute inset-0 -translate-x-full animate-assistant-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
 
                   {/* Ícone de Microfone Estiloso 🎙️ */}
-                  <div className={`relative flex items-center justify-center w-5 h-5 rounded-full transition-all ${
+                  <div className={`relative flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-all ${
                     isCommandCaptured
                       ? 'bg-slate-950 text-emerald-400 scale-110'
                       : isSoundDetected
@@ -1992,21 +1992,21 @@ export default function DashboardView({
                       ? 'bg-slate-950/60 text-sky-200 shadow-inner'
                       : 'bg-sky-500/15 text-sky-400'
                   }`}>
-                    <Mic size={13} strokeWidth={2.5} className={isCommandCaptured || isSoundDetected ? 'animate-pulse' : ''} />
+                    <Mic size={10} strokeWidth={2.5} className={isCommandCaptured || isSoundDetected ? 'animate-pulse' : ''} />
                   </div>
 
                   <span>
                     {isCommandCaptured
-                      ? 'Comando Captado! 🎙️'
+                      ? 'Captado!'
                       : isSoundDetected
-                      ? 'Captando Voz...'
+                      ? 'Ouvindo...'
                       : isWakeWordActive
-                      ? 'Pronto p/ Ouvir'
-                      : 'Microfone 🎙️'}
+                      ? 'Ativo'
+                      : 'MIC'}
                   </span>
 
                   {/* Indicador de estado: radar/ponto pulsante */}
-                  <span className="relative flex h-2 w-2 ml-0.5">
+                  <span className="relative flex h-1.5 w-1.5 ml-0.5">
                     {(isCommandCaptured || isSoundDetected || isWakeWordActive) && (
                       <span
                         className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -2019,7 +2019,7 @@ export default function DashboardView({
                       />
                     )}
                     <span
-                      className={`relative inline-flex rounded-full h-2 w-2 ${
+                      className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
                         isCommandCaptured
                           ? 'bg-slate-950'
                           : isSoundDetected

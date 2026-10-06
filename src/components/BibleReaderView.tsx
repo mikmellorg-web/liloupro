@@ -564,11 +564,11 @@ export function BibleReaderView({ theme = 'dark' }: BibleReaderViewProps) {
     <div className={`flex flex-col lg:flex-row ${
       isFullscreen 
         ? 'fixed inset-0 z-[150] h-screen w-screen overflow-hidden notranslate' 
-        : 'h-full min-h-[calc(100vh-4rem)]'
-    } ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} translate="no">
+        : 'h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-7rem)] max-h-[calc(100dvh-5.5rem)] md:max-h-[calc(100dvh-7rem)] overflow-hidden rounded-2xl border shadow-sm'
+    } ${isDark ? 'bg-slate-950 text-slate-100 border-slate-800' : 'bg-slate-50 text-slate-900 border-slate-200'}`} translate="no">
       {/* Sidebar de Seleção de Livros e Capítulos */}
-      <div className={`${isFullscreen ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-64 lg:shrink-0 border-b lg:border-b-0 lg:border-r ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'} p-3 sm:p-4 gap-2.5 max-h-[30vh] lg:max-h-full overflow-y-auto`}>
-        <div className="flex items-center gap-2">
+      <div className={`${isFullscreen ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-64 lg:shrink-0 border-b lg:border-b-0 lg:border-r ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'} p-3 sm:p-4 gap-2.5 max-h-[25vh] sm:max-h-[30vh] lg:max-h-full lg:h-full overflow-hidden shrink-0`}>
+        <div className="flex items-center gap-2 shrink-0">
           <BookOpen className="text-amber-500" size={18} />
           <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider">Bíblia Sagrada</h2>
           <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 font-semibold ml-auto">
@@ -577,7 +577,7 @@ export function BibleReaderView({ theme = 'dark' }: BibleReaderViewProps) {
         </div>
 
         {/* Busca Rápida de Livro */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -589,7 +589,7 @@ export function BibleReaderView({ theme = 'dark' }: BibleReaderViewProps) {
         </div>
 
         {/* Lista de Livros */}
-        <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 custom-scrollbar">
           {filteredBooks.map((b) => {
             const originalIndex = CANONICAL_BIBLE_BOOKS.findIndex(orig => orig.name === b.name);
             const isSelected = originalIndex === selectedBookIndex;
