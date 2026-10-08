@@ -497,6 +497,9 @@ export function LilouproAssistant({
   const prefetchedUserNameRef = useRef<string>('');
   const prefetchingUserNameRef = useRef<string>('');
 
+  // Proteção do microfone contra áudio do próprio player (YouTube e mídia HTML5)
+  const isPlayerAudioPlayingRef = useRef<boolean>(false);
+
   // Pré-aquecimento (prefetch) em segundo plano das 5 saudações personalizadas do usuário autenticado
   useEffect(() => {
     if (!userFirstName) return;
@@ -557,6 +560,117 @@ export function LilouproAssistant({
     prefetchGreetings();
   }, [userFirstName]);
 
+  // Gerenciamento e sincronização do estado de reprodução do player
+  const setPlayerAudioPlaying = useCallback((isPlaying: boolean) => {
+    const prev = isPlayerAudioPlayingRef.current;
+    isPlayerAudioPlayingRef.current = isPlaying;
+
+    if (isPlaying) {
+      // Se o player começou ou retomou a reprodução, interrompe a escuta direta
+      // para que o microfone não capture o som dos alto-falantes nem gere comandos indesejados
+      if (isListeningRef.current) {
+        try {
+          recognitionRef.current?.abort();
+        } catch {}
+        setIsListening(false);
+        isListeningRef.current = false;
+        setInterimTranscript('');
+        latestInterimRef.current = '';
+      }
+    } else if (prev && !isPlaying) {
+      // Quando o usuário pausa o player ou a música termina, libera imediatamente a escuta
+      if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current) {
+        startListeningRef.current?.();
+      }
+    }
+  }, []);
+
+  // Monitoramento do estado real de reprodução do player (YouTube e áudio HTML5)
+  useEffect(() => {
+    // 1. Mensagens do YouTube Player (iframe embed com enablejsapi=1)
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        let payload = event.data;
+        if (typeof payload === 'string' && (payload.includes('onStateChange') || payload.includes('playerState') || payload.includes('infoDelivery'))) {
+          try {
+            payload = JSON.parse(payload);
+          } catch {}
+        }
+        if (typeof payload === 'object' && payload !== null) {
+          const eventName = payload.event;
+          let state: number | undefined = undefined;
+          if (eventName === 'onStateChange') {
+            state = typeof payload.info === 'number' ? payload.info : payload.info?.playerState;
+          } else if (eventName === 'infoDelivery' && payload.info) {
+            state = typeof payload.info.playerState === 'number' ? payload.info.playerState : undefined;
+          }
+
+          if (state !== undefined) {
+            // YouTube States: 1 = PLAYING, 3 = BUFFERING, 2 = PAUSED, 0 = ENDED
+            if (state === 1 || state === 3) {
+              setPlayerAudioPlaying(true);
+            } else if (state === 2 || state === 0) {
+              setPlayerAudioPlaying(false);
+            }
+          }
+        }
+      } catch {}
+    };
+
+    // 2. Eventos de play/pause/ended de elementos de mídia HTML5 na página
+    const handleMediaPlay = (e: Event) => {
+      if (e.target !== currentAudioRef.current) {
+        setPlayerAudioPlaying(true);
+      }
+    };
+
+    const handleMediaPauseOrEnded = (e: Event) => {
+      if (e.target !== currentAudioRef.current) {
+        const anyAudioPlaying = Array.from(document.querySelectorAll('audio, video')).some(
+          (el: any) => el !== currentAudioRef.current && !el.paused && !el.ended && el.currentTime > 0
+        );
+        if (!anyAudioPlaying) {
+          setPlayerAudioPlaying(false);
+        }
+      }
+    };
+
+    // 3. Sincronização periódica com os iframes do YouTube no DOM
+    const syncInterval = setInterval(() => {
+      const ytIframes = document.querySelectorAll<HTMLIFrameElement>('iframe[src*="youtube.com"], iframe[src*="youtu.be"]');
+      if (ytIframes.length === 0) {
+        if (isPlayerAudioPlayingRef.current) {
+          const anyAudioPlaying = Array.from(document.querySelectorAll('audio, video')).some(
+            (el: any) => el !== currentAudioRef.current && !el.paused && !el.ended && el.currentTime > 0
+          );
+          if (!anyAudioPlaying) {
+            setPlayerAudioPlaying(false);
+          }
+        }
+      } else {
+        ytIframes.forEach(iframe => {
+          try {
+            iframe.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), '*');
+            iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }), '*');
+          } catch {}
+        });
+      }
+    }, 1000);
+
+    window.addEventListener('message', handleWindowMessage);
+    window.addEventListener('play', handleMediaPlay, true);
+    window.addEventListener('pause', handleMediaPauseOrEnded, true);
+    window.addEventListener('ended', handleMediaPauseOrEnded, true);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('message', handleWindowMessage);
+      window.removeEventListener('play', handleMediaPlay, true);
+      window.removeEventListener('pause', handleMediaPauseOrEnded, true);
+      window.removeEventListener('ended', handleMediaPauseOrEnded, true);
+    };
+  }, [setPlayerAudioPlaying]);
+
   /**
    * Função oficial de reprodução vocal do LiLou.
    * Utiliza exclusivamente o motor Gemini TTS com a voz de estúdio 'Puck'.
@@ -572,7 +686,7 @@ export function LilouproAssistant({
         onEnded();
       } else if (isManualMicSessionActiveRef.current) {
         setTimeout(() => {
-          if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current) {
+          if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current && !isPlayerAudioPlayingRef.current) {
             startListeningRef.current?.();
           }
         }, 120);
@@ -770,6 +884,12 @@ export function LilouproAssistant({
       };
 
       recognition.onresult = (event: any) => {
+        // Proteção do player: Se o player estiver ativamente reproduzindo áudio,
+        // não interpreta o som como fala ou comando do usuário
+        if (isPlayerAudioPlayingRef.current) {
+          return;
+        }
+
         // Se houver áudio do assistente ainda tocando no momento em que a fala do usuário é detectada,
         // interrompe o áudio imediatamente para priorizar a voz do usuário e evitar que o microfone capture o som do alto-falante.
         // Nunca descarta a transcrição do usuário por causa de referências residuais de áudio.
@@ -953,6 +1073,10 @@ export function LilouproAssistant({
 
   // Process user input (from speech or text)
   const handleProcessInput = async (rawInput: string) => {
+    if (isPlayerAudioPlayingRef.current) {
+      return;
+    }
+
     const text = rawInput.trim();
     if (!text) return;
 
@@ -1104,7 +1228,7 @@ export function LilouproAssistant({
             setIsOpen(false);
           }
         });
-        speak(`Abrindo a música ${pendingSong.title}.`);
+        speak('Pronto! Abri a música.');
         setTimeout(() => {
           onOpenSong(pendingSong);
           setIsOpen(false);
@@ -1128,7 +1252,7 @@ export function LilouproAssistant({
             setIsOpen(false);
           }
         });
-        speak(`Abrindo a Bíblia em ${displayText}.`);
+        speak('Pronto! A Bíblia está aberta.');
         setTimeout(() => {
           onOpenBible(bookName, chapter, verse);
           setIsOpen(false);
@@ -1315,7 +1439,8 @@ export function LilouproAssistant({
       }
 
       const replyText = `Tocando **"${nextSong.title}"** ${nextSong.artist ? `(${nextSong.artist})` : ''}.`;
-      const speakText = `Beleza, vou abrir ${nextSong.title}.`;
+      const speakText = 'Pronto! Tocando a música.';
+      setPlayerAudioPlaying(true);
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -1454,7 +1579,7 @@ export function LilouproAssistant({
 
       const songTone = nextSong.key ? `no tom **${nextSong.key}**` : '';
       const replyText = `Abrindo a cifra de **"${nextSong.title}"** ${songTone}.`;
-      const speakText = `Claro, vou abrir ${nextSong.title}.`;
+      const speakText = 'Pronto! Aqui está a cifra.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -1560,7 +1685,8 @@ export function LilouproAssistant({
         .join('\n');
 
       const replyText = `Iniciando a playlist do culto **${targetService.title}** (${playlistSongs.length} músicas):\n\n${songsListText}`;
-      const speakText = 'Beleza, vou abrir a playlist.';
+      const speakText = 'Pronto! A playlist está aberta.';
+      setPlayerAudioPlaying(true);
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -1760,9 +1886,8 @@ export function LilouproAssistant({
         setIsLoading(false);
         const { bookName, chapter, verse, displayText } = parsedBible;
         const verseText = verse !== undefined ? `, versículo **${verse}**` : '';
-        const speechVerse = verse !== undefined ? ` versículo ${verse}` : '';
         const replyText = `Abrindo a Bíblia em **${bookName} ${chapter}**${verseText}.`;
-        const speakText = `Claro, abrindo ${bookName} ${chapter}${speechVerse}.`;
+        const speakText = 'Pronto! A Bíblia está aberta.';
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -1789,7 +1914,7 @@ export function LilouproAssistant({
       } else {
         setIsLoading(false);
         const replyText = 'Claro, abrindo a **Bíblia**.';
-        const speakText = 'Claro.';
+        const speakText = 'Pronto! A Bíblia está aberta.';
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -3185,7 +3310,8 @@ export function LilouproAssistant({
         if (currentSong) {
           setIsLoading(false);
           const replyText = `Tocando **"${currentSong.title}"** no player.`;
-          const speakText = `Tocando ${currentSong.title}.`;
+          const speakText = 'Pronto! Tocando a música.';
+          setPlayerAudioPlaying(true);
           addMessage({
             id: getUniqueAssistantMsgId('assistant'),
             sender: 'assistant',
@@ -3315,17 +3441,22 @@ export function LilouproAssistant({
         let replyText = '';
 
         if (isTocarCommand) {
-          speakText = `Beleza, vou abrir ${foundSong.title}.`;
+          speakText = 'Pronto! Tocando a música.';
           replyText = `Tocando **"${foundSong.title}"**${focusText}${scrollText}.`;
+          setPlayerAudioPlaying(true);
         } else if (isPlayerMode) {
-          speakText = 'Já vou abrir o player.';
+          speakText = 'Pronto! Tocando a música.';
           replyText = `Abrindo o player de **"${foundSong.title}"**${focusText}${scrollText}.`;
+          setPlayerAudioPlaying(true);
         } else if (isLyricsOnly) {
-          speakText = 'Claro, vou abrir a letra.';
+          speakText = 'Pronto! Aqui está a letra.';
           replyText = `Abrindo a letra de **"${foundSong.title}"**${focusText}${scrollText}.`;
-        } else {
-          speakText = 'Claro, vou abrir.';
+        } else if (norm.includes('cifra')) {
+          speakText = 'Pronto! Aqui está a cifra.';
           replyText = `Abrindo a cifra de **"${foundSong.title}"**${focusText}${scrollText}.`;
+        } else {
+          speakText = 'Pronto! Abri a música.';
+          replyText = `Abrindo a música **"${foundSong.title}"**${focusText}${scrollText}.`;
         }
 
         addMessage({
@@ -3661,7 +3792,7 @@ export function LilouproAssistant({
       rec.onresult = (event: any) => {
         // Ignora áudio se o próprio sintetizador ou player de áudio estiver falando ou se já estiver processando
         const isPlayingNow = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
-        if (isPlayingNow || (typeof window !== 'undefined' && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
+        if (isPlayingNow || isPlayerAudioPlayingRef.current || (typeof window !== 'undefined' && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
           return;
         }
         if (isHandlingWakeRef.current || isListeningRef.current) {
