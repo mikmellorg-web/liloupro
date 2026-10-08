@@ -72,6 +72,10 @@
       "destination": "/api/songs/import-cifraclub-search"
     },
     {
+      "source": "/api/songs/theme-suggestions",
+      "destination": "/api/songs/theme-suggestions"
+    },
+    {
       "source": "/api/notifications/send-push",
       "destination": "/api/notifications/send-push"
     },
