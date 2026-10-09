@@ -3919,7 +3919,7 @@ export function LilouproAssistant({
           return;
         }
 
-        // Reinício controlado e suave (1200ms) quando o navegador encerra a conexão por silêncio
+        // Reinício ágil e controlado (300ms) quando o navegador encerra a conexão por silêncio
         if (!wakeWordRestartTimeoutRef.current) {
           wakeWordRestartTimeoutRef.current = setTimeout(() => {
             wakeWordRestartTimeoutRef.current = null;
@@ -3932,7 +3932,7 @@ export function LilouproAssistant({
             if (stillShouldRecover) {
               startWakeWordListeningRef.current?.();
             }
-          }, 1200);
+          }, 300);
         }
       };
 
