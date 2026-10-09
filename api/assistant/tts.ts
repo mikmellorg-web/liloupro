@@ -169,27 +169,9 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 3. Se a síntese ao vivo não estiver disponível, usa respostas de confirmação na voz oficial Puck
+    // 3. Se a síntese ao vivo não estiver disponível, não substitui por frase arbitrária ou incompatível
     if (!audioBase64) {
-      const pleasantFallbacks = [
-        'pronto, deixei o passo a passo na tela.',
-        'ainda não tem músicas no culto de hoje.',
-        'pronto.',
-        'já abriu.',
-        'pode deixar.',
-        'beleza, vou abrir a playlist.',
-        'não achei culto pra hoje.'
-      ];
-      for (const fb of pleasantFallbacks) {
-        if (assistantTtsCache.has(fb)) {
-          return res.json({
-            audioBase64: assistantTtsCache.get(fb),
-            mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType,
-            fallbackAudio: true
-          });
-        }
-      }
-      return res.status(503).json({ error: "Gemini API Key não disponível e áudio sem cache." });
+      return res.status(503).json({ error: "Não foi possível sintetizar a frase solicitada no momento." });
     }
 
     // Salva em memória para requisições subsequentes

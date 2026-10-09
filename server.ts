@@ -4142,27 +4142,9 @@ Diretrizes:
         }
       }
 
-      // Se síntese falhar temporariamente, usa apenas frases pré-gravadas na voz oficial Puck
+      // Se a síntese ao vivo falhar, não substitui por frase arbitrária ou incompatível
       if (!audioBase64) {
-        const pleasantFallbacks = [
-          'pronto, deixei o passo a passo na tela.',
-          'ainda não tem músicas no culto de hoje.',
-          'pronto.',
-          'já abriu.',
-          'pode deixar.',
-          'beleza, vou abrir a playlist.',
-          'não achei culto pra hoje.'
-        ];
-        for (const fb of pleasantFallbacks) {
-          if (assistantTtsCache.has(fb)) {
-            return res.json({
-              audioBase64: assistantTtsCache.get(fb),
-              mimeType: LILOU_OFFICIAL_VOICE_CONFIG.mimeType,
-              fallbackAudio: true
-            });
-          }
-        }
-        return res.status(500).json({ error: "Não foi possível gerar áudio." });
+        return res.status(503).json({ error: "Não foi possível sintetizar a frase solicitada no momento." });
       }
 
       assistantTtsCache.set(cacheKey, audioBase64);

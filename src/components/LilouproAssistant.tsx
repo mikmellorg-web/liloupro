@@ -1252,7 +1252,7 @@ export function LilouproAssistant({
             setIsOpen(false);
           }
         });
-        speak('Pronto! A Bíblia está aberta.');
+        speak('Claro, abrindo a Bíblia.');
         setTimeout(() => {
           onOpenBible(bookName, chapter, verse);
           setIsOpen(false);
@@ -1887,7 +1887,7 @@ export function LilouproAssistant({
         const { bookName, chapter, verse, displayText } = parsedBible;
         const verseText = verse !== undefined ? `, versículo **${verse}**` : '';
         const replyText = `Abrindo a Bíblia em **${bookName} ${chapter}**${verseText}.`;
-        const speakText = 'Pronto! A Bíblia está aberta.';
+        const speakText = 'Claro, abrindo a Bíblia.';
 
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
@@ -1914,7 +1914,7 @@ export function LilouproAssistant({
       } else {
         setIsLoading(false);
         const replyText = 'Claro, abrindo a **Bíblia**.';
-        const speakText = 'Pronto! A Bíblia está aberta.';
+        const speakText = 'Claro, abrindo a Bíblia.';
         addMessage({
           id: getUniqueAssistantMsgId('assistant'),
           sender: 'assistant',
@@ -2179,7 +2179,7 @@ export function LilouproAssistant({
     ) {
       setIsLoading(false);
       const replyText = 'Pode deixar, abrindo a **Projeção**.';
-      const speakText = 'Pode deixar.';
+      const speakText = 'Pode deixar, abrindo a projeção.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -2219,7 +2219,7 @@ export function LilouproAssistant({
     ) {
       setIsLoading(false);
       const replyText = 'Claro, abrindo a **Liturgia**.';
-      const speakText = 'Claro, vou abrir.';
+      const speakText = 'Claro, abrindo a liturgia.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
@@ -2262,7 +2262,7 @@ export function LilouproAssistant({
     ) {
       setIsLoading(false);
       const replyText = 'Pode deixar, abrindo as **Escalas**.';
-      const speakText = 'Pode deixar.';
+      const speakText = 'Pode deixar, abrindo as escalas.';
 
       addMessage({
         id: getUniqueAssistantMsgId('assistant'),
