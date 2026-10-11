@@ -233,7 +233,8 @@ export function LilouproAssistant({
   onStartPlaylist,
   onDownloadCifrasCulto
 }: LilouproAssistantProps) {
-  const { memberData, user } = useAuth();
+  const { memberData, user, isAdmin: authIsAdmin } = useAuth();
+  const effectiveIsAdmin = Boolean(isAdmin || authIsAdmin || memberData?.isAdmin);
 
   // Extrai o primeiro nome do membro autenticado (prioridade: memberData.name > user.displayName)
   const userFirstName = useMemo(() => {
@@ -2684,12 +2685,13 @@ export function LilouproAssistant({
 
       // 1. COMO AGENDAR UM CULTO / CRIAR CULTO?
       if (
-        norm.includes('agendar') ||
+        !norm.includes('liturgia') &&
+        (norm.includes('agendar') ||
         norm.includes('agenda') ||
         norm.includes('novo culto') ||
         norm.includes('criar culto') ||
         norm.includes('marcar culto') ||
-        (norm.includes('culto') && (norm.includes('criar') || norm.includes('agendar') || norm.includes('fazer') || norm.includes('marcar') || norm.includes('adicionar') || norm.includes('faco')))
+        (norm.includes('culto') && (norm.includes('criar') || norm.includes('agendar') || norm.includes('fazer') || norm.includes('marcar') || norm.includes('adicionar') || norm.includes('faco'))))
       ) {
         setIsLoading(false);
         const replyText = 'Aqui está o passo a passo completo e detalhado para **agendar um culto e organizar a celebração** no LiLouPro:';
@@ -4723,6 +4725,62 @@ export function LilouproAssistant({
                   🗓️ Disponibilidade
                 </button>
               </div>
+
+              {/* Sugestões para Administradores */}
+              {effectiveIsAdmin && (
+                <div className={`px-3 py-1.5 border-t flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px] whitespace-nowrap ${
+                  isLight ? 'bg-amber-50/60 border-amber-200/60' : 'bg-slate-900/80 border-slate-800'
+                }`}>
+                  <span className="text-[10px] font-black uppercase text-amber-500 tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                    <span>👑</span>
+                    <span>É administrador da equipe/igreja?</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickChip('Como faço para cadastrar um novo membro?')}
+                    className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                      isLight 
+                        ? 'bg-amber-100/70 border-amber-300 hover:bg-amber-200/80 text-amber-950' 
+                        : 'bg-amber-950/50 border-amber-500/40 hover:bg-amber-900/60 text-amber-200'
+                    }`}
+                  >
+                    Como faço para cadastrar um novo membro?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickChip('Como faço para agendar um culto?')}
+                    className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                      isLight 
+                        ? 'bg-amber-100/70 border-amber-300 hover:bg-amber-200/80 text-amber-950' 
+                        : 'bg-amber-950/50 border-amber-500/40 hover:bg-amber-900/60 text-amber-200'
+                    }`}
+                  >
+                    Como faço para agendar um culto?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickChip('Como fazer a Liturgia do Culto?')}
+                    className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                      isLight 
+                        ? 'bg-amber-100/70 border-amber-300 hover:bg-amber-200/80 text-amber-950' 
+                        : 'bg-amber-950/50 border-amber-500/40 hover:bg-amber-900/60 text-amber-200'
+                    }`}
+                  >
+                    Como fazer a Liturgia do Culto?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickChip('Como faço para cadastrar uma música nova?')}
+                    className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                      isLight 
+                        ? 'bg-amber-100/70 border-amber-300 hover:bg-amber-200/80 text-amber-950' 
+                        : 'bg-amber-950/50 border-amber-500/40 hover:bg-amber-900/60 text-amber-200'
+                    }`}
+                  >
+                    Como faço para cadastrar uma música nova?
+                  </button>
+                </div>
+              )}
 
               {/* Input Area (Voice and Text) */}
               <div className={`p-3 border-t flex items-center gap-2 ${

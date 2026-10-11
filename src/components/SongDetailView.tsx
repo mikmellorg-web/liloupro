@@ -872,8 +872,36 @@ export function SongDetailView({
   const [detectedBpmMsg, setDetectedBpmMsg] = useState<{ bpm: number; name: string } | null>(null);
   const [taps, setTaps] = useState<number[]>([]);
   const [songFontSize, setSongFontSize] = useState<number>(initialFocusMode ? 18 : 14); 
-  const [numColumns, setNumColumns] = useState<number>(1);
-  const [hasManuallyToggledColumns, setHasManuallyToggledColumns] = useState(false);
+  const [numColumns, setNumColumns] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('liloupro_chord_columns');
+      if (saved === '1' || saved === '2') {
+        return parseInt(saved, 10);
+      }
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024 ? 2 : 1;
+    }
+    return 1;
+  });
+  const [hasManuallyToggledColumns, setHasManuallyToggledColumns] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('liloupro_chord_columns') !== null;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const handleToggleColumns = () => {
+    setNumColumns(prev => {
+      const next = prev === 1 ? 2 : 1;
+      try {
+        localStorage.setItem('liloupro_chord_columns', String(next));
+      } catch (e) {}
+      return next;
+    });
+    setHasManuallyToggledColumns(true);
+  };
   const [isStageMode, setIsStageMode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('liloupro_stage_mode') === 'true';
@@ -2111,7 +2139,7 @@ export function SongDetailView({
 
             {/* Columns */}
             <button
-              onClick={() => setNumColumns(prev => prev === 1 ? 2 : 1)}
+              onClick={handleToggleColumns}
               className={cn("w-8 h-8 flex items-center justify-center rounded-lg transition-all border active:scale-90 cursor-pointer shrink-0", numColumns === 2 ? 'bg-cyan-500 border-cyan-400 text-white shadow-xs shadow-cyan-500/20' : isStageMode ? "bg-zinc-900 border-amber-500/30 text-white hover:bg-zinc-800" : 'bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border-border text-text-main')}
               title="Alternar Colunas"
             >
@@ -3095,10 +3123,7 @@ export function SongDetailView({
              <div className="flex flex-col items-center">
                <span className="text-[9px] sm:text-[11px] text-text-muted font-black uppercase tracking-widest mb-1">Layout</span>
                <button 
-                 onClick={() => {
-                   setNumColumns(prev => prev === 1 ? 2 : 1);
-                   setHasManuallyToggledColumns(true);
-                 }}
+                 onClick={handleToggleColumns}
                  className={cn(
                    "px-2 sm:px-3 rounded-lg border border-black/10 dark:border-white/20 leading-none min-h-[38px] sm:min-h-[46px] flex items-center justify-center shadow-lg active:scale-95 transition-all outline-none",
                    numColumns === 2
@@ -3345,10 +3370,7 @@ export function SongDetailView({
                <div className="flex border-l border-border bg-black/5 dark:bg-white/10 items-center px-1.5 sm:px-3 gap-1.5 sm:gap-2 self-stretch">
                  {/* Column Layout Selector */} <div style={{ display: 'none' }}>
                  <button 
-                   onClick={() => {
-                     setNumColumns(prev => prev === 1 ? 2 : 1);
-                     setHasManuallyToggledColumns(true);
-                   }}
+                   onClick={handleToggleColumns}
                    className={cn(
                      "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all border border-black/10 dark:border-white/20 shadow-sm active:scale-90",
                      numColumns === 2
@@ -3511,10 +3533,7 @@ export function SongDetailView({
                     {/* Columns (Layout) */}
                     <button 
                       type="button"
-                      onClick={() => {
-                        setNumColumns(prev => prev === 1 ? 2 : 1);
-                        setHasManuallyToggledColumns(true);
-                      }}
+                      onClick={handleToggleColumns}
                       className={cn(
                         "w-8 h-8 flex items-center justify-center rounded-lg transition-all border shrink-0",
                         numColumns === 2
