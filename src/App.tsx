@@ -2025,6 +2025,31 @@ function MainContent() {
     setShowNotifications(false);
   }, [activeTab]);
 
+  // Distinção cirúrgica da tela principal (Home) em relação a todas as outras telas:
+  // - Tela principal (Home): usuário logado, activeTab === 'home', nenhuma cifra aberta e fora da landing/auth.
+  // - Todas as demais telas: Músicas, Cifras, Liturgia, Escalas, Membros, Chat, Bíblia, Teoria, Configurações, etc.
+  const isHomeScreen = Boolean(user && !showLandingPage && activeTab === 'home' && !selectedSong);
+
+  // Prevenção global, condicional e reversível contra atualização acidental por pull-to-refresh / overscroll:
+  // - Na Home: mantém o comportamento nativo de pull-to-refresh ao puxar a tela para baixo.
+  // - Nas demais telas: desativa o overscroll vertical na raiz para impedir recarregamentos acidentais.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    if (isHomeScreen) {
+      document.body.style.overscrollBehaviorY = '';
+      document.documentElement.style.overscrollBehaviorY = '';
+    } else {
+      document.body.style.overscrollBehaviorY = 'none';
+      document.documentElement.style.overscrollBehaviorY = 'none';
+    }
+
+    return () => {
+      document.body.style.overscrollBehaviorY = '';
+      document.documentElement.style.overscrollBehaviorY = '';
+    };
+  }, [isHomeScreen, isSongFocusMode]);
+
   // Capture invite code from URL parameters and store in localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2861,11 +2886,17 @@ function MainContent() {
   }
 
   return (
-    <div className={cn(
-      "min-h-screen bg-surface transition-all duration-300",
-      isSongFocusMode ? "p-0" : (isBottomBarCollapsed ? "pb-6 md:pb-0" : "pb-24 md:pb-0"),
-      isSongFocusMode ? "md:pl-0" : (isSidebarCollapsed ? "md:pl-20" : "md:pl-64")
-    )}>
+    <div 
+      className={cn(
+        "min-h-screen bg-surface transition-all duration-300",
+        isSongFocusMode ? "p-0" : (isBottomBarCollapsed ? "pb-6 md:pb-0" : "pb-24 md:pb-0"),
+        isSongFocusMode ? "md:pl-0" : (isSidebarCollapsed ? "md:pl-20" : "md:pl-64"),
+        !isHomeScreen && "overscroll-y-none"
+      )}
+      style={{
+        overscrollBehaviorY: !isHomeScreen ? 'none' : undefined
+      }}
+    >
       <DynamicThemeStyle churchData={churchData} />
 
       {/* Trial / Subscription Status Banner - Exibido APENAS para administradores e NUNCA para igrejas com Acesso Vitalício (ex: Graça Soberana de Rio Grande) */}
