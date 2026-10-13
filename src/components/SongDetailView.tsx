@@ -290,6 +290,22 @@ export function SongDetailView({
       }
     };
   }, [isFocusMode, onFocusModeChange]);
+
+  // Prevenção cirúrgica de pull-to-refresh e recarregamento acidental por overscroll no Modo Foco
+  useEffect(() => {
+    if (!isFocusMode) return;
+
+    const originalBodyOverscrollY = document.body.style.overscrollBehaviorY;
+    const originalHtmlOverscrollY = document.documentElement.style.overscrollBehaviorY;
+
+    document.body.style.overscrollBehaviorY = 'none';
+    document.documentElement.style.overscrollBehaviorY = 'none';
+
+    return () => {
+      document.body.style.overscrollBehaviorY = originalBodyOverscrollY;
+      document.documentElement.style.overscrollBehaviorY = originalHtmlOverscrollY;
+    };
+  }, [isFocusMode]);
   const [isEditing, setIsEditing] = useState(false);
   const [isAnalyzingBible, setIsAnalyzingBible] = useState(false);
   const [isBibleExpanded, setIsBibleExpanded] = useState(false);
@@ -2096,9 +2112,10 @@ export function SongDetailView({
         onTouchStart={handleFocusTouchStart}
         onTouchEnd={handleFocusTouchEnd}
         className={cn(
-          "fixed inset-0 z-[200] overflow-hidden flex flex-col notranslate",
+          "fixed inset-0 z-[200] overflow-hidden flex flex-col notranslate overscroll-y-none",
           isStageMode ? "bg-black text-white" : "bg-background"
         )}
+        style={{ overscrollBehaviorY: 'none' }}
         translate="no"
       >
         {/* Header / Bar de Controles Unificada do Modo Foco */}
@@ -2299,10 +2316,11 @@ export function SongDetailView({
         <div 
           id="song-scroll-container"
           className={cn(
-            "flex-1 overflow-y-auto px-1 sm:px-2 py-6 custom-scrollbar transition-colors duration-300",
+            "flex-1 overflow-y-auto px-1 sm:px-2 py-6 custom-scrollbar transition-colors duration-300 overscroll-y-none",
             !isAutoScrolling && "scroll-smooth",
             isStageMode && "bg-black"
           )}
+          style={{ overscrollBehaviorY: 'none' }}
         >
           <div className="w-full max-w-none mx-0 px-2 pb-12">
             {detailTab === 'chords' ? (
@@ -2328,6 +2346,8 @@ export function SongDetailView({
                     #song-scroll-container {
                       scroll-behavior: smooth !important;
                       transition: scroll-behavior 0.3s ease-in-out;
+                      overscroll-behavior-y: none !important;
+                      -webkit-overflow-scrolling: touch;
                     }
 
                     #song-viewer-container {
