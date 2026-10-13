@@ -316,8 +316,24 @@ export function SongDetailView({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erro desconhecido na análise.");
+        let errorMessage = "Erro na análise bíblica.";
+        try {
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            errorMessage = "Serviço de análise temporariamente indisponível. Tente novamente em instantes.";
+          }
+        } catch {
+          errorMessage = "Serviço de análise temporariamente indisponível. Tente novamente em instantes.";
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Serviço de análise temporariamente indisponível. Tente novamente em instantes.");
       }
 
       const data = await response.json();

@@ -76,6 +76,10 @@
       "destination": "/api/songs/theme-suggestions"
     },
     {
+      "source": "/api/analyze-bible-references",
+      "destination": "/api/analyze-bible-references"
+    },
+    {
       "source": "/api/notifications/send-push",
       "destination": "/api/notifications/send-push"
     },
