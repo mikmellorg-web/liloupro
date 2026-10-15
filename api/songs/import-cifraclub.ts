@@ -102,6 +102,15 @@ export default async function handler(req: any, res: any) {
       targetUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${normalSlug}/`);
     }
 
+    if (artistSlug.startsWith('banda-')) {
+      const strippedArtist = artistSlug.replace(/^banda-/, '');
+      targetUrls.push(`https://www.cifraclub.com.br/${strippedArtist}/${songSlug}/`);
+      targetUrls.push(`https://www.cifraclub.com.br/${strippedArtist}/${songSlug}`);
+    } else {
+      targetUrls.push(`https://www.cifraclub.com.br/banda-${artistSlug}/${songSlug}/`);
+      targetUrls.push(`https://www.cifraclub.com.br/banda-${artistSlug}/${songSlug}`);
+    }
+
     const htmlDecode = (str: string) => {
       return str
         .replace(/&nbsp;/g, ' ')
@@ -126,13 +135,37 @@ export default async function handler(req: any, res: any) {
         console.log('[CIFRACLUB-DIAG]', response.status, response.headers.get('server'), new URL(targetUrl).hostname);
         if (response.ok) {
           const bodyText = await response.text();
-          if (bodyText.includes('<pre') || bodyText.includes('cifra_cnt')) {
+          if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt')) {
             html = bodyText;
             break;
           }
         }
       } catch (e) {
         console.warn('Fetch error:', targetUrl, e);
+      }
+    }
+
+    // Camada resiliente de alta disponibilidade (leitor de borda) se o fetch direto for barrado por WAF
+    if (!html) {
+      for (const targetUrl of targetUrls) {
+        try {
+          const readerUrl = `https://r.jina.ai/${targetUrl}`;
+          const response = await fetch(readerUrl, {
+            headers: {
+              'X-Return-Format': 'html',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            }
+          });
+          if (response.ok) {
+            const bodyText = await response.text();
+            if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt')) {
+              html = bodyText;
+              break;
+            }
+          }
+        } catch (resErr: any) {
+          console.warn('Resilient reader fetch error:', targetUrl, resErr);
+        }
       }
     }
 
@@ -189,7 +222,11 @@ export default async function handler(req: any, res: any) {
                        html.match(/<div[^>]*class=["'][^"']*cifra_cnt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
 
       if (preMatch) {
-        let preHtml = preMatch[1]
+        let preHtml = preMatch[1];
+        // Remove internal newlines trapped inside HTML tags/attributes
+        preHtml = preHtml.replace(/<[^>]+>/g, (tag) => tag.replace(/\r?\n/g, ' '));
+
+        preHtml = preHtml
           .replace(/<div\b[^>]*>/gi, '\n')
           .replace(/<\/div>/gi, '\n')
           .replace(/<br\s*\/?>/gi, '\n');
@@ -239,7 +276,8 @@ export default async function handler(req: any, res: any) {
 
           const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Riff/i.test(cleanLine);
           const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
-          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
+          const isChordOnly = /^(?:[A-G][b#]?(?:m|M|maj|min|dim|aug|sus|[0-9])*(?:\/[A-G][b#]?)?\s*|\([^\)]*\)\s*)+$/.test(cleanLine);
+          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader && !isChordOnly) || isSectionHeader;
 
           if (hasContent) {
             lyricLines.push(cleanLine);

@@ -2037,6 +2037,16 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       targetUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${normalSlug}/`);
     }
 
+    // Also support "banda-" prefix variation
+    if (artistSlug.startsWith("banda-")) {
+      const strippedArtist = artistSlug.replace(/^banda-/, "");
+      targetUrls.push(`https://www.cifraclub.com.br/${strippedArtist}/${songSlug}/`);
+      targetUrls.push(`https://www.cifraclub.com.br/${strippedArtist}/${songSlug}`);
+    } else {
+      targetUrls.push(`https://www.cifraclub.com.br/banda-${artistSlug}/${songSlug}/`);
+      targetUrls.push(`https://www.cifraclub.com.br/banda-${artistSlug}/${songSlug}`);
+    }
+
     console.log(`scrapeCifraClub: Iniciando raspagem para URL [${targetUrls[0]}] (Artista: ${artistGuess}, Música: ${songGuess})...`);
 
     // Helper to decode basic HTML entities
@@ -2055,7 +2065,7 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     let fetchOk = false;
 
     // Fast fetch with AbortController timeout (8 seconds)
-    const fetchWithTimeout = async (urlToFetch: string, timeoutMs = 8000) => {
+    const fetchWithTimeout = async (urlToFetch: string, timeoutMs = 8000, customHeaders: Record<string, string> = {}) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -2065,7 +2075,8 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://www.cifraclub.com.br/'
+            'Referer': 'https://www.cifraclub.com.br/',
+            ...customHeaders
           }
         });
         clearTimeout(timer);
@@ -2133,6 +2144,28 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         }
       } catch (artistErr: any) {
         console.log(`scrapeCifraClub: Busca na página do artista falhou: ${artistErr?.message || artistErr}`);
+      }
+    }
+
+    // Rota resiliente de alta disponibilidade (leitor de borda) se o fetch direto for barrado por WAF
+    if (!fetchOk) {
+      console.log(`scrapeCifraClub: Acionando leitor resiliente de alta disponibilidade para [${targetUrls[0]}]...`);
+      for (const testUrl of targetUrls) {
+        try {
+          const readerUrl = `https://r.jina.ai/${testUrl}`;
+          const readerRes = await fetchWithTimeout(readerUrl, 8000, { 'X-Return-Format': 'html' });
+          if (readerRes.ok) {
+            const bodyText = await readerRes.text();
+            if (bodyText.includes("<pre") || bodyText.includes("data-chord-container") || bodyText.includes("cifra_cnt")) {
+              html = bodyText;
+              fetchOk = true;
+              console.log(`scrapeCifraClub: Leitor resiliente bem-sucedido para "${testUrl}"`);
+              break;
+            }
+          }
+        } catch (resErr: any) {
+          console.log(`scrapeCifraClub: Tentativa resiliente falhou para "${testUrl}": ${resErr?.message || resErr}`);
+        }
       }
     }
 
@@ -2249,6 +2282,9 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
 
       if (preMatch) {
         let preHtml = preMatch[1];
+        // Remove internal newlines trapped inside HTML tags/attributes
+        preHtml = preHtml.replace(/<[^>]+>/g, (tag) => tag.replace(/\r?\n/g, " "));
+
         // Normalize HTML divs and linebreaks to standard newlines
         preHtml = preHtml
           .replace(/<div\b[^>]*>/gi, "\n")
@@ -2311,7 +2347,8 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
 
           const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Riff/i.test(cleanLine);
           const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
-          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
+          const isChordOnly = /^(?:[A-G][b#]?(?:m|M|maj|min|dim|aug|sus|[0-9])*(?:\/[A-G][b#]?)?\s*|\([^\)]*\)\s*)+$/.test(cleanLine);
+          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader && !isChordOnly) || isSectionHeader;
 
           if (hasContent) {
             lyricLines.push(cleanLine);
