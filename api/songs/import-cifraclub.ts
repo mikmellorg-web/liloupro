@@ -123,6 +123,7 @@ export default async function handler(req: any, res: any) {
             'Referer': 'https://www.cifraclub.com.br/'
           }
         });
+        console.log('[CIFRACLUB-DIAG]', response.status, response.headers.get('server'), new URL(targetUrl).hostname);
         if (response.ok) {
           const bodyText = await response.text();
           if (bodyText.includes('<pre') || bodyText.includes('cifra_cnt')) {
