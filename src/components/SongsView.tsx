@@ -570,42 +570,58 @@ export function SongsView({
     }
   };
 
-  // Cadastrar nova música geral
+  // Cadastrar nova música geral (fluxo ágil: Título + Artista -> Abre edição geral)
   const handleAddSongSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
     setSavingSong(true);
     try {
-      const tagsArray = newCategory.trim() 
-        ? [newCategory.trim()] 
-        : ['Louvor'];
+      const trimmedTitle = newTitle.trim();
+      const trimmedArtist = newArtist.trim() || 'Ministério de Louvor';
+      let createdId = `song_${Date.now()}`;
 
       if (db) {
-        await addDoc(collection(db, 'songs'), {
-          title: newTitle.trim(),
-          artist: newArtist.trim() || 'Desconhecido',
-          key: newTone.trim() || 'C',
-          tone: newTone.trim() || 'C',
-          bpm: newBpm ? Number(newBpm) : null,
-          category: newCategory.trim() || null,
-          chords: newLyrics.trim(),
-          lyrics: newLyrics.trim(),
-          tags: tagsArray,
+        const docRef = await addDoc(collection(db, 'songs'), {
+          title: trimmedTitle,
+          artist: trimmedArtist,
+          key: 'C',
+          tone: 'C',
+          bpm: 120,
+          category: 'Louvor',
+          chords: '',
+          lyrics: '',
+          tags: ['Louvor'],
           churchId: churchId || 'semente',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        createdId = docRef.id;
       }
 
+      const createdSong = {
+        id: createdId,
+        title: trimmedTitle,
+        artist: trimmedArtist,
+        key: 'C',
+        tone: 'C',
+        bpm: 120,
+        category: 'Louvor',
+        chords: '',
+        lyrics: '',
+        tags: ['Louvor'],
+        churchId: churchId || 'semente',
+        initialEdit: true
+      };
+
+      setSongs(prev => [createdSong, ...prev.filter(s => s.id !== createdId)]);
       setNewTitle('');
       setNewArtist('');
-      setNewTone('C');
-      setNewBpm('');
-      setNewCategory('');
-      setNewLyrics('');
       setIsAddModalOpen(false);
       if (onAddModalClose) onAddModalClose();
+
+      // Abre imediatamente a tela de edição geral da música
+      onSelectSong(createdSong);
     } catch (err) {
       console.error('[SongsView] Erro ao cadastrar música:', err);
     } finally {
@@ -1648,13 +1664,21 @@ export function SongsView({
       {/* ============================================================== */}
       {/* MODAL: CADASTRAR NOVA MÚSICA                                   */}
       {/* ============================================================== */}
+      {/* ============================================================== */}
+      {/* MODAL: CADASTRAR NOVA MÚSICA                                   */}
+      {/* ============================================================== */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-2xl bg-[#101a35] border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#101a35] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-100 flex flex-col animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Music className="text-blue-500" size={20} />
-                <h3 className="font-bold text-base text-white">Cadastrar Nova Música</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Music size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Cadastrar Nova Música</h3>
+                  <p className="text-[11px] text-slate-400">Preencha o básico para iniciar a edição</p>
+                </div>
               </div>
               <button
                 type="button"
@@ -1662,111 +1686,64 @@ export function SongsView({
                   setIsAddModalOpen(false);
                   if (onAddModalClose) onAddModalClose();
                 }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Fechar"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAddSongSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Título da Música *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="Ex: Bondade de Deus"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Artista / Ministério *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newArtist}
-                    onChange={(e) => setNewArtist(e.target.value)}
-                    placeholder="Ex: Isaías Saad"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Tom Original
-                  </label>
-                  <input
-                    type="text"
-                    value={newTone}
-                    onChange={(e) => setNewTone(e.target.value)}
-                    placeholder="C, G, D, Em..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    BPM
-                  </label>
-                  <input
-                    type="number"
-                    value={newBpm}
-                    onChange={(e) => setNewBpm(e.target.value ? parseInt(e.target.value) : '')}
-                    placeholder="72"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Categoria Litúrgica
-                  </label>
-                  <input
-                    type="text"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="Ex: Redenção/Ação de Graças"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
+            <form onSubmit={handleAddSongSubmit} className="py-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Cifra e Letra Completa
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Título da Música *
                 </label>
-                <textarea
-                  rows={8}
-                  value={newLyrics}
-                  onChange={(e) => setNewLyrics(e.target.value)}
-                  placeholder="Cole aqui a letra cifrada com os acordes..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:border-blue-500"
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Ex: Bondade de Deus"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Artista / Ministério *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newArtist}
+                  onChange={(e) => setNewArtist(e.target.value)}
+                  placeholder="Ex: Isaías Saad"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/30 text-[11px] text-blue-300/80 leading-relaxed">
+                💡 Após salvar, a tela de edição completa será aberta automaticamente para você importar pelo Cifra Club ou digitar os acordes.
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
                     setIsAddModalOpen(false);
                     if (onAddModalClose) onAddModalClose();
                   }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={savingSong}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50"
+                  disabled={savingSong || !newTitle.trim() || !newArtist.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5"
                 >
-                  {savingSong ? 'Salvando...' : 'Salvar Música'}
+                  {savingSong ? 'Salvando...' : 'Salvar e Continuar Cadastro'}
                 </button>
               </div>
             </form>

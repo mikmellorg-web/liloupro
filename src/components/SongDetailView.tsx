@@ -306,7 +306,7 @@ export function SongDetailView({
       document.documentElement.style.overscrollBehaviorY = originalHtmlOverscrollY;
     };
   }, [isFocusMode]);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(() => Boolean(song?.initialEdit || (!song?.chords && !song?.lyrics)));
   const [isAnalyzingBible, setIsAnalyzingBible] = useState(false);
   const [isBibleExpanded, setIsBibleExpanded] = useState(false);
   const [bibleAnalysisError, setBibleAnalysisError] = useState<string | null>(null);
@@ -632,7 +632,7 @@ export function SongDetailView({
     setTranspose(0);
     setIsCapoEnabled(true);
     setSelectedCapoFret(null);
-    setIsEditing(false); // Sair do modo edição ao trocar de música
+    setIsEditing(Boolean(song?.initialEdit || (!song?.chords && !song?.lyrics)));
   }, [song.id]); 
 
   // Real-time synchronization with Firestore for this specific song
