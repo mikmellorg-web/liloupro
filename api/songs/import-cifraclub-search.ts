@@ -1,3 +1,6 @@
+import { findLocalPopularSong } from "../../src/songsDatabase.js";
+import { cleanCifraHtml } from "../../src/services/chordService.js";
+
 // Vercel Serverless Function: Import Cifra Club by Title and Artist
 export default async function handler(req: any, res: any) {
   // CORS Headers
@@ -21,6 +24,32 @@ export default async function handler(req: any, res: any) {
     const { title, artist } = req.body || {};
     if (!title) {
       return res.status(400).json({ error: 'O título da música é obrigatório.' });
+    }
+
+    // Check local popular songs database with exact match validation only
+    const localHit = findLocalPopularSong(title, artist || "");
+    if (localHit) {
+      const localTitleNorm = localHit.title.toLowerCase().trim();
+      const localArtistNorm = localHit.artist.toLowerCase().trim();
+      const searchTitleNorm = title.toLowerCase().trim();
+      const searchArtistNorm = (artist || '').toLowerCase().trim();
+
+      const titleMatches = localTitleNorm === searchTitleNorm ||
+                           localTitleNorm.includes(searchTitleNorm) ||
+                           searchTitleNorm.includes(localTitleNorm);
+
+      const artistMatches = !searchArtistNorm ||
+                            localArtistNorm.includes(searchArtistNorm) ||
+                            searchArtistNorm.includes(localArtistNorm);
+
+      if (titleMatches && artistMatches) {
+        return res.status(200).json({
+          ...localHit,
+          chords: cleanCifraHtml(localHit.chords),
+          lyrics: cleanCifraHtml(localHit.lyrics),
+          source: 'local'
+        });
+      }
     }
 
     const slugify = (text: string) => {
@@ -96,9 +125,9 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    return res.status(404).json({
-      error: `Não foi possível encontrar a cifra para "${title}" no Cifra Club.`,
-      details: 'Tente colar o link direto da música copiado do navegador.'
+    return res.status(422).json({
+      error: `Não foi possível localizar a cifra de "${title}" no Cifra Club.`,
+      details: 'A página original não pôde ser acessada no momento (restrição de acesso temporária ou indisponibilidade). Tente colar o link direto da música copiado do navegador ou cadastre a letra e os acordes manualmente no editor do LiLouPro.'
     });
   } catch (error: any) {
     console.error('[Vercel CifraClub Search Error]:', error);

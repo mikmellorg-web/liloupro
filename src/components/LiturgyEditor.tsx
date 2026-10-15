@@ -1540,7 +1540,7 @@ export function LiturgyEditor({
                       ) : (
                         <select 
                           className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand cursor-pointer"
-                          value={newItem.content}
+                          value={newItem.content || ''}
                           onChange={e => setNewItem({...newItem, content: e.target.value})}
                         >
                           <option value="">Opcional</option>
@@ -1844,7 +1844,7 @@ export function LiturgyEditor({
                             ) : (
                               <select 
                                 className="w-full bg-black/20 border border-border rounded-lg text-text-main text-xs p-2.5 h-10 outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand appearance-none cursor-pointer"
-                                value={editItem.content}
+                                value={editItem.content || ''}
                                 onChange={e => setEditItem({...editItem, content: e.target.value})}
                               >
                                 <option value="">Opcional</option>

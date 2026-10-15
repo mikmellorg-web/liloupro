@@ -36,7 +36,7 @@ import {
 import { 
   transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, 
   isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, 
-  cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
+  cleanCifraHtml, pairChordsAndLyricsIfSeparated, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
   extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText 
@@ -504,8 +504,15 @@ export function SongDetailView({
         if (response && response.ok) {
           data = await response.json();
         } else {
-          // Fallback to direct client-side scrape
-          data = await fetchCifraClubDirect(rawInput);
+          const errData = response ? await response.json().catch(() => ({})) : {};
+          const fallbackGeneric = "Não foi possível acessar a página original da cifra no Cifra Club. A página pode estar temporariamente inacessível. Você pode cadastrar a letra e os acordes manualmente.";
+          const candidateMsg = (typeof errData.details === 'string' && errData.details.trim())
+            ? errData.details.trim()
+            : (typeof errData.error === 'string' && errData.error.trim())
+              ? errData.error.trim()
+              : fallbackGeneric;
+          const msg = candidateMsg.startsWith('<') ? fallbackGeneric : candidateMsg;
+          throw new Error(msg);
         }
       } else {
         // Support searching by song name or "Artist - Title"
@@ -526,31 +533,48 @@ export function SongDetailView({
         if (searchRes && searchRes.ok) {
           data = await searchRes.json();
         } else {
-          const slugify = (str: string) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-          const sSlug = slugify(searchTitle);
-          const aSlug = searchArtist ? slugify(searchArtist) : '';
-          const candidate = aSlug ? `https://www.cifraclub.com.br/${aSlug}/${sSlug}/` : `https://www.cifraclub.com.br/gospel/${sSlug}/`;
-          data = await fetchCifraClubDirect(candidate);
+          const errData = searchRes ? await searchRes.json().catch(() => ({})) : {};
+          const fallbackGeneric = `Não foi possível localizar a cifra de "${searchTitle}" no Cifra Club. Tente colar o link direto ou cadastre manualmente.`;
+          const candidateMsg = (typeof errData.details === 'string' && errData.details.trim())
+            ? errData.details.trim()
+            : (typeof errData.error === 'string' && errData.error.trim())
+              ? errData.error.trim()
+              : fallbackGeneric;
+          const msg = candidateMsg.startsWith('<') ? fallbackGeneric : candidateMsg;
+          throw new Error(msg);
         }
       }
+
+      const rawImportedChords = typeof data.chords === 'string' ? data.chords : (Array.isArray(data.chords) ? data.chords.join('\n') : '');
+      const rawImportedLyrics = typeof data.lyrics === 'string' ? data.lyrics : (data.content || '');
+      const processedChords = rawImportedChords ? cleanCifraHtml(pairChordsAndLyricsIfSeparated(rawImportedChords, rawImportedLyrics)) : '';
+      const processedLyrics = rawImportedLyrics ? cleanCifraHtml(rawImportedLyrics) : '';
 
       setEditedSong(prev => ({
         ...prev,
         title: data.title || prev.title,
         artist: data.artist || prev.artist,
         artistImageUrl: data.artistImageUrl || prev.artistImageUrl || '',
-        baseKey: data.key || prev.baseKey,
-        bpm: data.bpm || prev.bpm,
+        baseKey: data.key || data.tone || prev.baseKey,
+        bpm: data.bpm ? Number(data.bpm) : prev.bpm,
         timeSignature: data.timeSignature || prev.timeSignature,
-        chords: data.chords || prev.chords,
-        lyrics: data.lyrics || prev.lyrics,
+        chords: processedChords || prev.chords,
+        lyrics: processedLyrics || prev.lyrics,
         capo: data.capo || prev.capo || ""
       }));
       setEditCifraClubUrl('');
-      setAutofillSuccess(`Música "${data.title}" importada e preenchida com sucesso direto do Cifra Club!`);
+
+      const songTitle = data.title || 'Música';
+      if (data.source === 'cifraclub') {
+        setAutofillSuccess(`Música "${songTitle}" importada diretamente do Cifra Club com sucesso!`);
+      } else if (data.source === 'local') {
+        setAutofillSuccess(`Música "${songTitle}" carregada da base de referência do LiLouPro com sucesso!`);
+      } else {
+        setAutofillSuccess(`Música "${songTitle}" importada com sucesso!`);
+      }
     } catch (error: any) {
-      console.error("Erro ao importar do Cifra Club:", error);
-      setAutofillError(error.message || "Não foi possível importar a cifra do Cifra Club. Verifique o link e tente novamente.");
+      console.warn("Importação do Cifra Club não concluída:", error?.message || error);
+      setAutofillError(error.message || "Não foi possível importar a cifra do Cifra Club. A página original não pôde ser acessada. Você pode cadastrar a letra e os acordes manualmente.");
     } finally {
       setIsImportingCifra(false);
     }
@@ -570,10 +594,11 @@ export function SongDetailView({
       files: song.files || [],
       chords: initialChords,
       lyrics: initialLyrics,
-      baseKey: song.baseKey || detectKey(initialChords) || '',
-      driveAudioLink: song.driveAudioLink || '',
-      driveFilesLink: song.driveFilesLink || '',
-      capo: song.capo || ''
+      category: song?.category || '',
+      baseKey: song?.baseKey || detectKey(initialChords) || '',
+      driveAudioLink: song?.driveAudioLink || '',
+      driveFilesLink: song?.driveFilesLink || '',
+      capo: song?.capo || ''
     };
   });
   const [referenceBpm, setReferenceBpm] = useState<number>(() => {
@@ -598,10 +623,11 @@ export function SongDetailView({
       files: song.files || [],
       chords: chordsData,
       lyrics: lyricsData,
-      baseKey: song.baseKey || detectKey(chordsData) || '',
-      driveAudioLink: song.driveAudioLink || '',
-      driveFilesLink: song.driveFilesLink || '',
-      capo: song.capo || ''
+      category: song?.category || '',
+      baseKey: song?.baseKey || detectKey(chordsData) || '',
+      driveAudioLink: song?.driveAudioLink || '',
+      driveFilesLink: song?.driveFilesLink || '',
+      capo: song?.capo || ''
     });
     setTranspose(0);
     setIsCapoEnabled(true);
@@ -629,6 +655,7 @@ export function SongDetailView({
             files: data.files || [],
             chords: chordsData,
             lyrics: lyricsData,
+            category: data.category || '',
             baseKey: data.baseKey || detectKey(chordsData) || '',
             driveAudioLink: data.driveAudioLink || '',
             driveFilesLink: data.driveFilesLink || '',
@@ -2873,7 +2900,7 @@ export function SongDetailView({
                     </div>
                   </div>
                   <select 
-                    value={editedSong.category} 
+                    value={editedSong.category || ''} 
                     onChange={e => setEditedSong({...editedSong, category: e.target.value})}
                     className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-9 text-[12px] uppercase font-bold rounded px-2 outline-none flex-1 min-w-[120px]"
                   >
@@ -2895,7 +2922,7 @@ export function SongDetailView({
                   </select>
                   <div className="flex gap-1 items-center">
                     <Input 
-                      value={editedSong.baseKey} 
+                      value={editedSong.baseKey || ''} 
                       onChange={e => setEditedSong({...editedSong, baseKey: e.target.value})}
                       className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-8 text-[10px] font-bold rounded px-2 outline-none w-16"
                       placeholder="Tom"

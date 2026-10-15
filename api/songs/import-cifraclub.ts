@@ -1,3 +1,30 @@
+import { GoogleGenAI, Type } from "@google/genai";
+import { findLocalPopularSong } from "../../src/songsDatabase.js";
+import { cleanCifraHtml, pairChordsAndLyricsIfSeparated } from "../../src/services/chordService.js";
+
+function getGeminiApiKey(): string | undefined {
+  const key1 = process.env.GEMINI_API_KEY;
+  const key2 = process.env.GEMINI_API_KEY2;
+
+  const isValid = (key: string | undefined): boolean => {
+    if (!key) return false;
+    const trimmed = key.trim();
+    if (
+      trimmed === "" ||
+      trimmed === "MY_GEMINI_API_KEY" ||
+      trimmed === "YOUR_GEMINI_API_KEY" ||
+      trimmed === "GEMINI_API_KEY" ||
+      trimmed.startsWith("MY_") ||
+      trimmed.startsWith("YOUR_")
+    ) return false;
+    return true;
+  };
+
+  if (isValid(key1)) return key1;
+  if (isValid(key2)) return key2;
+  return key1 || key2;
+}
+
 // Vercel Serverless Function: Import Cifra Club
 export default async function handler(req: any, res: any) {
   // CORS Headers
@@ -70,6 +97,11 @@ export default async function handler(req: any, res: any) {
       targetUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${stripped}/`);
     }
 
+    if (songSlug.endsWith('-simplificada')) {
+      const normalSlug = songSlug.replace(/-simplificada$/, '');
+      targetUrls.push(`https://www.cifraclub.com.br/${artistSlug}/${normalSlug}/`);
+    }
+
     const htmlDecode = (str: string) => {
       return str
         .replace(/&nbsp;/g, ' ')
@@ -92,155 +124,186 @@ export default async function handler(req: any, res: any) {
           }
         });
         if (response.ok) {
-          html = await response.text();
-          if (html.includes('<pre') || html.includes('cifra_cnt')) break;
+          const bodyText = await response.text();
+          if (bodyText.includes('<pre') || bodyText.includes('cifra_cnt')) {
+            html = bodyText;
+            break;
+          }
         }
       } catch (e) {
         console.warn('Fetch error:', targetUrl, e);
       }
     }
 
-    if (!html) {
-      return res.status(404).json({
-        error: 'Não foi possível carregar a página do Cifra Club.',
-        details: 'Verifique se o link está correto.'
-      });
-    }
+    // Direct scrape processing if HTML obtained
+    if (html) {
+      let extractedTitle = songGuess;
+      let extractedArtist = artistGuess;
 
-    // Extract title & artist
-    let extractedTitle = songGuess;
-    let extractedArtist = artistGuess;
-
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    if (titleMatch) {
-      const cleanFull = htmlDecode(titleMatch[1].replace(/\s*-\s*Cifra Club/i, '').trim());
-      const parts = cleanFull.split(' - ');
-      if (parts.length >= 2) {
-        extractedArtist = parts[parts.length - 1].trim();
-        extractedTitle = parts.slice(0, -1).join(' - ').trim();
-      } else {
-        extractedTitle = cleanFull;
-      }
-    }
-
-    const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-    if (h1Match) {
-      const cleanH1 = htmlDecode(h1Match[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
-      if (cleanH1 && !cleanH1.toLowerCase().includes('cifra club')) {
-        extractedTitle = cleanH1;
-      }
-    }
-
-    // Key
-    let key = 'C';
-    const toneMatch = html.match(/data-anchor=["']--chord-tone["'][^>]*>([\s\S]*?)<\/button>/i) ||
-                      html.match(/Tom(?:<!-- -->)?:\s*<\/span>\s*<button[^>]*>([\s\S]*?)<\/button>/i) ||
-                      html.match(/id="cifra_tom"[^>]*>[\s\S]*?>([^<]+)<\/a>/i) ||
-                      html.match(/data-key=["']([^"']+)["']/i);
-    if (toneMatch) {
-      const rawKey = htmlDecode(toneMatch[1].replace(/<[^>]*>/g, '').trim());
-      const baseNote = rawKey.split(/[\s(]/)[0].trim();
-      if (baseNote) key = baseNote;
-    }
-
-    key = key.replace('m7m', 'm7').replace('min7', 'm7').replace('7+', '7M').replace('maj7', '7M').replace('M7', '7M').trim();
-
-    // Capo
-    let capo = '';
-    const capoMatch = html.match(/data-anchor=["']--chord-capo["'][^>]*>([\s\S]*?)<\/button>/i) ||
-                      html.match(/id="cifra_capo"[^>]*>([\s\S]*?)<\/span>/i);
-    if (capoMatch) {
-      capo = htmlDecode(capoMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
-    }
-
-    // Image
-    let artistImageUrl = '';
-    const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
-    if (ogImage) artistImageUrl = htmlDecode(ogImage[1].trim());
-
-    // Chords and lyrics
-    const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i) ||
-                     html.match(/<div[^>]*class=["'][^"']*cifra_cnt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-
-    let chordsClean = '';
-    let lyricsClean = '';
-
-    if (preMatch) {
-      let preHtml = preMatch[1]
-        .replace(/<div\b[^>]*>/gi, '\n')
-        .replace(/<\/div>/gi, '\n')
-        .replace(/<br\s*\/?>/gi, '\n');
-
-      const rawLines = preHtml.split(/\r?\n/);
-      const cleanedChordsLines: string[] = [];
-      const lyricLines: string[] = [];
-
-      for (const rawLine of rawLines) {
-        const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, '')).trim();
-        if (stripped === '') {
-          cleanedChordsLines.push('');
-          continue;
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (titleMatch) {
+        const cleanFull = htmlDecode(titleMatch[1].replace(/\s*-\s*Cifra Club/i, '').trim());
+        const parts = cleanFull.split(' - ');
+        if (parts.length >= 2) {
+          extractedArtist = parts[parts.length - 1].trim();
+          extractedTitle = parts.slice(0, -1).join(' - ').trim();
+        } else {
+          extractedTitle = cleanFull;
         }
+      }
 
-        const isTab = (
-          /^[a-gA-G1-9]#?[b]?\s*[\|:]/.test(stripped) && stripped.includes('-')
-        ) || (
-          stripped.includes('|') && (stripped.match(/-{2,}/) !== null)
-        ) || /^-{3,}$/.test(stripped) || /\[Tab\b/i.test(stripped);
+      const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (h1Match) {
+        const cleanH1 = htmlDecode(h1Match[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+        if (cleanH1 && !cleanH1.toLowerCase().includes('cifra club')) {
+          extractedTitle = cleanH1;
+        }
+      }
 
-        if (isTab) continue;
+      let key = 'C';
+      const toneMatch = html.match(/data-anchor=["']--chord-tone["'][^>]*>([\s\S]*?)<\/button>/i) ||
+                        html.match(/Tom(?:<!-- -->)?:\s*<\/span>\s*<button[^>]*>([\s\S]*?)<\/button>/i) ||
+                        html.match(/id="cifra_tom"[^>]*>[\s\S]*?>([^<]+)<\/a>/i) ||
+                        html.match(/data-key=["']([^"']+)["']/i);
+      if (toneMatch) {
+        const rawKey = htmlDecode(toneMatch[1].replace(/<[^>]*>/g, '').trim());
+        const baseNote = rawKey.split(/[\s(]/)[0].trim();
+        if (baseNote) key = baseNote;
+      }
 
-        let cleanedChordLine = htmlDecode(
-          rawLine
-            .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, '$1')
-            .replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, '$1')
-            .replace(/<[^>]*>/g, '')
-        );
+      key = key.replace('m7m', 'm7').replace('min7', 'm7').replace('7+', '7M').replace('maj7', '7M').replace('M7', '7M').trim();
 
-        cleanedChordLine = cleanedChordLine
-          .replace(/m7m/g, 'm7')
-          .replace(/min7/g, 'm7')
-          .replace(/7\+/g, '7M')
-          .replace(/maj7/g, '7M')
-          .replace(/M7/g, '7M');
+      let capo = '';
+      const capoMatch = html.match(/data-anchor=["']--chord-capo["'][^>]*>([\s\S]*?)<\/button>/i) ||
+                        html.match(/id="cifra_capo"[^>]*>([\s\S]*?)<\/span>/i);
+      if (capoMatch) {
+        capo = htmlDecode(capoMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+      }
 
-        cleanedChordsLines.push(cleanedChordLine);
+      let artistImageUrl = '';
+      const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      if (ogImage) artistImageUrl = htmlDecode(ogImage[1].trim());
 
-        const lineWithoutChords = rawLine
-          .replace(/<b\b[^>]*>[\s\S]*?<\/b>/gi, '')
-          .replace(/<span\b[^>]*class=["']?(?:cifra|tab|tablatura|chord)["']?[^>]*>[\s\S]*?<\/span>/gi, '');
+      const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i) ||
+                       html.match(/<div[^>]*class=["'][^"']*cifra_cnt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
 
-        const cleanLine = htmlDecode(lineWithoutChords.replace(/<[^>]*>/g, ''))
-          .replace(/\s+/g, ' ')
-          .trim();
+      if (preMatch) {
+        let preHtml = preMatch[1]
+          .replace(/<div\b[^>]*>/gi, '\n')
+          .replace(/<\/div>/gi, '\n')
+          .replace(/<br\s*\/?>/gi, '\n');
 
-        const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Riff/i.test(cleanLine);
-        const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
-        const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
+        const rawLines = preHtml.split(/\r?\n/);
+        const cleanedChordsLines: string[] = [];
+        const lyricLines: string[] = [];
 
-        if (hasContent) {
-          lyricLines.push(cleanLine);
-        } else if (stripped === '') {
-          if (lyricLines.length > 0 && lyricLines[lyricLines.length - 1] !== '') {
-            lyricLines.push('');
+        for (const rawLine of rawLines) {
+          const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, '')).trim();
+          if (stripped === '') {
+            cleanedChordsLines.push('');
+            continue;
+          }
+
+          const isTab = (
+            /^[a-gA-G1-9]#?[b]?\s*[\|:]/.test(stripped) && stripped.includes('-')
+          ) || (
+            stripped.includes('|') && (stripped.match(/-{2,}/) !== null)
+          ) || /^-{3,}$/.test(stripped) || /\[Tab\b/i.test(stripped);
+
+          if (isTab) continue;
+
+          let cleanedChordLine = htmlDecode(
+            rawLine
+              .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, '$1')
+              .replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, '$1')
+              .replace(/<[^>]*>/g, '')
+          );
+
+          cleanedChordLine = cleanedChordLine
+            .replace(/m7m/g, 'm7')
+            .replace(/min7/g, 'm7')
+            .replace(/7\+/g, '7M')
+            .replace(/maj7/g, '7M')
+            .replace(/M7/g, '7M');
+
+          cleanedChordsLines.push(cleanedChordLine);
+
+          const lineWithoutChords = rawLine
+            .replace(/<b\b[^>]*>[\s\S]*?<\/b>/gi, '')
+            .replace(/<span\b[^>]*class=["']?(?:cifra|tab|tablatura|chord)["']?[^>]*>[\s\S]*?<\/span>/gi, '');
+
+          const cleanLine = htmlDecode(lineWithoutChords.replace(/<[^>]*>/g, ''))
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          const isTabHeader = /^\[Tab/i.test(cleanLine) || /^Riff/i.test(cleanLine);
+          const isSectionHeader = /^\[[^\]]+\]$/.test(cleanLine) && !isTabHeader;
+          const hasContent = (/[a-zA-ZÀ-ÿ]{2,}/.test(cleanLine) && !isTabHeader) || isSectionHeader;
+
+          if (hasContent) {
+            lyricLines.push(cleanLine);
+          } else if (stripped === '') {
+            if (lyricLines.length > 0 && lyricLines[lyricLines.length - 1] !== '') {
+              lyricLines.push('');
+            }
           }
         }
-      }
 
-      chordsClean = cleanedChordsLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-      lyricsClean = lyricLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        const chordsClean = cleanedChordsLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        const lyricsClean = lyricLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+        if (chordsClean.length > 20) {
+          return res.status(200).json({
+            title: extractedTitle,
+            artist: extractedArtist,
+            key,
+            bpm: 120,
+            timeSignature: '4/4',
+            chords: cleanCifraHtml(chordsClean),
+            lyrics: cleanCifraHtml(lyricsClean),
+            capo: capo || '',
+            artistImageUrl: artistImageUrl || '',
+            source: 'cifraclub'
+          });
+        }
+      }
     }
 
-    return res.status(200).json({
-      title: extractedTitle,
-      artist: extractedArtist,
-      key,
-      bpm: 120,
-      timeSignature: '4/4',
-      chords: chordsClean,
-      lyrics: lyricsClean,
-      capo: capo || '',
-      artistImageUrl: artistImageUrl || ''
+    // MULTI-TIER FALLBACK PIPELINE
+    // Tier 1: Local popular songs database - exact match validation only
+    const songNameNorm = (songGuess || '').toLowerCase().trim();
+    const artistNameNorm = (artistGuess || '').toLowerCase().trim();
+    const localHit = findLocalPopularSong(songGuess, artistGuess) || findLocalPopularSong(songSlug, artistSlug);
+
+    if (localHit) {
+      const localTitleNorm = localHit.title.toLowerCase().trim();
+      const localArtistNorm = localHit.artist.toLowerCase().trim();
+
+      const titleMatches = localTitleNorm === songNameNorm ||
+                           localTitleNorm.includes(songNameNorm) ||
+                           songNameNorm.includes(localTitleNorm);
+
+      const artistMatches = !artistNameNorm ||
+                            localArtistNorm.includes(artistNameNorm) ||
+                            artistNameNorm.includes(localArtistNorm);
+
+      if (titleMatches && artistMatches) {
+        return res.status(200).json({
+          ...localHit,
+          chords: cleanCifraHtml(localHit.chords),
+          lyrics: cleanCifraHtml(localHit.lyrics),
+          capo: '',
+          artistImageUrl: '',
+          source: 'local'
+        });
+      }
+    }
+
+    // Direct scrape failed and no exact match in curated local base:
+    // TRANSPARENT FAILURE - Never hallucinate, guess or generate speculative chords.
+    return res.status(422).json({
+      error: `Não foi possível acessar a página original da cifra de "${songGuess}" no Cifra Club.`,
+      details: 'A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro.'
     });
   } catch (error: any) {
     console.error('[Vercel CifraClub Handler Error]:', error);

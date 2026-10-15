@@ -123,6 +123,35 @@ function formatServiceDateTime(serviceDate: any, serviceTime?: string): string {
   return `${weekDay}, ${day} de ${monthName} de ${year} • ${cleanTime}h`;
 }
 
+// Tipos de ordenação do Repertório Musical
+export type SongSortOption = 'recent' | 'alphabetical' | 'artist';
+
+// Extrai a data/timestamp real de criação da música sem presumir campos e sem utilizar datas de edição
+function getSongCreationTime(song: any): number {
+  if (!song) return 0;
+  // Identifica o campo de data de criação real do projeto (createdAt / created_at)
+  // Ignora explicitamente campos de edição/atualização (updatedAt / editedAt)
+  const created = song.createdAt ?? song.created_at;
+  if (!created) return 0;
+
+  if (typeof created.toDate === 'function') {
+    const t = created.toDate().getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  if (created instanceof Date) {
+    const t = created.getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  if (typeof created === 'number') {
+    return isNaN(created) ? 0 : created;
+  }
+  if (typeof created === 'string') {
+    const t = new Date(created).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  return 0;
+}
+
 export function SongsView({
   onSelectSong,
   initialAdd = false,
@@ -161,6 +190,7 @@ export function SongsView({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showOnlyLiturgy, setShowOnlyLiturgy] = useState(propShowLiturgySongs);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [sortBy, setSortBy] = useState<SongSortOption>('recent');
 
   // Reconhecimento de voz para busca
   const [isListening, setIsListening] = useState(false);
@@ -759,11 +789,49 @@ export function SongsView({
       list = list.filter((s) => favoriteIds.has(s.id));
     }
 
-    // Ordenação alfabética por título
-    list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    // Ordenação conforme o seletor ativo ("recent", "alphabetical" ou "artist")
+    if (sortBy === 'recent') {
+      list.sort((a, b) => {
+        const timeA = getSongCreationTime(a);
+        const timeB = getSongCreationTime(b);
+
+        if (timeA > 0 && timeB > 0) {
+          if (timeB !== timeA) return timeB - timeA;
+        } else if (timeA > 0 && timeB === 0) {
+          return -1; // Canções com data de criação conhecida aparecem primeiro
+        } else if (timeA === 0 && timeB > 0) {
+          return 1;
+        }
+
+        // Desempate determinístico (ordem alfabética por título em pt-BR e id)
+        const titleCompare = (a.title || '').localeCompare(b.title || '', 'pt-BR', { sensitivity: 'base' });
+        if (titleCompare !== 0) return titleCompare;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+    } else if (sortBy === 'alphabetical') {
+      list.sort((a, b) => {
+        const titleA = a.title || '';
+        const titleB = b.title || '';
+        const titleCompare = titleA.localeCompare(titleB, 'pt-BR', { sensitivity: 'base' });
+        if (titleCompare !== 0) return titleCompare;
+        const artistCompare = (a.artist || '').localeCompare(b.artist || '', 'pt-BR', { sensitivity: 'base' });
+        if (artistCompare !== 0) return artistCompare;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+    } else if (sortBy === 'artist') {
+      list.sort((a, b) => {
+        const artistA = (a.artist || '').trim();
+        const artistB = (b.artist || '').trim();
+        const artistCompare = artistA.localeCompare(artistB, 'pt-BR', { sensitivity: 'base' });
+        if (artistCompare !== 0) return artistCompare;
+        const titleCompare = (a.title || '').localeCompare(b.title || '', 'pt-BR', { sensitivity: 'base' });
+        if (titleCompare !== 0) return titleCompare;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+    }
 
     return list;
-  }, [songs, searchQuery, selectedArtist, selectedCategory, showOnlyFavorites, favoriteIds]);
+  }, [songs, searchQuery, selectedArtist, selectedCategory, showOnlyFavorites, favoriteIds, sortBy]);
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#080d1a] text-slate-100 px-4 sm:px-8 py-6">
@@ -1158,9 +1226,9 @@ export function SongsView({
         /* ============================================================== */
         <>
           {/* Barra de Busca e Filtros de Seleção */}
-          <div className="max-w-5xl mx-auto w-full flex flex-col md:flex-row items-stretch md:items-center gap-3 mb-6">
+          <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row sm:flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-3 mb-6">
             {/* Campo de Busca por Título ou Artista com Microfone */}
-            <div className="relative flex-1 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl flex items-center px-4 py-1.5 focus-within:border-blue-500/80 transition shadow-inner">
+            <div className="relative flex-1 min-w-[200px] bg-[#101a35]/90 border border-slate-800/90 rounded-2xl flex items-center px-4 py-1.5 focus-within:border-blue-500/80 transition shadow-inner">
               <Search size={18} className="text-slate-400 mr-2.5 shrink-0" />
               <input
                 type="text"
@@ -1191,11 +1259,11 @@ export function SongsView({
             </div>
 
             {/* Dropdown Todos os Artistas */}
-            <div className="w-full md:w-auto">
+            <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
               <select
                 value={selectedArtist}
                 onChange={(e) => setSelectedArtist(e.target.value)}
-                className="w-full md:w-56 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner"
+                className="w-full lg:w-48 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner min-h-[44px]"
               >
                 <option value="all">Todos os Artistas</option>
                 {uniqueArtists.map((artist) => (
@@ -1207,11 +1275,11 @@ export function SongsView({
             </div>
 
             {/* Dropdown Todas as Categorias */}
-            <div className="w-full md:w-auto">
+            <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full md:w-56 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner"
+                className="w-full lg:w-48 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner min-h-[44px]"
               >
                 <option value="all">Todas as Categorias</option>
                 {uniqueCategories.map((cat) => (
@@ -1220,6 +1288,27 @@ export function SongsView({
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Seletor Compacto: Ordenar por */}
+            <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
+              <div className="bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 sm:py-3 focus-within:border-blue-500 transition shadow-inner flex items-center gap-2 min-h-[44px]">
+                <label htmlFor="sort-by-select" className="text-xs sm:text-sm font-semibold text-slate-400 shrink-0 whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+                  <ArrowUpDown size={14} className="text-blue-400 shrink-0" />
+                  <span>Ordenar por:</span>
+                </label>
+                <select
+                  id="sort-by-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SongSortOption)}
+                  className="w-full lg:w-auto bg-transparent text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none pr-1"
+                  aria-label="Ordenar por"
+                >
+                  <option value="recent" className="bg-[#101a35] text-slate-200">Mais recente</option>
+                  <option value="alphabetical" className="bg-[#101a35] text-slate-200">Ordem alfabética</option>
+                  <option value="artist" className="bg-[#101a35] text-slate-200">Artista</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1245,6 +1334,7 @@ export function SongsView({
                     setSelectedArtist('all');
                     setSelectedCategory('all');
                     setShowOnlyFavorites(false);
+                    setSortBy('recent');
                   }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition"
                 >

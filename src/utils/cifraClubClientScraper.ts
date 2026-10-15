@@ -7,9 +7,12 @@ export interface ScrapedCifraClubSong {
   bpm?: number;
   timeSignature?: string;
   lyrics: string;
-  chords?: string[];
+  chords?: string | string[];
   url?: string;
   tags?: string[];
+  source?: string;
+  artistImageUrl?: string;
+  capo?: string;
 }
 
 export async function fetchCifraClubDirect(urlOrCandidate: string): Promise<ScrapedCifraClubSong> {
@@ -40,13 +43,22 @@ export async function fetchCifraClubDirect(urlOrCandidate: string): Promise<Scra
         bpm: data.bpm ? Number(data.bpm) : undefined,
         timeSignature: data.timeSignature || '4/4',
         lyrics: data.lyrics || data.content || '',
-        chords: Array.isArray(data.chords) ? data.chords : [],
+        chords: typeof data.chords === 'string' ? data.chords : (Array.isArray(data.chords) ? data.chords.join('\n') : ''),
         url: targetUrl,
-        tags: data.tags || ['Louvor']
+        tags: data.tags || ['Louvor'],
+        source: data.source || 'cifraclub',
+        artistImageUrl: data.artistImageUrl || '',
+        capo: data.capo || ''
       };
-    } else {
       const errJson = await response.json().catch(() => ({}));
-      throw new Error(errJson.error || `Erro HTTP ${response.status} ao importar do Cifra Club.`);
+      const fallbackGeneric = `Erro HTTP ${response.status} ao importar do Cifra Club.`;
+      const candidateMsg = (typeof errJson.details === 'string' && errJson.details.trim())
+        ? errJson.details.trim()
+        : (typeof errJson.error === 'string' && errJson.error.trim())
+          ? errJson.error.trim()
+          : fallbackGeneric;
+      const msg = candidateMsg.startsWith('<') ? fallbackGeneric : candidateMsg;
+      throw new Error(msg);
     }
   } catch (err: any) {
     console.warn('[cifraClubClientScraper] Falha na API interna:', err);

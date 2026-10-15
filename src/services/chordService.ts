@@ -755,7 +755,8 @@ export function cleanCifraHtml(text: string): string {
 
   // 2. Extract contents of <b> tags (e.g. <b data-chord-name="A"...>A  </b>)
   // Replace <b ...>content</b> with content (preserving internal spaces)
-  str = str.replace(/<b\b[^>]*>(.*?)<\/b>/gi, '$1');
+  str = str.replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, '$1');
+  str = str.replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, '$1');
   str = str.replace(/<b\b[^>]*>/gi, ''); // remove any unclosed opening <b> tags with attributes
 
   // 3. Replace closing tags
@@ -775,14 +776,130 @@ export function cleanCifraHtml(text: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
     .replace(/&apos;/g, "'");
 
-  // 6. Normalize newlines and trim each line's trailing whitespace
+  // 6. Ensure section headers on their own line if fused with content or chords
+  // e.g. "[Intro]B   F#" -> "[Intro]\nB   F#" or "[Verso 1]Texto" -> "[Verso 1]\nTexto"
+  str = str.replace(/^(\[[^\]\n]+\])([^\r\n\s])/gm, '$1\n$2');
+  str = str.replace(/^(\[[^\]\n]+\])[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gm, '$1\n$2');
+
+  // 7. Normalize 7M / 7m notation according to Liloupro domain rules
+  str = str
+    .replace(/\b([A-G][#b]?)m7m\b/g, '$1m7')
+    .replace(/\b([A-G][#b]?)min7\b/g, '$1m7')
+    .replace(/\b([A-G][#b]?)7\+\b/g, '$17M')
+    .replace(/\b([A-G][#b]?)maj7\b/g, '$17M')
+    .replace(/\b([A-G][#b]?)M7\b/g, '$17M');
+
+  // 8. Normalize newlines and trim each line's trailing whitespace
   str = str.replace(/\r/g, '');
   str = str.split('\n').map(l => l.trimEnd()).join('\n');
   str = str.replace(/\n{3,}/g, '\n\n').trim();
 
   return str;
+}
+
+/**
+ * Ensures chords and lyrics are properly structured.
+ * If `rawChords` already contains lyrics lines interleaved, it returns `rawChords` cleaned.
+ * If `rawChords` contains ONLY chords (e.g. from an AI or source that returned pure chord lines without lyrics)
+ * and `rawLyrics` is provided, it intelligently pairs each section's chord lines with its corresponding lyrics lines.
+ */
+export function pairChordsAndLyricsIfSeparated(rawChords: string, rawLyrics: string): string {
+  const cleanChords = cleanCifraHtml(rawChords || '');
+  const cleanLyrics = cleanCifraHtml(rawLyrics || '');
+
+  if (!cleanChords) return cleanChords;
+  if (!cleanLyrics) return cleanChords;
+
+  const chordLines = cleanChords.split('\n');
+
+  // Check if cleanChords already has lyrics lines
+  let hasLyricsInside = false;
+  for (const line of chordLines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Section headers like [Verso 1] don't count as lyric lines
+    if (/^\[[^\]]+\]$/.test(trimmed) || /^\{[^\}]+\}$/.test(trimmed)) continue;
+    if (!isChordLine(trimmed)) {
+      hasLyricsInside = true;
+      break;
+    }
+  }
+
+  // If chords already contain lyrics lines, return cleanChords as is
+  if (hasLyricsInside) {
+    return cleanChords;
+  }
+
+  // If chords has only chord lines / headers, but we have cleanLyrics, pair them by section
+  type Section = { header: string; lines: string[] };
+  const parseSections = (text: string): Section[] => {
+    const sections: Section[] = [];
+    let current: Section = { header: '', lines: [] };
+    const lines = text.split('\n');
+    for (const l of lines) {
+      const trimmed = l.trim();
+      const headerMatch = trimmed.match(/^\[([^\]]+)\]$/);
+      if (headerMatch) {
+        if (current.header || current.lines.length > 0) {
+          sections.push(current);
+        }
+        current = { header: headerMatch[1], lines: [] };
+      } else if (trimmed) {
+        current.lines.push(l);
+      }
+    }
+    if (current.header || current.lines.length > 0) {
+      sections.push(current);
+    }
+    return sections;
+  };
+
+  const chordSections = parseSections(cleanChords);
+  const lyricSections = parseSections(cleanLyrics);
+
+  if (chordSections.length === 0) return cleanChords;
+
+  const normalizeHeader = (h: string) => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  const resultBlocks: string[] = [];
+
+  for (const cSec of chordSections) {
+    const blockLines: string[] = [];
+    if (cSec.header) {
+      blockLines.push(`[${cSec.header}]`);
+    }
+
+    const matchingLSec = lyricSections.find(
+      lSec => lSec.header && (
+        normalizeHeader(lSec.header) === normalizeHeader(cSec.header) ||
+        normalizeHeader(lSec.header).includes(normalizeHeader(cSec.header)) ||
+        normalizeHeader(cSec.header).includes(normalizeHeader(lSec.header))
+      )
+    );
+
+    const isInstrumental = /intro|solo|ponte\s+instr|instrumental|riff|interludio/i.test(cSec.header);
+
+    if (matchingLSec && !isInstrumental && matchingLSec.lines.length > 0) {
+      const maxLines = Math.max(cSec.lines.length, matchingLSec.lines.length);
+      for (let i = 0; i < maxLines; i++) {
+        if (i < cSec.lines.length) {
+          blockLines.push(cSec.lines[i]);
+        }
+        if (i < matchingLSec.lines.length) {
+          blockLines.push(matchingLSec.lines[i]);
+        }
+      }
+    } else {
+      blockLines.push(...cSec.lines);
+    }
+
+    resultBlocks.push(blockLines.join('\n'));
+  }
+
+  return resultBlocks.join('\n\n').trim();
 }
 
 export function isChordLine(line: string): boolean {

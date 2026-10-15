@@ -9,6 +9,7 @@ import { getFirestore as getClientFirestore, collection as clientCollection, get
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage } from "./src/localBibleDb.js";
+import { cleanCifraHtml, pairChordsAndLyricsIfSeparated } from "./src/services/chordService.js";
 
 // Compatibilidade universal para obter o diretório do servidor tanto em ESM (tsx) quanto em CommonJS compilado (esbuild)
 const serverDir: string = (() => {
@@ -1963,6 +1964,7 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     lyrics: string;
     capo: string;
     artistImageUrl?: string;
+    source?: string;
   }> {
     let cleanUrl = (inputUrl || "").trim();
 
@@ -2372,10 +2374,11 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
             key,
             bpm,
             timeSignature,
-            chords: chordsClean,
-            lyrics: lyricsClean,
+            chords: cleanCifraHtml(chordsClean),
+            lyrics: cleanCifraHtml(lyricsClean),
             capo: capo || "",
-            artistImageUrl: artistImageUrl || ""
+            artistImageUrl: artistImageUrl || "",
+            source: "cifraclub"
           };
         }
       }
@@ -2385,84 +2388,42 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     // MULTI-TIER RESILIENT FALLBACK PIPELINE
     // If direct HTML scrape failed or returned no chords:
     // ==========================================
-    console.log(`scrapeCifraClub: Raspagem direta não obteve a cifra. Ativando pipeline de contingência para "${songGuess}" / "${artistGuess}"...`);
+    console.log(`scrapeCifraClub: Raspagem direta não obteve a cifra para "${songGuess}" / "${artistGuess}".`);
 
-    // Tier 1: Local popular songs database
+    // Tier 1: Local popular songs database - exact match validation only
+    const songNameNorm = (songGuess || '').toLowerCase().trim();
+    const artistNameNorm = (artistGuess || '').toLowerCase().trim();
     const localHit = findLocalPopularSong(songGuess, artistGuess) || findLocalPopularSong(songSlug, artistSlug);
+
     if (localHit) {
-      console.log(`scrapeCifraClub: Hit na base local de músicas para "${songGuess}"`);
-      return {
-        ...localHit,
-        capo: ""
-      };
-    }
+      const localTitleNorm = localHit.title.toLowerCase().trim();
+      const localArtistNorm = localHit.artist.toLowerCase().trim();
 
-    // Tier 2: AI Generation with Search / Knowledge
-    const apiKey = getGeminiApiKey();
-    if (apiKey) {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-      });
+      const titleMatches = localTitleNorm === songNameNorm ||
+                           localTitleNorm.includes(songNameNorm) ||
+                           songNameNorm.includes(localTitleNorm);
 
-      const systemInstruction = `Você é um curador e mapeador de cifras musicais gospel profissional para o Liloupro. Reproduza com precisão matemática as cifras e letras de referência do Cifra Club.
-Regras:
-1. Preserve o tom correto original.
-2. Formate as seções entre colchetes ([Intro], [Verso 1], [Refrão], [Ponte]).
-3. Na cifra, posicione os acordes (especificados em tags HTML bold '<b>A</b>') na linha superior exatamente sobre a sílaba correspondente de forma monoespaçada.
-4. Represente sétimas menores como '7m' e sétimas maiores como '7M'.
-5. O campo 'lyrics' deve conter estritamente a letra completa sem acordes.`;
+      const artistMatches = !artistNameNorm ||
+                            localArtistNorm.includes(artistNameNorm) ||
+                            artistNameNorm.includes(localArtistNorm);
 
-      const prompt = `Traga a cifra completa e letra de "${songGuess}" do artista/banda "${artistGuess}" conforme o padrão do Cifra Club.`;
-
-      const fallbackModels = ["gemini-2.5-flash", "gemini-3.1-flash-lite"];
-      for (const model of fallbackModels) {
-        try {
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  artist: { type: Type.STRING },
-                  key: { type: Type.STRING },
-                  bpm: { type: Type.INTEGER },
-                  timeSignature: { type: Type.STRING },
-                  chords: { type: Type.STRING },
-                  lyrics: { type: Type.STRING }
-                },
-                required: ["title", "artist", "key", "bpm", "timeSignature", "chords", "lyrics"]
-              }
-            }
-          });
-
-          if (response?.text) {
-            const parsed = JSON.parse(response.text.trim());
-            if (parsed.chords && parsed.lyrics) {
-              return {
-                title: parsed.title || songGuess,
-                artist: parsed.artist || artistGuess,
-                key: (parsed.key || "C").replace(/7\+/g, "7M").replace(/maj7/g, "7M").replace(/min7/g, "m7"),
-                bpm: Number(parsed.bpm) || 80,
-                timeSignature: parsed.timeSignature || "4/4",
-                chords: parsed.chords,
-                lyrics: parsed.lyrics,
-                capo: ""
-              };
-            }
-          }
-        } catch {
-          // Try next model
-        }
+      if (titleMatches && artistMatches) {
+        console.log(`scrapeCifraClub: Hit exato na base local de músicas para "${songGuess}"`);
+        return {
+          ...localHit,
+          chords: cleanCifraHtml(localHit.chords),
+          lyrics: cleanCifraHtml(localHit.lyrics),
+          capo: "",
+          artistImageUrl: "",
+          source: "local"
+        };
       }
     }
 
+    // Direct scrape failed and no exact match in curated local base:
+    // TRANSPARENT FAILURE - Never hallucinate, guess or generate speculative chords.
     throw new Error(
-      `Não foi possível importar a música "${songGuess}" do Cifra Club. Verifique o link e certifique-se de que é a página de uma cifra com acordes.`
+      `Não foi possível acessar a página original da cifra de "${songGuess}" no Cifra Club. A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro.`
     );
   }
 
@@ -2478,10 +2439,12 @@ Regras:
       return res.json(data);
 
     } catch (error: any) {
-      console.error("[Status] error importing from Cifra Club link:", error);
-      res.status(500).json({
-        error: "Erro ao importar cifra do Cifra Club.",
-        details: error?.message || String(error)
+      console.info("[Status] Cifra Club link import unfulfilled:", error?.message || error);
+      const songSlug = (url || "").replace(/\/+$/, "").split("/").pop()?.replace(/\.html$/i, "") || "";
+      const songGuess = error?.message?.match(/cifra de "([^"]+)"/)?.[1] || formatCifraClubSlug(songSlug);
+      res.status(422).json({
+        error: `Não foi possível acessar a página original da cifra de "${songGuess}" no Cifra Club.`,
+        details: "A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro."
       });
     }
   });
@@ -2496,14 +2459,32 @@ Regras:
 
       console.log(`import-cifraclub-search: Buscando link oficial Cifra Club para "${title}" / "${artist || '-'}"`);
 
-      // 1. CHECK LOCAL BASE OF POPULAR SONGS FIRST (0 API quota/rate-limit cost, outstanding alignment)
+      // 1. CHECK LOCAL BASE OF POPULAR SONGS FIRST (Exact match validation only)
       const localPopularSong = findLocalPopularSong(title, artist);
       if (localPopularSong) {
-        console.log(`import-cifraclub-search: Hit na base local de músicas populares para "${title}"`);
-        return res.json({
-          ...localPopularSong,
-          foundUrl: "https://www.cifraclub.com.br/gospel/"
-        });
+        const localTitleNorm = localPopularSong.title.toLowerCase().trim();
+        const localArtistNorm = localPopularSong.artist.toLowerCase().trim();
+        const searchTitleNorm = title.toLowerCase().trim();
+        const searchArtistNorm = (artist || '').toLowerCase().trim();
+
+        const titleMatches = localTitleNorm === searchTitleNorm ||
+                             localTitleNorm.includes(searchTitleNorm) ||
+                             searchTitleNorm.includes(localTitleNorm);
+
+        const artistMatches = !searchArtistNorm ||
+                              localArtistNorm.includes(searchArtistNorm) ||
+                              searchArtistNorm.includes(localArtistNorm);
+
+        if (titleMatches && artistMatches) {
+          console.log(`import-cifraclub-search: Hit na base local de músicas populares para "${title}"`);
+          return res.json({
+            ...localPopularSong,
+            chords: cleanCifraHtml(localPopularSong.chords),
+            lyrics: cleanCifraHtml(localPopularSong.lyrics),
+            source: "local",
+            foundUrl: "https://www.cifraclub.com.br/gospel/"
+          });
+        }
       }
 
       const apiKey = getGeminiApiKey();
@@ -2616,168 +2597,12 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
         }
       }
 
-      // LAYER 2: If T0 and T1 failed, try generating structure via IA or return the structured supporting card
-      if (!scrapeSucceeded) {
-        console.log("import-cifraclub-search: Ativando geração inteligente de cifras via IA como plano de contingência...");
-        
-        const systemInstruction = `Você é um curador e mapeador de cifras musicais gospel profissional e perfeccionista para o Liloupro. Seu objetivo absoluto é reproduzir com precisão matemática e máxima fidelidade as cifras e letras oficiais de referência de sites consagrados como cifraclub.com.br e letras.mus.br.
-Regras inegociáveis:
-1. Preserve o tom correto original.
-2. Formate as seções entre colchetes em linhas separadas (ex: [Intro], [Verso 1], [Refrão], [Ponte]).
-3. Na letra cifrada, posicione os acordes (especificados dentro de tags HTML bold '<b>A</b>') EXATAMENTE acima da sílaba exata em que o acorde deve soar. Use espaços monoespaçados para manter o alinhamento original meticuloso da cifra do Cifra Club. No Liloupro, os acordes não devem ficar inline com o texto.
-4. Represente sétimas menores como '7m' e sétimas maiores como '7M' (ex: G7M, C7m).
-5. A propriedade 'lyrics' deve conter estritamente a letra oficial completa em português de forma legível e sem NENHUM acorde, cifra ou marcação musical embutida.`;
-
-        const initialPrompt = `Por favor, faça uma busca detalhada no Google Search no site cifraclub.com.br e letras.mus.br pela música "${title}" do artista "${artist || "cantor consagrado"}".
-Caso seja uma versão em português de uma música internacional como "Holy Forever" de Chris Tomlin / Gabriel Guedes / Fernandinho, você DEVE obrigatoriamente trazer a letra oficial brasileira iniciada em: "As muitas gerações rendidas em louvor" e com acordes com base em C, C4, Am7, G, F9 (tom C original). Você está estritamente proibido de devolver qualquer tradução contendo "Gerações vêm e vão".
-
-Retorne uma estrutura JSON perfeita contendo:
-1. "title": título corrigido brasileiro oficial (ex: "Santos Pra Sempre").
-2. "artist": o cantor brasileiro consagrado (ex: "Gabriel Guedes").
-3. "key": Tom da versão nacional (ex: "C").
-4. "bpm": andamento original da canção.
-5. "timeSignature": compasso da música (ex: '4/4').
-6. "lyrics": A letra consagrada oficial completa, separada em estrofes ([Verso 1], [Refrão], [Ponte], etc.).
-7. "chords": Letra oficial mesclada com as marcas de cifras por cima de forma monoespaçada correta no tom correspondente.`;
-
-        const modelsToTry = GEMINI_FALLBACK_MODELS;
-        let responseText = "";
-        let lastError: any = null;
-
-        if (ai) {
-          for (const model of modelsToTry) {
-          try {
-            console.log(`import-cifraclub-search (Fallback): Executando busca usando modelo "${model}" com Google Search...`);
-            const response = await ai.models.generateContent({
-              model: model,
-              contents: initialPrompt,
-              config: {
-                systemInstruction,
-                tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    artist: { type: Type.STRING },
-                    key: { type: Type.STRING },
-                    bpm: { type: Type.INTEGER },
-                    timeSignature: { type: Type.STRING },
-                    chords: { type: Type.STRING },
-                    lyrics: { type: Type.STRING }
-                  },
-                  required: ["title", "artist", "key", "bpm", "timeSignature", "chords", "lyrics"]
-                }
-              }
-            });
-
-            if (response && response.text) {
-              const parsed = JSON.parse(response.text.trim());
-              if (parsed.chords && parsed.lyrics) {
-                responseText = response.text;
-                break;
-              }
-            }
-          } catch (err: any) {
-            console.log(`import-cifraclub-search (Fallback): Modelo "${model}" indisponível com Google Search. Tentando sem busca.`);
-            
-            // Tenta SEM busca caso quota de busca esteja esgotada
-            try {
-              console.log(`import-cifraclub-search (Fallback): Executando sob modelo "${model}" SEM Google Search...`);
-              const fallbackPrompt = `${initialPrompt}\nImportante: Caso não consiga pesquisar em tempo real, use exclusivamente seu conhecimento musical prévio consolidado sobre a letra e acordes consagradas dessa canção.`;
-              const response = await ai.models.generateContent({
-                model: model,
-                contents: fallbackPrompt,
-                config: {
-                  systemInstruction,
-                  responseMimeType: "application/json",
-                  responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                      title: { type: Type.STRING },
-                      artist: { type: Type.STRING },
-                      key: { type: Type.STRING },
-                      bpm: { type: Type.INTEGER },
-                      timeSignature: { type: Type.STRING },
-                      chords: { type: Type.STRING },
-                      lyrics: { type: Type.STRING }
-                    },
-                    required: ["title", "artist", "key", "bpm", "timeSignature", "chords", "lyrics"]
-                  }
-                }
-              });
-
-              if (response && response.text) {
-                const parsed = JSON.parse(response.text.trim());
-                if (parsed.chords && parsed.lyrics) {
-                  responseText = response.text;
-                  break;
-                }
-              }
-            } catch (errNoSearch: any) {
-              lastError = errNoSearch;
-              console.log(`import-cifraclub-search (Fallback): Modelo "${model}" indisponível sem Google Search. Seguindo para próximo modelo.`);
-            }
-          }
-        }
-        }
-
-        if (responseText) {
-          const finalParsedData = JSON.parse(responseText.trim());
-          data = {
-            title: finalParsedData.title || title,
-            artist: finalParsedData.artist || artist || "Artista Oficial",
-            key: finalParsedData.key || "C",
-            bpm: Number(finalParsedData.bpm) || 80,
-            timeSignature: finalParsedData.timeSignature || "4/4",
-            chords: finalParsedData.chords,
-            lyrics: finalParsedData.lyrics,
-            capo: ""
-          };
-          scrapeSucceeded = true;
-        } else {
-          // Se até a IA falhou ou cota está esgotada, aplica fallback estruturado graceful igual ao do autofill:
-          console.log("import-cifraclub-search: Todas as tentativas de IA concluídas. Retornando gabarito estruturado de suporte.");
-          data = {
-            title: title || "Música Solicitada",
-            artist: artist || "Artista Oficial",
-            key: "G",
-            bpm: 78,
-            timeSignature: "4/4",
-            chords: `[Intro]
-G   C9   Em7   D4
-
-[Verso 1]
-G                          C9
-  Digite ou cole os acordes aqui
-Em7                       D4
-  Alinhados com a letra do louvor
-
-[Refrão]
-G           D4
-  Insira a mensagem do Refrão
-Em7         C9
-  E os acordes correspondentes
-
-[Ponte]
-C9       D4       Em7      D/F#
-  Complete a finalização da música`,
-            lyrics: `[Intro]
-
-[Verso 1]
-Digite ou cole os acordes aqui
-Alinhados com a letra do louvor
-
-[Refrão]
-Insira a mensagem do Refrão
-E os acordes correspondentes
-
-[Ponte]
-Complete a finalização da música`,
-            capo: "",
-            warning: "Cota de Inteligência Artificial temporariamente de busca excedida. Carregamos um gabarito básico estruturado de apoio para que possa preencher ou colar sua cifra sem erros!"
-          };
-        }
+      // If scraping did not succeed:
+      if (!scrapeSucceeded || !data) {
+        return res.status(422).json({
+          error: `Não foi possível localizar e resgatar a cifra de "${title}" no Cifra Club.`,
+          details: "A página original não pôde ser acessada no momento (restrição de acesso temporária ou indisponibilidade). Tente colar o link direto da música copiado do navegador ou cadastre a letra e os acordes manualmente no editor do LiLouPro."
+        });
       }
 
       return res.json({
@@ -2786,9 +2611,9 @@ Complete a finalização da música`,
       });
 
     } catch (error: any) {
-      console.error("[Status] error searching and importing from Cifra Club:", error);
-      res.status(500).json({
-        error: "Não foi possível localizar e resgatar a cifra do Cifra Club.",
+      console.info("[Status] Cifra Club search unfulfilled:", error?.message || error);
+      res.status(422).json({
+        error: `Não foi possível localizar e resgatar a cifra de "${title}" no Cifra Club.`,
         details: error?.message || String(error)
       });
     }
