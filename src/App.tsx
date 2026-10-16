@@ -3485,6 +3485,7 @@ function MainContent() {
           onOpenChange={setIsAssistantOpen}
           theme={theme}
           allSongs={allSongs}
+          allMembers={allMembers}
           currentSong={selectedSong}
           services={allServices}
           activeService={activeLiturgyService}
@@ -15277,6 +15278,37 @@ function CalendarView({
     );
   };
 
+  const openScaleWhatsAppShare = (message: string, toastText: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(message).catch(() => {});
+      }
+      showQuickToast(toastText);
+    } catch (err) {
+      console.warn("Could not copy to clipboard", err);
+    }
+
+    const encoded = encodeURIComponent(message);
+    const waUrl = `https://api.whatsapp.com/send?text=${encoded}`;
+
+    try {
+      const a = document.createElement('a');
+      a.href = waUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 500);
+    } catch (err) {
+      console.warn("Falha no link do WhatsApp, tentando window.open:", err);
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const shareScaleWhatsAppIndividual = (service: any) => {
     const date = service.date?.toDate ? service.date.toDate() : new Date(service.date);
     const dateStr = !isNaN(date.getTime()) 
@@ -15326,19 +15358,7 @@ function CalendarView({
     message += `\n🔗 *Acesse o nosso sistema:* ${window.location.origin}\n\n`;
     message += `_Gerado por LiLouPro_`;
 
-    try {
-      navigator.clipboard.writeText(message);
-      showQuickToast("Escala copiada! Abrindo WhatsApp...");
-    } catch (err) {
-      console.warn("Could not copy to clipboard", err);
-    }
-
-    const encoded = encodeURIComponent(message);
-    if (whatsappGroupLink) {
-      window.open(whatsappGroupLink, '_blank', 'noopener,noreferrer');
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank', 'noopener,noreferrer');
-    }
+    openScaleWhatsAppShare(message, "Escala copiada! Abrindo WhatsApp...");
   };
 
   const generateMonthPDF = () => {
@@ -15496,25 +15516,7 @@ function CalendarView({
 
     message += `🔗 *Acesse o nosso sistema:* ${window.location.origin}\n_Gerado por LiLouPro_`;
 
-    try {
-      navigator.clipboard.writeText(message);
-      showQuickToast("Texto da escala mensal copiado! Abrindo WhatsApp...");
-    } catch (err) {
-      console.warn("Could not copy to clipboard", err);
-    }
-
-    const encoded = encodeURIComponent(message);
-    const targetUrl = whatsappGroupLink || `https://api.whatsapp.com/send?text=${encoded}`;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
-
-    try {
-      const result = generateMonthPDF();
-      if (result) {
-        result.doc.save(result.filename);
-      }
-    } catch (e) {
-      console.error("Erro ao salvar PDF mensal:", e);
-    }
+    openScaleWhatsAppShare(message, "Texto da escala mensal copiado! Abrindo WhatsApp...");
   };
 
   const [isGenerating, setIsGenerating] = useState<string | null>(null);

@@ -39,15 +39,20 @@ interface SongsViewProps {
 // Extrai ou classifica a categoria litúrgica / teológica da música
 function getSongCategory(song: any): string | null {
   if (song.category && typeof song.category === 'string' && song.category.trim()) {
-    return song.category.toUpperCase().trim();
+    const cat = song.category.toUpperCase().trim();
+    if (cat === 'LOUVOR' || cat === 'GERAL' || cat === 'SEM CATEGORIA' || cat === 'NONE') {
+      return null;
+    }
+    return cat;
   }
 
   // Verificar se tem bloco de liturgia associado (ex: Criação, Queda, Redenção, Consumação)
   if (song.liturgySection && typeof song.liturgySection === 'string') {
-    return song.liturgySection.toUpperCase().trim();
+    const sec = song.liturgySection.toUpperCase().trim();
+    if (sec !== 'LOUVOR' && sec !== 'GERAL') return sec;
   }
 
-  // Verificar nas tags
+  // Verificar nas tags (apenas se for categoria litúrgica específica)
   if (Array.isArray(song.tags) && song.tags.length > 0) {
     const candidate = song.tags.find((t: any) => {
       const s = String(t).toLowerCase().trim();
@@ -370,7 +375,7 @@ export function SongsView({
               artistImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
               customImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
               tone: item.tone || item.key || found.tone || found.key,
-              category: item.category || getSongCategory(found) || 'LOUVOR'
+              category: item.category || getSongCategory(found) || null
             };
           }
           if (item.type === 'song' || item.songId) {
@@ -379,7 +384,7 @@ export function SongsView({
               title: item.title || item.songTitle,
               artist: item.artist || item.songArtist || 'Desconhecido',
               tone: item.tone || item.key || 'C',
-              category: item.category || 'LOUVOR',
+              category: item.category || null,
               lyrics: item.lyrics || '',
               chords: item.chords || ''
             };
@@ -588,10 +593,10 @@ export function SongsView({
           key: 'C',
           tone: 'C',
           bpm: 120,
-          category: 'Louvor',
+          category: null,
           chords: '',
           lyrics: '',
-          tags: ['Louvor'],
+          tags: [],
           churchId: churchId || 'semente',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -606,10 +611,10 @@ export function SongsView({
         key: 'C',
         tone: 'C',
         bpm: 120,
-        category: 'Louvor',
+        category: null,
         chords: '',
         lyrics: '',
-        tags: ['Louvor'],
+        tags: [],
         churchId: churchId || 'semente',
         initialEdit: true
       };
@@ -764,10 +769,18 @@ export function SongsView({
     });
     // Adicionar categorias de referência litúrgica se vazias
     if (catSet.size === 0) {
-      catSet.add('CRIAÇÃO/ADORAÇÃO');
-      catSet.add('QUEDA/CONFISSÃO');
-      catSet.add('REDENÇÃO/AÇÃO DE GRAÇAS');
-      catSet.add('CONSUMAÇÃO/RESPOSTA');
+      catSet.add('1 - ABERTURA');
+      catSet.add('2 - CRIAÇÃO/ADORAÇÃO');
+      catSet.add('3 - QUEDA/CONFISSÃO');
+      catSet.add('4 - REDENÇÃO/AÇÃO DE GRAÇAS');
+      catSet.add('5 - CONSUMAÇÃO/RESPOSTA');
+      catSet.add('6 - DÍZIMOS/OFERTAS');
+      catSet.add('7 - ORAÇÃO/INTERCESSÃO');
+      catSet.add('8 - APELO/DECISÃO');
+      catSet.add('9 - JÚBILO/CELEBRAÇÃO');
+      catSet.add('10 - CEIA/COMUNHÃO');
+      catSet.add('11 - ADORAÇÃO');
+      catSet.add('12 - ENCERRAMENTO');
     }
     return Array.from(catSet).sort((a, b) => a.localeCompare(b));
   }, [songs]);
@@ -792,11 +805,14 @@ export function SongsView({
       list = list.filter((s) => (s.artist || '').toLowerCase() === selectedArtist.toLowerCase());
     }
 
-    // Filtro por categoria selecionada
+    // Filtro por categoria selecionada (compara com e sem numeração)
     if (selectedCategory !== 'all') {
+      const cleanFilter = selectedCategory.replace(/^\d+\s*[-–—]\s*/, '').toLowerCase().trim();
       list = list.filter((s) => {
         const cat = getSongCategory(s);
-        return cat && cat.toLowerCase() === selectedCategory.toLowerCase();
+        if (!cat) return false;
+        const cleanCat = cat.replace(/^\d+\s*[-–—]\s*/, '').toLowerCase().trim();
+        return cat.toLowerCase() === selectedCategory.toLowerCase() || cleanCat === cleanFilter;
       });
     }
 

@@ -57,6 +57,7 @@ interface Message {
 interface LilouproAssistantProps {
   theme: 'dark' | 'light';
   allSongs: any[];
+  allMembers?: any[];
   currentSong?: any;
   onNavigate: (tab: 'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master') => void;
   onOpenSong: (song: any, options?: { focusMode?: boolean; scrollSpeed?: number; autoScroll?: boolean; showPlayer?: boolean }) => void;
@@ -216,6 +217,7 @@ function getRandomDone(): string {
 export function LilouproAssistant({
   theme,
   allSongs = [],
+  allMembers = [],
   currentSong,
   onNavigate,
   onOpenSong,
@@ -282,6 +284,44 @@ export function LilouproAssistant({
     if (future) return future;
     return servicesWithDates[servicesWithDates.length - 1] || null;
   }, [activeService, services]);
+
+  const resolveMemberName = useCallback((idOrName: string) => {
+    if (!idOrName) return '';
+    const cleanId = String(idOrName).trim();
+    
+    const list = Array.isArray(allMembers) && allMembers.length > 0 ? allMembers : (() => {
+      try {
+        const cached = localStorage.getItem('liloupro_offline_members');
+        return cached ? JSON.parse(cached) : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    const found = list.find((m: any) => 
+      m.id === cleanId || 
+      m.name === cleanId || 
+      (m.name && m.name.trim().toLowerCase() === cleanId.toLowerCase())
+    );
+
+    if (found && found.name) {
+      const parts = found.name.trim().split(/\s+/);
+      if (parts.length > 1) {
+        return `${parts[0]} ${parts[parts.length - 1]}`;
+      }
+      return parts[0];
+    }
+
+    if (!cleanId.startsWith('mem_') && !cleanId.includes('-') && cleanId.length < 30) {
+      const parts = cleanId.split(/\s+/);
+      if (parts.length > 1) {
+        return `${parts[0]} ${parts[parts.length - 1]}`;
+      }
+      return cleanId;
+    }
+
+    return cleanId;
+  }, [allMembers]);
 
   const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
     const nextVal = typeof val === 'function' ? val(isOpen) : val;
@@ -1469,9 +1509,9 @@ export function LilouproAssistant({
     // Ex: "quantos membros na escala de hoje?", "quem está escalado hoje?", "escala de hoje", "voluntários de hoje"
     // ==========================================
     const isScaleTodayCommand = (
-      (norm.includes('quantos membros') || norm.includes('quem esta') || norm.includes('quem tá') || norm.includes('quantas pessoas') || norm.includes('qual a escala') || norm.includes('ver escala') || norm.includes('mostrar escala') || norm.includes('membros na escala')) &&
+      (norm.includes('quantos membros') || norm.includes('quais os membros') || norm.includes('quem esta') || norm.includes('quem tá') || norm.includes('quantas pessoas') || norm.includes('qual a escala') || norm.includes('ver escala') || norm.includes('mostrar escala') || norm.includes('membros na escala') || norm.includes('membros da escala')) &&
       (norm.includes('hoje') || norm.includes('de hoje') || norm.includes('proximo culto') || norm.includes('deste culto') || norm.includes('do culto'))
-    ) || norm === 'quantos membros na escala de hoje' || norm === 'escala de hoje';
+    ) || norm === 'quantos membros na escala de hoje' || norm === 'escala de hoje' || norm.includes('membros da escala');
 
     if (isScaleTodayCommand) {
       setIsLoading(false);
@@ -1495,17 +1535,21 @@ export function LilouproAssistant({
 
       const scales = targetService.scales || {};
       const uniqueMemberIds = new Set();
-      const rolesSummary = [];
+      const rolesDetails: { role: string; names: string[] }[] = [];
 
       Object.entries(scales).forEach(([role, ids]) => {
-        if (Array.isArray(ids)) {
-          ids.forEach(id => {
+        const rawList = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+        const assignedIds = rawList.filter(Boolean);
+        if (assignedIds.length > 0) {
+          const names: string[] = [];
+          assignedIds.forEach(id => {
             if (id && typeof id === 'string') uniqueMemberIds.add(id);
+            const formatted = resolveMemberName(id);
+            if (formatted) names.push(formatted);
           });
-          if (ids.length > 0) rolesSummary.push(`${role}: ${ids.length}`);
-        } else if (ids && typeof ids === 'string') {
-          uniqueMemberIds.add(ids);
-          rolesSummary.push(`${role}: 1`);
+          if (names.length > 0) {
+            rolesDetails.push({ role, names });
+          }
         }
       });
 
@@ -1515,9 +1559,10 @@ export function LilouproAssistant({
       let replyText = '';
       let speakText = '';
 
-      if (memberCount > 0) {
-        replyText = `Hoje no **${serviceTitle}**, temos **${memberCount} pessoa(s) na escala**:\n${rolesSummary.length > 0 ? `\n• ${rolesSummary.slice(0, 5).join('\n• ')}` : ''}`;
-        speakText = `Hoje temos ${memberCount} ${memberCount === 1 ? 'pessoa' : 'pessoas'} na escala.`;
+      if (rolesDetails.length > 0) {
+        const lines = rolesDetails.map(item => `• **${item.role}:** ${item.names.join(', ')}`);
+        replyText = `Membros escalados para o **${serviceTitle}** (${memberCount} ministros):\n\n${lines.join('\n')}`;
+        speakText = `Escalados para o ${serviceTitle}: ${rolesDetails.map(r => `${r.role}: ${r.names.join(', ')}`).join('. ')}.`;
       } else {
         replyText = `O culto **${serviceTitle}** ainda está sem membros escalados.`;
         speakText = 'Esse culto ainda está sem escala.';
@@ -3156,21 +3201,23 @@ export function LilouproAssistant({
         return;
       }
 
-      // 14. COMO ENSAIAR COM O PLAYER / MODO PRATIQUE?
+      // 14. COMO PRATICAR AS MÚSICAS DO CULTO / MODO PRATIQUE?
       if (
         norm.includes('player') ||
         norm.includes('pratique') ||
+        norm.includes('praticar') ||
         norm.includes('ensaiar') ||
         norm.includes('ouvir musica') ||
-        norm.includes('tocar junto')
+        norm.includes('tocar junto') ||
+        norm.includes('musicas do culto')
       ) {
         setIsLoading(false);
-        const replyText = 'Passo a passo para **ensaiar com o Player e Modo Pratique**:';
+        const replyText = 'Passo a passo para **praticar e ensaiar as músicas do Culto**:';
         const steps = [
-          '1. Peça ao assistente ex: *"Tocar música Teu amor não falha"* ou abra a cifra e clique no botão **"Player / Modo Pratique"**.',
-          '2. O player integrado carrega o vídeo oficial do YouTube ou áudio guia sincronizado com a letra.',
-          '3. Você pode tocar junto lendo os acordes transpostos na tela e controlar o volume.',
-          '4. Ideal para estudar a dinâmica, introduções e pontes da música antes do ensaio presencial com a banda!'
+          '1. **Consultar o Repertório do Culto**: Na tela inicial ou em **Escalas**, veja a lista de louvores selecionados para a celebração.',
+          '2. **Ouvir com 1 Clique**: Clique no botão **"Playlist do Culto"** para carregar os vídeos e áudios oficiais de referência no YouTube/Spotify.',
+          '3. **Estudar a Cifra no Tom Certo**: Abra a cifra no LiLouPro com transposição instantânea para a tonalidade combinada com a equipe, diagramas de acordes e rolagem automática.',
+          '4. **Modo Pratique & Metrônomo**: Ative o player integrado e o metrônomo para tocar junto com a gravação original no andamento correto!'
         ];
 
         addMessage({
@@ -3179,11 +3226,46 @@ export function LilouproAssistant({
           text: replyText,
           steps: steps,
           timestamp: new Date(),
-          actionLabel: '🎵 Ver Músicas',
+          actionLabel: '🎵 Ver Músicas do Culto',
           actionIcon: <Music size={15} />,
           actionSuccessMessage: getRandomDone(),
           onActionClick: () => {
             onNavigate('songs');
+            setIsOpen(false);
+          }
+        });
+
+        speak('Pronto, deixei o passo a passo na tela.');
+        return;
+      }
+
+      // 15. COMO FAZER O CURSO DE TEORIA MUSICAL DO APP?
+      if (
+        norm.includes('teoria') ||
+        norm.includes('curso de teoria') ||
+        norm.includes('teoria musical') ||
+        norm.includes('fazer o curso')
+      ) {
+        setIsLoading(false);
+        const replyText = 'Passo a passo para **fazer o Curso de Teoria Musical** no LiLouPro:';
+        const steps = [
+          '1. **Acessar a Aba Teoria Musical**: Abra o menu lateral do LiLouPro e selecione **"Teoria Musical"**.',
+          '2. **Módulos Progressivos**: Estude os módulos estruturados: *Notas & Pautas*, *Intervalos Musicais*, *Escalas Maiores e Menores*, *Campo Harmônico* e *Funções Harmônicas*.',
+          '3. **Exercícios & Quizzes Interativos**: Teste seu ouvido e raciocínio harmônico respondendo aos desafios sonoros com feedback em tempo real.',
+          '4. **Dicionário Visual de Acordes**: Consulte diagramas anatômicos para Violão/Guitarra e Teclado, alternando entre Dedos e Intervalos (T, 3, 5, 7M)!'
+        ];
+
+        addMessage({
+          id: getUniqueAssistantMsgId('assistant'),
+          sender: 'assistant',
+          text: replyText,
+          steps: steps,
+          timestamp: new Date(),
+          actionLabel: '🎼 Abrir Teoria Musical',
+          actionIcon: <Music size={15} />,
+          actionSuccessMessage: getRandomDone(),
+          onActionClick: () => {
+            onNavigate('theory');
             setIsOpen(false);
           }
         });
@@ -4557,172 +4639,52 @@ export function LilouproAssistant({
                 <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider shrink-0 ml-1">
                   Dúvidas:
                 </span>
-                {/* New Natural Voice & Quick Actions */}
                 <button
                   type="button"
-                  onClick={() => handleQuickChip('Tocar próxima música')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
+                  onClick={() => handleQuickChip('Como marcar minha disponibilidade?')}
+                  className={`px-3 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold text-xs ${
+                    isLight 
+                      ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 text-blue-900' 
+                      : 'bg-blue-950/70 border-blue-500/50 hover:bg-blue-900/80 text-blue-300'
+                  }`}
+                >
+                  🗓️ Como marcar minha disponibilidade?
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickChip('Como praticar as músicas do Culto?')}
+                  className={`px-3 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold text-xs ${
                     isLight 
                       ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100 text-emerald-900' 
                       : 'bg-emerald-950/70 border-emerald-500/50 hover:bg-emerald-900/80 text-emerald-300'
                   }`}
-                  title="Comando de voz: 'Tocar próxima música'"
                 >
-                  ⏭️ Tocar próxima música
+                  🎸 Como praticar as músicas do Culto?
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => handleQuickChip('Quantos membros na escala de hoje?')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
-                    isLight 
-                      ? 'bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-900' 
-                      : 'bg-purple-950/70 border-purple-500/50 hover:bg-purple-900/80 text-purple-300'
-                  }`}
-                  title="Comando de voz: 'Quantos membros na escala de hoje?'"
-                >
-                  👥 Membros na escala de hoje?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickChip('Abrir cifra do próximo louvor')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-bold ${
+                  onClick={() => handleQuickChip('Como fazer o Curso de Teoria Musical do app?')}
+                  className={`px-3 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold text-xs ${
                     isLight 
                       ? 'bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-900' 
                       : 'bg-amber-950/70 border-amber-500/50 hover:bg-amber-900/80 text-amber-300'
                   }`}
-                  title="Comando de voz: 'Abrir cifra do próximo louvor'"
                 >
-                  🎼 Cifra do próximo louvor
+                  🎼 Como fazer o Curso de Teoria Musical do app?
                 </button>
+
                 <button
-                  onClick={() => handleQuickChip('Como faço para agendar um culto?')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
-                    isLight 
-                      ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 text-blue-900' 
-                      : 'bg-blue-950/60 border-blue-600/40 hover:bg-blue-900/60 text-blue-300'
-                  }`}
-                >
-                  🗓️ Como agendar culto?
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Como cadastrar uma música nova no app?')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
+                  type="button"
+                  onClick={() => handleQuickChip('Quais os membros da escala do próximo Culto?')}
+                  className={`px-3 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold text-xs ${
                     isLight 
                       ? 'bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-900' 
-                      : 'bg-purple-950/60 border-purple-600/40 hover:bg-purple-900/60 text-purple-300'
+                      : 'bg-purple-950/70 border-purple-500/50 hover:bg-purple-900/80 text-purple-300'
                   }`}
                 >
-                  ➕ Como cadastrar música?
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Como cadastrar membro no ministério?')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
-                    isLight 
-                      ? 'bg-sky-50 border-sky-300 hover:bg-sky-100 text-sky-900' 
-                      : 'bg-sky-950/60 border-sky-600/40 hover:bg-sky-900/60 text-sky-300'
-                  }`}
-                >
-                  👥 Como cadastrar membro?
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra o afinador do app')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
-                    isLight 
-                      ? 'bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-900' 
-                      : 'bg-amber-950/60 border-amber-600/40 hover:bg-amber-900/60 text-amber-300'
-                  }`}
-                >
-                  🎯 Afinador
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra o metrônomo do app')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 font-semibold ${
-                    isLight 
-                      ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100 text-emerald-900' 
-                      : 'bg-emerald-950/60 border-emerald-600/40 hover:bg-emerald-900/60 text-emerald-300'
-                  }`}
-                >
-                  ⏱️ Metrônomo
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra o repertório de músicas')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  🎵 Repertório
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Tocar playlist do culto')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  ▶️ Playlist
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra as escalas')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  👥 Escalas
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra a liturgia')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  🗓️ Liturgia
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra a bíblia no Salmo 23')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  📖 Salmo 23
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra a projeção')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  📺 Projeção
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra os membros')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  👥 Membros
-                </button>
-                <button
-                  onClick={() => handleQuickChip('Abra a disponibilidade')}
-                  className={`px-2.5 py-1 rounded-full border transition-all shrink-0 active:scale-95 ${
-                    isLight 
-                      ? 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700' 
-                      : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  🗓️ Disponibilidade
+                  👥 Quais os membros da escala do próximo Culto?
                 </button>
               </div>
 

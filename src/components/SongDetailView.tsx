@@ -81,6 +81,18 @@ import {
   findBestSongMatch, parseYoutubeVideoId, SERVICE_THEMES, getContrastColor
 } from './songsShared';
 
+const sanitizeCategory = (rawCat: any): string => {
+  if (!rawCat || typeof rawCat !== 'string') return '';
+  let trimmed = rawCat.trim();
+  // Remove número da frente se houver (ex: "11 - ADORAÇÃO" -> "ADORAÇÃO")
+  trimmed = trimmed.replace(/^\d+\s*[-–—]\s*/, '').trim();
+  const upper = trimmed.toUpperCase();
+  if (upper === 'LOUVOR' || upper === 'GERAL' || upper === 'SEM CATEGORIA' || upper === 'NONE') {
+    return '';
+  }
+  return upper;
+};
+
 export function SongDetailView({ 
   song, 
   onBack,
@@ -594,7 +606,7 @@ export function SongDetailView({
       files: song.files || [],
       chords: initialChords,
       lyrics: initialLyrics,
-      category: song?.category || '',
+      category: sanitizeCategory(song?.category),
       baseKey: song?.baseKey || detectKey(initialChords) || '',
       driveAudioLink: song?.driveAudioLink || '',
       driveFilesLink: song?.driveFilesLink || '',
@@ -623,7 +635,7 @@ export function SongDetailView({
       files: song.files || [],
       chords: chordsData,
       lyrics: lyricsData,
-      category: song?.category || '',
+      category: sanitizeCategory(song?.category),
       baseKey: song?.baseKey || detectKey(chordsData) || '',
       driveAudioLink: song?.driveAudioLink || '',
       driveFilesLink: song?.driveFilesLink || '',
@@ -655,7 +667,7 @@ export function SongDetailView({
             files: data.files || [],
             chords: chordsData,
             lyrics: lyricsData,
-            category: data.category || '',
+            category: sanitizeCategory(data.category),
             baseKey: data.baseKey || detectKey(chordsData) || '',
             driveAudioLink: data.driveAudioLink || '',
             driveFilesLink: data.driveFilesLink || '',
@@ -1214,12 +1226,48 @@ export function SongDetailView({
       handleInsertDynamicsTag(customTag.trim(), target);
     }
   };
-  const categories = [
-    "CRIAÇÃO/ADORAÇÃO",
-    "QUEDA/CONFISSÃO",
-    "REDENÇÃO/AÇÃO DE GRAÇAS",
-    "CONSUMAÇÃO/RESPOSTA"
+  const categoriesList = [
+    { num: 1, name: "ABERTURA", label: "1 - ABERTURA" },
+    { num: 2, name: "CRIAÇÃO/ADORAÇÃO", label: "2 - CRIAÇÃO/ADORAÇÃO" },
+    { num: 3, name: "QUEDA/CONFISSÃO", label: "3 - QUEDA/CONFISSÃO" },
+    { num: 4, name: "REDENÇÃO/AÇÃO DE GRAÇAS", label: "4 - REDENÇÃO/AÇÃO DE GRAÇAS" },
+    { num: 5, name: "CONSUMAÇÃO/RESPOSTA", label: "5 - CONSUMAÇÃO/RESPOSTA" },
+    { num: 6, name: "DÍZIMOS/OFERTAS", label: "6 - DÍZIMOS/OFERTAS" },
+    { num: 7, name: "ORAÇÃO/INTERCESSÃO", label: "7 - ORAÇÃO/INTERCESSÃO" },
+    { num: 8, name: "APELO/DECISÃO", label: "8 - APELO/DECISÃO" },
+    { num: 9, name: "JÚBILO/CELEBRAÇÃO", label: "9 - JÚBILO/CELEBRAÇÃO" },
+    { num: 10, name: "CEIA/COMUNHÃO", label: "10 - CEIA/COMUNHÃO" },
+    { num: 11, name: "ADORAÇÃO", label: "11 - ADORAÇÃO" },
+    { num: 12, name: "ENCERRAMENTO", label: "12 - ENCERRAMENTO" },
+    { num: 13, name: "PERSONALIZAR", label: "13 - PERSONALIZAR" }
   ];
+
+  const [isCustomCategoryModalOpen, setIsCustomCategoryModalOpen] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isCategoryDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isCategoryDropdownOpen]);
+
+  const handleSaveCustomCategory = () => {
+    const clean = customCategoryInput.trim().toUpperCase().replace(/^\d+\s*[-–—]\s*/, '').trim();
+    setEditedSong(prev => ({ ...prev, category: clean }));
+    setIsCustomCategoryModalOpen(false);
+    setIsCategoryDropdownOpen(false);
+  };
 
   const [isMetronomeActive, setIsMetronomeActive] = useState(false);
   const [metronomeVolume, setMetronomeVolume] = useState<number>(() => {
@@ -1792,15 +1840,17 @@ export function SongDetailView({
       const sanitizedChords = cleanTablatures(editedSong.chords || '');
       const sanitizedLyrics = cleanTablatures(editedSong.lyrics || '');
 
+      const cleanCategory = sanitizeCategory(editedSong.category);
       const finalData = { 
         ...editedSong,
+        category: cleanCategory || null,
         artistImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         customImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         chords: sanitizedChords,
         lyrics: sanitizedLyrics
       };
       await updateDoc(doc(db, 'songs', song.id), finalData);
-      setEditedSong(finalData); // Sync local state immediately
+      setEditedSong({ ...finalData, category: cleanCategory }); // Sync local state immediately
       setReferenceBpm(finalData.bpm); // Update reference to make it the new "Original"
       setIsEditing(false);
     } catch (error) {
@@ -2899,25 +2949,93 @@ export function SongDetailView({
                       </label>
                     </div>
                   </div>
-                  <select 
-                    value={editedSong.category || ''} 
-                    onChange={e => setEditedSong({...editedSong, category: e.target.value})}
-                    className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-9 text-[12px] uppercase font-bold rounded px-2 outline-none flex-1 min-w-[120px]"
-                  >
-                    <option value="" className="bg-surface text-text-muted">Categoria</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat} className="bg-surface text-zinc-900 dark:text-zinc-100 text-xs">{cat}</option>
-                    ))}
-                  </select>
+                  <div className="relative flex-1 min-w-[140px]" ref={categoryDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                      className="w-full bg-[#101a35] border border-slate-700 hover:border-slate-500 text-white h-9 text-[12px] uppercase font-bold rounded px-2.5 outline-none flex items-center justify-between gap-1.5 focus:border-blue-500 transition-colors cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {sanitizeCategory(editedSong.category) || 'CATEGORIA'}
+                      </span>
+                      <ChevronDown size={14} className={cn("text-slate-400 transition-transform shrink-0", isCategoryDropdownOpen && "rotate-180")} />
+                    </button>
+
+                    {isCategoryDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 z-[70] bg-[#101a35] border border-slate-700 rounded-lg shadow-2xl py-1 max-h-64 overflow-y-auto custom-scrollbar notranslate min-w-[220px]">
+                        {/* Opção para limpar / sem categoria */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditedSong(prev => ({ ...prev, category: '' }));
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer",
+                            !sanitizeCategory(editedSong.category)
+                              ? "bg-blue-600/20 text-blue-400 font-bold"
+                              : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          )}
+                        >
+                          <span>SEM CATEGORIA</span>
+                          {!sanitizeCategory(editedSong.category) && <Check size={14} />}
+                        </button>
+
+                        <div className="h-px bg-slate-800 my-1" />
+
+                        {categoriesList.map(cat => {
+                          const isSelected = sanitizeCategory(editedSong.category) === cat.name;
+                          return (
+                            <button
+                              key={cat.label}
+                              type="button"
+                              onClick={() => {
+                                if (cat.num === 13) {
+                                  setIsCategoryDropdownOpen(false);
+                                  setCustomCategoryInput(sanitizeCategory(editedSong.category) || '');
+                                  setIsCustomCategoryModalOpen(true);
+                                  return;
+                                }
+                                setEditedSong(prev => ({ ...prev, category: cat.name }));
+                                setIsCategoryDropdownOpen(false);
+                              }}
+                              className={cn(
+                                "w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer",
+                                isSelected
+                                  ? "bg-blue-600 text-white font-bold"
+                                  : "text-slate-200 hover:bg-blue-500/15 hover:text-white"
+                              )}
+                            >
+                              <span>{cat.label}</span>
+                              {isSelected && <Check size={14} />}
+                            </button>
+                          );
+                        })}
+
+                        {/* Se o usuário tiver uma categoria customizada que não está na lista padrão */}
+                        {sanitizeCategory(editedSong.category) && !categoriesList.some(c => c.name === sanitizeCategory(editedSong.category)) && (
+                          <div className="mt-1 pt-1 border-t border-slate-800">
+                            <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-500">
+                              Personalizada Atual
+                            </div>
+                            <div className="px-3 py-1.5 text-xs font-bold text-blue-400 bg-blue-500/10 flex items-center justify-between">
+                              <span>{sanitizeCategory(editedSong.category)}</span>
+                              <Check size={14} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <select 
                     value={editedSong.timeSignature || '4/4'} 
                     onChange={e => setEditedSong({...editedSong, timeSignature: e.target.value})}
-                    className="bg-black/5 dark:bg-white/5 border border-border text-text-main h-8 text-[10px] uppercase font-bold rounded px-2 outline-none w-20"
+                    className="bg-[#101a35] border border-slate-700 text-white h-8 text-[10px] uppercase font-bold rounded px-2 outline-none w-20 focus:border-blue-500"
                   >
                     {['4/4', '3/4', '2/4', '6/8', '5/4', '7/8', '12/8'].map(ts => (
-                      <option key={ts} value={ts} className="bg-surface text-zinc-900 dark:text-zinc-100 text-xs">{ts}</option>
+                      <option key={ts} value={ts} className="bg-[#101a35] text-white text-xs py-1">{ts}</option>
                     ))}
                   </select>
                   <div className="flex gap-1 items-center">
@@ -2968,9 +3086,9 @@ export function SongDetailView({
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <p className="text-sm sm:text-base text-text-muted italic truncate max-w-[140px] sm:max-w-[180px]">{editedSong.artist}</p>
                   {/* Key display moved next to YouTube icon */}
-                  {editedSong.category && (
+                  {editedSong.category && sanitizeCategory(editedSong.category) && (
                     <span className="text-[11px] sm:text-[13px] font-black bg-brand px-2 py-0.5 sm:py-1 rounded text-white uppercase tracking-tight whitespace-nowrap">
-                      {editedSong.category}
+                      {sanitizeCategory(editedSong.category)}
                     </span>
                   )}
                   {!isEditing && (
@@ -6735,6 +6853,82 @@ export function SongDetailView({
         churchData={churchData}
         isAdmin={isAdmin}
       />
+
+      {/* Modal de Categoria Personalizada */}
+      <AnimatePresence>
+        {isCustomCategoryModalOpen && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[350] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-md p-5 shadow-2xl flex flex-col space-y-4 notranslate"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                      Personalizar Categoria
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Digite o nome da categoria para esta música
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomCategoryModalOpen(false)}
+                  className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                  Nome da Categoria
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Ex: PREGAÇÃO, ESPECIAL, OFERTÓRIO..."
+                  value={customCategoryInput}
+                  onChange={e => setCustomCategoryInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveCustomCategory();
+                    } else if (e.key === 'Escape') {
+                      setIsCustomCategoryModalOpen(false);
+                    }
+                  }}
+                  className="w-full bg-[#1e293b] border border-slate-600 focus:border-blue-500 rounded-lg px-3 py-2.5 text-white text-sm outline-none uppercase font-bold placeholder:normal-case placeholder:text-slate-500 placeholder:font-normal"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomCategoryModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold uppercase text-slate-300 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCustomCategory}
+                  className="px-4 py-2 text-xs font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  Salvar Categoria
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

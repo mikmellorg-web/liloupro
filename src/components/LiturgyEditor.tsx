@@ -1017,8 +1017,31 @@ export function LiturgyEditor({
 
     message += `_Gerado por LiLouPro_`;
 
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(message).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Clipboard error:", e);
+    }
+
     const encodedMessage = encodeURIComponent(message);
-    window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
+    const waUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+    try {
+      const a = document.createElement('a');
+      a.href = waUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 500);
+    } catch (e) {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleUpdateItem = async (itemId: string, itemIdx?: number) => {
