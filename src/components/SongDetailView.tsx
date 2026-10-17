@@ -106,7 +106,12 @@ export function SongDetailView({
   initialScrollSpeed,
   initialAutoScroll = false,
   initialShowPlayer = false,
-  initialPlayerTrigger = 0
+  initialPlayerTrigger = 0,
+  onStartSongPlayer,
+  isGlobalPlayerOpen = false,
+  isGlobalPlayerMinimized = false,
+  globalPlayerCurrentSongId,
+  onToggleGlobalPlayer
 }: { 
   song: any, 
   onBack: () => void,
@@ -120,7 +125,12 @@ export function SongDetailView({
   initialScrollSpeed?: number,
   initialAutoScroll?: boolean,
   initialShowPlayer?: boolean,
-  initialPlayerTrigger?: number
+  initialPlayerTrigger?: number,
+  onStartSongPlayer?: (song: any) => void,
+  isGlobalPlayerOpen?: boolean,
+  isGlobalPlayerMinimized?: boolean,
+  globalPlayerCurrentSongId?: string,
+  onToggleGlobalPlayer?: () => void
 }) {
   const { user, isAdmin, memberData, churchData } = useAuth();
 
@@ -933,8 +943,12 @@ export function SongDetailView({
   // Sync practice player with external props / triggers (from Assistant commands)
   useEffect(() => {
     if (initialShowPlayer || (initialPlayerTrigger && initialPlayerTrigger > 0)) {
-      setShowPracticePlayer(true);
-      setIsPracticePlayerMinimized(false);
+      if (onStartSongPlayer) {
+        onStartSongPlayer(editedSong);
+      } else {
+        setShowPracticePlayer(true);
+        setIsPracticePlayerMinimized(false);
+      }
     }
   }, [initialShowPlayer, initialPlayerTrigger]);
   const [tempLink, setTempLink] = useState({ name: '', url: '' });
@@ -1008,8 +1022,12 @@ export function SongDetailView({
   // Synchronize initialShowPlayer when requested
   useEffect(() => {
     if (initialShowPlayer) {
-      setShowPracticePlayer(true);
-      setIsPracticePlayerMinimized(false);
+      if (onStartSongPlayer) {
+        onStartSongPlayer(editedSong);
+      } else {
+        setShowPracticePlayer(true);
+        setIsPracticePlayerMinimized(false);
+      }
     }
   }, [initialShowPlayer]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -2025,6 +2043,7 @@ export function SongDetailView({
   };
 
   const renderPracticePlayer = () => {
+    if (isGlobalPlayerOpen) return null;
     return (
       <AnimatePresence>
         {showPracticePlayer && (
@@ -4891,21 +4910,29 @@ export function SongDetailView({
                   </p>
                   <button 
                     onClick={() => {
-                      const nextVal = !showPracticePlayer;
-                      setShowPracticePlayer(nextVal);
-                      if (nextVal) {
-                        setIsPracticePlayerMinimized(false);
+                      if (onStartSongPlayer) {
+                        if (isGlobalPlayerOpen && globalPlayerCurrentSongId === editedSong.id) {
+                          onToggleGlobalPlayer ? onToggleGlobalPlayer() : onStartSongPlayer(editedSong);
+                        } else {
+                          onStartSongPlayer(editedSong);
+                        }
+                      } else {
+                        const nextVal = !showPracticePlayer;
+                        setShowPracticePlayer(nextVal);
+                        if (nextVal) {
+                          setIsPracticePlayerMinimized(false);
+                        }
                       }
                     }}
                     className={cn(
                       "w-full py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-95 font-black uppercase tracking-widest text-xs shadow-md cursor-pointer",
-                      showPracticePlayer 
+                      (isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer 
                         ? "bg-brand text-brand-text shadow-brand/20 ring-4 ring-brand/10" 
                         : "bg-white text-primary border-2 border-brand hover:bg-brand hover:text-brand-text"
                     )}
                   >
-                    <Volume2 size={18} className={showPracticePlayer ? "animate-pulse" : ""} />
-                    <span>{showPracticePlayer ? 'Ouvindo...' : 'Abrir Player'}</span>
+                    <Volume2 size={18} className={((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? "animate-pulse" : ""} />
+                    <span>{((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? 'Ouvindo...' : 'Abrir Player'}</span>
                   </button>
                 </div>
               </div>

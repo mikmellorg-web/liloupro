@@ -751,6 +751,10 @@ export function cleanCifraHtml(text: string): string {
   // e.g. </div><div class="kvMV"> or </div><div ...> -> \n
   str = str.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
   str = str.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
+  str = str.replace(/<div\b[^>]*>/gi, '\n');
+  str = str.replace(/<\/div>/gi, '');
+  str = str.replace(/<p\b[^>]*>/gi, '\n');
+  str = str.replace(/<\/p>/gi, '');
   str = str.replace(/<br\s*\/?>/gi, '\n');
 
   // 2. Extract contents of <b> tags (e.g. <b data-chord-name="A"...>A  </b>)
@@ -760,8 +764,6 @@ export function cleanCifraHtml(text: string): string {
   str = str.replace(/<b\b[^>]*>/gi, ''); // remove any unclosed opening <b> tags with attributes
 
   // 3. Replace closing tags
-  str = str.replace(/<\/div>/gi, '\n');
-  str = str.replace(/<\/p>/gi, '\n');
   str = str.replace(/<\/span>/gi, '');
   str = str.replace(/<\/b>/gi, '');
 
@@ -783,6 +785,7 @@ export function cleanCifraHtml(text: string): string {
   // e.g. "[Intro]B   F#" -> "[Intro]\nB   F#" or "[Verso 1]Texto" -> "[Verso 1]\nTexto"
   str = str.replace(/^(\[[^\]\n]+\])([^\r\n\s])/gm, '$1\n$2');
   str = str.replace(/^(\[[^\]\n]+\])[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gm, '$1\n$2');
+  str = str.replace(/^(Intro|Introdução|Introducao|Solo|Ponte|Verso\s*\d*|Refrão|Refrao|Chorus):[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gim, '[$1]\n$2');
 
   // 7. Normalize 7M / 7m notation according to Liloupro domain rules
   str = str
@@ -797,7 +800,7 @@ export function cleanCifraHtml(text: string): string {
   str = str.split('\n').map(l => l.trimEnd()).join('\n');
   str = str.replace(/\n{3,}/g, '\n\n').trim();
 
-  return str;
+  return compactCifraPhrases(str);
 }
 
 /**
@@ -961,6 +964,131 @@ export function isChordLine(line: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Detecta se uma linha corresponde a um cabeçalho de seção musical
+ * (ex: [Intro], [Primeira Parte], [Refrão], [Ponte], Primeira Parte, Refrão, etc.)
+ */
+export function isSectionHeaderLine(line: string): boolean {
+  const trimmed = (line || '').trim();
+  if (!trimmed) return false;
+  if (/^\[[^\]]+\]$/.test(trimmed) || /^\{[^\}]+\}$/.test(trimmed)) {
+    return !/^\[(?:tab|riff)\b/i.test(trimmed);
+  }
+  if (trimmed.length > 40) return false;
+  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
+  return sectionRegex.test(trimmed);
+}
+
+/**
+ * Normaliza cabeçalhos de seção para o formato padrão do Liloupro: [Nome da Seção]
+ */
+export function normalizeSectionHeader(line: string): string {
+  const trimmed = (line || '').trim();
+  if (/^\[[^\]]+\]$/.test(trimmed)) return trimmed;
+  if (/^\{[^\}]+\}$/.test(trimmed)) return '[' + trimmed.slice(1, -1) + ']';
+  const clean = trimmed.replace(/^[\s\[\(\{]+|[\s\]\)\}\:]+$/g, '');
+  return '[' + clean + ']';
+}
+
+/**
+ * Normaliza o espaçamento entre frases importadas do Cifra Club.
+ * No Cifra Club, cada frase (acorde + letra) costuma vir separada por linhas vazias (\n\n ou tags de div/p),
+ * criando um espaçamento exagerado na leitura.
+ * Esta função detecta as frases de cada seção e as mantém fluidas e compactas (com espaçamento menor/inexistente
+ * entre as frases da mesma estrofe, idêntico ao padrão dos hinários e bancos de cifras profissionais),
+ * preservando a separação natural apenas entre diferentes seções ([Intro], [Verso], [Refrão], [Ponte], etc.).
+ */
+export function compactCifraPhrases(text: string): string {
+  if (!text) return '';
+
+  const cleanText = text.replace(/\r/g, '');
+  const lines = cleanText.split('\n');
+
+  interface SectionGroup {
+    header: string | null;
+    phrases: string[][];
+  }
+
+  const sections: SectionGroup[] = [];
+  let currentSection: SectionGroup = { header: null, phrases: [] };
+  let currentPhrase: string[] = [];
+
+  const flushPhrase = () => {
+    if (currentPhrase.length > 0) {
+      currentSection.phrases.push([...currentPhrase]);
+      currentPhrase = [];
+    }
+  };
+
+  const flushSection = () => {
+    flushPhrase();
+    if (currentSection.header || currentSection.phrases.length > 0) {
+      sections.push(currentSection);
+      currentSection = { header: null, phrases: [] };
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    if (trimmed === '') {
+      flushPhrase();
+      continue;
+    }
+
+    if (isSectionHeaderLine(trimmed)) {
+      flushSection();
+      currentSection.header = normalizeSectionHeader(trimmed);
+      continue;
+    }
+
+    const isChord = isChordLine(rawLine);
+
+    if (isChord) {
+      if (currentPhrase.length > 0) {
+        flushPhrase();
+      }
+      currentPhrase.push(rawLine);
+    } else {
+      currentPhrase.push(rawLine);
+    }
+  }
+
+  flushSection();
+
+  const formattedSections: string[] = [];
+  for (const sec of sections) {
+    // Se a seção não possui cabeçalho explícito e é muito longa (> 4 frases), divide em estrofes naturais
+    if (!sec.header && sec.phrases.length > 4) {
+      for (let p = 0; p < sec.phrases.length; p += 4) {
+        const chunk = sec.phrases.slice(p, p + 4);
+        const chunkLines: string[] = [];
+        for (const phrase of chunk) {
+          chunkLines.push(...phrase);
+        }
+        if (chunkLines.length > 0) {
+          formattedSections.push(chunkLines.join('\n'));
+        }
+      }
+      continue;
+    }
+
+    const secLines: string[] = [];
+    if (sec.header) {
+      secLines.push(sec.header);
+    }
+    for (const phrase of sec.phrases) {
+      secLines.push(...phrase);
+    }
+    if (secLines.length > 0) {
+      formattedSections.push(secLines.join('\n'));
+    }
+  }
+
+  return formattedSections.join('\n\n').trim();
 }
 
 export function detectKey(text: string): string | null {

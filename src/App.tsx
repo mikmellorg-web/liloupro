@@ -1828,11 +1828,13 @@ function MainContent() {
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [allServices, setAllServices] = useState<any[]>([]);
 
-  // Worship service video playlist states
+  // Worship service video playlist & persistent global player states
   const [activePlaylistSongs, setActivePlaylistSongs] = useState<any[] | null>(null);
   const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState<number>(0);
   const [isPlaylistPlayerOpen, setIsPlaylistPlayerOpen] = useState<boolean>(false);
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
+  const [activeAudioGuideUrl, setActiveAudioGuideUrl] = useState<string | null>(null);
+  const globalAudioGuideRef = useRef<HTMLAudioElement | null>(null);
   const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
   const [songInitialScrollSpeed, setSongInitialScrollSpeed] = useState<number | undefined>(undefined);
   const [songInitialAutoScroll, setSongInitialAutoScroll] = useState<boolean | undefined>(undefined);
@@ -2605,10 +2607,71 @@ function MainContent() {
   };
 
   const handleStartWorshipPlaylist = (songsList: any[]) => {
+    handleStopAudioGuide();
     setActivePlaylistSongs(songsList);
     setCurrentPlaylistIndex(0);
     setIsPlaylistPlayerOpen(true);
     setIsPlaylistPlayerMinimized(false);
+  };
+
+  const handleStartSongPlayer = (song: any) => {
+    if (!song) return;
+    handleStopAudioGuide();
+    // Se a playlist já contém a música, apenas muda para ela
+    if (activePlaylistSongs && activePlaylistSongs.length > 0) {
+      const existingIdx = activePlaylistSongs.findIndex(s => s.id === song.id);
+      if (existingIdx !== -1) {
+        setCurrentPlaylistIndex(existingIdx);
+        setIsPlaylistPlayerOpen(true);
+        setIsPlaylistPlayerMinimized(false);
+        return;
+      }
+    }
+    // Caso contrário, toca essa música individualmente no player global
+    setActivePlaylistSongs([song]);
+    setCurrentPlaylistIndex(0);
+    setIsPlaylistPlayerOpen(true);
+    setIsPlaylistPlayerMinimized(false);
+  };
+
+  const handleToggleGlobalPlayer = () => {
+    if (!isPlaylistPlayerOpen) {
+      if (activePlaylistSongs && activePlaylistSongs.length > 0) {
+        setIsPlaylistPlayerOpen(true);
+        setIsPlaylistPlayerMinimized(false);
+      }
+    } else {
+      setIsPlaylistPlayerMinimized(prev => !prev);
+    }
+  };
+
+  const handleToggleAudioGuide = (url: string) => {
+    if (!globalAudioGuideRef.current) {
+      globalAudioGuideRef.current = new Audio();
+      globalAudioGuideRef.current.onended = () => setActiveAudioGuideUrl(null);
+    }
+    const audio = globalAudioGuideRef.current;
+    if (activeAudioGuideUrl === url) {
+      audio.pause();
+      setActiveAudioGuideUrl(null);
+    } else {
+      audio.src = url;
+      audio.play().catch(e => console.warn("Erro ao reproduzir guia de áudio:", e));
+      setActiveAudioGuideUrl(url);
+    }
+  };
+
+  const handleStopAudioGuide = () => {
+    if (globalAudioGuideRef.current) {
+      globalAudioGuideRef.current.pause();
+    }
+    setActiveAudioGuideUrl(null);
+  };
+
+  const handleClosePlayer = () => {
+    handleStopAudioGuide();
+    setIsPlaylistPlayerOpen(false);
+    setActivePlaylistSongs(null);
   };
 
   const getPlaylistEmbedUrl = (songs: any[], index: number) => {
@@ -2616,23 +2679,34 @@ function MainContent() {
     const currentSong = songs[index];
     if (!currentSong) return '';
     const currentId = parseYoutubeVideoId(currentSong.youtube);
-    if (!currentId) return '';
     
     // Get all valid YouTube video IDs
     const allIds = songs.map(s => parseYoutubeVideoId(s.youtube)).filter(Boolean);
     
-    // Create the playlist parameter by joining all IDs.
-    // YouTube player will play the main video first, and the playlist parameter will populate the playlist queue!
-    return `https://www.youtube.com/embed/${currentId}?playlist=${allIds.join(',')}&autoplay=1&enablejsapi=1`;
+    if (currentId) {
+      if (allIds.length > 1) {
+        return `https://www.youtube.com/embed/${currentId}?playlist=${allIds.join(',')}&autoplay=1&enablejsapi=1`;
+      }
+      return `https://www.youtube.com/embed/${currentId}?autoplay=1&enablejsapi=1`;
+    }
+
+    // Fallback: se não tiver link direto do YouTube, busca pelo nome e artista
+    const query = `${currentSong.title || ''} ${currentSong.artist || ''}`.trim();
+    if (query) {
+      return `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    }
+    return '';
   };
 
   const renderWorshipPlaylistPlayer = () => {
     if (!isPlaylistPlayerOpen || !activePlaylistSongs || activePlaylistSongs.length === 0) return null;
 
-    const currentSong = activePlaylistSongs[currentPlaylistIndex];
+    const currentSong = activePlaylistSongs[currentPlaylistIndex] || activePlaylistSongs[0];
     if (!currentSong) return null;
 
-    const currentId = parseYoutubeVideoId(currentSong.youtube);
+    const isSingleSong = activePlaylistSongs.length === 1;
+    const embedUrl = getPlaylistEmbedUrl(activePlaylistSongs, currentPlaylistIndex);
+    const bottomClass = !isBottomBarCollapsed && !isSongFocusMode ? "bottom-20 sm:bottom-6" : "bottom-4 sm:bottom-6";
 
     return (
       <AnimatePresence>
@@ -2642,30 +2716,35 @@ function MainContent() {
             initial={{ opacity: 0, scale: 0.8, y: 50 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 50 }}
-            className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[210] bg-zinc-950 text-white rounded-full py-2 px-4 shadow-2xl flex items-center gap-3 border border-red-500/40 hover:border-red-500 transition-all cursor-pointer"
+            className={cn(
+              "fixed right-4 sm:right-6 z-[210] bg-zinc-950 text-white rounded-full py-2 px-4 shadow-2xl flex items-center gap-3 border border-red-500/40 hover:border-red-500 transition-all cursor-pointer backdrop-blur-md",
+              bottomClass
+            )}
             onClick={() => setIsPlaylistPlayerMinimized(false)}
           >
             <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shrink-0 shadow-lg animate-pulse">
               <Play size={12} className="fill-white ml-0.5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase text-red-500 tracking-wider leading-none">Ouvindo Culto</p>
-              <p className="text-xs font-bold truncate max-w-[150px] sm:max-w-[200px] mt-0.5 text-zinc-100">{currentSong.title}</p>
+              <p className="text-[10px] font-black uppercase text-red-500 tracking-wider leading-none">
+                {isSingleSong ? "Ouvindo Música" : "Ouvindo Culto"}
+              </p>
+              <p className="text-xs font-bold truncate max-w-[140px] sm:max-w-[200px] mt-0.5 text-zinc-100">{currentSong.title}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
               <button 
                 onClick={() => setIsPlaylistPlayerMinimized(false)}
                 className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-white transition-colors"
-                title="Expandir"
+                title="Expandir Player"
               >
-                <Maximize2 size={12} />
+                <Maximize2 size={13} />
               </button>
               <button 
-                onClick={() => { setIsPlaylistPlayerOpen(false); setActivePlaylistSongs(null); }}
+                onClick={handleClosePlayer}
                 className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-red-500 transition-colors"
-                title="Fechar"
+                title="Fechar Player"
               >
-                <X size={12} />
+                <X size={13} />
               </button>
             </div>
           </motion.div>
@@ -2675,20 +2754,36 @@ function MainContent() {
             initial={{ opacity: 0, y: 100, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.95 }}
-            className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[210] bg-zinc-950 text-white border border-white/10 shadow-2xl rounded-2xl w-[calc(100%-2rem)] sm:w-96 overflow-hidden flex flex-col max-h-[480px]"
+            className={cn(
+              "fixed right-4 sm:right-6 z-[210] bg-zinc-950 text-white border border-white/10 shadow-2xl rounded-2xl w-[calc(100%-2rem)] sm:w-96 overflow-hidden flex flex-col max-h-[500px]",
+              bottomClass
+            )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/80">
+            <div className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/90">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center text-white shrink-0 shadow-md">
                   <Youtube size={16} className="fill-white" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[9px] font-black uppercase text-red-500 tracking-wider leading-none">Playlist do Culto</h4>
+                  <h4 className="text-[9px] font-black uppercase text-red-500 tracking-wider leading-none">
+                    {isSingleSong ? "Modo Pratique" : "Playlist do Culto"}
+                  </h4>
                   <p className="text-[11px] font-bold text-zinc-300 truncate mt-0.5">LiLouPro Player</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Botão Ver Cifra para abrir a cifra sem interromper o áudio */}
+                {currentSong.id && (
+                  <button
+                    onClick={() => handleOpenSongById(currentSong.id)}
+                    className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
+                    title="Visualizar cifra desta música"
+                  >
+                    <FileText size={11} />
+                    <span>Cifra</span>
+                  </button>
+                )}
                 <button 
                   onClick={() => setIsPlaylistPlayerMinimized(true)}
                   className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors"
@@ -2697,7 +2792,7 @@ function MainContent() {
                   <Minimize2 size={14} />
                 </button>
                 <button 
-                  onClick={() => { setIsPlaylistPlayerOpen(false); setActivePlaylistSongs(null); }}
+                  onClick={handleClosePlayer}
                   className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"
                   title="Fechar"
                 >
@@ -2708,91 +2803,160 @@ function MainContent() {
 
             {/* Video Player Embed */}
             <div className="w-full aspect-video bg-black relative border-b border-white/5">
-              {currentId ? (
+              {embedUrl ? (
                 <iframe
                   width="100%"
                   height="100%"
-                  src={getPlaylistEmbedUrl(activePlaylistSongs, currentPlaylistIndex)}
-                  title="Worship Setlist YouTube Player"
+                  src={embedUrl}
+                  title="LiLouPro Player"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                   className="absolute inset-0 w-full h-full"
                 ></iframe>
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 p-4 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2">
                   <p className="text-xs text-zinc-400 italic">Vídeo indisponível para este louvor.</p>
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent((currentSong.title || '') + ' ' + (currentSong.artist || ''))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-md"
+                  >
+                    <Play size={12} className="fill-white" /> Buscar no YouTube
+                  </a>
                 </div>
               )}
             </div>
 
-            {/* Track Navigation controls */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-zinc-900/40">
+            {/* Track Info & Navigation controls */}
+            <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/5 bg-zinc-900/40">
               <div className="min-w-0 flex-1 pr-2">
                 <p className="text-xs font-black truncate text-zinc-100">{currentSong.title}</p>
                 <p className="text-[10px] text-zinc-400 truncate italic">{currentSong.artist || 'Artista Desconhecido'}</p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  disabled={currentPlaylistIndex === 0}
-                  onClick={() => setCurrentPlaylistIndex(prev => Math.max(0, prev - 1))}
-                  className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
-                  title="Anterior"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <span className="text-[10px] font-black font-mono text-zinc-500 bg-black/30 px-1.5 py-0.5 rounded">
-                  {currentPlaylistIndex + 1}/{activePlaylistSongs.length}
-                </span>
-                <button
-                  disabled={currentPlaylistIndex === activePlaylistSongs.length - 1}
-                  onClick={() => setCurrentPlaylistIndex(prev => Math.min(activePlaylistSongs.length - 1, prev + 1))}
-                  className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
-                  title="Próxima"
-                >
-                  <ChevronRight size={18} />
-                </button>
-              </div>
+              {!isSingleSong && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    disabled={currentPlaylistIndex === 0}
+                    onClick={() => {
+                      handleStopAudioGuide();
+                      setCurrentPlaylistIndex(prev => Math.max(0, prev - 1));
+                    }}
+                    className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
+                    title="Anterior"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="text-[10px] font-black font-mono text-zinc-500 bg-black/30 px-1.5 py-0.5 rounded">
+                    {currentPlaylistIndex + 1}/{activePlaylistSongs.length}
+                  </span>
+                  <button
+                    disabled={currentPlaylistIndex === activePlaylistSongs.length - 1}
+                    onClick={() => {
+                      handleStopAudioGuide();
+                      setCurrentPlaylistIndex(prev => Math.min(activePlaylistSongs.length - 1, prev + 1));
+                    }}
+                    className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
+                    title="Próxima"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Tracklist Queue */}
-            <div className="flex-1 overflow-y-auto max-h-[160px] p-2 space-y-1 custom-scrollbar bg-zinc-950/80">
-              <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 px-2 py-1">Ordem das Músicas</p>
-              {activePlaylistSongs.map((song, idx) => {
-                const isActive = idx === currentPlaylistIndex;
-                return (
-                  <div
-                    key={song.id}
-                    onClick={() => setCurrentPlaylistIndex(idx)}
-                    className={cn(
-                      "flex items-center justify-between p-2 rounded-xl transition-all text-left cursor-pointer border",
-                      isActive
-                        ? "bg-red-500/10 border-red-500/20 text-red-400 font-bold animate-pulse"
-                        : "border-transparent hover:bg-white/5 text-zinc-300 hover:text-white"
-                    )}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={cn(
-                        "text-[10px] font-bold shrink-0 w-5 text-center font-mono",
-                        isActive ? "text-red-500" : "text-zinc-500"
-                      )}>
-                        {idx + 1}ª
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs truncate leading-tight">{song.title}</p>
-                        <p className="text-[9px] text-zinc-500 truncate italic mt-0.5">{song.artist}</p>
+            {/* Audio Guides if present on current song */}
+            {currentSong.audio && currentSong.audio.length > 0 && (
+              <div className="p-2 border-b border-white/5 bg-zinc-900/60 space-y-1.5">
+                <p className="text-[9px] font-black uppercase tracking-wider text-brand px-1">Guias de Áudio</p>
+                <div className="grid grid-cols-1 gap-1 max-h-[80px] overflow-y-auto custom-scrollbar">
+                  {currentSong.audio.map((a: any, i: number) => {
+                    const isPlaying = activeAudioGuideUrl === a.url;
+                    return (
+                      <div key={i} className="flex items-center justify-between p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAudioGuide(a.url)}
+                            className={cn(
+                              "w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                              isPlaying ? "bg-red-600 text-white" : "bg-white/10 text-zinc-200 hover:bg-red-600 hover:text-white"
+                            )}
+                          >
+                            {isPlaying ? <Pause size={10} /> : <Play size={10} className="ml-0.5 fill-current" />}
+                          </button>
+                          <span className="text-[10px] font-bold truncate text-zinc-200">{a.name}</span>
+                        </div>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[9px] text-zinc-400 hover:text-white font-bold uppercase tracking-wider"
+                        >
+                          Ouvir
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tracklist Queue for worship playlist */}
+            {!isSingleSong && (
+              <div className="flex-1 overflow-y-auto max-h-[160px] p-2 space-y-1 custom-scrollbar bg-zinc-950/80">
+                <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 px-2 py-1">Ordem das Músicas</p>
+                {activePlaylistSongs.map((song, idx) => {
+                  const isActive = idx === currentPlaylistIndex;
+                  return (
+                    <div
+                      key={song.id || idx}
+                      onClick={() => {
+                        handleStopAudioGuide();
+                        setCurrentPlaylistIndex(idx);
+                      }}
+                      className={cn(
+                        "flex items-center justify-between p-2 rounded-xl transition-all text-left cursor-pointer border",
+                        isActive
+                          ? "bg-red-500/10 border-red-500/20 text-red-400 font-bold"
+                          : "border-transparent hover:bg-white/5 text-zinc-300 hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={cn(
+                          "text-[10px] font-bold shrink-0 w-5 text-center font-mono",
+                          isActive ? "text-red-500" : "text-zinc-500"
+                        )}>
+                          {idx + 1}ª
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs truncate leading-tight">{song.title}</p>
+                          <p className="text-[9px] text-zinc-500 truncate italic mt-0.5">{song.artist}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {song.id && (
+                          <button
+                            onClick={() => handleOpenSongById(song.id)}
+                            className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-amber-400 transition-colors"
+                            title="Ver cifra"
+                          >
+                            <FileText size={12} />
+                          </button>
+                        )}
+                        {isActive && (
+                          <div className="flex items-center gap-1 text-red-500 pr-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+                            <Youtube size={12} className="fill-red-500" />
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {isActive && (
-                      <div className="flex items-center gap-1 text-red-500 pr-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-                        <Youtube size={12} className="fill-red-500" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -3361,6 +3525,11 @@ function MainContent() {
               initialAutoScroll={songInitialAutoScroll}
               initialShowPlayer={songInitialShowPlayer}
               initialPlayerTrigger={songInitialPlayerTrigger}
+              onStartSongPlayer={handleStartSongPlayer}
+              isGlobalPlayerOpen={isPlaylistPlayerOpen}
+              isGlobalPlayerMinimized={isPlaylistPlayerMinimized}
+              globalPlayerCurrentSongId={activePlaylistSongs?.[currentPlaylistIndex]?.id}
+              onToggleGlobalPlayer={handleToggleGlobalPlayer}
             />
           )}
           {activeTab === 'calendar' && (
@@ -3516,6 +3685,7 @@ function MainContent() {
             if (options?.showPlayer) {
               setSongInitialShowPlayer(true);
               setSongInitialPlayerTrigger(Date.now());
+              handleStartSongPlayer(song);
             } else {
               setSongInitialShowPlayer(false);
             }

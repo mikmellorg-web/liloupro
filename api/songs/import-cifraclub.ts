@@ -227,20 +227,29 @@ export default async function handler(req: any, res: any) {
         preHtml = preHtml.replace(/<[^>]+>/g, (tag) => tag.replace(/\r?\n/g, ' '));
 
         preHtml = preHtml
+          .replace(/<\/div>\s*<div[^>]*>/gi, '\n')
+          .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
           .replace(/<div\b[^>]*>/gi, '\n')
-          .replace(/<\/div>/gi, '\n')
+          .replace(/<\/div>/gi, '')
+          .replace(/<p\b[^>]*>/gi, '\n')
+          .replace(/<\/p>/gi, '')
           .replace(/<br\s*\/?>/gi, '\n');
 
         const rawLines = preHtml.split(/\r?\n/);
         const cleanedChordsLines: string[] = [];
         const lyricLines: string[] = [];
+        let prevWasEmpty = false;
 
         for (const rawLine of rawLines) {
           const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, '')).trim();
           if (stripped === '') {
-            cleanedChordsLines.push('');
+            if (!prevWasEmpty && cleanedChordsLines.length > 0) {
+              cleanedChordsLines.push('');
+              prevWasEmpty = true;
+            }
             continue;
           }
+          prevWasEmpty = false;
 
           const isTab = (
             /^[a-gA-G1-9]#?[b]?\s*[\|:]/.test(stripped) && stripped.includes('-')
