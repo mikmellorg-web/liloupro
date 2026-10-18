@@ -9,7 +9,7 @@ import {
   Trash2, Edit, Save, ArrowLeft, Volume2, FileText, ExternalLink, Bell,
   ChevronRight, ChevronLeft, ChevronUp, ChevronDown, LogOut, Check, X, Sparkles, CloudOff, Wifi, WifiOff, Database,
   Clock, Activity, Maximize2, Minimize2, ThumbsUp, Menu, MoreHorizontal,
-  Play, Pause, BookOpen, Book, Quote, GripVertical, Timer, ChevronsDown, RefreshCcw,
+  Play, Pause, BookOpen, Book, Quote, GripVertical, GripHorizontal, Timer, ChevronsDown, RefreshCcw,
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
@@ -1835,6 +1835,8 @@ function MainContent() {
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
   const [activeAudioGuideUrl, setActiveAudioGuideUrl] = useState<string | null>(null);
   const globalAudioGuideRef = useRef<HTMLAudioElement | null>(null);
+  const playerDragControls = useDragControls();
+  const [isPlayerDragging, setIsPlayerDragging] = useState<boolean>(false);
   const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
   const [songInitialScrollSpeed, setSongInitialScrollSpeed] = useState<number | undefined>(undefined);
   const [songInitialAutoScroll, setSongInitialAutoScroll] = useState<boolean | undefined>(undefined);
@@ -2710,57 +2712,100 @@ function MainContent() {
 
     return (
       <AnimatePresence>
-        {isPlaylistPlayerMinimized ? (
-          <motion.div
-            key="playlist-minimized"
-            initial={{ opacity: 0, scale: 0.8, y: 50 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 50 }}
+        <motion.div
+          key="worship-playlist-player-wrapper"
+          drag
+          dragControls={playerDragControls}
+          dragListener={false}
+          dragMomentum={false}
+          dragElastic={0.05}
+          onDragStart={() => setIsPlayerDragging(true)}
+          onDragEnd={() => {
+            setTimeout(() => setIsPlayerDragging(false), 120);
+          }}
+          initial={{ opacity: 0, scale: 0.9, y: 50 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 50 }}
+          className={cn(
+            "fixed right-4 sm:right-6 z-[210] antialiased select-none",
+            bottomClass,
+            isPlayerDragging ? "cursor-grabbing shadow-2xl ring-2 ring-red-500 scale-[1.01]" : ""
+          )}
+        >
+          {/* MINIMIZED VIEW */}
+          {isPlaylistPlayerMinimized && (
+            <div
+              onPointerDown={(e) => {
+                if (!(e.target as HTMLElement).closest('button, a')) {
+                  playerDragControls.start(e);
+                }
+              }}
+              onClick={() => {
+                if (!isPlayerDragging) {
+                  setIsPlaylistPlayerMinimized(false);
+                }
+              }}
+              className="bg-zinc-950 text-white rounded-full py-2 px-3.5 shadow-2xl flex items-center gap-2.5 border border-red-500/40 hover:border-red-500 transition-all cursor-grab active:cursor-grabbing backdrop-blur-md touch-none"
+              title="Pressione e arraste para mover | Toque para expandir"
+            >
+              <GripHorizontal size={14} className="text-zinc-500 shrink-0" />
+              <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shrink-0 shadow-lg animate-pulse">
+                <Play size={12} className="fill-white ml-0.5" />
+              </div>
+              <div className="min-w-0 pr-1">
+                <p className="text-[9px] font-black uppercase text-red-500 tracking-wider leading-none">
+                  {isSingleSong ? "Ouvindo Música" : "Ouvindo Culto"}
+                </p>
+                <p className="text-xs font-bold truncate max-w-[130px] sm:max-w-[190px] mt-0.5 text-zinc-100">{currentSong.title}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <button 
+                  onClick={() => setIsPlaylistPlayerMinimized(false)}
+                  className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  title="Expandir Player"
+                >
+                  <Maximize2 size={13} />
+                </button>
+                <button 
+                  onClick={handleClosePlayer}
+                  className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                  title="Fechar Player"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* EXPANDED VIEW + PERSISTENT IFRAME */}
+          {/* Note: O iframe e o container permanecem montados no DOM para o áudio nunca parar ao minimizar! */}
+          <div
             className={cn(
-              "fixed right-4 sm:right-6 z-[210] bg-zinc-950 text-white rounded-full py-2 px-4 shadow-2xl flex items-center gap-3 border border-red-500/40 hover:border-red-500 transition-all cursor-pointer backdrop-blur-md",
-              bottomClass
-            )}
-            onClick={() => setIsPlaylistPlayerMinimized(false)}
-          >
-            <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shrink-0 shadow-lg animate-pulse">
-              <Play size={12} className="fill-white ml-0.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase text-red-500 tracking-wider leading-none">
-                {isSingleSong ? "Ouvindo Música" : "Ouvindo Culto"}
-              </p>
-              <p className="text-xs font-bold truncate max-w-[140px] sm:max-w-[200px] mt-0.5 text-zinc-100">{currentSong.title}</p>
-            </div>
-            <div className="flex items-center gap-1 shrink-0 ml-1" onClick={(e) => e.stopPropagation()}>
-              <button 
-                onClick={() => setIsPlaylistPlayerMinimized(false)}
-                className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-white transition-colors"
-                title="Expandir Player"
-              >
-                <Maximize2 size={13} />
-              </button>
-              <button 
-                onClick={handleClosePlayer}
-                className="p-1 hover:bg-white/10 rounded-full text-zinc-400 hover:text-red-500 transition-colors"
-                title="Fechar Player"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="playlist-expanded"
-            initial={{ opacity: 0, y: 100, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 100, scale: 0.95 }}
-            className={cn(
-              "fixed right-4 sm:right-6 z-[210] bg-zinc-950 text-white border border-white/10 shadow-2xl rounded-2xl w-[calc(100%-2rem)] sm:w-96 overflow-hidden flex flex-col max-h-[500px]",
-              bottomClass
+              "bg-zinc-950 text-white border border-white/10 shadow-2xl rounded-2xl w-[calc(100vw-2rem)] sm:w-96 overflow-hidden flex flex-col max-h-[500px]",
+              isPlaylistPlayerMinimized
+                ? "w-[1px] h-[1px] opacity-0 pointer-events-none overflow-hidden absolute -top-[9999px] left-0"
+                : "relative"
             )}
           >
+            {/* Drag Handle Top Bar - Idêntico ao Dicionário de Acordes */}
+            <div
+              onPointerDown={(e) => playerDragControls.start(e)}
+              className="flex items-center justify-center gap-1.5 py-1 px-3 bg-red-600/15 border-b border-red-500/20 cursor-grab active:cursor-grabbing text-red-500 font-black text-[9px] uppercase tracking-wider select-none touch-none hover:bg-red-600/20 transition-colors"
+              title="Pressione e arraste para mover o player pela tela"
+            >
+              <GripHorizontal size={14} className="text-red-500 shrink-0" />
+              <span>Pressione e arraste para mover</span>
+            </div>
+
             {/* Header */}
-            <div className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/90">
+            <div 
+              onPointerDown={(e) => {
+                if (!(e.target as HTMLElement).closest('button, input, select, a')) {
+                  playerDragControls.start(e);
+                }
+              }}
+              className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/90 cursor-grab active:cursor-grabbing select-none touch-none"
+            >
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center text-white shrink-0 shadow-md">
                   <Youtube size={16} className="fill-white" />
@@ -2772,7 +2817,7 @@ function MainContent() {
                   <p className="text-[11px] font-bold text-zinc-300 truncate mt-0.5">LiLouPro Player</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
                 {/* Botão Ver Cifra para abrir a cifra sem interromper o áudio */}
                 {currentSong.id && (
                   <button
@@ -2786,14 +2831,14 @@ function MainContent() {
                 )}
                 <button 
                   onClick={() => setIsPlaylistPlayerMinimized(true)}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
                   title="Minimizar"
                 >
                   <Minimize2 size={14} />
                 </button>
                 <button 
                   onClick={handleClosePlayer}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
                   title="Fechar"
                 >
                   <X size={14} />
@@ -2802,7 +2847,7 @@ function MainContent() {
             </div>
 
             {/* Video Player Embed */}
-            <div className="w-full aspect-video bg-black relative border-b border-white/5">
+            <div className="w-full aspect-video bg-black relative border-b border-white/5 shrink-0">
               {embedUrl ? (
                 <iframe
                   width="100%"
@@ -2957,8 +3002,8 @@ function MainContent() {
                 })}
               </div>
             )}
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
       </AnimatePresence>
     );
   };
