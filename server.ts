@@ -109,7 +109,7 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
-const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.7-flash"];
+const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
 
 function isQuotaError(error: any): boolean {
   if (!error) return false;
@@ -1748,6 +1748,216 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
     }
   });
 
+  // Engine de Teoria Musical Determinística para Análise Harmônica Didática
+  function generateDeterministicHarmonyAnalysis(title: string, content: string, baseKey?: string) {
+    const MAJOR_SCALES: Record<string, { notes: string[]; chords: string[] }> = {
+      'C':  { notes: ['C', 'D', 'E', 'F', 'G', 'A', 'B'], chords: ['C', 'Dm', 'Em', 'F', 'G', 'Am', 'Bdim'] },
+      'G':  { notes: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'], chords: ['G', 'Am', 'Bm', 'C', 'D', 'Em', 'F#dim'] },
+      'D':  { notes: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'], chords: ['D', 'Em', 'F#m', 'G', 'A', 'Bm', 'C#dim'] },
+      'A':  { notes: ['A', 'B', 'C#', 'D', 'E', 'F#', 'G#'], chords: ['A', 'Bm', 'C#m', 'D', 'E', 'F#m', 'G#dim'] },
+      'E':  { notes: ['E', 'F#', 'G#', 'A', 'B', 'C#', 'D#'], chords: ['E', 'F#m', 'G#m', 'A', 'B', 'C#m', 'D#dim'] },
+      'B':  { notes: ['B', 'C#', 'D#', 'E', 'F#', 'G#', 'A#'], chords: ['B', 'C#m', 'D#m', 'E', 'F#', 'G#m', 'A#dim'] },
+      'F#': { notes: ['F#', 'G#', 'A#', 'B', 'C#', 'D#', 'E#'], chords: ['F#', 'G#m', 'A#m', 'B', 'C#', 'D#m', 'E#dim'] },
+      'Gb': { notes: ['Gb', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F'], chords: ['Gb', 'Abm', 'Bbm', 'Cb', 'Db', 'Ebm', 'Fdim'] },
+      'F':  { notes: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'], chords: ['F', 'Gm', 'Am', 'Bb', 'C', 'Dm', 'Edim'] },
+      'Bb': { notes: ['Bb', 'C', 'D', 'Eb', 'F', 'G', 'A'], chords: ['Bb', 'Cm', 'Dm', 'Eb', 'F', 'Gm', 'Adim'] },
+      'Eb': { notes: ['Eb', 'F', 'G', 'Ab', 'Bb', 'C', 'D'], chords: ['Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Cm', 'Ddim'] },
+      'Ab': { notes: ['Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G'], chords: ['Ab', 'Bbm', 'Cm', 'Db', 'Eb', 'Fm', 'Gdim'] },
+      'Db': { notes: ['Db', 'Eb', 'F', 'Gb', 'Ab', 'Bb', 'C'], chords: ['Db', 'Ebm', 'Fm', 'Gb', 'Ab', 'Bbm', 'Cdim'] },
+      'C#': { notes: ['C#', 'D#', 'E#', 'F#', 'G#', 'A#', 'B#'], chords: ['C#', 'D#m', 'E#m', 'F#', 'G#', 'A#m', 'B#dim'] }
+    };
+
+    const MINOR_SCALES: Record<string, { notes: string[]; chords: string[] }> = {
+      'Am':  { notes: ['A', 'B', 'C', 'D', 'E', 'F', 'G'], chords: ['Am', 'Bdim', 'C', 'Dm', 'Em', 'F', 'G'] },
+      'Em':  { notes: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'], chords: ['Em', 'F#dim', 'G', 'Am', 'Bm', 'C', 'D'] },
+      'Bm':  { notes: ['B', 'C#', 'D', 'E', 'F#', 'G', 'A'], chords: ['Bm', 'C#dim', 'D', 'Em', 'F#m', 'G', 'A'] },
+      'F#m': { notes: ['F#', 'G#', 'A', 'B', 'C#', 'D', 'E'], chords: ['F#m', 'G#dim', 'A', 'Bm', 'C#m', 'D', 'E'] },
+      'C#m': { notes: ['C#', 'D#', 'E', 'F#', 'G#', 'A', 'B'], chords: ['C#m', 'D#dim', 'E', 'F#m', 'G#m', 'A', 'B'] },
+      'G#m': { notes: ['G#', 'A#', 'B', 'C#', 'D#', 'E', 'F#'], chords: ['G#m', 'A#dim', 'B', 'C#m', 'D#m', 'E', 'F#'] },
+      'Dm':  { notes: ['D', 'E', 'F', 'G', 'A', 'Bb', 'C'], chords: ['Dm', 'Edim', 'F', 'Gm', 'Am', 'Bb', 'C'] },
+      'Gm':  { notes: ['G', 'A', 'Bb', 'C', 'D', 'Eb', 'F'], chords: ['Gm', 'Adim', 'Bb', 'Cm', 'Dm', 'Eb', 'F'] },
+      'Cm':  { notes: ['C', 'D', 'Eb', 'F', 'G', 'Ab', 'Bb'], chords: ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb'] },
+      'Fm':  { notes: ['F', 'G', 'Ab', 'Bb', 'C', 'Db', 'Eb'], chords: ['Fm', 'Gdim', 'Ab', 'Bbm', 'Cm', 'Db', 'Eb'] },
+      'Bbm': { notes: ['Bb', 'C', 'Db', 'Eb', 'F', 'Gb', 'Ab'], chords: ['Bbm', 'Cdim', 'Db', 'Ebm', 'Fm', 'Gb', 'Ab'] },
+      'Ebm': { notes: ['Eb', 'F', 'Gb', 'Ab', 'Bb', 'Cb', 'Db'], chords: ['Ebm', 'Fdim', 'Gb', 'Abm', 'Bbm', 'Cb', 'Db'] }
+    };
+
+    let keyStr = (baseKey || '').trim().replace(/^Tom:\s*/i, '').replace(/\s+(Major|Maior|Minor|Menor)/i, '');
+    let isMinor = false;
+    let root = 'C';
+
+    const m = keyStr.match(/^([A-G][#b]?)(m(?:enor|in)?)?/i);
+    if (m) {
+      root = m[1].charAt(0).toUpperCase() + (m[1].charAt(1) ? m[1].charAt(1).toLowerCase() : '');
+      isMinor = !!m[2];
+    } else {
+      const chordMatches = (content || '').match(/\b([A-G][#b]?)(m(?:[a-zA-Z0-9]*)?)?/g) || [];
+      if (chordMatches.length > 0) {
+        const first = chordMatches[0].match(/^([A-G][#b]?)(m)?/);
+        if (first) {
+          root = first[1].charAt(0).toUpperCase() + (first[1].charAt(1) ? first[1].charAt(1).toLowerCase() : '');
+          isMinor = !!first[2];
+        }
+      }
+    }
+
+    const lookupKey = isMinor ? `${root}m` : root;
+    const scaleInfo = (isMinor ? MINOR_SCALES[lookupKey] : MAJOR_SCALES[lookupKey]) || MAJOR_SCALES['C'] || { notes: ['C', 'D', 'E', 'F', 'G', 'A', 'B'], chords: ['C', 'Dm', 'Em', 'F', 'G', 'Am', 'Bdim'] };
+    const detectedKeyDisplay = isMinor ? `${root}m` : root;
+    const scaleType = isMinor ? 'Menor Natural' : 'Maior Diatônica';
+
+    const majorDegrees = [
+      { degree: 'I', func: 'Tônica', desc: 'O centro tonal de repouso e paz onde a melodia encontra descanso e segurança espiritual.' },
+      { degree: 'ii', func: 'Subdominante', desc: 'Acorde menor preparatório suave que gera movimento sutil em direção ao clímax.' },
+      { degree: 'iii', func: 'Tônica', desc: 'Tônica secundária meditativa que confere um tom introspectivo e intimista.' },
+      { degree: 'IV', func: 'Subdominante', desc: 'Acorde de abertura emocional e expansão da adoração no altar.' },
+      { degree: 'V', func: 'Dominante', desc: 'Gera tensão harmônica direcional que clama com força pela resolução na Tônica.' },
+      { degree: 'vi', func: 'Tônica', desc: 'Relativa menor de profunda contrição, reflexão e reverência congregacional.' },
+      { degree: 'vii°', func: 'Dominante', desc: 'Tensão máxima contendo o trítono, direcionando com intensidade à Tônica.' }
+    ];
+
+    const minorDegrees = [
+      { degree: 'Im', func: 'Tônica', desc: 'Centro tonal menor, transmitindo reverência profunda e solenidade.' },
+      { degree: 'ii°', func: 'Subdominante', desc: 'Tensão intermediária que prepara a transição para a dominante ou relativa maior.' },
+      { degree: 'bIII', func: 'Tônica', desc: 'Relativa maior do tom menor, introduzindo alívio, brilho e esperança na melodia.' },
+      { degree: 'iv', func: 'Subdominante', desc: 'Afastamento reflexivo e orante que aprofunda a expressão vocal.' },
+      { degree: 'v', func: 'Dominante', desc: 'Tensão direcional suave que guia o retorno ao centro tonal menor.' },
+      { degree: 'bVI', func: 'Subdominante', desc: 'Acorde de grande impacto dramático e decolagem congregacional.' },
+      { degree: 'bVII', func: 'Dominante', desc: 'Subtom inspirador e resolutivo, característico do worship moderno.' }
+    ];
+
+    const degConfigs = isMinor ? minorDegrees : majorDegrees;
+    const harmonicField = scaleInfo.chords.map((ch, idx) => ({
+      degree: degConfigs[idx].degree,
+      chord: ch,
+      functionType: degConfigs[idx].func,
+      explanation: degConfigs[idx].desc
+    }));
+
+    // Extract chords found in song
+    const rawTokens = (content || '').match(/\b([A-G][#b]?(?:m|maj|M|dim|aug|sus[24]?|add[9]?|[0-9]+)*(?:\/[A-G][#b]?)?)/g) || [];
+    const uniqueChords = Array.from(new Set(rawTokens.filter(t => !['A', 'E', 'O'].includes(t) || rawTokens.length <= 3))).slice(0, 10);
+    
+    // Map chords to analysis
+    const chordsAnalysis = uniqueChords.map(ch => {
+      const foundIdx = scaleInfo.chords.findIndex(sc => ch.startsWith(sc) || sc.startsWith(ch));
+      if (foundIdx !== -1) {
+        return {
+          chord: ch,
+          degree: degConfigs[foundIdx].degree,
+          role: degConfigs[foundIdx].func === 'Tônica' ? 'Repouso / Estabilidade' : degConfigs[foundIdx].func === 'Subdominante' ? 'Movimento / Abertura' : 'Tensão / Preparação',
+          description: degConfigs[foundIdx].desc
+        };
+      }
+      return {
+        chord: ch,
+        degree: ch.includes('/') ? 'Inversão' : 'Acorde de Passagem',
+        role: ch.includes('/') ? 'Condução Melódica do Baixo' : 'Coloração Harmônica',
+        description: `Enriquece a harmonia tonal com nuances melódicas e sustentação dinâmica.`
+      };
+    });
+
+    if (chordsAnalysis.length === 0) {
+      harmonicField.slice(0, 4).forEach(hf => {
+        chordsAnalysis.push({
+          chord: hf.chord,
+          degree: hf.degree,
+          role: hf.functionType,
+          description: hf.explanation
+        });
+      });
+    }
+
+    // Determine cadences
+    const cadencesFound: Array<{ name: string; progression: string; description: string }> = [];
+    if (!isMinor) {
+      const I = scaleInfo.chords[0];
+      const IV = scaleInfo.chords[3];
+      const V = scaleInfo.chords[4];
+      const vi = scaleInfo.chords[5];
+      const ii = scaleInfo.chords[1];
+
+      cadencesFound.push({
+        name: `Progressão de Ouro do Louvor (I - V - vi - IV)`,
+        progression: `${I} -> ${V} -> ${vi} -> ${IV}`,
+        description: `A cadência mais consagrada do louvor contemporâneo. Cria uma jornada emocional perfeita entre celebração, reverência e entrega congregacional.`
+      });
+
+      cadencesFound.push({
+        name: `Cadência Autêntica Preparada (ii - V - I)`,
+        progression: `${ii} -> ${V} -> ${I}`,
+        description: `Move com suavidade da subdominante para a máxima tensão da dominante, resolvendo em plenitude de paz na tônica.`
+      });
+
+      cadencesFound.push({
+        name: `Cadência Plagal de Altar (IV - I)`,
+        progression: `${IV} -> ${I}`,
+        description: `Tradicionalmente conhecida como a 'Cadência do Amém', confere uma sensação bíblica de encerramento doce e solene.`
+      });
+    } else {
+      const Im = scaleInfo.chords[0];
+      const bVI = scaleInfo.chords[5];
+      const bIII = scaleInfo.chords[2];
+      const bVII = scaleInfo.chords[6];
+      const iv = scaleInfo.chords[3];
+
+      cadencesFound.push({
+        name: `Cadência de Adoração Menor Épica (Im - bVI - bIII - bVII)`,
+        progression: `${Im} -> ${bVI} -> ${bIII} -> ${bVII}`,
+        description: `Gera grande dinâmica e profundidade espiritual, levando a congregação do quebrantamento inicial a um clímax triunfante.`
+      });
+
+      cadencesFound.push({
+        name: `Movimento de Contrição (iv - Im)`,
+        progression: `${iv} -> ${Im}`,
+        description: `Subdominante menor que reforça o sentimento orante e de súplica antes da confirmação da fé.`
+      });
+    }
+
+    // Special chords (arrangement and reharmonization tips)
+    const specialChords: Array<{ chord: string; concept: string; explanation: string }> = [];
+    if (!isMinor) {
+      const IVm = scaleInfo.chords[3] + 'm';
+      const V_over_bass = `${scaleInfo.chords[4]}/${scaleInfo.notes[6]}`;
+      specialChords.push({
+        chord: IVm,
+        concept: `Dica de Arranjo: A.E.M. (Acorde de Empréstimo Modal - iv menor)`,
+        explanation: `Sugestão rica para o altar: experimente tocar ${scaleInfo.chords[3]} seguido por ${IVm} antes de resolver na tônica ${scaleInfo.chords[0]}. Esse empréstimo modal do homônimo menor injeta uma emoção profunda de comoção e entrega no refrão.`
+      });
+      specialChords.push({
+        chord: V_over_bass,
+        concept: `Dica de Condução: Inversão com Baixo Descendente`,
+        explanation: `Substitua a passagem direta da Tônica ${scaleInfo.chords[0]} para a Relativa ${scaleInfo.chords[5]} por ${scaleInfo.chords[0]} → ${V_over_bass} → ${scaleInfo.chords[5]}. A linha de baixo descendente traz elegância instantânea.`
+      });
+    } else {
+      const V7 = scaleInfo.notes[4] + '7';
+      specialChords.push({
+        chord: V7,
+        concept: `Dica de Arranjo: Dominante Maior com Sétima (V7)`,
+        explanation: `Experimente usar a dominante maior ${V7} em vez do v menor para criar uma atração magnética e imediata de volta à tônica ${scaleInfo.chords[0]}.`
+      });
+    }
+
+    const tipsRoot = detectedKeyDisplay;
+    const musicianTips = {
+      keyboardist: `Para a tonalidade de ${tipsRoot}, utilize voicings abertos (Drop 2) no piano acústico. Na mão esquerda, sustente a fundamental oitavada ou com quinta, e na mão direita explore terças e nonas adicionadas (add9) para abrir o som do louvor.`,
+      guitarist: `No violão no tom de ${tipsRoot}, prefira dedilhados arpejados nas estrofes mais intimistas. Deixe as cordas soltas ressoarem para preencher o ambiente sonoro sem disputar espaço com os vocais.`,
+      vocalist: `A tonalidade de ${tipsRoot} possui momentos de descanso e tensão bem definidos. Inicie os versos com emissão suave e deixe a abertura de vozes (segunda e terça) para o ápice do refrão.`,
+      bassist: `Marque com firmeza os tempos fortes nas tônicas de ${tipsRoot}. Em momentos de dinâmica alta, conecte os acordes com notas de passagem pela escala pentatônica ou pela quinta justa.`
+    };
+
+    return {
+      detectedKey: detectedKeyDisplay,
+      scaleNotes: scaleInfo.notes,
+      scaleType,
+      harmonicField,
+      chordsAnalysis,
+      cadencesFound,
+      specialChords,
+      musicianTips
+    };
+  }
+
   // POST endpoint to perform educational harmonic and practical analysis of a song
   app.post("/api/songs/analyze-harmony", async (req, res) => {
     const { title, content, baseKey } = req.body;
@@ -1759,13 +1969,20 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
 
       const cacheKey = `${title.trim().toLowerCase()}_${(baseKey || '').trim().toLowerCase()}_${content.slice(0, 100).trim().toLowerCase()}`;
       if (harmonyAnalysisCache.has(cacheKey)) {
-        console.log(`[Análise Harmônica] Hit de cache para "${title}"`);
-        return res.json(harmonyAnalysisCache.get(cacheKey));
+        const cached = harmonyAnalysisCache.get(cacheKey);
+        // Ensure cached item is not an old invalid warning or mismatched key
+        if (!cached?.warning && (!baseKey || cached?.detectedKey?.toLowerCase().includes(baseKey.trim().toLowerCase()) || baseKey.toLowerCase().includes(cached?.detectedKey?.toLowerCase()))) {
+          console.log(`[Análise Harmônica] Hit de cache para "${title}"`);
+          return res.json(cached);
+        }
       }
 
       const apiKey = getGeminiApiKey();
       if (!apiKey) {
-        throw new Error("A chave de API do Gemini não foi configurada. Utilizando fallback harmônico local.");
+        console.log(`[Análise Harmônica] Sem chave de API Gemini, usando engine harmônico determinístico.`);
+        const localAnalysis = generateDeterministicHarmonyAnalysis(title, content, baseKey);
+        harmonyAnalysisCache.set(cacheKey, localAnalysis);
+        return res.json(localAnalysis);
       }
 
       // Initialize Gemini SDK with telemetry header
@@ -1784,7 +2001,7 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
 Informações de Tom sugerido: ${baseKey || "Identifique automaticamente"}.
 Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise didática contendo o tom detectado de forma precisa, a escala correspondente, o campo harmônico diatônico de 7 acordes do tom, um mapeamento detalhado dos acordes individuais presentes na canção e seus respectivos graus funcionais (ex: I, IV, V7, vi, etc.), cadências melódicas ou funcionais encontradas (como II-V-I, ou progressões plagais como IV-IVm-I). Identifique e descreva acordes especiais como empréstimos modais (AEM), dominantes secundárias ou SubV7. IMPORTANTE: Se um acorde especial (como Fm em uma música no tom de C) não estiver na cifra original fornecida, inclua-o expressamente como uma "Dica de Arranjo Harmônico / Rearmonização sugerida para embelezamento", explicando como a banda pode inseri-lo para enriquecer o arranjo. Dê dicas práticas detalhadas direcionadas para tecladistas, violonistas/guitarristas, baixistas e ministros vocais executarem essa harmonia com total união e reverência no altar.`;
 
-      const modelsToTry = GEMINI_FALLBACK_MODELS;
+      const modelsToTry = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
       let responseText = "";
       let lastError: any = null;
 
@@ -1895,7 +2112,7 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         }
 
         if (!responseText) {
-          throw lastError || new Error("Falha ao gerar análise harmônica.");
+          throw lastError || new Error("Falha ao gerar análise harmônica via IA.");
         }
 
         const parsedData = JSON.parse(responseText.trim());
@@ -1903,38 +2120,11 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         return res.json(parsedData);
 
     } catch (error: any) {
-      console.log("[Status] Harmony analysis fallback applied");
-      res.json({
-        detectedKey: baseKey || "G Major",
-        scaleNotes: ["G", "A", "B", "C", "D", "E", "F#"],
-        scaleType: "Maior Diatônica",
-        harmonicField: [
-          { degree: "I", chord: "G", functionType: "Tônica", explanation: "O centro tonal de repouso e resolução." },
-          { degree: "ii", chord: "Am", functionType: "Subdominante", explanation: "Acorde menor preparatório que gera suave progressão." },
-          { degree: "iii", chord: "Bm", functionType: "Tônica", explanation: "Tônica substituta que provê sonoridade mais intimista." },
-          { degree: "IV", chord: "C", functionType: "Subdominante", explanation: "Acorde de abertura emocional e crescimento espiritual." },
-          { degree: "V", chord: "D", functionType: "Dominante", explanation: "Gera tensão direcional que resolve perfeitamente de volta à Tônica." },
-          { degree: "vi", chord: "Em", functionType: "Tônica", explanation: "Relativa menor que provê contrição profunda e reflexão." },
-          { degree: "vii°", chord: "F#dim", functionType: "Dominante", explanation: "Gera tensão extrema direcionada à Tônica." }
-        ],
-        chordsAnalysis: [
-          { chord: "G", degree: "I", role: "Repouso", description: "Inicia e conclui estrofes principais com estabilidade." },
-          { chord: "C", degree: "IV", role: "Abertura Emocional", description: "Empurra a música para cima no início de pontes ou refrões." },
-          { chord: "D", degree: "V", role: "Preparação", description: "Cria expectativa para as resoluções harmônicas de estrofes." },
-          { chord: "Em", degree: "vi", role: "Contrição", description: "Introduz a sonoridade menor para expressar humildade e reverência." }
-        ],
-        cadencesFound: [
-          { name: "Progressão de Louvor Ativo (vi - IV - I - V)", progression: "Em -> C -> G -> D", description: "A cadência mais sagrada do worship contemporâneo, facilitando a transição vocal com fluidez." }
-        ],
-        specialChords: [],
-        musicianTips: {
-          keyboardist: "Utilize pads suaves de cordas por baixo do piano acústico, tocando na mão esquerda apenas a fundamental (oitavada) e na direita arranjos de terças ou quintas.",
-          guitarist: "Seja sutil nos acordes. Faça dedilhados leves nas cordas agudas e use delay rítmico pontuado nos compassos 1 e 3.",
-          vocalist: "Mantenha a voz firme na melodia principal nas primeiras estrofes e permita aberturas de duas e três vozes apenas nos refrões finais.",
-          bassist: "Marque as tônicas com notas de fôlego longo. Na ponte, adicione pequenas passagens de terça ou quinta com suavidade."
-        },
-        warning: "A cota diária do servidor Gemini foi excedida. Exibindo análise harmônica diatônica estrutural padrão."
-      });
+      console.log(`[Status] Harmony analysis fallback aplicado com precisão determinística: ${error?.message || error}`);
+      const fallbackData = generateDeterministicHarmonyAnalysis(title, content, baseKey);
+      const cacheKey = `${(title || '').trim().toLowerCase()}_${(baseKey || '').trim().toLowerCase()}_${(content || '').slice(0, 100).trim().toLowerCase()}`;
+      harmonyAnalysisCache.set(cacheKey, fallbackData);
+      return res.json(fallbackData);
     }
   });
 

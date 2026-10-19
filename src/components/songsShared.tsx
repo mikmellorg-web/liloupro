@@ -2195,8 +2195,8 @@ export function TimeSignatureDisplay({ value, className }: { value: string, clas
   const den = parts[1] || '4';
   return (
     <div className={cn("inline-flex flex-col items-center justify-center font-serif leading-none select-none text-[10px] font-bold text-text-secondary dark:text-text-muted", className)}>
-      <span className="border-b border-current px-0.5 pb-0.2">{num}</span>
-      <span className="px-0.5 pt-0.2">{den}</span>
+      <span className="border-b border-current px-0.5 pb-[1px]">{num}</span>
+      <span className="px-0.5 pt-[1px]">{den}</span>
     </div>
   );
 }

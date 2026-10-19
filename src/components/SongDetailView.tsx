@@ -454,6 +454,13 @@ export function SongDetailView({
     setIsHarmonyExpanded(true);
     setHarmonyAnalysisError(null);
     try {
+      // Prioritize chords (with lyrics) so harmonic analysis receives actual chords!
+      const contentToSend = (editedSong.chords && editedSong.chords.trim().length > 0)
+        ? editedSong.chords
+        : (editedSong.lyrics || "");
+
+      const keyToSend = currentKey || editedSong.baseKey || song.baseKey || (contentToSend ? detectKey(contentToSend) : "") || "";
+
       const response = await fetch("/api/songs/analyze-harmony", {
         method: "POST",
         headers: {
@@ -461,8 +468,8 @@ export function SongDetailView({
         },
         body: JSON.stringify({
           title: editedSong.title,
-          content: editedSong.lyrics || editedSong.chords || "",
-          baseKey: editedSong.baseKey || "",
+          content: contentToSend,
+          baseKey: keyToSend,
         }),
       });
 
@@ -3279,7 +3286,7 @@ export function SongDetailView({
                  type="button"
                  onClick={() => setShowTimeSignatureMenu(true)}
                  className={cn(
-                   "px-1.5 sm:px-2.5 py-1.5 rounded-lg border leading-tight min-h-[38px] sm:min-h-[46px] flex flex-col items-center justify-center text-center shadow-lg w-full transition-all active:scale-95 cursor-pointer outline-none select-none group",
+                   "px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border leading-none h-[38px] sm:h-[46px] flex flex-col items-center justify-center text-center shadow-lg w-full transition-all active:scale-95 cursor-pointer outline-none select-none group overflow-hidden",
                    (editedSong.timeSignature || '4/4') !== originalTimeSignature
                      ? "bg-amber-500 text-black border-amber-400 hover:bg-amber-400 shadow-amber-500/20"
                      : "bg-brand hover:bg-brand/90 text-white border-brand/30 shadow-brand/10 hover:brightness-110"
@@ -3289,7 +3296,7 @@ export function SongDetailView({
                  <TimeSignatureDisplay 
                    value={editedSong.timeSignature || song?.timeSignature || '4/4'} 
                    className={cn(
-                     "scale-75 sm:scale-100 group-hover:scale-105 transition-transform",
+                     "text-[11px] sm:text-[14px] font-black group-hover:scale-105 transition-transform",
                      (editedSong.timeSignature || '4/4') !== originalTimeSignature ? "text-black font-black" : "text-white font-black"
                    )} 
                  />
