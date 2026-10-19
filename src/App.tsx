@@ -2818,8 +2818,8 @@ function MainContent() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                {/* Botão Ver Cifra para abrir a cifra sem interromper o áudio */}
-                {currentSong.id && (
+                {/* Botão Ver Cifra apenas no Modo Pratique (música avulsa) */}
+                {isSingleSong && currentSong.id && (
                   <button
                     onClick={() => handleOpenSongById(currentSong.id)}
                     className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
