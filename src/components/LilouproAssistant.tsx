@@ -726,11 +726,12 @@ export function LilouproAssistant({
       if (onEnded) {
         onEnded();
       } else if (isManualMicSessionActiveRef.current) {
+        // Conversational turn-taking: reabre janela de escuta para comandos seguintes
         setTimeout(() => {
           if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current && !isPlayerAudioPlayingRef.current) {
             startListeningRef.current?.();
           }
-        }, 120);
+        }, 150);
       }
     };
 
@@ -902,26 +903,13 @@ export function LilouproAssistant({
         setInterimTranscript('');
         latestInterimRef.current = '';
 
-        // Se o usuário não falar nada por 6.5 segundos na conversa ativa, transiciona para espera da wake word ("Oi Lilou") se a sessão estiver ativa
+        // Janela de conversação fluida (8 segundos): se o usuário permanecer em silêncio após o comando, repousa silenciosamente sem disparar bips
         if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = setTimeout(() => {
           if (!latestInterimRef.current || !latestInterimRef.current.trim()) {
-            if (isManualMicSessionActiveRef.current || wakeWordEnabledRef.current) {
-              stopListening();
-              setIsListening(false);
-              isListeningRef.current = false;
-              setInterimTranscript('');
-              latestInterimRef.current = '';
-              wakeWordEnabledRef.current = true;
-              setWakeWordEnabled(true);
-              // Transição segura: o stopListening() dispara recognition.stop(),
-              // e a passagem para Wake Word ocorre exclusivamente em recognition.onend
-              // quando recognitionRef.current for estritamente null.
-            } else {
-              turnOffAllListeningRef.current?.();
-            }
+            turnOffAllListeningRef.current?.();
           }
-        }, 6500);
+        }, 8000);
       };
 
       recognition.onresult = (event: any) => {
@@ -972,22 +960,9 @@ export function LilouproAssistant({
           if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
           silenceTimeoutRef.current = setTimeout(() => {
             if (!latestInterimRef.current || !latestInterimRef.current.trim()) {
-              if (isManualMicSessionActiveRef.current || wakeWordEnabledRef.current) {
-                stopListening();
-                setIsListening(false);
-                isListeningRef.current = false;
-                setInterimTranscript('');
-                latestInterimRef.current = '';
-                wakeWordEnabledRef.current = true;
-                setWakeWordEnabled(true);
-                // Transição segura: o stopListening() dispara recognition.stop(),
-                // e a passagem para Wake Word ocorre exclusivamente em recognition.onend
-                // quando recognitionRef.current for estritamente null.
-              } else {
-                turnOffAllListeningRef.current?.();
-              }
+              turnOffAllListeningRef.current?.();
             }
-          }, 4500);
+          }, 5500);
         }
 
         if (final) {
@@ -1012,15 +987,10 @@ export function LilouproAssistant({
         setInterimTranscript('');
         latestInterimRef.current = '';
 
-        // Se o erro for apenas ausência de fala (silêncio normal), transiciona para o modo de espera por "Oi Lilou" sem matar a sessão
+        // Se o erro for ausência de fala (silêncio normal), encerra em repouso elegante sem loops ou bips
         if (event.error === 'no-speech') {
-          if (isManualMicSessionActiveRef.current || wakeWordEnabledRef.current) {
-            wakeWordEnabledRef.current = true;
-            setWakeWordEnabled(true);
-            // O navegador Chromium dispara recognition.onend logo em seguida,
-            // onde recognitionRef.current será null e startWakeWordListening() iniciará com total segurança.
-            return;
-          }
+          turnOffAllListeningRef.current?.();
+          return;
         }
 
         turnOffAllListeningRef.current?.();
@@ -1053,26 +1023,8 @@ export function LilouproAssistant({
           setInterimTranscript('');
           handleProcessInput(textToProcess);
         } else {
-          // Usuário não falou nada no comando: se wake word ou sessão de voz estiver habilitada, volta para escuta de wake word sem loop
-          const isSessionActive = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current);
-          const isAudioSpeaking = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
-          const shouldStartWake = isSessionActive &&
-            !isListeningRef.current &&
-            !isHandlingWakeRef.current &&
-            !isSpeakingRef.current &&
-            !isAudioSpeaking &&
-            !recognitionRef.current &&
-            !wakeWordRecognitionRef.current;
-
-          if (shouldStartWake) {
-            setIsListening(false);
-            isListeningRef.current = false;
-            wakeWordEnabledRef.current = true;
-            setWakeWordEnabled(true);
-            startWakeWordListeningRef.current?.();
-          } else if (!isSessionActive) {
-            turnOffAllListeningRef.current?.();
-          }
+          // Usuário permaneceu em silêncio ou concluiu o diálogo: repouso suave sem loops ou bips no dispositivo
+          turnOffAllListeningRef.current?.();
         }
       };
 
@@ -3834,7 +3786,7 @@ export function LilouproAssistant({
     if (!SpeechRecognition) return;
 
     const isAudioSpeaking = Boolean(currentAudioRef.current && !currentAudioRef.current.paused && !currentAudioRef.current.ended);
-    const isVoiceSessionActive = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current);
+    const isVoiceSessionActive = Boolean(wakeWordEnabledRef.current);
     if (
       isSpeakingRef.current ||
       !isVoiceSessionActive ||
@@ -3845,11 +3797,6 @@ export function LilouproAssistant({
       (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking)
     ) {
       return;
-    }
-
-    if (isManualMicSessionActiveRef.current && !wakeWordEnabledRef.current) {
-      wakeWordEnabledRef.current = true;
-      setWakeWordEnabled(true);
     }
 
     // Se já existe uma instância ativa e rodando do Wake Word, não criar outra
@@ -3993,8 +3940,8 @@ export function LilouproAssistant({
           wakeWordRecognitionRef.current = null;
         }
 
-        // Verifica se a SESSÃO DE VOZ continua ativa e se não estamos executando comando ou fala
-        const shouldRecover = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current) &&
+        // Verifica se a escuta por Wake Word está explicitamente habilitada
+        const shouldRecover = Boolean(wakeWordEnabledRef.current) &&
           !isListeningRef.current &&
           !isHandlingWakeRef.current &&
           !Boolean(recognitionRef.current);
@@ -4003,11 +3950,11 @@ export function LilouproAssistant({
           return;
         }
 
-        // Reinício ágil e controlado (300ms) quando o navegador encerra a conexão por silêncio
+        // Recuperação com delay seguro (2500ms) para não disparar rajadas de bips do sistema operacional
         if (!wakeWordRestartTimeoutRef.current) {
           wakeWordRestartTimeoutRef.current = setTimeout(() => {
             wakeWordRestartTimeoutRef.current = null;
-            const stillShouldRecover = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current) &&
+            const stillShouldRecover = Boolean(wakeWordEnabledRef.current) &&
               !isListeningRef.current &&
               !isHandlingWakeRef.current &&
               !Boolean(recognitionRef.current) &&
@@ -4016,7 +3963,7 @@ export function LilouproAssistant({
             if (stillShouldRecover) {
               startWakeWordListeningRef.current?.();
             }
-          }, 300);
+          }, 2500);
         }
       };
 
@@ -4027,8 +3974,8 @@ export function LilouproAssistant({
       setIsWakeWordActive(false);
       wakeWordRecognitionRef.current = null;
 
-      // Se a sessão de voz continua ativa, agenda uma nova tentativa de recuperação suave (1200ms) sem loop rápido
-      const shouldRetry = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current) &&
+      // Se o recurso estiver explicitamente ativo, agenda nova tentativa com delay seguro (3000ms)
+      const shouldRetry = Boolean(wakeWordEnabledRef.current) &&
         !isListeningRef.current &&
         !isHandlingWakeRef.current &&
         !Boolean(recognitionRef.current);
@@ -4036,7 +3983,7 @@ export function LilouproAssistant({
       if (shouldRetry && !wakeWordRestartTimeoutRef.current) {
         wakeWordRestartTimeoutRef.current = setTimeout(() => {
           wakeWordRestartTimeoutRef.current = null;
-          const stillShouldRetry = Boolean(wakeWordEnabledRef.current || isManualMicSessionActiveRef.current) &&
+          const stillShouldRetry = Boolean(wakeWordEnabledRef.current) &&
             !isListeningRef.current &&
             !isHandlingWakeRef.current &&
             !Boolean(recognitionRef.current) &&
@@ -4045,16 +3992,16 @@ export function LilouproAssistant({
           if (stillShouldRetry) {
             startWakeWordListeningRef.current?.();
           }
-        }, 1200);
+        }, 3000);
       }
     }
   }, []);
 
   startWakeWordListeningRef.current = startWakeWordListening;
 
-  // Efeito para sincronizar o reconhecimento de Wake Word quando a sessão estiver habilitada e não em escuta direta
+  // Efeito para sincronizar o reconhecimento de Wake Word quando explicitamente habilitado e não em escuta direta
   useEffect(() => {
-    const isSessionActive = Boolean(wakeWordEnabled || isManualMicSessionActiveRef.current);
+    const isSessionActive = Boolean(wakeWordEnabled);
     if (isSessionActive && !isListening) {
       // Se não há instância rodando e nenhum timer de restart pendente, inicia o Wake Word com segurança
       if (!wakeWordRecognitionRef.current && !wakeWordRestartTimeoutRef.current && !Boolean(recognitionRef.current)) {
@@ -4105,15 +4052,7 @@ export function LilouproAssistant({
         turnOffAllListening();
       } else {
         isManualMicSessionActiveRef.current = true;
-        setWakeWordEnabled(true);
-        wakeWordEnabledRef.current = true;
-        try {
-          localStorage.setItem('liloupro_assistant_wakeword', 'true');
-        } catch {}
         startListening();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('liloupro:wakeword-change', { detail: { enabled: true } }));
-        }
       }
     };
 
