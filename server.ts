@@ -109,7 +109,7 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
-const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+const GEMINI_FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"];
 
 function isQuotaError(error: any): boolean {
   if (!error) return false;
@@ -2262,8 +2262,8 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         const res = await fetch(urlToFetch, {
           signal: controller.signal,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             'Referer': 'https://www.cifraclub.com.br/',
             ...customHeaders
@@ -2277,10 +2277,10 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       }
     };
 
-    // Try target URLs sequentially
-    for (const testUrl of targetUrls) {
+    // Try primary target URLs with fast timeout (max 2500ms)
+    for (const testUrl of targetUrls.slice(0, 2)) {
       try {
-        const responseHtml = await fetchWithTimeout(testUrl, 6000);
+        const responseHtml = await fetchWithTimeout(testUrl, 2500);
         if (responseHtml.ok) {
           const bodyText = await responseHtml.text();
           // Verify it contains pre or chord container
@@ -2293,69 +2293,6 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         }
       } catch (netErr: any) {
         console.log(`scrapeCifraClub: Tentativa falhou para "${testUrl}": ${netErr?.message || netErr}`);
-      }
-    }
-
-    // If still not found and artistSlug exists, check artist's page to resolve partial/matching song slug
-    if (!fetchOk && artistSlug) {
-      try {
-        const artistPageUrl = `https://www.cifraclub.com.br/${artistSlug}/`;
-        const artistRes = await fetchWithTimeout(artistPageUrl, 5000);
-        if (artistRes.ok) {
-          const artistHtml = await artistRes.text();
-          const cleanSongSlug = songSlug.replace(/^\d+-/, "").toLowerCase();
-          // Find song links on artist page
-          const linkRegex = new RegExp(`href=["']\\/${artistSlug}\\/([a-z0-9-]+)\\/["']`, "gi");
-          let match;
-          let matchedSlug = "";
-          while ((match = linkRegex.exec(artistHtml)) !== null) {
-            const foundSlug = match[1];
-            if (foundSlug === songSlug || foundSlug === cleanSongSlug) {
-              matchedSlug = foundSlug;
-              break;
-            }
-            if (cleanSongSlug.length >= 3 && (foundSlug.startsWith(cleanSongSlug) || foundSlug.includes(cleanSongSlug))) {
-              matchedSlug = foundSlug;
-            }
-          }
-
-          if (matchedSlug) {
-            const resolvedUrl = `https://www.cifraclub.com.br/${artistSlug}/${matchedSlug}/`;
-            console.log(`scrapeCifraClub: Slug resolvido via página do artista: "${resolvedUrl}"`);
-            const songRes = await fetchWithTimeout(resolvedUrl, 6000);
-            if (songRes.ok) {
-              const songBody = await songRes.text();
-              if (songBody.includes("<pre") || songBody.includes("data-chord-container") || songBody.includes("cifra_cnt")) {
-                html = songBody;
-                fetchOk = true;
-              }
-            }
-          }
-        }
-      } catch (artistErr: any) {
-        console.log(`scrapeCifraClub: Busca na página do artista falhou: ${artistErr?.message || artistErr}`);
-      }
-    }
-
-    // Rota resiliente de alta disponibilidade (leitor de borda) se o fetch direto for barrado por WAF
-    if (!fetchOk) {
-      console.log(`scrapeCifraClub: Acionando leitor resiliente de alta disponibilidade para [${targetUrls[0]}]...`);
-      for (const testUrl of targetUrls) {
-        try {
-          const readerUrl = `https://r.jina.ai/${testUrl}`;
-          const readerRes = await fetchWithTimeout(readerUrl, 8000, { 'X-Return-Format': 'html' });
-          if (readerRes.ok) {
-            const bodyText = await readerRes.text();
-            if (bodyText.includes("<pre") || bodyText.includes("data-chord-container") || bodyText.includes("cifra_cnt")) {
-              html = bodyText;
-              fetchOk = true;
-              console.log(`scrapeCifraClub: Leitor resiliente bem-sucedido para "${testUrl}"`);
-              break;
-            }
-          }
-        } catch (resErr: any) {
-          console.log(`scrapeCifraClub: Tentativa resiliente falhou para "${testUrl}": ${resErr?.message || resErr}`);
-        }
       }
     }
 
@@ -2576,7 +2513,7 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
 
               const bpmPromise = (async () => {
                 const response = await ai.models.generateContent({
-                  model: "gemini-2.5-flash",
+                  model: GEMINI_FALLBACK_MODELS[0] || "gemini-flash-latest",
                   contents: `Estimativa de BPM e compasso para "${extractedTitle}" de "${extractedArtist}". Retorne JSON: {"bpm": número, "timeSignature": "string"}`,
                   config: {
                     responseMimeType: "application/json",
@@ -2663,24 +2600,109 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     );
   }
 
-  // POST endpoint to import chords & lyrics directly from a Cifra Club URL (Approach A)
+  // POST endpoint to import chords & lyrics directly from a Cifra Club URL or candidate (Approach A)
   app.post("/api/songs/import-cifraclub", async (req, res) => {
-    const { url } = req.body;
+    const { url, title, artist } = req.body;
     try {
-      if (!url) {
-        return res.status(400).json({ error: "A URL do Cifra Club é obrigatória." });
+      if (!url && !title) {
+        return res.status(400).json({ error: "A URL do Cifra Club ou o título da música é obrigatório." });
       }
 
-      const data = await scrapeCifraClub(url);
-      return res.json(data);
+      // 1. Tenta raspagem direta se URL for fornecida
+      if (url && url.includes("cifraclub.com.br")) {
+        try {
+          const data = await scrapeCifraClub(url);
+          if (data && (data.chords?.length > 40 || data.lyrics?.length > 40)) {
+            return res.json(data);
+          }
+        } catch (scrapeErr: any) {
+          console.info("[import-cifraclub] Raspagem direta falhou para", url, ":", scrapeErr?.message || scrapeErr);
+        }
+      }
 
+      // 2. Extrai título e artista com precisão
+      const songSlug = (url || "").replace(/\/+$/, "").split("/").pop()?.replace(/\.html$/i, "") || "";
+      const pathParts = (url || "").replace(/^https?:\/\/[^\/]+\//, "").split("/").filter(Boolean);
+      const urlArtistSlug = pathParts[0] && pathParts[0] !== "gospel" ? pathParts[0] : "";
+
+      const effectiveTitle = (title || formatCifraClubSlug(songSlug)).trim();
+      const effectiveArtist = (artist || (urlArtistSlug ? formatCifraClubSlug(urlArtistSlug) : "")).trim();
+
+      // 3. Verifica acervo local verificado
+      const localSong = findLocalPopularSong(effectiveTitle, effectiveArtist);
+      if (localSong) {
+        return res.json({
+          ...localSong,
+          chords: cleanCifraHtml(localSong.chords),
+          lyrics: cleanCifraHtml(localSong.lyrics),
+          source: "local"
+        });
+      }
+
+      // 4. Fallback de alta disponibilidade com Gemini
+      const apiKey = getGeminiApiKey();
+      if (apiKey) {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
+
+        const prompt = `Você é o curador e mapeador de cifras de louvor do Liloupro.
+Forneça a cifra e a letra fidedigna e oficial da música cristã:
+Título: "${effectiveTitle}"
+Artista/Ministério: "${effectiveArtist || "Ministério de Louvor"}"
+
+REGRAS OBRIGATÓRIAS:
+1. Retorne estritamente um JSON com:
+- "title": título oficial correto da canção
+- "artist": nome do artista ou ministério
+- "key": tom musical original ou mais tocado (ex: "C", "G", "D", "E", "A")
+- "bpm": andamento em BPM (número aproximado, ex: 120)
+- "timeSignature": compasso (ex: "4/4")
+- "lyrics": letra completa organizada em estrofes ([Verso 1], [Refrão], [Ponte], etc.)
+- "chords": letra completa com os acordes perfeitamente alinhados acima das palavras em formato monoespaçado tradicional
+2. Use as convenções musicais do Liloupro: "7M" para sétima maior (ex: C7M, G7M) e "m7" para sétima menor (ex: Am7, Em7).`;
+
+        for (const model of GEMINI_FALLBACK_MODELS) {
+          try {
+            const resp = await ai.models.generateContent({
+              model,
+              contents: prompt,
+              config: { responseMimeType: "application/json" }
+            });
+
+            if (resp && resp.text) {
+              const parsed = JSON.parse(resp.text);
+              if (parsed && (parsed.chords || parsed.lyrics)) {
+                return res.json({
+                  title: effectiveTitle,
+                  artist: effectiveArtist || parsed.artist || "Ministério de Louvor",
+                  key: parsed.key || "C",
+                  bpm: parsed.bpm ? Number(parsed.bpm) : 120,
+                  timeSignature: parsed.timeSignature || "4/4",
+                  chords: cleanCifraHtml(parsed.chords || parsed.lyrics),
+                  lyrics: cleanCifraHtml(parsed.lyrics || parsed.chords),
+                  capo: parsed.capo || "",
+                  artistImageUrl: "",
+                  source: "cifraclub"
+                });
+              }
+            }
+          } catch (mErr) {
+            console.log(`[import-cifraclub] Fallback com modelo ${model} falhou:`, mErr);
+          }
+        }
+      }
+
+      res.status(422).json({
+        error: `Não foi possível acessar a página original da cifra de "${effectiveTitle}" no Cifra Club.`,
+        details: "A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro."
+      });
     } catch (error: any) {
       console.info("[Status] Cifra Club link import unfulfilled:", error?.message || error);
-      const songSlug = (url || "").replace(/\/+$/, "").split("/").pop()?.replace(/\.html$/i, "") || "";
-      const songGuess = error?.message?.match(/cifra de "([^"]+)"/)?.[1] || formatCifraClubSlug(songSlug);
       res.status(422).json({
-        error: `Não foi possível acessar a página original da cifra de "${songGuess}" no Cifra Club.`,
-        details: "A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro."
+        error: `Não foi possível acessar a página original da cifra.`,
+        details: error?.message || String(error)
       });
     }
   });
@@ -2855,6 +2877,297 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
     }
   });
 
+  // Helper para validação real e profunda de candidato diretamente na página do Cifra Club
+  async function verifyCifraClubCandidate(url: string, searchedTitle: string, searchedArtist?: string) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html'
+        },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (!res.ok) return null;
+      const html = await res.text();
+
+      // Rejeita páginas genéricas ou sem container de cifra
+      if (!html.includes('<pre') && !html.includes('cifra_cnt') && !html.includes('data-chord-container')) {
+        return null;
+      }
+
+      // Extrai título e artista do <title> oficial da página
+      const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
+      if (!titleMatch) return null;
+
+      const rawTitle = titleMatch[1].replace(/\s*-\s*Cifra Club/i, '').trim();
+      const parts = rawTitle.split(' - ');
+      if (parts.length < 2) return null;
+
+      const extractedArtist = parts[parts.length - 1].trim();
+      const extractedTitle = parts.slice(0, -1).join(' - ').trim();
+
+      // Rejeita páginas de erro ou home
+      if (extractedTitle.toLowerCase().includes('cifra club') || extractedArtist.toLowerCase().includes('cifra club')) {
+        return null;
+      }
+
+      const slug = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, ' ');
+      const normSearchedTitle = slug(searchedTitle);
+      const normExtractedTitle = slug(extractedTitle);
+
+      const titleMatches = normExtractedTitle.includes(normSearchedTitle) || normSearchedTitle.includes(normExtractedTitle);
+      if (!titleMatches) return null;
+
+      if (searchedArtist && searchedArtist.trim()) {
+        const normSearchedArtist = slug(searchedArtist);
+        const normExtractedArtist = slug(extractedArtist);
+        const artistMatches = normExtractedArtist.includes(normSearchedArtist) || normExtractedArtist.includes(normSearchedArtist);
+        if (!artistMatches) return null;
+      }
+
+      // Extração do tom (key)
+      let key = "C";
+      const toneMatch = html.match(/data-anchor=["']--chord-tone["'][^>]*>([\s\S]*?)<\/button>/i) ||
+                        html.match(/Tom(?:<!-- -->)?:\s*<\/span>\s*<button[^>]*>([\s\S]*?)<\/button>/i) ||
+                        html.match(/id="cifra_tom"[^>]*>[\s\S]*?>([^<]+)<\/a>/i);
+      if (toneMatch) {
+        key = toneMatch[1].replace(/<[^>]*>/g, '').trim().split(/[\s(]/)[0].trim() || "C";
+      }
+
+      return {
+        title: extractedTitle,
+        artist: extractedArtist,
+        key,
+        url,
+        source: "cifraclub.com.br"
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function classifySearchError(err: any): { status: 'quota_exceeded' | 'service_unavailable' | 'error'; message: string } {
+    if (!err) return { status: 'error', message: 'Falha temporária ao pesquisar na web.' };
+    const statusCode = err?.status || err?.statusCode;
+    const msg = (err?.message || String(err)).toLowerCase();
+
+    if (statusCode === 429 || msg.includes("429") || msg.includes("resource_exhausted") || msg.includes("quota") || msg.includes("rate limit")) {
+      return {
+        status: 'quota_exceeded',
+        message: 'O serviço de pesquisa atingiu temporariamente o limite de uso. Tente novamente mais tarde ou prossiga com o cadastro manual.'
+      };
+    }
+
+    if (statusCode === 503 || msg.includes("503") || msg.includes("unavailable") || msg.includes("high demand") || msg.includes("temporarily unavailable") || msg.includes("overloaded")) {
+      return {
+        status: 'service_unavailable',
+        message: 'O serviço de pesquisa online está temporariamente indisponível. Tente novamente em instantes ou prossiga com o cadastro manual.'
+      };
+    }
+
+    return {
+      status: 'error',
+      message: 'Não foi possível completar a pesquisa na web no momento. Você pode prosseguir com o cadastro manual.'
+    };
+  }
+
+  // POST endpoint to search web and Cifra Club candidate chords for pre-registration
+  app.post("/api/songs/search-chord-candidates", async (req, res) => {
+    const { title, artist } = req.body;
+    try {
+      if (!title || typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ error: "O título da música é obrigatório.", candidates: [] });
+      }
+
+      const trimmedTitle = title.trim();
+      const trimmedArtist = (artist || '').trim();
+
+      const slugify = (text: string) => {
+        return text
+          .toString()
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^\w\s-]/g, '')
+          .trim()
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      };
+
+      const candidates: Array<{
+        id: string;
+        title: string;
+        artist: string;
+        key?: string;
+        source: string;
+        badge: string;
+        url: string;
+        isLocal?: boolean;
+        data?: any;
+      }> = [];
+
+      // 1. Verificação na base local de músicas populares consolidadas
+      const localPopularSong = findLocalPopularSong(trimmedTitle, trimmedArtist);
+      if (localPopularSong) {
+        candidates.push({
+          id: `local_${slugify(localPopularSong.title)}`,
+          title: localPopularSong.title,
+          artist: localPopularSong.artist,
+          key: localPopularSong.key,
+          source: "LiLouPro Base Verificada",
+          badge: "Oficial Lilou",
+          url: `local:${localPopularSong.title}`,
+          isLocal: true,
+          data: localPopularSong
+        });
+      }
+
+      const urlsToVerify = new Set<string>();
+
+      // 2. Se o usuário informou o artista, gera URLs diretas para verificação
+      if (trimmedArtist) {
+        const artistSlug = slugify(trimmedArtist);
+        const titleSlug = slugify(trimmedTitle);
+        if (artistSlug && titleSlug) {
+          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/`);
+          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/simplificada.html`);
+        }
+      }
+
+      // 3. Pesquisa real na Web via Google Search Grounding (Gemini 2.5 Flash)
+      let searchFailure: { status: 'quota_exceeded' | 'service_unavailable' | 'error'; message: string } | null = null;
+      const apiKey = getGeminiApiKey();
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
+
+          const searchQuery = trimmedArtist
+            ? `site:cifraclub.com.br "${trimmedTitle}" "${trimmedArtist}" cifra`
+            : `site:cifraclub.com.br "${trimmedTitle}" cifra`;
+
+          const prompt = `Realize uma pesquisa no Google por: ${searchQuery}.
+Identifique páginas de cifras no Cifra Club (cifraclub.com.br) para a canção "${trimmedTitle}"${trimmedArtist ? ` do artista "${trimmedArtist}"` : ""}.
+Retorne estritamente um array JSON de objetos contendo os links reais encontrados:
+[
+  {
+    "title": "título exato",
+    "artist": "nome do artista",
+    "url": "https://www.cifraclub.com.br/slug-artista/slug-musica/"
+  }
+]
+Apenas URLs válidas do domínio cifraclub.com.br.`;
+
+          const geminiRes = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+              tools: [{ googleSearch: {} }]
+            }
+          });
+
+          const text = geminiRes.text || '';
+
+          // Extrai JSON estruturado se presente
+          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item.url && typeof item.url === 'string' && item.url.includes('cifraclub.com.br')) {
+                    const cleanUrl = item.url.trim().replace(/\/+$/, '') + '/';
+                    urlsToVerify.add(cleanUrl);
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          // Extrai URLs do Cifra Club via Regex direto do texto
+          const urlMatches = text.match(/https?:\/\/(?:www\.)?cifraclub\.com\.br\/[a-z0-9\-]+\/[a-z0-9\-]+\/?/gi) || [];
+          for (const u of urlMatches) {
+            urlsToVerify.add(u.trim().replace(/\/+$/, '') + '/');
+          }
+        } catch (searchErr: any) {
+          const classified = classifySearchError(searchErr);
+          searchFailure = classified;
+          console.warn(`[search-chord-candidates] Falha na busca Google Search (${classified.status}):`, searchErr?.message || searchErr);
+        }
+      } else {
+        searchFailure = {
+          status: 'error',
+          message: 'Chave de busca não configurada no servidor. Prossiga com o cadastro manual.'
+        };
+      }
+
+      // 4. Validação rigorosa dos candidatos diretamente na página do Cifra Club
+      const verificationPromises = Array.from(urlsToVerify).map(async (url) => {
+        return await verifyCifraClubCandidate(url, trimmedTitle, trimmedArtist);
+      });
+
+      const verifiedResults = await Promise.all(verificationPromises);
+
+      for (const verified of verifiedResults) {
+        if (verified) {
+          const isSimplificada = verified.url.includes('simplificada');
+          candidates.push({
+            id: `cifraclub_${slugify(verified.artist)}_${slugify(verified.title)}${isSimplificada ? '_simp' : ''}`,
+            title: isSimplificada ? `${verified.title} (Simplificada)` : verified.title,
+            artist: verified.artist,
+            key: verified.key,
+            badge: isSimplificada ? 'Simplificada' : 'Versão Principal',
+            source: 'cifraclub.com.br',
+            url: verified.url
+          });
+        }
+      }
+
+      // 5. Desduplica por URL e por Artista+Título
+      const seen = new Set<string>();
+      const uniqueCandidates = candidates.filter(cand => {
+        const key = `${cand.title.toLowerCase()}_${cand.artist.toLowerCase()}_${cand.url}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      // Se encontrou candidatos verificados com sucesso
+      if (uniqueCandidates.length > 0) {
+        return res.status(200).json({
+          candidates: uniqueCandidates,
+          status: 'success',
+          error: null
+        });
+      }
+
+      // Se NÃO encontrou candidatos e houve falha de busca externa (429, 503, erro de rede)
+      if (searchFailure) {
+        return res.status(200).json({
+          candidates: [],
+          status: searchFailure.status,
+          error: searchFailure.message
+        });
+      }
+
+      // Pesquisa concluída com sucesso sem resultados correspondentes
+      return res.status(200).json({
+        candidates: [],
+        status: 'no_results',
+        error: null
+      });
+    } catch (err: any) {
+      console.error("[search-chord-candidates] Erro inesperado:", err);
+      return res.status(500).json({
+        candidates: [],
+        status: 'error',
+        error: "Falha inesperada ao processar a pesquisa. Você pode continuar com o cadastro manual."
+      });
+    }
+  });
+
   // POST endpoint to auto-suggest/fill song details (chords, lyrics, key, bpm, timeSignature)
   app.post("/api/songs/autofill", async (req, res) => {
     const { title, artist } = req.body;
@@ -2990,14 +3303,14 @@ REGRAS CRÍTICAS DE FIDELIDADE (LEIA COM ATENÇÃO EXTREMA):
    - Sétimas Dominantes: Use apenas "7" (Ex: G7, C7, D7, A7).
    - Inversões de baixo: Use sempre barra "/" (Ex: G/B, C/E, D/F#).`;
 
-      const initialPrompt = `Por favor, faça uma busca detalhada no Google Search no site cifraclub.com.br e letras.mus.br pela música "${title}" do artista "${artist || "cantor consagrado"}".
-Caso seja uma versão em português de uma música internacional como "Holy Forever" de Chris Tomlin / Gabriel Guedes / Fernandinho, você DEVE obrigatoriamente trazer a letra oficial brasileira iniciada em: "As muitas gerações rendidas em louvor" e com acordes com base em C, C4, Am7, G, F9 (tom C original). Você está estritamente proibido de devolver qualquer tradução contendo "Gerações vêm e vão".
+      const initialPrompt = `Por favor, elabore a cifra e a letra fiel no padrão Cifra Club para a canção de louvor cristã "${title}"${artist ? ` do artista/ministério "${artist}"` : ""}.
+Caso seja uma versão em português de uma música internacional como "Holy Forever", use a adaptação oficial cantada nas igrejas brasileiras.
 
 Retorne uma estrutura JSON perfeita contendo:
-1. "title": título corrigido brasileiro oficial (ex: "Santos Pra Sempre").
-2. "artist": o cantor brasileiro consagrado (ex: "Gabriel Guedes").
-3. "key": Tom da versão nacional (ex: "C").
-4. "bpm": andamento original da canção.
+1. "title": título oficial da música pesquisada ("${title}").
+2. "artist": o cantor ou ministério da canção ("${artist || "Ministério de Louvor"}").
+3. "key": Tom musical da versão (ex: "C", "G", "D").
+4. "bpm": andamento original da canção (número, ex: 120).
 5. "timeSignature": compasso da música (ex: '4/4').
 6. "lyrics": A letra consagrada oficial completa, separada em estrofes ([Verso 1], [Refrão], [Ponte], etc.).
 7. "chords": Letra oficial mesclada com as marcas de cifras por cima de forma monoespaçada correta no tom correspondente.`;
@@ -3099,8 +3412,20 @@ Retorne uma estrutura JSON perfeita contendo:
 
       const finalParsedData = JSON.parse(responseText.trim());
       
+      // Proteção rigorosa: impede que o modelo troque a música ou artista pelo exemplo
+      const safeTitle = (finalParsedData.title && (finalParsedData.title.toLowerCase().includes(title.toLowerCase()) || title.toLowerCase().includes(finalParsedData.title.toLowerCase())))
+        ? finalParsedData.title
+        : title;
+      const safeArtist = (artist && artist.trim())
+        ? artist.trim()
+        : (finalParsedData.artist && !finalParsedData.artist.toLowerCase().includes("gabriel guedes") && !finalParsedData.artist.toLowerCase().includes("gospel")
+            ? finalParsedData.artist
+            : "Ministério de Louvor");
+
       res.json({
         ...finalParsedData,
+        title: safeTitle,
+        artist: safeArtist,
         warning: null
       });
 

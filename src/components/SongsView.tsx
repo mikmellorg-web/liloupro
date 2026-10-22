@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Music, Star, ChevronRight, Zap, Settings, Mic, X, 
   ExternalLink, Sparkles, FolderOpen, Save, Play, FileText, Youtube,
-  ChevronUp, ChevronDown, Trash2, Calendar, Clock, ArrowUpDown
+  ChevronUp, ChevronDown, Trash2, Calendar, Clock, ArrowUpDown,
+  Globe, Download, Check
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -222,6 +223,10 @@ export function SongsView({
   const [newCategory, setNewCategory] = useState('');
   const [newLyrics, setNewLyrics] = useState('');
   const [savingSong, setSavingSong] = useState(false);
+  const [isSearchingWeb, setIsSearchingWeb] = useState(false);
+  const [searchCandidates, setSearchCandidates] = useState<any[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [importingCandidateId, setImportingCandidateId] = useState<string | null>(null);
 
   // Modal do Google Drive da Equipe
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
@@ -631,6 +636,149 @@ export function SongsView({
       console.error('[SongsView] Erro ao cadastrar música:', err);
     } finally {
       setSavingSong(false);
+    }
+  };
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+    setNewTitle('');
+    setNewArtist('');
+    setSearchCandidates([]);
+    setSearchError(null);
+    setImportingCandidateId(null);
+    if (onAddModalClose) onAddModalClose();
+  };
+
+  // Buscar opções de cifras na web
+  const handleSearchChordCandidates = async () => {
+    if (!newTitle.trim()) return;
+    setIsSearchingWeb(true);
+    setSearchError(null);
+    setSearchCandidates([]);
+
+    try {
+      const res = await fetch('/api/songs/search-chord-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          artist: newArtist.trim()
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Não foi possível realizar a pesquisa no momento.');
+      }
+
+      const data = await res.json();
+      if (data.candidates && data.candidates.length > 0) {
+        setSearchCandidates(data.candidates);
+      } else if (data.error) {
+        setSearchError(data.error);
+      } else {
+        setSearchError('Nenhuma opção de cifra encontrada automaticamente na web. Você pode continuar com o cadastro manual.');
+      }
+    } catch (err: any) {
+      setSearchError(err?.message || 'Erro ao conectar com o serviço de busca.');
+    } finally {
+      setIsSearchingWeb(false);
+    }
+  };
+
+  // Selecionar candidato de cifra e preencher tudo automaticamente
+  const handleSelectCandidate = async (candidate: any) => {
+    setImportingCandidateId(candidate.id);
+    setSearchError(null);
+    try {
+      let songData: any = null;
+
+      if (candidate.isLocal && candidate.data) {
+        songData = candidate.data;
+      } else {
+        let response = await fetch('/api/songs/import-cifraclub', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            url: candidate.url,
+            title: candidate.title,
+            artist: candidate.artist
+          })
+        });
+
+        if (!response.ok) {
+          // Fallback de contingência para autofill estruturado
+          response = await fetch('/api/songs/autofill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: candidate.title || newTitle,
+              artist: candidate.artist || newArtist
+            })
+          });
+        }
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'Não foi possível importar esta cifra automaticamente.');
+        }
+
+        songData = await response.json();
+      }
+
+      const targetTitle = candidate.title || newTitle;
+      const targetArtist = candidate.artist || newArtist;
+
+      const trimmedTitle = (songData.title && (songData.title.toLowerCase().includes(targetTitle.toLowerCase()) || targetTitle.toLowerCase().includes(songData.title.toLowerCase()))
+        ? songData.title
+        : targetTitle).trim();
+      const trimmedArtist = (targetArtist && targetArtist.trim())
+        ? targetArtist.trim()
+        : (songData.artist && !songData.artist.toLowerCase().includes("gabriel guedes") && !songData.artist.toLowerCase().includes("gospel")
+            ? songData.artist.trim()
+            : 'Ministério de Louvor');
+      let createdId = `song_${Date.now()}`;
+
+      const newSongPayload = {
+        title: trimmedTitle,
+        artist: trimmedArtist,
+        key: songData.key || songData.tone || 'C',
+        tone: songData.key || songData.tone || 'C',
+        bpm: songData.bpm ? Number(songData.bpm) : 120,
+        timeSignature: songData.timeSignature || '4/4',
+        category: songData.category || null,
+        chords: typeof songData.chords === 'string' ? songData.chords : '',
+        lyrics: typeof songData.lyrics === 'string' ? songData.lyrics : (songData.content || ''),
+        youtube: songData.youtube || '',
+        artistImageUrl: songData.artistImageUrl || '',
+        capo: songData.capo || '',
+        tags: [],
+        churchId: churchId || 'semente',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      if (db) {
+        const docRef = await addDoc(collection(db, 'songs'), newSongPayload);
+        createdId = docRef.id;
+      }
+
+      const createdSong = {
+        ...newSongPayload,
+        id: createdId,
+        initialEdit: true
+      };
+
+      setSongs(prev => [createdSong, ...prev.filter(s => s.id !== createdId)]);
+      handleCloseAddModal();
+
+      // Abre imediatamente a tela de edição geral da música com tudo preenchido
+      onSelectSong(createdSong);
+    } catch (err: any) {
+      console.error('Erro ao importar cifra selecionada:', err);
+      setSearchError(err?.message || 'Falha ao importar esta opção. Tente outra ou cadastre manualmente.');
+    } finally {
+      setImportingCandidateId(null);
     }
   };
 
@@ -1685,7 +1833,7 @@ export function SongsView({
       {/* ============================================================== */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#101a35] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-100 flex flex-col animate-in zoom-in-95 duration-150">
+          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-[#101a35] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-100 flex flex-col animate-in zoom-in-95 duration-150 scrollbar-thin">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
@@ -1693,15 +1841,12 @@ export function SongsView({
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-white">Cadastrar Nova Música</h3>
-                  <p className="text-[11px] text-slate-400">Preencha o básico para iniciar a edição</p>
+                  <p className="text-[11px] text-slate-400">Pesquise a cifra na web ou cadastre manualmente</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setIsAddModalOpen(false);
-                  if (onAddModalClose) onAddModalClose();
-                }}
+                onClick={handleCloseAddModal}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 title="Fechar"
               >
@@ -1719,7 +1864,11 @@ export function SongsView({
                   required
                   autoFocus
                   value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
+                  onChange={(e) => {
+                    setNewTitle(e.target.value);
+                    if (searchCandidates.length > 0) setSearchCandidates([]);
+                    if (searchError) setSearchError(null);
+                  }}
                   placeholder="Ex: Bondade de Deus"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
@@ -1727,39 +1876,131 @@ export function SongsView({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Artista / Ministério *
+                  Artista / Ministério
                 </label>
                 <input
                   type="text"
-                  required
                   value={newArtist}
-                  onChange={(e) => setNewArtist(e.target.value)}
+                  onChange={(e) => {
+                    setNewArtist(e.target.value);
+                    if (searchCandidates.length > 0) setSearchCandidates([]);
+                    if (searchError) setSearchError(null);
+                  }}
                   placeholder="Ex: Isaías Saad"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
 
-              <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/30 text-[11px] text-blue-300/80 leading-relaxed">
-                💡 Após salvar, a tela de edição completa será aberta automaticamente para você importar pelo Cifra Club ou digitar os acordes.
+              {/* Botão de Pesquisar Cifras na Web */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleSearchChordCandidates}
+                  disabled={isSearchingWeb || !newTitle.trim()}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-md shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-98 border border-emerald-500/30"
+                >
+                  {isSearchingWeb ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                      <span>Pesquisando cifras oficiais na web...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe size={16} className="text-emerald-200 shrink-0" />
+                      <span>Pesquisar Cifras na Web</span>
+                    </>
+                  )}
+                </button>
               </div>
 
+              {/* Lista de Opções Encontradas */}
+              {searchCandidates.length > 0 && (
+                <div className="space-y-2 pt-1 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                      Cifras Encontradas (Toque para importar):
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {searchCandidates.length} opções
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                    {searchCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => handleSelectCandidate(candidate)}
+                        disabled={importingCandidateId !== null}
+                        className="w-full text-left p-2.5 sm:p-3 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-emerald-950/40 hover:border-emerald-500/50 transition-all cursor-pointer flex items-center justify-between gap-2.5 group active:scale-98 disabled:opacity-60"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+                              {candidate.title}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                              {candidate.badge}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="text-emerald-400 font-semibold">{candidate.artist || 'Artista'}</span>
+                            <span>•</span>
+                            <span className="text-slate-400">{candidate.source}</span>
+                            {candidate.key && (
+                              <>
+                                <span>•</span>
+                                <span className="text-amber-300 font-bold">Tom: {candidate.key}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 pl-1">
+                          {importingCandidateId === candidate.id ? (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                              <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shrink-0" />
+                              <span className="hidden sm:inline">Importando...</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-bold text-emerald-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                              Importar <ChevronRight size={14} />
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensagem de Erro / Informação da Busca */}
+              {searchError && (
+                <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-200 leading-relaxed">
+                  ⚠️ {searchError}
+                </div>
+              )}
+
+              {/* Dica amigável */}
+              <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-800/30 text-[11px] text-blue-300/80 leading-relaxed">
+                💡 Escolha uma das opções na lista acima para importar tudo automaticamente, ou salve sem cifra para digitar os acordes manualmente.
+              </div>
+
+              {/* Botões Inferiores */}
               <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAddModalOpen(false);
-                    if (onAddModalClose) onAddModalClose();
-                  }}
+                  onClick={handleCloseAddModal}
                   className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={savingSong || !newTitle.trim() || !newArtist.trim()}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5"
+                  disabled={savingSong || importingCandidateId !== null || !newTitle.trim()}
+                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Salvar e continuar para o editor manual"
                 >
-                  {savingSong ? 'Salvando...' : 'Salvar e Continuar Cadastro'}
+                  {savingSong ? 'Salvando...' : 'Salvar sem Cifra (Manual)'}
                 </button>
               </div>
             </form>
