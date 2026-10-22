@@ -260,7 +260,49 @@ Apenas URLs válidas do domínio cifraclub.com.br.`;
       } catch (searchErr: any) {
         const classified = classifySearchError(searchErr);
         searchFailure = classified;
-        console.warn(`[search-chord-candidates] Falha na busca Google Search (${classified.status}):`, searchErr?.message || searchErr);
+
+        // Extração diagnóstica segura para inspeção nos logs da Vercel (sem expor credenciais)
+        let httpStatus = searchErr?.status ?? searchErr?.statusCode ?? searchErr?.response?.status ?? null;
+        let technicalCode = searchErr?.code ?? searchErr?.error?.code ?? searchErr?.response?.data?.error?.code ?? null;
+        let internalStatus = searchErr?.error?.status ?? searchErr?.response?.data?.error?.status ?? null;
+        let rawMessage = searchErr?.message ?? searchErr?.error?.message ?? searchErr?.response?.data?.error?.message ?? String(searchErr);
+
+        // Se a mensagem contiver uma string JSON (padrão de ApiError do Google: {"error":{"code":429,"message":"...","status":"RESOURCE_EXHAUSTED"}}),
+        // analisa em try/catch seguro apenas para preencher campos ausentes mantendo prioridade das propriedades diretas
+        if (typeof rawMessage === 'string' && rawMessage.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(rawMessage);
+            const errObj = parsed?.error ?? parsed;
+            if (errObj && typeof errObj === 'object') {
+              if (technicalCode === null && errObj.code !== undefined) {
+                technicalCode = errObj.code;
+              }
+              if (internalStatus === null && errObj.status !== undefined) {
+                internalStatus = errObj.status;
+              }
+              if (httpStatus === null && typeof errObj.code === 'number') {
+                httpStatus = errObj.code;
+              }
+              if (errObj.message && typeof errObj.message === 'string') {
+                rawMessage = errObj.message;
+              }
+            }
+          } catch {}
+        }
+
+        const sanitizedMessage = typeof rawMessage === 'string'
+          ? rawMessage.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]')
+          : String(rawMessage);
+
+        const diagnosticDetails = {
+          httpStatus,
+          technicalCode,
+          internalStatus,
+          classifiedAs: classified.status,
+          message: sanitizedMessage
+        };
+
+        console.error('[search-chord-candidates] Diagnóstico de Erro Gemini/Google:', JSON.stringify(diagnosticDetails));
       }
     } else {
       searchFailure = {
@@ -325,7 +367,9 @@ Apenas URLs válidas do domínio cifraclub.com.br.`;
       error: null
     });
   } catch (err: any) {
-    console.error("[search-chord-candidates] Erro inesperado:", err);
+    const outerStatus = err?.status ?? err?.statusCode ?? 500;
+    const outerMessage = (err?.message || String(err)).replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
+    console.error("[search-chord-candidates] Erro inesperado:", JSON.stringify({ status: outerStatus, message: outerMessage }));
     return res.status(500).json({
       candidates: [],
       status: 'error',
