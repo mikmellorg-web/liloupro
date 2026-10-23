@@ -40,20 +40,47 @@ const slugify = (text: string) => {
 
 async function verifyCandidate(url: string, searchedTitle: string, searchedArtist?: string) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html'
-      },
-      signal: AbortSignal.timeout(3500)
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
+    let html = '';
 
-    // Rejeita páginas genéricas ou sem container de cifra
-    if (!html.includes('<pre') && !html.includes('cifra_cnt') && !html.includes('data-chord-container')) {
-      return null;
+    // 1. Tentativa de fetch direto com cabeçalhos de navegador e Referer
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Referer': 'https://www.cifraclub.com.br/'
+        },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.ok) {
+        const bodyText = await res.text();
+        if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt')) {
+          html = bodyText;
+        }
+      }
+    } catch {}
+
+    // 2. Camada resiliente de alta disponibilidade (leitor de borda) se o fetch direto for barrado por WAF (Akamai/Cloudflare)
+    if (!html) {
+      try {
+        const readerUrl = `https://r.jina.ai/${url}`;
+        const resReader = await fetch(readerUrl, {
+          headers: {
+            'X-Return-Format': 'html',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+          },
+          signal: AbortSignal.timeout(4500)
+        });
+        if (resReader.ok) {
+          const bodyText = await resReader.text();
+          if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt') || bodyText.includes('data-chord-page')) {
+            html = bodyText;
+          }
+        }
+      } catch {}
     }
+
+    if (!html) return null;
 
     // Extrai título e artista do <title> oficial
     const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
@@ -257,6 +284,20 @@ Apenas URLs válidas do domínio cifraclub.com.br.`;
         for (const u of urlMatches) {
           urlsToVerify.add(u.trim().replace(/\/+$/, '') + '/');
         }
+
+        // Extrai URLs de grounding chunks se fornecido pelo Google Search Grounding
+        try {
+          const groundingChunks = (geminiRes as any)?.candidates?.[0]?.groundingMetadata?.groundingChunks;
+          if (Array.isArray(groundingChunks)) {
+            for (const chunk of groundingChunks) {
+              const uri = chunk?.web?.uri;
+              if (uri && typeof uri === 'string' && uri.includes('cifraclub.com.br')) {
+                const cleanUrl = uri.trim().replace(/\/+$/, '') + '/';
+                urlsToVerify.add(cleanUrl);
+              }
+            }
+          }
+        } catch {}
       } catch (searchErr: any) {
         const classified = classifySearchError(searchErr);
         searchFailure = classified;
