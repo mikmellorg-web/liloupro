@@ -747,6 +747,9 @@ export function cleanCifraHtml(text: string): string {
 
   let str = text;
 
+  // 0. Remove zero-width characters (U+200B-U+200D, U+FEFF) and control spaces
+  str = str.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
   // 1. Replace Cifra Club / web line break containers
   // e.g. </div><div class="kvMV"> or </div><div ...> -> \n
   str = str.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
@@ -781,11 +784,17 @@ export function cleanCifraHtml(text: string): string {
     .replace(/&#x27;/g, "'")
     .replace(/&apos;/g, "'");
 
-  // 6. Ensure section headers on their own line if fused with content or chords
-  // e.g. "[Intro]B   F#" -> "[Intro]\nB   F#" or "[Verso 1]Texto" -> "[Verso 1]\nTexto"
-  str = str.replace(/^(\[[^\]\n]+\])([^\r\n\s])/gm, '$1\n$2');
-  str = str.replace(/^(\[[^\]\n]+\])[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gm, '$1\n$2');
+  // 6. Ensure section headers are cleanly isolated on their own line
+  // Handles cases where headers are fused with chords/lyrics (e.g. "G/D D[Primeira Parte]" or "[Intro]G/D D")
+  str = str.replace(/([^\n])\s*(\[[^\]\n]+\])/g, '$1\n$2');
+  str = str.replace(/(\[[^\]\n]+\])\s*([^\r\n\s])/g, '$1\n$2');
   str = str.replace(/^(Intro|Introdução|Introducao|Solo|Ponte|Verso\s*\d*|Refrão|Refrao|Chorus):[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gim, '[$1]\n$2');
+
+  // Padronização e normalização de seções para a convenção oficial do LiLouPro
+  str = str.replace(/\[\s*([^\]]+?)\s*\]/g, (_full, inner) => {
+    const std = standardizeSectionName(inner);
+    return `[${std}]`;
+  });
 
   // 7. Normalize 7M / 7m notation according to Liloupro domain rules
   str = str
@@ -967,6 +976,41 @@ export function isChordLine(line: string): boolean {
 }
 
 /**
+/**
+ * Padroniza a nomenclatura de seções para a convenção oficial do LiLouPro:
+ * Intro, Verso 1, Verso 2, Verso 3, Pré-Refrão, Refrão, Ponte, Solo, Interlúdio, Final, etc.
+ */
+export function standardizeSectionName(name: string): string {
+  if (!name) return '';
+  const clean = name.trim().replace(/\s+/g, ' ');
+  const lower = clean.toLowerCase();
+
+  if (/^(?:primeir\s*a|1\s*ª|1\s*a)\s+parte$/i.test(lower)) return 'Verso 1';
+  if (/^(?:segund\s*a|2\s*ª|2\s*a)\s+parte$/i.test(lower)) return 'Verso 2';
+  if (/^(?:terceir\s*a|3\s*ª|3\s*a)\s+parte$/i.test(lower)) return 'Verso 3';
+  if (/^(?:quart\s*a|4\s*ª|4\s*a)\s+parte$/i.test(lower)) return 'Verso 4';
+  if (/^(?:quint\s*a|5\s*ª|5\s*a)\s+parte$/i.test(lower)) return 'Verso 5';
+  if (/^(?:estrofe|verso)\s*1$/i.test(lower)) return 'Verso 1';
+  if (/^(?:estrofe|verso)\s*2$/i.test(lower)) return 'Verso 2';
+  if (/^(?:estrofe|verso)\s*3$/i.test(lower)) return 'Verso 3';
+  if (/^(?:estrofe|verso)\s*4$/i.test(lower)) return 'Verso 4';
+  if (/^(?:estrofe|verso)\s*5$/i.test(lower)) return 'Verso 5';
+  if (/^(?:estrofe)$/i.test(lower)) return 'Verso';
+  if (/^(?:intro(?:du[cç][aã]o)?)$/i.test(lower)) return 'Intro';
+  if (/^(?:pr[eé]\s*[\-\s]*refr[aã]o|pre\s*chorus|pre\s*refr[aã]o)$/i.test(lower)) return 'Pré-Refrão';
+  if (/^(?:refr[aã]o|chorus|coro)$/i.test(lower)) return 'Refrão';
+  if (/^(?:ponte|bridge)$/i.test(lower)) return 'Ponte';
+  if (/^(?:solo)$/i.test(lower)) return 'Solo';
+  if (/^(?:interl[uú]dio|interlude)$/i.test(lower)) return 'Interlúdio';
+  if (/^(?:final|outro|fim)$/i.test(lower)) return 'Final';
+  if (/^(?:ministra[cç][aã]o)$/i.test(lower)) return 'Ministração';
+  if (/^(?:tag|hook)$/i.test(lower)) return 'Tag';
+  if (/^(?:coda)$/i.test(lower)) return 'Coda';
+
+  return clean;
+}
+
+/**
  * Detecta se uma linha corresponde a um cabeçalho de seção musical
  * (ex: [Intro], [Primeira Parte], [Refrão], [Ponte], Primeira Parte, Refrão, etc.)
  */
@@ -977,7 +1021,7 @@ export function isSectionHeaderLine(line: string): boolean {
     return !/^\[(?:tab|riff)\b/i.test(trimmed);
   }
   if (trimmed.length > 40) return false;
-  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
+  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|verse|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|primeir a parte|segund a parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|pre refrão|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
   return sectionRegex.test(trimmed);
 }
 
@@ -986,10 +1030,9 @@ export function isSectionHeaderLine(line: string): boolean {
  */
 export function normalizeSectionHeader(line: string): string {
   const trimmed = (line || '').trim();
-  if (/^\[[^\]]+\]$/.test(trimmed)) return trimmed;
-  if (/^\{[^\}]+\}$/.test(trimmed)) return '[' + trimmed.slice(1, -1) + ']';
   const clean = trimmed.replace(/^[\s\[\(\{]+|[\s\]\)\}\:]+$/g, '');
-  return '[' + clean + ']';
+  const std = standardizeSectionName(clean);
+  return '[' + std + ']';
 }
 
 /**
@@ -1003,7 +1046,7 @@ export function normalizeSectionHeader(line: string): string {
 export function compactCifraPhrases(text: string): string {
   if (!text) return '';
 
-  const cleanText = text.replace(/\r/g, '');
+  const cleanText = text.replace(/\r/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
   const lines = cleanText.split('\n');
 
   interface SectionGroup {
@@ -1061,6 +1104,16 @@ export function compactCifraPhrases(text: string): string {
 
   const formattedSections: string[] = [];
   for (const sec of sections) {
+    const headerLower = (sec.header || '').toLowerCase();
+    const hasLyrics = sec.phrases.some(phrase => phrase.some(l => !isChordLine(l) && /[a-zA-ZÀ-ÿ]{2,}/.test(l)));
+    const isInstrumental = !hasLyrics || 
+      headerLower.includes('intro') || 
+      headerLower.includes('solo') || 
+      headerLower.includes('riff') || 
+      headerLower.includes('instrumental') || 
+      headerLower.includes('interlúdio') || 
+      headerLower.includes('interludio');
+
     // Se a seção não possui cabeçalho explícito e é muito longa (> 4 frases), divide em estrofes naturais
     if (!sec.header && sec.phrases.length > 4) {
       for (let p = 0; p < sec.phrases.length; p += 4) {
@@ -1081,7 +1134,14 @@ export function compactCifraPhrases(text: string): string {
       secLines.push(sec.header);
     }
     for (const phrase of sec.phrases) {
-      secLines.push(...phrase);
+      for (const line of phrase) {
+        // Alinha os acordes de seções instrumentais (Intro, Solo, etc.) eliminando recuos residuais do Cifra Club
+        if (isInstrumental && isChordLine(line)) {
+          secLines.push(line.trimStart());
+        } else {
+          secLines.push(line);
+        }
+      }
     }
     if (secLines.length > 0) {
       formattedSections.push(secLines.join('\n'));

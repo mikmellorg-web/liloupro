@@ -2296,7 +2296,30 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       }
     }
 
-    // If direct HTML fetch succeeded and has content
+    // Camada resiliente de borda se o fetch direto for barrado por firewall/WAF
+    if (!html) {
+      for (const targetUrl of targetUrls.slice(0, 2)) {
+        try {
+          const readerUrl = `https://r.jina.ai/${targetUrl}`;
+          const responseReader = await fetchWithTimeout(readerUrl, 4000, {
+            'X-Return-Format': 'html'
+          });
+          if (responseReader.ok) {
+            const bodyText = await responseReader.text();
+            if (bodyText.includes("<pre") || bodyText.includes("data-chord-container") || bodyText.includes("cifra_cnt")) {
+              html = bodyText;
+              fetchOk = true;
+              console.log(`scrapeCifraClub: Leitor de borda bem-sucedido para "${targetUrl}"`);
+              break;
+            }
+          }
+        } catch (resErr: any) {
+          console.warn(`scrapeCifraClub: Tentativa de borda falhou para "${targetUrl}":`, resErr?.message || resErr);
+        }
+      }
+    }
+
+    // If HTML fetch succeeded and has content
     if (fetchOk && html) {
       // 2. Extract Title and Artist accurately
       // Cifra Club Next.js: <title>Nome da Música - Nome do Artista - Cifra Club</title>
@@ -3061,10 +3084,39 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
         }
       }
 
-      // 3. Pesquisa real na Web via Google Search Grounding (Gemini 2.5 Flash)
+      // 3. Busca Primária Direta via Solr Cifra Club (Custo Zero, Ilimitada e Instantânea)
+      try {
+        const solrQuery = trimmedArtist
+          ? `${trimmedTitle} ${trimmedArtist}`
+          : trimmedTitle;
+        const solrUrl = `https://solr.sscdn.co/cifraclub/cc/select?q=${encodeURIComponent(solrQuery)}&wt=json`;
+        const solrRes = await fetch(solrUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Referer': 'https://www.cifraclub.com.br/'
+          },
+          signal: AbortSignal.timeout(3500)
+        });
+        if (solrRes.ok) {
+          const solrData = await solrRes.json();
+          const docs = (solrData?.response?.docs || []).filter((d: any) => d.t === '2');
+          for (const doc of docs.slice(0, 8)) {
+            if (doc.dns && doc.url) {
+              urlsToVerify.add(`https://www.cifraclub.com.br/${doc.dns}/${doc.url}/`);
+              urlsToVerify.add(`https://www.cifraclub.com.br/${doc.dns}/${doc.url}/simplificada.html`);
+            }
+          }
+        }
+      } catch (solrErr) {
+        console.warn('[search-chord-candidates] Solr search warning:', solrErr);
+      }
+
+      // 4. Contingência Secundária via Google Search Grounding (Gemini 2.5 Flash)
+      // Acionada somente se a busca direta não encontrar links, poupando 100% da cota gratuita
       let searchFailure: { status: 'quota_exceeded' | 'service_unavailable' | 'error'; message: string } | null = null;
-      const apiKey = getGeminiApiKey();
-      if (apiKey) {
+      if (urlsToVerify.size === 0) {
+        const apiKey = getGeminiApiKey();
+        if (apiKey) {
         try {
           const ai = new GoogleGenAI({
             apiKey,
@@ -3087,15 +3139,28 @@ Retorne estritamente um array JSON de objetos contendo os links reais encontrado
 ]
 Apenas URLs válidas do domínio cifraclub.com.br.`;
 
-          const geminiRes = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-              tools: [{ googleSearch: {} }]
+          let geminiRes: any = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              geminiRes = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                  tools: [{ googleSearch: {} }]
+                }
+              });
+              break;
+            } catch (callErr: any) {
+              const is503 = callErr?.status === 503 || String(callErr?.message || '').includes('503') || String(callErr?.message || '').toLowerCase().includes('unavailable');
+              if (is503 && attempt === 1) {
+                await new Promise(r => setTimeout(r, 1200));
+                continue;
+              }
+              throw callErr;
             }
-          });
+          }
 
-          const text = geminiRes.text || '';
+          const text = geminiRes?.text || '';
 
           // Extrai JSON estruturado se presente
           const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -3143,8 +3208,9 @@ Apenas URLs válidas do domínio cifraclub.com.br.`;
           message: 'Chave de busca não configurada no servidor. Prossiga com o cadastro manual.'
         };
       }
+      }
 
-      // 4. Validação rigorosa dos candidatos diretamente na página do Cifra Club
+      // 5. Validação rigorosa dos candidatos diretamente na página do Cifra Club
       const verificationPromises = Array.from(urlsToVerify).map(async (url) => {
         return await verifyCifraClubCandidate(url, trimmedTitle, trimmedArtist);
       });

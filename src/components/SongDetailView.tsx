@@ -1819,7 +1819,8 @@ export function SongDetailView({
 
   // Split song text into blocks of lines separated by empty lines (verses/choruses/stanzas)
   const getSongBlocks = (text: string) => {
-    const lines = (text || '').split(/\r?\n/);
+    const cleanText = (text || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const lines = cleanText.split(/\r?\n/);
     const blocks: string[][] = [];
     let currentBlock: string[] = [];
 
@@ -1829,7 +1830,6 @@ export function SongDetailView({
         if (currentBlock.length > 0) {
           blocks.push(currentBlock);
           currentBlock = [];
-          blocks.push(['']);
         }
       } else {
         currentBlock.push(line);
@@ -1837,9 +1837,6 @@ export function SongDetailView({
     }
     if (currentBlock.length > 0) {
       blocks.push(currentBlock);
-    }
-    if (blocks.length > 0 && blocks[blocks.length - 1].length === 1 && blocks[blocks.length - 1][0] === '') {
-      blocks.pop();
     }
     return blocks;
   };
@@ -2651,7 +2648,12 @@ export function SongDetailView({
                       const currentLine = block[lIdx];
                       const isCurrentChord = isChordLine(currentLine);
                       const hasNext = lIdx + 1 < block.length;
-                      const isNextLyric = hasNext && !isChordLine(block[lIdx + 1]);
+                      const nextLine = hasNext ? block[lIdx + 1] : '';
+                      const isNextSectionOrDyn = hasNext && (
+                        parseLineSectionAndDynamics(nextLine).isMatch ||
+                        isSectionHeaderContent(nextLine.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toLowerCase())
+                      );
+                      const isNextLyric = hasNext && !isChordLine(nextLine) && !isNextSectionOrDyn;
 
                       if (isCurrentChord && isNextLyric) {
                         const nextLine = block[lIdx + 1];
@@ -2678,7 +2680,7 @@ export function SongDetailView({
                     }
 
                     return (
-                      <div key={`block-${bIdx}`} className="break-inside-avoid mb-3 sm:mb-4 block">
+                      <div key={`block-${bIdx}`} className="break-inside-avoid mb-2 sm:mb-2.5 block">
                         {rows}
                       </div>
                     );
@@ -2707,7 +2709,7 @@ export function SongDetailView({
                     }
 
                     return (
-                      <div key={`block-${bIdx}`} className="break-inside-avoid mb-3 sm:mb-4 block">
+                      <div key={`block-${bIdx}`} className="break-inside-avoid mb-2 sm:mb-2.5 block">
                         {block.map((line, lIdx) => {
                           if (isChordLine(line)) return null;
                           const elements: React.ReactNode[] = [];
@@ -4445,7 +4447,12 @@ export function SongDetailView({
                             const currentLine = block[lIdx];
                             const isCurrentChord = isChordLine(currentLine);
                             const hasNext = lIdx + 1 < block.length;
-                            const isNextLyric = hasNext && !isChordLine(block[lIdx + 1]);
+                            const nextLine = hasNext ? block[lIdx + 1] : '';
+                            const isNextSectionOrDyn = hasNext && (
+                              parseLineSectionAndDynamics(nextLine).isMatch ||
+                              isSectionHeaderContent(nextLine.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toLowerCase())
+                            );
+                            const isNextLyric = hasNext && !isChordLine(nextLine) && !isNextSectionOrDyn;
 
                             if (isCurrentChord && isNextLyric) {
                               const nextLine = block[lIdx + 1];

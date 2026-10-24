@@ -227,21 +227,50 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 3. Pesquisa real na Web via Google Search Grounding (Gemini 2.5 Flash)
+    // 3. Busca Primária Direta via Solr Cifra Club (Custo Zero, Ilimitada e Instantânea)
+    try {
+      const solrQuery = trimmedArtist
+        ? `${trimmedTitle} ${trimmedArtist}`
+        : trimmedTitle;
+      const solrUrl = `https://solr.sscdn.co/cifraclub/cc/select?q=${encodeURIComponent(solrQuery)}&wt=json`;
+      const solrRes = await fetch(solrUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://www.cifraclub.com.br/'
+        },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (solrRes.ok) {
+        const solrData = await solrRes.json();
+        const docs = (solrData?.response?.docs || []).filter((d: any) => d.t === '2');
+        for (const doc of docs.slice(0, 8)) {
+          if (doc.dns && doc.url) {
+            urlsToVerify.add(`https://www.cifraclub.com.br/${doc.dns}/${doc.url}/`);
+            urlsToVerify.add(`https://www.cifraclub.com.br/${doc.dns}/${doc.url}/simplificada.html`);
+          }
+        }
+      }
+    } catch (solrErr) {
+      console.warn('[search-chord-candidates] Solr search warning:', solrErr);
+    }
+
+    // 4. Contingência Secundária via Google Search Grounding (Gemini 2.5 Flash)
+    // Acionada somente se a busca direta não encontrar links, poupando 100% da cota gratuita
     let searchFailure: { status: 'quota_exceeded' | 'service_unavailable' | 'error'; message: string } | null = null;
-    const apiKey = getGeminiApiKey();
-    if (apiKey) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-        });
+    if (urlsToVerify.size === 0) {
+      const apiKey = getGeminiApiKey();
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
 
-        const searchQuery = trimmedArtist
-          ? `site:cifraclub.com.br "${trimmedTitle}" "${trimmedArtist}" cifra`
-          : `site:cifraclub.com.br "${trimmedTitle}" cifra`;
+          const searchQuery = trimmedArtist
+            ? `site:cifraclub.com.br "${trimmedTitle}" "${trimmedArtist}" cifra`
+            : `site:cifraclub.com.br "${trimmedTitle}" cifra`;
 
-        const prompt = `Realize uma pesquisa no Google por: ${searchQuery}.
+          const prompt = `Realize uma pesquisa no Google por: ${searchQuery}.
 Identifique páginas de cifras no Cifra Club (cifraclub.com.br) para a canção "${trimmedTitle}"${trimmedArtist ? ` do artista "${trimmedArtist}"` : ""}.
 Retorne estritamente um array JSON de objetos contendo os links reais encontrados:
 [
@@ -253,103 +282,112 @@ Retorne estritamente um array JSON de objetos contendo os links reais encontrado
 ]
 Apenas URLs válidas do domínio cifraclub.com.br.`;
 
-        const geminiRes = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }]
+          let geminiRes: any = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              geminiRes = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                  tools: [{ googleSearch: {} }]
+                }
+              });
+              break;
+            } catch (callErr: any) {
+              const is503 = callErr?.status === 503 || String(callErr?.message || '').includes('503') || String(callErr?.message || '').toLowerCase().includes('unavailable');
+              if (is503 && attempt === 1) {
+                await new Promise(r => setTimeout(r, 1200));
+                continue;
+              }
+              throw callErr;
+            }
           }
-        });
 
-        const text = geminiRes.text || '';
+          const text = geminiRes?.text || '';
 
-        // Extrai JSON estruturado se presente
-        const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-        if (jsonMatch) {
+          // Extrai JSON estruturado se presente
+          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item.url && typeof item.url === 'string' && item.url.includes('cifraclub.com.br')) {
+                    const cleanUrl = item.url.trim().replace(/\/+$/, '') + '/';
+                    urlsToVerify.add(cleanUrl);
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          // Extrai URLs do Cifra Club via Regex direto do texto
+          const urlMatches = text.match(/https?:\/\/(?:www\.)?cifraclub\.com\.br\/[a-z0-9\-]+\/[a-z0-9\-]+\/?/gi) || [];
+          for (const u of urlMatches) {
+            urlsToVerify.add(u.trim().replace(/\/+$/, '') + '/');
+          }
+
+          // Extrai URLs de grounding chunks se fornecido pelo Google Search Grounding
           try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (Array.isArray(parsed)) {
-              for (const item of parsed) {
-                if (item.url && typeof item.url === 'string' && item.url.includes('cifraclub.com.br')) {
-                  const cleanUrl = item.url.trim().replace(/\/+$/, '') + '/';
+            const groundingChunks = (geminiRes as any)?.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            if (Array.isArray(groundingChunks)) {
+              for (const chunk of groundingChunks) {
+                const uri = chunk?.web?.uri;
+                if (uri && typeof uri === 'string' && uri.includes('cifraclub.com.br')) {
+                  const cleanUrl = uri.trim().replace(/\/+$/, '') + '/';
                   urlsToVerify.add(cleanUrl);
                 }
               }
             }
           } catch {}
-        }
+        } catch (searchErr: any) {
+          const classified = classifySearchError(searchErr);
+          searchFailure = classified;
 
-        // Extrai URLs do Cifra Club via Regex direto do texto
-        const urlMatches = text.match(/https?:\/\/(?:www\.)?cifraclub\.com\.br\/[a-z0-9\-]+\/[a-z0-9\-]+\/?/gi) || [];
-        for (const u of urlMatches) {
-          urlsToVerify.add(u.trim().replace(/\/+$/, '') + '/');
-        }
+          // Extração diagnóstica segura para inspeção nos logs da Vercel (sem expor credenciais)
+          let httpStatus = searchErr?.status ?? searchErr?.statusCode ?? searchErr?.response?.status ?? null;
+          let technicalCode = searchErr?.code ?? searchErr?.error?.code ?? searchErr?.response?.data?.error?.code ?? null;
+          let internalStatus = searchErr?.error?.status ?? searchErr?.response?.data?.error?.status ?? null;
+          let rawMessage = searchErr?.message ?? searchErr?.error?.message ?? searchErr?.response?.data?.error?.message ?? String(searchErr);
 
-        // Extrai URLs de grounding chunks se fornecido pelo Google Search Grounding
-        try {
-          const groundingChunks = (geminiRes as any)?.candidates?.[0]?.groundingMetadata?.groundingChunks;
-          if (Array.isArray(groundingChunks)) {
-            for (const chunk of groundingChunks) {
-              const uri = chunk?.web?.uri;
-              if (uri && typeof uri === 'string' && uri.includes('cifraclub.com.br')) {
-                const cleanUrl = uri.trim().replace(/\/+$/, '') + '/';
-                urlsToVerify.add(cleanUrl);
+          // Se a mensagem contiver uma string JSON (padrão de ApiError do Google: {"error":{"code":429,"message":"...","status":"RESOURCE_EXHAUSTED"}}),
+          // analisa em try/catch seguro apenas para preencher campos ausentes mantendo prioridade das propriedades diretas
+          if (typeof rawMessage === 'string' && rawMessage.trim().startsWith('{')) {
+            try {
+              const parsed = JSON.parse(rawMessage);
+              const errObj = parsed?.error ?? parsed;
+              if (errObj && typeof errObj === 'object') {
+                if (technicalCode === null && errObj.code !== undefined) {
+                  technicalCode = errObj.code;
+                }
+                if (internalStatus === null && errObj.status !== undefined) {
+                  internalStatus = errObj.status;
+                }
+                if (httpStatus === null && typeof errObj.code === 'number') {
+                  httpStatus = errObj.code;
+                }
+                if (errObj.message && typeof errObj.message === 'string') {
+                  rawMessage = errObj.message;
+                }
               }
-            }
+            } catch {}
           }
-        } catch {}
-      } catch (searchErr: any) {
-        const classified = classifySearchError(searchErr);
-        searchFailure = classified;
 
-        // Extração diagnóstica segura para inspeção nos logs da Vercel (sem expor credenciais)
-        let httpStatus = searchErr?.status ?? searchErr?.statusCode ?? searchErr?.response?.status ?? null;
-        let technicalCode = searchErr?.code ?? searchErr?.error?.code ?? searchErr?.response?.data?.error?.code ?? null;
-        let internalStatus = searchErr?.error?.status ?? searchErr?.response?.data?.error?.status ?? null;
-        let rawMessage = searchErr?.message ?? searchErr?.error?.message ?? searchErr?.response?.data?.error?.message ?? String(searchErr);
+          const sanitizedMessage = typeof rawMessage === 'string'
+            ? rawMessage.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]')
+            : String(rawMessage);
 
-        // Se a mensagem contiver uma string JSON (padrão de ApiError do Google: {"error":{"code":429,"message":"...","status":"RESOURCE_EXHAUSTED"}}),
-        // analisa em try/catch seguro apenas para preencher campos ausentes mantendo prioridade das propriedades diretas
-        if (typeof rawMessage === 'string' && rawMessage.trim().startsWith('{')) {
-          try {
-            const parsed = JSON.parse(rawMessage);
-            const errObj = parsed?.error ?? parsed;
-            if (errObj && typeof errObj === 'object') {
-              if (technicalCode === null && errObj.code !== undefined) {
-                technicalCode = errObj.code;
-              }
-              if (internalStatus === null && errObj.status !== undefined) {
-                internalStatus = errObj.status;
-              }
-              if (httpStatus === null && typeof errObj.code === 'number') {
-                httpStatus = errObj.code;
-              }
-              if (errObj.message && typeof errObj.message === 'string') {
-                rawMessage = errObj.message;
-              }
-            }
-          } catch {}
+          const diagnosticDetails = {
+            httpStatus,
+            technicalCode,
+            internalStatus,
+            classifiedAs: classified.status,
+            message: sanitizedMessage
+          };
+
+          console.error('[search-chord-candidates] Diagnóstico de Erro Gemini/Google:', JSON.stringify(diagnosticDetails));
         }
-
-        const sanitizedMessage = typeof rawMessage === 'string'
-          ? rawMessage.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]')
-          : String(rawMessage);
-
-        const diagnosticDetails = {
-          httpStatus,
-          technicalCode,
-          internalStatus,
-          classifiedAs: classified.status,
-          message: sanitizedMessage
-        };
-
-        console.error('[search-chord-candidates] Diagnóstico de Erro Gemini/Google:', JSON.stringify(diagnosticDetails));
       }
-    } else {
-      searchFailure = {
-        status: 'error',
-        message: 'Chave de busca não configurada no servidor. Prossiga com o cadastro manual.'
-      };
     }
 
     // 4. Validação rigorosa dos candidatos diretamente na página do Cifra Club

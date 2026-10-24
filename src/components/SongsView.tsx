@@ -1891,6 +1891,14 @@ export function SongsView({
                 />
               </div>
 
+              {/* Dica de busca rápida */}
+              <div className="flex items-start gap-1.5 px-0.5 text-[11px] text-slate-400 leading-snug">
+                <span className="text-amber-400 shrink-0 text-xs">💡</span>
+                <span>
+                  <strong className="text-slate-300 font-semibold">Dica:</strong> Escolha a música e o artista para uma pesquisa mais rápida e precisa.
+                </span>
+              </div>
+
               {/* Botão de Pesquisar Cifras na Web */}
               <div className="pt-1">
                 <button

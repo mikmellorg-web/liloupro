@@ -37,7 +37,7 @@ import {
   cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
-  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText 
+  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText, standardizeSectionName 
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1195,8 +1195,8 @@ export function DynamicExplanationModal({
 
 export function isSectionHeaderContent(str: string): boolean {
   if (!str) return false;
-  const clean = str.trim().toLowerCase();
-  return /^(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|1a parte|2a parte|3a parte|4a parte|parte)(\s*[\d\wáéíóúÁÉÍÓÚa-zA-Z\-\_\&]+)*$/i.test(clean);
+  const clean = str.trim().toLowerCase().replace(/\s+/g, ' ');
+  return /^(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|pre refrão|pre refrao|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|1a parte|2a parte|3a parte|4a parte|5a parte|primeir a parte|segund a parte|parte)(\s*[\d\wáéíóúÁÉÍÓÚa-zA-Z\-\_\&]+)*$/i.test(clean);
 }
 
 export function parseBracketSubContent(content: string): { isSection: boolean; sectionTitle: string; dynamicContent: string } | null {
@@ -1205,7 +1205,7 @@ export function parseBracketSubContent(content: string): { isSection: boolean; s
   if (parts.length >= 2 && isSectionHeaderContent(parts[0])) {
     return {
       isSection: true,
-      sectionTitle: parts[0].toUpperCase(),
+      sectionTitle: standardizeSectionName(parts[0]).toUpperCase(),
       dynamicContent: parts.slice(1).join(' - ')
     };
   }
@@ -1250,7 +1250,7 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
     if (isSectionHeaderContent(cleanLower)) {
       return {
         isMatch: true,
-        sections: [{ type: cleanLower, title: cleanLine.toUpperCase() }],
+        sections: [{ type: cleanLower, title: standardizeSectionName(cleanLine).toUpperCase() }],
         dynamics: [],
         repeats: [],
         remainingText: ''
@@ -1300,7 +1300,7 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
 
     // Check if it's a standard section header
     if (isSectionHeaderContent(contentLower)) {
-      sections.push({ type: contentLower, title: content.toUpperCase() });
+      sections.push({ type: contentLower, title: standardizeSectionName(content).toUpperCase() });
       workStr = workStr.replace(match[0], '').trim();
     } else {
       const combined = parseBracketSubContent(content);
@@ -1319,10 +1319,11 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
   }
 
   if (sections.length === 0 && dynamics.length === 0 && repeats.length === 0) {
-    const isStandaloneSection = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|1a parte|2a parte|3a parte|4a parte|parte)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(rawTrimmed);
+    const isStandaloneSection = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|pre refrão|pre refrao|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|1a parte|2a parte|3a parte|4a parte|5a parte|primeir a parte|segund a parte|parte)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(rawTrimmed);
     if (isStandaloneSection) {
-      const cleanTitle = rawTrimmed.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toUpperCase();
-      sections.push({ type: rawTrimmed.toLowerCase(), title: cleanTitle });
+      const cleanTitle = rawTrimmed.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim();
+      const stdTitle = standardizeSectionName(cleanTitle).toUpperCase();
+      sections.push({ type: rawTrimmed.toLowerCase(), title: stdTitle });
       workStr = '';
     }
   }
@@ -1437,7 +1438,7 @@ export function RenderTextWithInlineBadges({ text, baseClasses = '' }: { text: s
                 title="Clique para abrir o Guia de Seções e Dinâmicas"
               >
                 <Music size={10} className="text-white shrink-0" />
-                <span>{content.toUpperCase()}</span>
+                <span>{standardizeSectionName(content).toUpperCase()}</span>
               </button>
             );
           }
