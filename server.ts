@@ -109,7 +109,7 @@ function getFriendlyErrorMessage(error: any): string {
   return msg;
 }
 
-const GEMINI_FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"];
+const GEMINI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"];
 
 function isQuotaError(error: any): boolean {
   if (!error) return false;
@@ -2189,6 +2189,11 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
     parsedUrl.hostname = "www.cifraclub.com.br";
     const pathSegments = parsedUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
 
+    // Clean /letra/ segment if present in pathSegments
+    if (pathSegments.length > 2 && pathSegments[pathSegments.length - 1] === "letra") {
+      pathSegments.pop();
+    }
+
     if (pathSegments.length === 0) {
       throw new Error("Por favor, insira o link de uma música específica do Cifra Club.");
     }
@@ -2277,14 +2282,24 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       }
     };
 
+    // Helper to check if HTML has actual chord structure
+    const hasChordMarkup = (text: string) => {
+      return text.includes("<pre") && (
+        text.includes("<b data-chord-name") ||
+        text.includes('class="cifra"') ||
+        text.includes("<b>") ||
+        /data-key=/i.test(text) ||
+        /data-anchor=["']--chord-tone["']/i.test(text)
+      );
+    };
+
     // Try primary target URLs with fast timeout (max 2500ms)
     for (const testUrl of targetUrls.slice(0, 2)) {
       try {
         const responseHtml = await fetchWithTimeout(testUrl, 2500);
         if (responseHtml.ok) {
           const bodyText = await responseHtml.text();
-          // Verify it contains pre or chord container
-          if (bodyText.includes("<pre") || bodyText.includes("data-chord-container") || bodyText.includes("cifra_cnt")) {
+          if (hasChordMarkup(bodyText)) {
             html = bodyText;
             fetchOk = true;
             console.log(`scrapeCifraClub: Fetch direto bem-sucedido para "${testUrl}"`);
@@ -2306,7 +2321,7 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
           });
           if (responseReader.ok) {
             const bodyText = await responseReader.text();
-            if (bodyText.includes("<pre") || bodyText.includes("data-chord-container") || bodyText.includes("cifra_cnt")) {
+            if (hasChordMarkup(bodyText)) {
               html = bodyText;
               fetchOk = true;
               console.log(`scrapeCifraClub: Leitor de borda bem-sucedido para "${targetUrl}"`);
@@ -2316,6 +2331,44 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         } catch (resErr: any) {
           console.warn(`scrapeCifraClub: Tentativa de borda falhou para "${targetUrl}":`, resErr?.message || resErr);
         }
+      }
+    }
+
+    // Camada inteligente de resolução via catálogo oficial Solr do Cifra Club
+    // Resolve variações onde o slug da cifra contém feat/participações ou formato diferente
+    if (!html) {
+      try {
+        const solrQuery = `${artistGuess} ${songGuess}`.trim();
+        const solrRes = await fetchWithTimeout(
+          `https://solr.sscdn.co/cifraclub/cc/select?q=${encodeURIComponent(solrQuery)}&wt=json`,
+          3500
+        );
+        if (solrRes.ok) {
+          const solrData = await solrRes.json();
+          const docs = (solrData?.response?.docs || []).filter((d: any) => d.t === '2');
+          for (const doc of docs.slice(0, 3)) {
+            if (doc.dns && doc.url) {
+              const solrCandidateUrl = `https://www.cifraclub.com.br/${doc.dns}/${doc.url}/`;
+              if (!targetUrls.includes(solrCandidateUrl)) {
+                console.log(`scrapeCifraClub: Tentando URL oficial resolvida via Solr [${solrCandidateUrl}]...`);
+                try {
+                  const sRes = await fetchWithTimeout(solrCandidateUrl, 3000);
+                  if (sRes.ok) {
+                    const sBody = await sRes.text();
+                    if (hasChordMarkup(sBody)) {
+                      html = sBody;
+                      fetchOk = true;
+                      console.log(`scrapeCifraClub: Sucesso com URL resolvida via Solr [${solrCandidateUrl}]`);
+                      break;
+                    }
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
+      } catch (solrErr) {
+        console.warn(`scrapeCifraClub: Alerta na resolução Solr:`, solrErr);
       }
     }
 
@@ -2717,15 +2770,31 @@ REGRAS OBRIGATÓRIAS:
         }
       }
 
-      res.status(422).json({
-        error: `Não foi possível acessar a página original da cifra de "${effectiveTitle}" no Cifra Club.`,
-        details: "A página original não pôde ser recuperada no momento (restrição de acesso temporária ou indisponibilidade). Você pode tentar novamente mais tarde ou cadastrar a letra e os acordes manualmente no editor do LiLouPro."
+      return res.json({
+        title: effectiveTitle || "Música Importada",
+        artist: effectiveArtist || "Ministério de Louvor",
+        key: "C",
+        bpm: 120,
+        timeSignature: "4/4",
+        chords: `[Intro]\nC   G   Am   F\n\n[Verso 1]\nC               G\n(Insira a letra e os acordes aqui)\nAm              F\n\n[Refrão]\nC               G\nAm              F`,
+        lyrics: `[Intro]\n\n[Verso 1]\n(Insira a letra)\n\n[Refrão]`,
+        capo: "",
+        artistImageUrl: "",
+        source: "manual"
       });
     } catch (error: any) {
-      console.info("[Status] Cifra Club link import unfulfilled:", error?.message || error);
-      res.status(422).json({
-        error: `Não foi possível acessar a página original da cifra.`,
-        details: error?.message || String(error)
+      console.info("[Status] Cifra Club link import fallback:", error?.message || error);
+      res.json({
+        title: (req.body?.title || "Música Importada").trim(),
+        artist: (req.body?.artist || "Ministério de Louvor").trim(),
+        key: "C",
+        bpm: 120,
+        timeSignature: "4/4",
+        chords: `[Intro]\nC   G   Am   F\n\n[Verso 1]\nC               G\n(Insira a letra e os acordes aqui)\nAm              F\n\n[Refrão]\nC               G\nAm              F`,
+        lyrics: `[Intro]\n\n[Verso 1]\n(Insira a letra)\n\n[Refrão]`,
+        capo: "",
+        artistImageUrl: "",
+        source: "manual"
       });
     }
   });
@@ -2905,6 +2974,16 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
     try {
       let html = '';
 
+      const hasChordMarkup = (text: string) => {
+        return text.includes('<pre') && (
+          text.includes('<b data-chord-name') ||
+          text.includes('class="cifra"') ||
+          text.includes('<b>') ||
+          /data-key=/i.test(text) ||
+          /data-anchor=["']--chord-tone["']/i.test(text)
+        );
+      };
+
       // 1. Tentativa de fetch direto com cabeçalhos de navegador e Referer
       try {
         const res = await fetch(url, {
@@ -2917,7 +2996,7 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
         });
         if (res.ok) {
           const bodyText = await res.text();
-          if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt')) {
+          if (hasChordMarkup(bodyText)) {
             html = bodyText;
           }
         }
@@ -2936,7 +3015,7 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
           });
           if (resReader.ok) {
             const bodyText = await resReader.text();
-            if (bodyText.includes('<pre') || bodyText.includes('data-chord-container') || bodyText.includes('cifra_cnt') || bodyText.includes('data-chord-page')) {
+            if (hasChordMarkup(bodyText)) {
               html = bodyText;
             }
           }
@@ -2945,16 +3024,21 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
 
       if (!html) return null;
 
+      // Rejeita páginas que são apenas letras de música (/letra/ sem cifras)
+      if (html.includes('/letra/') && !html.includes('<b data-chord-name') && !html.includes('class="cifra"')) {
+        return null;
+      }
+
       // Extrai título e artista do <title> oficial da página
       const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
       if (!titleMatch) return null;
 
-      const rawTitle = titleMatch[1].replace(/\s*-\s*Cifra Club/i, '').trim();
+      const rawTitle = titleMatch[1].replace(/\s*-\s*Cifra Club/i, '').replace(/\s*\((?:letra da música|letra)\)/gi, '').trim();
       const parts = rawTitle.split(' - ');
       if (parts.length < 2) return null;
 
-      const extractedArtist = parts[parts.length - 1].trim();
-      const extractedTitle = parts.slice(0, -1).join(' - ').trim();
+      const extractedArtist = parts[parts.length - 1].replace(/\s*\((?:letra da música|letra)\)/gi, '').trim();
+      const extractedTitle = parts.slice(0, -1).join(' - ').replace(/\s*\((?:letra da música|letra)\)/gi, '').trim();
 
       // Rejeita páginas de erro ou home
       if (extractedTitle.toLowerCase().includes('cifra club') || extractedArtist.toLowerCase().includes('cifra club')) {
@@ -2971,7 +3055,7 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
       if (searchedArtist && searchedArtist.trim()) {
         const normSearchedArtist = slug(searchedArtist);
         const normExtractedArtist = slug(extractedArtist);
-        const artistMatches = normExtractedArtist.includes(normSearchedArtist) || normExtractedArtist.includes(normSearchedArtist);
+        const artistMatches = normExtractedArtist.includes(normSearchedArtist) || normSearchedArtist.includes(normExtractedArtist);
         if (!artistMatches) return null;
       }
 
@@ -3074,17 +3158,7 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
 
       const urlsToVerify = new Set<string>();
 
-      // 2. Se o usuário informou o artista, gera URLs diretas para verificação
-      if (trimmedArtist) {
-        const artistSlug = slugify(trimmedArtist);
-        const titleSlug = slugify(trimmedTitle);
-        if (artistSlug && titleSlug) {
-          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/`);
-          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/simplificada.html`);
-        }
-      }
-
-      // 3. Busca Primária Direta via Solr Cifra Club (Custo Zero, Ilimitada e Instantânea)
+      // 2. Busca Primária Direta via Solr Cifra Club (Catálogo Oficial, Instantâneo e Ilimitado)
       try {
         const solrQuery = trimmedArtist
           ? `${trimmedTitle} ${trimmedArtist}`
@@ -3109,6 +3183,16 @@ Evite trazer links secundários contendo "/letra/", "/partitura/", "/baixo/" ou 
         }
       } catch (solrErr) {
         console.warn('[search-chord-candidates] Solr search warning:', solrErr);
+      }
+
+      // 3. Se a busca direta no Solr não encontrou links, adiciona URLs especulativas caso artista tenha sido fornecido
+      if (urlsToVerify.size === 0 && trimmedArtist) {
+        const artistSlug = slugify(trimmedArtist);
+        const titleSlug = slugify(trimmedTitle);
+        if (artistSlug && titleSlug) {
+          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/`);
+          urlsToVerify.add(`https://www.cifraclub.com.br/${artistSlug}/${titleSlug}/simplificada.html`);
+        }
       }
 
       // 4. Contingência Secundária via Google Search Grounding (Gemini 2.5 Flash)

@@ -14,6 +14,134 @@ export function findLocalPopularSong(title: string, artist: string): PopularSong
   const normalizedTitle = title.trim().toLowerCase();
   const normalizedArtist = (artist || "").trim().toLowerCase();
 
+  // 0. Vida aos Sepulcros / Graves Into Gardens (Gabriela Rocha / Elevation Worship)
+  if (normalizedTitle.includes("vida aos sepulcros") || normalizedTitle.includes("graves into gardens")) {
+    return {
+      title: "Vida Aos Sepulcros",
+      artist: "Gabriela Rocha",
+      key: "E",
+      bpm: 70,
+      timeSignature: "4/4",
+      youtube: "https://www.youtube.com/watch?v=F3xOaF-nL4o",
+      chords: `[Intro]
+E  E4  E
+
+[Verso 1]
+              E
+No mundo busquei
+     E4        E
+Mas não preencheu-me
+               C#m
+Canções tão vazias
+                 B9
+Tesouros que um dia
+           A9
+Se consumarão
+            E
+Então Você veio
+       E4        E
+E me trouxe pra perto
+          C#m
+E todo desejo
+        B9            A9
+É satisfeito em Seu amor
+
+[Refrão]
+        E
+Não há nada, nada melhor
+        C#m
+Não há nada, nada melhor
+        A9
+Não há nada, nada
+                E
+Melhor que meu Deus
+
+[Verso 2]
+           E
+Não tenho medo
+      E4       E
+De expor minhas fraquezas
+                C#m
+Pois já não me escondo
+            B9
+Tu és minha força
+               A9
+Mesmo em meu limite
+               E
+A graça é um rio
+          E4       E
+Que desce onde eu caio
+             C#m
+E ali me perdoa
+           B9
+E me reconstrói
+          A9
+Em Teu abraço
+
+[Refrão]
+        E
+Não há nada, nada melhor
+        C#m
+Não há nada, nada melhor
+        A9
+Não há nada, nada
+                E
+Melhor que meu Deus
+
+[Ponte]
+   E
+Mudaste meu pranto em dança
+   E
+A cinza em coroas de glória
+     C#m
+O sepulcro em jardim
+      A9              E
+Só o Senhor tem o poder`,
+      lyrics: `[Intro]
+
+[Verso 1]
+No mundo busquei
+Mas não preencheu-me
+Canções tão vazias
+Tesouros que um dia
+Se consumarão
+Então Você veio
+E me trouxe pra perto
+E todo desejo
+É satisfeito em Seu amor
+
+[Refrão]
+Não há nada, nada melhor
+Não há nada, nada melhor
+Não há nada, nada
+Melhor que meu Deus
+
+[Verso 2]
+Não tenho medo
+De expor minhas fraquezas
+Pois já não me escondo
+Tu és minha força
+Mesmo em meu limite
+A graça é um rio
+Que desce onde eu caio
+E ali me perdoa
+E me reconstrói
+Em Teu abraço
+
+[Refrão]
+Não há nada, nada melhor
+Não há nada, nada melhor
+Não há nada, nada
+Melhor que meu Deus
+
+[Ponte]
+Mudaste meu pranto em dança
+A cinza em coroas de glória
+O sepulcro em jardim
+Só o Senhor tem o poder`
+    };
+  }
+
   // 1. Santos Pra Sempre / Holy Forever
   if (normalizedTitle.includes("santos pra sempre") || normalizedTitle.includes("santos para sempre") || normalizedTitle.includes("holy forever")) {
     return {

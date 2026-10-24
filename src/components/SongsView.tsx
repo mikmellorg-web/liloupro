@@ -719,23 +719,41 @@ export function SongsView({
         }
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'Não foi possível importar esta cifra automaticamente.');
+          songData = {
+            title: candidate.title || newTitle || "Nova Música",
+            artist: candidate.artist || newArtist || "Ministério de Louvor",
+            key: candidate.key || "C",
+            tone: candidate.key || "C",
+            bpm: 120,
+            timeSignature: "4/4",
+            chords: `[Intro]\n${candidate.key || 'C'}\n\n[Verso 1]\n${candidate.key || 'C'}\n(Digite ou cole os acordes aqui)\n\n[Refrão]\n${candidate.key || 'C'}`,
+            lyrics: `[Intro]\n\n[Verso 1]\n(Insira a letra aqui)\n\n[Refrão]`,
+            source: "manual"
+          };
+        } else {
+          songData = await response.json();
         }
-
-        songData = await response.json();
       }
 
-      const targetTitle = candidate.title || newTitle;
-      const targetArtist = candidate.artist || newArtist;
+      const cleanLabel = (text: string) => {
+        return (text || "")
+          .replace(/\[VERSÃO PRINCIPAL\]/gi, "")
+          .replace(/\(VERSÃO PRINCIPAL\)/gi, "")
+          .replace(/\[SIMPLIFICADA\]/gi, "")
+          .replace(/\s*\((?:letra da música|letra)\)/gi, "")
+          .trim();
+      };
+
+      const targetTitle = cleanLabel(candidate.title || newTitle);
+      const targetArtist = cleanLabel(candidate.artist || newArtist);
 
       const trimmedTitle = (songData.title && (songData.title.toLowerCase().includes(targetTitle.toLowerCase()) || targetTitle.toLowerCase().includes(songData.title.toLowerCase()))
-        ? songData.title
+        ? cleanLabel(songData.title)
         : targetTitle).trim();
       const trimmedArtist = (targetArtist && targetArtist.trim())
         ? targetArtist.trim()
         : (songData.artist && !songData.artist.toLowerCase().includes("gabriel guedes") && !songData.artist.toLowerCase().includes("gospel")
-            ? songData.artist.trim()
+            ? cleanLabel(songData.artist)
             : 'Ministério de Louvor');
       let createdId = `song_${Date.now()}`;
 
