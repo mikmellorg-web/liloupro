@@ -784,13 +784,13 @@ export function SongsView({
       const createdSong = {
         ...newSongPayload,
         id: createdId,
-        initialEdit: true
+        initialEdit: false
       };
 
       setSongs(prev => [createdSong, ...prev.filter(s => s.id !== createdId)]);
       handleCloseAddModal();
 
-      // Abre imediatamente a tela de edição geral da música com tudo preenchido
+      // Abre a tela de visualização da cifra importada
       onSelectSong(createdSong);
     } catch (err: any) {
       console.error('Erro ao importar cifra selecionada:', err);

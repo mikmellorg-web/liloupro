@@ -328,7 +328,11 @@ export function SongDetailView({
       document.documentElement.style.overscrollBehaviorY = originalHtmlOverscrollY;
     };
   }, [isFocusMode]);
-  const [isEditing, setIsEditing] = useState(() => Boolean(song?.initialEdit || (!song?.chords && !song?.lyrics)));
+
+  const [isEditing, setIsEditing] = useState(() => {
+    const hasContent = Boolean(song?.chords || song?.lyrics || (song as any)?.cifra || (song as any)?.content);
+    return Boolean(!hasContent || (song?.initialEdit && !hasContent));
+  });
   const [isAnalyzingBible, setIsAnalyzingBible] = useState(false);
   const [isBibleExpanded, setIsBibleExpanded] = useState(false);
   const [bibleAnalysisError, setBibleAnalysisError] = useState<string | null>(null);
@@ -660,8 +664,11 @@ export function SongDetailView({
     });
     setTranspose(0);
     setIsCapoEnabled(true);
-    setSelectedCapoFret(null);
-    setIsEditing(Boolean(song?.initialEdit || (!song?.chords && !song?.lyrics)));
+    const hasContent = Boolean(chordsData || lyricsData);
+    setIsEditing(Boolean(!hasContent || (song?.initialEdit && !hasContent)));
+    if (song?.initialEdit) {
+      (song as any).initialEdit = false;
+    }
   }, [song.id]); 
 
   // Real-time synchronization with Firestore for this specific song
@@ -1863,16 +1870,19 @@ export function SongDetailView({
       const sanitizedLyrics = cleanTablatures(editedSong.lyrics || '');
 
       const cleanCategory = sanitizeCategory(editedSong.category);
+      const { initialEdit: _discardInitialEdit, ...dataToSave } = (editedSong as any);
       const finalData = { 
-        ...editedSong,
+        ...dataToSave,
         category: cleanCategory || null,
         artistImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         customImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         chords: sanitizedChords,
-        lyrics: sanitizedLyrics
+        lyrics: sanitizedLyrics,
+        initialEdit: false
       };
       await updateDoc(doc(db, 'songs', song.id), finalData);
-      setEditedSong({ ...finalData, category: cleanCategory }); // Sync local state immediately
+      setEditedSong({ ...finalData, category: cleanCategory, initialEdit: false }); // Sync local state immediately
+      if (song) (song as any).initialEdit = false;
       setReferenceBpm(finalData.bpm); // Update reference to make it the new "Original"
       setIsEditing(false);
     } catch (error) {
