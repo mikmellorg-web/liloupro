@@ -1364,15 +1364,71 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
             </motion.div>
           )}
 
-          <div className="flex items-center justify-center">
+          {/* Sequência Ilustrativa de Passos para Marcação */}
+          <div className="w-full max-w-4xl p-3 sm:p-4 rounded-2xl bg-card border border-border shadow-md">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-text-muted flex items-center gap-1.5">
+                <Sparkles size={13} className="text-brand" /> Como Marcar Sua Disponibilidade (3 Passos Simples)
+              </span>
+              <span className="text-[10px] font-bold text-brand bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full hidden sm:inline-block">
+                Siga a ordem dos passos
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              {/* Passo 1 */}
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 text-left">
+                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
+                  1
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 1</span>
+                  <p className="text-xs font-black text-text-main leading-tight">Marque os dias que você pode</p>
+                </div>
+              </div>
+
+              {/* Passo 2 */}
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 text-left">
+                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
+                  2
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 2</span>
+                  <p className="text-xs font-black text-text-main leading-tight">Confirme: Conte Comigo ou Não Posso</p>
+                </div>
+              </div>
+
+              {/* Passo 3 */}
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-brand/10 border border-brand/30 text-left">
+                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
+                  3
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 3</span>
+                  <p className="text-xs font-black text-text-main leading-tight">Finalizar e Notificar Liderança</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Passo 3: Finalizar e Notificar Liderança */}
+          <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-2.5 pt-1">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/20 shadow-sm">
+              <span className="w-5 h-5 rounded-md bg-brand text-white flex items-center justify-center font-black text-[11px] shadow-sm">
+                3
+              </span>
+              <span className="text-[11px] font-black uppercase tracking-wider text-brand">
+                Passo 3: Finalizar e Notificar Liderança
+              </span>
+            </div>
+
             <Button
               onClick={handleFinishAvailability}
               disabled={isFinishing || isFinished || isLocked}
               className={cn(
-                "px-10 py-3 shadow-xl transition-all font-black uppercase tracking-widest text-[10px] h-12 rounded-xl border group",
+                "px-10 py-3 shadow-xl transition-all font-black uppercase tracking-widest text-[10px] h-12 rounded-xl border group cursor-pointer",
                 isFinished 
                   ? "bg-green-500 border-green-400 text-white cursor-default" 
-                  : (isLocked ? "bg-card border-border text-text-muted cursor-not-allowed opacity-50" : "bg-brand hover:scale-105 border-brand shadow-brand/20")
+                  : (isLocked ? "bg-card border-border text-text-muted cursor-not-allowed opacity-50" : "bg-brand hover:scale-105 border-brand shadow-brand/20 text-white")
               )}
             >
               {isFinished ? (
@@ -1396,6 +1452,25 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           <Card className="p-6 sm:p-8 bg-card backdrop-blur-md border border-border shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
               <Calendar size={120} />
+            </div>
+
+            {/* Passo 1: Marque os dias que você pode */}
+            <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4 relative z-10">
+              <div className="flex items-center gap-2.5 text-left">
+                <span className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shadow-md shadow-brand/20 shrink-0">
+                  1
+                </span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-brand">Passo 1</span>
+                    <span className="text-[9px] font-bold text-text-muted px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/5 border border-border/40">Calendário</span>
+                  </div>
+                  <h3 className="text-sm font-black text-text-main tracking-tight leading-tight">Marque os dias que você pode</h3>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-text-muted hidden sm:inline-flex items-center gap-1 bg-black/5 dark:bg-white/5 px-2.5 py-1 rounded-lg border border-border/40">
+                <Calendar size={12} className="text-brand" /> Toque no dia
+              </span>
             </div>
             
             <div className="grid grid-cols-7 mb-4">
@@ -1479,7 +1554,23 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                   </div>
                   
                   <Card className="p-6 bg-card border-border shadow-xl">
-                    <p className="text-[16px] font-black text-text-main uppercase tracking-widest mb-4 text-center">Minha Disponibilidade Geral</p>
+                    {/* Passo 2: Confirme no CONTE COMIGO ou NÃO POSSO */}
+                    <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
+                      <div className="flex items-center gap-2.5 text-left">
+                        <span className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shadow-md shadow-brand/20 shrink-0">
+                          2
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-brand">Passo 2</span>
+                            <span className="text-[9px] font-bold text-text-muted px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/5 border border-border/40">Confirmação</span>
+                          </div>
+                          <h3 className="text-sm font-black text-text-main tracking-tight leading-tight">Confirme no "Conte Comigo" ou "Não Posso"</h3>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[14px] font-black text-text-main uppercase tracking-widest mb-4 text-center">Minha Disponibilidade Geral</p>
                     {isLocked && (
                       <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-center">
                         <p className="text-xs font-black text-red-500 flex items-center justify-center gap-1.5 leading-tight">
@@ -1514,6 +1605,25 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                           </button>
                         );
                       })}
+                    </div>
+
+                    {/* Dica para o Passo 3 */}
+                    <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-text-muted">
+                      <span className="flex items-center gap-1.5 font-bold">
+                        <span className="w-4 h-4 rounded-full bg-brand/20 text-brand text-[9px] font-black flex items-center justify-center">3</span>
+                        Após marcar seus dias:
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={handleFinishAvailability}
+                        disabled={isFinishing || isFinished || isLocked}
+                        className={cn(
+                          "text-[10px] font-black uppercase text-brand hover:underline flex items-center gap-1 transition-opacity",
+                          (isFinishing || isFinished || isLocked) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        )}
+                      >
+                        <Send size={11} /> Passo 3: Finalizar Envio
+                      </button>
                     </div>
                   </Card>
 
@@ -1601,12 +1711,20 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                   )}
                </div>
              ) : (
-               <div className="h-full flex items-center justify-center p-10 text-center border-2 border-dashed border-border rounded-3xl opacity-50">
-                  <div className="max-w-xs space-y-4">
-                       <Calendar size={48} className="mx-auto text-text-main" />
-                     <p className="text-sm text-text-main font-black italic">Selecione um dia no calendário para gerenciar sua disponibilidade.</p>
+                <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-border/80 rounded-3xl bg-card/40">
+                  <div className="max-w-xs space-y-3 flex flex-col items-center">
+                    <div className="w-10 h-10 rounded-2xl bg-brand/15 text-brand flex items-center justify-center font-black text-base shadow-sm ring-2 ring-brand/30">
+                      2
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand">Passo 2</span>
+                    <h4 className="text-base font-black text-text-main tracking-tight leading-snug">
+                      Confirme no "Conte Comigo" ou "Não Posso"
+                    </h4>
+                    <p className="text-xs text-text-muted font-bold leading-relaxed">
+                      Toque primeiro em uma data no <strong>Passo 1 (calendário ao lado)</strong> para abrir e marcar seus dias aqui.
+                    </p>
                   </div>
-               </div>
+                </div>
              )}
           </div>
        </div>
