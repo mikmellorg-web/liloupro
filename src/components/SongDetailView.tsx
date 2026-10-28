@@ -39,7 +39,8 @@ import {
   cleanCifraHtml, pairChordsAndLyricsIfSeparated, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
-  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText 
+  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText,
+  isDedilhadoOrTabPartLine
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -857,16 +858,17 @@ export function SongDetailView({
   }, [currentKey, editedSong.chords]);
 
   const effectiveLyrics = useMemo(() => {
-    return getEffectiveLyrics(editedSong.lyrics, editedSong.chords);
+    return cleanCifraHtml(getEffectiveLyrics(editedSong.lyrics, editedSong.chords));
   }, [editedSong.lyrics, editedSong.chords]);
 
   const displayedContent = useMemo(() => {
     if (detailTab === 'lyrics') {
       return effectiveLyrics;
     }
+    const cleanChords = cleanCifraHtml(editedSong.chords || '');
     const transposedText = netTranspose === 0 
-      ? (editedSong.chords || '') 
-      : transposeLyricsAndChords(editedSong.chords || '', netTranspose);
+      ? cleanChords
+      : transposeLyricsAndChords(cleanChords, netTranspose);
 
     if (harmonicDisplayMode !== 'chords') {
       return convertLyricsAndChordsToHarmonicMode(transposedText, currentKey, harmonicDisplayMode);
@@ -1833,7 +1835,11 @@ export function SongDetailView({
 
     for (let j = 0; j < lines.length; j++) {
       const line = lines[j];
-      if (line.trim() === '') {
+      const trimmed = line.trim();
+      if (isDedilhadoOrTabPartLine(trimmed)) {
+        continue;
+      }
+      if (trimmed === '') {
         if (currentBlock.length > 0) {
           blocks.push(currentBlock);
           currentBlock = [];

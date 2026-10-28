@@ -9,7 +9,7 @@ import { getFirestore as getClientFirestore, collection as clientCollection, get
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage } from "./src/localBibleDb.js";
-import { cleanCifraHtml, pairChordsAndLyricsIfSeparated } from "./src/services/chordService.js";
+import { cleanCifraHtml, pairChordsAndLyricsIfSeparated, isDedilhadoOrTabPartLine } from "./src/services/chordService.js";
 
 // Compatibilidade universal para obter o diretório do servidor tanto em ESM (tsx) quanto em CommonJS compilado (esbuild)
 const serverDir: string = (() => {
@@ -2502,17 +2502,32 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         const cleanedChordsLines: string[] = [];
         const lyricLines: string[] = [];
         let prevWasEmpty = false;
+        let inDedilhadoBlock = false;
 
-        for (const rawLine of rawLines) {
+        for (let i = 0; i < rawLines.length; i++) {
+          const rawLine = rawLines[i];
           const stripped = htmlDecode(rawLine.replace(/<[^>]*>/g, "")).trim();
           if (stripped === "") {
-            if (!prevWasEmpty && cleanedChordsLines.length > 0) {
+            if (!prevWasEmpty && cleanedChordsLines.length > 0 && !inDedilhadoBlock) {
               cleanedChordsLines.push("");
               prevWasEmpty = true;
             }
             continue;
           }
           prevWasEmpty = false;
+
+          const cleanStripped = stripped.replace(/^[\s\[\(\{\-]+|[\s\]\)\}\:\.\-]+$/g, '').trim().toLowerCase();
+          const isDedilhadoLine = isDedilhadoOrTabPartLine(stripped) || /^dedilhado\b/i.test(cleanStripped) || /^\[\s*dedilhado\b/i.test(stripped);
+          const isParteLine = /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(cleanStripped) || /^\[\s*parte\s*\d+\s*(?:de|\/)\s*\d+/i.test(stripped);
+
+          if (isDedilhadoLine) {
+            inDedilhadoBlock = true;
+            continue;
+          }
+
+          if (isParteLine) {
+            continue;
+          }
 
           // Filter out guitar tablatures
           const isTab = (
@@ -2529,6 +2544,34 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
           );
 
           if (isTab) continue;
+
+          if (inDedilhadoBlock) {
+            const isTabHeader = /^\[Tab/i.test(stripped) || /^Riff/i.test(stripped);
+            const isSectionHeader = /^\[[^\]]+\]$/.test(stripped) && !isTabHeader;
+
+            // Check if next non-empty line has lyrics
+            let nextHasLyrics = false;
+            for (let j = i + 1; j < rawLines.length; j++) {
+              const nextStripped = htmlDecode(rawLines[j].replace(/<[^>]*>/g, "")).trim();
+              if (!nextStripped) continue;
+              const nextClean = nextStripped.replace(/^[\s\[\(\{\-]+|[\s\]\)\}\:\.\-]+$/g, '').trim().toLowerCase();
+              if (isDedilhadoOrTabPartLine(nextStripped) || /^dedilhado\b/i.test(nextClean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(nextClean)) {
+                break;
+              }
+              if (/[a-zA-ZÀ-ÿ]{3,}/.test(nextStripped) && !nextStripped.includes('|') && !nextStripped.includes('-')) {
+                nextHasLyrics = true;
+              }
+              break;
+            }
+
+            if (isSectionHeader) {
+              inDedilhadoBlock = false;
+            } else if (nextHasLyrics) {
+              inDedilhadoBlock = false;
+            } else {
+              continue;
+            }
+          }
 
           // Chords line: keep chord notation in place
           let cleanedChordLine = htmlDecode(

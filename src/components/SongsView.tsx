@@ -16,6 +16,7 @@ import { DEFAULT_LOCAL_SONGS } from '../songsDatabase';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
 import ContextualHelp from './ContextualHelp';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
+import { cleanCifraHtml } from '../services/chordService';
 
 // Re-exports for critical modules referenced by App.tsx and LiturgyView
 export { SongDetailView } from './SongDetailView';
@@ -765,8 +766,8 @@ export function SongsView({
         bpm: songData.bpm ? Number(songData.bpm) : 120,
         timeSignature: songData.timeSignature || '4/4',
         category: songData.category || null,
-        chords: typeof songData.chords === 'string' ? songData.chords : '',
-        lyrics: typeof songData.lyrics === 'string' ? songData.lyrics : (songData.content || ''),
+        chords: typeof songData.chords === 'string' ? cleanCifraHtml(songData.chords) : '',
+        lyrics: typeof songData.lyrics === 'string' ? cleanCifraHtml(songData.lyrics) : cleanCifraHtml(songData.content || ''),
         youtube: songData.youtube || '',
         artistImageUrl: songData.artistImageUrl || '',
         capo: songData.capo || '',
@@ -802,6 +803,7 @@ export function SongsView({
 
   // Funções de reordenação litúrgica (Mover para Cima / Baixo)
   const executeMoveSongUp = async (index: number) => {
+    if (!isAdmin) return;
     if (index <= 0) return;
     const newList = [...orderedLiturgySongs];
     const temp = newList[index];
@@ -826,6 +828,7 @@ export function SongsView({
   };
 
   const executeMoveSongDown = async (index: number) => {
+    if (!isAdmin) return;
     if (index >= orderedLiturgySongs.length - 1) return;
     const newList = [...orderedLiturgySongs];
     const temp = newList[index];
@@ -850,17 +853,20 @@ export function SongsView({
   };
 
   const handleMoveSongUp = (index: number, songTitle: string) => {
+    if (!isAdmin) return;
     if (index <= 0) return;
     setReorderConfirm({ index, direction: 'up', songTitle });
   };
 
   const handleMoveSongDown = (index: number, songTitle: string) => {
+    if (!isAdmin) return;
     if (index >= orderedLiturgySongs.length - 1) return;
     setReorderConfirm({ index, direction: 'down', songTitle });
   };
 
   // Remover música da liturgia
   const handleRemoveSongFromLiturgy = async (index: number) => {
+    if (!isAdmin) return;
     const songToRemove = orderedLiturgySongs[index];
     if (!confirm(`Deseja remover "${songToRemove.title}" das músicas deste culto?`)) return;
 
@@ -1370,48 +1376,50 @@ export function SongsView({
                       </div>
                     </div>
 
-                    {/* Botões de Ação na Ordem Litúrgica: Subir, Descer e Excluir */}
-                    <div className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      {/* Botão Subir Ordem */}
-                      <button
-                        type="button"
-                        disabled={isFirst}
-                        onClick={() => handleMoveSongUp(index, song.title)}
-                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                          isFirst 
-                            ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
-                            : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
-                        }`}
-                        title="Mover para cima"
-                      >
-                        <ChevronUp size={18} />
-                      </button>
+                    {/* Botões de Ação na Ordem Litúrgica: Subir, Descer e Excluir (Apenas Administradores) */}
+                    {isAdmin && (
+                      <div className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {/* Botão Subir Ordem */}
+                        <button
+                          type="button"
+                          disabled={isFirst}
+                          onClick={() => handleMoveSongUp(index, song.title)}
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                            isFirst 
+                              ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
+                              : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
+                          }`}
+                          title="Mover para cima"
+                        >
+                          <ChevronUp size={18} />
+                        </button>
 
-                      {/* Botão Descer Ordem */}
-                      <button
-                        type="button"
-                        disabled={isLast}
-                        onClick={() => handleMoveSongDown(index, song.title)}
-                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                          isLast 
-                            ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
-                            : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
-                        }`}
-                        title="Mover para baixo"
-                      >
-                        <ChevronDown size={18} />
-                      </button>
+                        {/* Botão Descer Ordem */}
+                        <button
+                          type="button"
+                          disabled={isLast}
+                          onClick={() => handleMoveSongDown(index, song.title)}
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                            isLast 
+                              ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
+                              : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
+                          }`}
+                          title="Mover para baixo"
+                        >
+                          <ChevronDown size={18} />
+                        </button>
 
-                      {/* Botão Excluir do Culto */}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSongFromLiturgy(index)}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-red-950/60 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer ml-0.5"
-                        title="Remover da liturgia deste culto"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
+                        {/* Botão Excluir do Culto */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSongFromLiturgy(index)}
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-red-950/60 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer ml-0.5"
+                          title="Remover da liturgia deste culto"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -2035,7 +2043,7 @@ export function SongsView({
       )}
 
       {/* Modal de Confirmação: Mudar a ordem? */}
-      {reorderConfirm && (
+      {isAdmin && reorderConfirm && (
         <div 
           className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 notranslate" 
           translate="no"

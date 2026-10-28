@@ -37,7 +37,8 @@ import {
   cleanCifraHtml, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
-  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText, standardizeSectionName 
+  extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText, standardizeSectionName,
+  isDedilhadoOrTabPartLine
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1196,6 +1197,9 @@ export function DynamicExplanationModal({
 export function isSectionHeaderContent(str: string): boolean {
   if (!str) return false;
   const clean = str.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (isDedilhadoOrTabPartLine(clean) || /^dedilhado\b/i.test(clean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean)) {
+    return false;
+  }
   return /^(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|pre refrão|pre refrao|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|1a parte|2a parte|3a parte|4a parte|5a parte|primeir a parte|segund a parte|parte)(\s*[\d\wáéíóúÁÉÍÓÚa-zA-Z\-\_\&]+)*$/i.test(clean);
 }
 
@@ -1239,6 +1243,10 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
     return { isMatch: false, sections: [], dynamics: [], repeats: [], remainingText: '' };
   }
 
+  if (isDedilhadoOrTabPartLine(line)) {
+    return { isMatch: false, sections: [], dynamics: [], repeats: [], remainingText: '' };
+  }
+
   const normalized = normalizeSpacedTags(line);
   const rawTrimmed = normalized.trim();
 
@@ -1246,6 +1254,10 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
   if (!rawTrimmed.includes('[') && !rawTrimmed.includes('(')) {
     const cleanLine = rawTrimmed.replace(/^[\s:\-]+|[\s:\-]+$/g, '').trim();
     const cleanLower = cleanLine.toLowerCase();
+
+    if (isDedilhadoOrTabPartLine(cleanLower)) {
+      return { isMatch: false, sections: [], dynamics: [], repeats: [], remainingText: '' };
+    }
 
     if (isSectionHeaderContent(cleanLower)) {
       return {
@@ -1297,6 +1309,12 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
     const content = match[1].trim();
     if (!content) continue;
     const contentLower = content.toLowerCase();
+
+    // Descartar anotações de dedilhado e partes de tablatura para não virarem tags de dinâmica ou cabeçalhos
+    if (isDedilhadoOrTabPartLine(content) || /^dedilhado\b/i.test(contentLower) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(contentLower)) {
+      workStr = workStr.replace(match[0], '').trim();
+      continue;
+    }
 
     // Check if it's a standard section header
     if (isSectionHeaderContent(contentLower)) {
@@ -1388,6 +1406,11 @@ export function RenderTextWithInlineBadges({ text, baseClasses = '' }: { text: s
           const content = part.slice(1, -1).trim();
           if (!content) return null;
           const contentLower = content.toLowerCase();
+
+          // Reject dedilhado and tab parts
+          if (isDedilhadoOrTabPartLine(content) || /^dedilhado\b/i.test(contentLower) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(contentLower)) {
+            return null;
+          }
 
           // Pausa / Stop / Corte
           if (contentLower.includes('pausa') || contentLower.includes('pause') || contentLower.includes('stop') || contentLower.includes('parada') || contentLower.includes('corta') || contentLower.includes('🛑') || contentLower.includes('⏱️') || contentLower.includes('⏸️')) {
@@ -1591,6 +1614,10 @@ export const SingleLineRow = React.memo(function SingleLineRow({
   isChord: boolean; 
   setActiveChordInDict: (val: string) => void;
 }) {
+  if (isDedilhadoOrTabPartLine(line)) {
+    return null;
+  }
+
   if (isChord) {
     const tokens = parseChordLineIntoTokens(line);
 

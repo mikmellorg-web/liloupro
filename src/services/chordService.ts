@@ -742,6 +742,33 @@ export function convertHarmonicToChordName(chord: string, songKey: string): stri
   return targetBass ? `${targetChordRoot}${suffix}/${targetBass}` : `${targetChordRoot}${suffix}`;
 }
 
+/**
+ * Detecta se uma linha ou termo corresponde a anotações de dedilhado ou partes fracionadas de tablatura do Cifra Club
+ * (ex: [Dedilhado - Intro], [Parte 1 de 3], Dedilhado Intro, Dedilhado Refrão, Parte 2 de 4, [Parte 1/3], etc.)
+ */
+export function isDedilhadoOrTabPartLine(line: string): boolean {
+  if (!line) return false;
+  const stripped = line.replace(/<[^>]*>/g, '').trim();
+  if (!stripped) return false;
+
+  const clean = stripped
+    .replace(/^[\s\[\(\{\|\,\-:]+|[\s\]\)\}\|\,\-:]+$/g, '')
+    .trim()
+    .toLowerCase();
+
+  // 1. "Parte 1 de 3", "Parte 2 de 3", "Parte 1 de 4", "Parte 1/3", etc.
+  if (/^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean)) {
+    return true;
+  }
+
+  // 2. Anotações de Dedilhado (Intro, Refrão, Refrão Final, Verso, Ponte, Solo, etc.)
+  if (/^dedilhado\b/i.test(clean)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function cleanCifraHtml(text: string): string {
   if (!text) return '';
 
@@ -784,6 +811,81 @@ export function cleanCifraHtml(text: string): string {
     .replace(/&#x27;/g, "'")
     .replace(/&apos;/g, "'");
 
+  // 5.5. Filtrar e descartar blocos de Dedilhado e anotações de partes (ex: [Dedilhado - Intro], [Parte 1 de 3], Dedilhado Refrão)
+  const rawLines = str.split('\n');
+  const filteredLines: string[] = [];
+  let inDedilhado = false;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const l = rawLines[i];
+    const stripped = l.trim();
+
+    if (!stripped) {
+      if (!inDedilhado && filteredLines.length > 0 && filteredLines[filteredLines.length - 1] !== '') {
+        filteredLines.push('');
+      }
+      continue;
+    }
+
+    const clean = stripped
+      .replace(/^[\s\[\(\{\|\,\-:]+|[\s\]\)\}\|\,\-:]+$/g, '')
+      .trim()
+      .toLowerCase();
+
+    const isDed = /^dedilhado\b/i.test(clean) || /^\[\s*dedilhado\b/i.test(stripped);
+    const isPart = /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean) || /^\[\s*parte\s*\d+\s*(?:de|\/)\s*\d+/i.test(stripped);
+
+    if (isDed) {
+      inDedilhado = true;
+      continue;
+    }
+
+    if (isPart) {
+      continue;
+    }
+
+    if (inDedilhado) {
+      // Verificar se o bloco de dedilhado terminou
+      const isHeader = isSectionHeaderLine(stripped) && !isDed && !isPart;
+      const isChord = isChordLine(stripped);
+
+      // Verificar se a próxima linha não-vazia contém letra cantada
+      let nextHasLyrics = false;
+      for (let j = i + 1; j < rawLines.length; j++) {
+        const nextTr = rawLines[j].trim();
+        if (!nextTr) continue;
+        const nextClean = nextTr.replace(/^[\s\[\(\{\|\,\-:]+|[\s\]\)\}\|\,\-:]+$/g, '').trim().toLowerCase();
+        if (isDedilhadoOrTabPartLine(nextTr) || /^dedilhado\b/i.test(nextClean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(nextClean)) {
+          break;
+        }
+        if (!isChordLine(nextTr) && !isSectionHeaderLine(nextTr) && /[a-zA-ZÀ-ÿ]{3,}/.test(nextTr)) {
+          nextHasLyrics = true;
+        }
+        break;
+      }
+
+      if (isHeader) {
+        inDedilhado = false;
+        filteredLines.push(l);
+      } else if (isChord && nextHasLyrics) {
+        // Acorde legítimo pertencente à letra real seguinte
+        inDedilhado = false;
+        filteredLines.push(l);
+      } else if (!isChord && /[a-zA-ZÀ-ÿ]{3,}/.test(stripped) && !isTablatureLine(l)) {
+        // Linha legítima de letra atingida
+        inDedilhado = false;
+        filteredLines.push(l);
+      } else {
+        // Acordes de tablatura ou linhas residuais de dedilhado - descartar
+        continue;
+      }
+    } else {
+      filteredLines.push(l);
+    }
+  }
+
+  str = filteredLines.join('\n');
+
   // 6. Ensure section headers are cleanly isolated on their own line
   // Handles cases where headers are fused with chords/lyrics (e.g. "G/D D[Primeira Parte]" or "[Intro]G/D D")
   str = str.replace(/([^\n])\s*(\[[^\]\n]+\])/g, '$1\n$2');
@@ -792,6 +894,7 @@ export function cleanCifraHtml(text: string): string {
 
   // Padronização e normalização de seções para a convenção oficial do LiLouPro
   str = str.replace(/\[\s*([^\]]+?)\s*\]/g, (_full, inner) => {
+    if (isDedilhadoOrTabPartLine(inner)) return '';
     const std = standardizeSectionName(inner);
     return `[${std}]`;
   });
@@ -806,7 +909,7 @@ export function cleanCifraHtml(text: string): string {
 
   // 8. Normalize newlines and trim each line's trailing whitespace
   str = str.replace(/\r/g, '');
-  str = str.split('\n').map(l => l.trimEnd()).join('\n');
+  str = str.split('\n').map(l => l.trimEnd()).filter(l => !isDedilhadoOrTabPartLine(l)).join('\n');
   str = str.replace(/\n{3,}/g, '\n\n').trim();
 
   return compactCifraPhrases(str);
@@ -1017,11 +1120,12 @@ export function standardizeSectionName(name: string): string {
 export function isSectionHeaderLine(line: string): boolean {
   const trimmed = (line || '').trim();
   if (!trimmed) return false;
+  if (isDedilhadoOrTabPartLine(trimmed)) return false;
   if (/^\[[^\]]+\]$/.test(trimmed) || /^\{[^\}]+\}$/.test(trimmed)) {
-    return !/^\[(?:tab|riff)\b/i.test(trimmed);
+    return !/^\[(?:tab|riff|dedilhado)\b/i.test(trimmed);
   }
   if (trimmed.length > 40) return false;
-  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|verse|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|primeir a parte|segund a parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|pre refrão|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
+  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|verse|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|primeir a parte|segund a parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|pre refrão|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
   return sectionRegex.test(trimmed);
 }
 
@@ -1276,6 +1380,10 @@ export function parseChordLineIntoTokens(rawLine: string): ChordToken[] {
 }
 
 export function isTablatureLine(line: string): boolean {
+  if (isDedilhadoOrTabPartLine(line)) {
+    return true;
+  }
+
   // Check the raw line for tab classes, in case HTML is preserved
   if (line.includes('class="tablatura"') || line.includes("class='tablatura'") || line.includes('class="tab"') || line.includes("class='tab'")) {
     return true;
@@ -1364,7 +1472,6 @@ export function cleanTablatures(text: string): string {
         currentSection.includes("interlúdio") || 
         currentSection.includes("outro") || 
         currentSection.includes("fim") || 
-        currentSection.includes("dedilhado") || 
         currentSection.includes("riff");
 
       if (!isIntroOrSoloSection) {

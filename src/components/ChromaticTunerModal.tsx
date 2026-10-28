@@ -13,7 +13,10 @@ import {
   Sparkles,
   Radio,
   Sun,
-  Moon
+  Moon,
+  Activity,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -94,6 +97,19 @@ const PRESET_TUNINGS: Record<TunerMode, { name: string; strings: PresetString[] 
 
 const NOTE_STRINGS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+export interface TunerDiagMetrics {
+  rawPitch: number | null;
+  medianPitch: number | null;
+  smoothedFreq: number | null;
+  candidateKey: string | null;
+  confirmedKey: string | null;
+  targetFreq: number | null;
+  cents: number | null;
+  rms: number;
+  confidence: number;
+  dspTimeMs: number;
+}
+
 export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
   isOpen,
   onClose
@@ -107,6 +123,8 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
   const [activeStringIndex, setActiveStringIndex] = useState<number | null>(null);
   const [isPlayingReference, setIsPlayingReference] = useState<boolean>(false);
   const [refFrequency, setRefFrequency] = useState<number>(440);
+  const [diagMetrics, setDiagMetrics] = useState<TunerDiagMetrics | null>(null);
+  const [showDiagPanel, setShowDiagPanel] = useState<boolean>(true);
   const [tunerTheme, setTunerTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('liloupro_tuner_theme') as 'dark' | 'light') || 'dark';
   });
@@ -131,24 +149,36 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
   const circularBufferRef = useRef<Float32Array>(new Float32Array(8192));
   const circularWritePointerRef = useRef<number>(0);
 
-  // Simple Moving Average (SMA) buffers for frequency and cents stability
-  const freqSmaBufferRef = useRef<number[]>([]);
-  const centsSmaBufferRef = useRef<number[]>([]);
+  // Audio Gate & Noise Floor Refs (Schmitt Trigger)
+  const isAudioActiveRef = useRef<boolean>(false);
+  const GATE_OPEN_RMS = 0.006;  // Threshold to trigger detection from silence (avoids room noise)
+  const GATE_HOLD_RMS = 0.0025; // Sustain threshold once note is already sounding
 
-  // Smoothing and stability refs
+  // Outlier rejection & Pitch Stability
+  const recentPitchesRef = useRef<number[]>([]);
+  const confirmedNoteRef = useRef<NoteInfo | null>(null);
+  const confirmedNoteKeyRef = useRef<string | null>(null);
+  const candidateNoteKeyRef = useRef<string | null>(null);
+  const candidateNoteCountRef = useRef<number>(0);
+
+  // Adaptive smoothing and UI throttle refs
   const smoothedCentsRef = useRef<number>(0);
+  const smoothedFreqRef = useRef<number>(0);
   const silenceCounterRef = useRef<number>(0);
-  const lastNoteNameRef = useRef<string | null>(null);
   const lastSignalLevelRef = useRef<number>(0);
+  const lastUiUpdateTimestampRef = useRef<number>(0);
+  const lastRenderedNoteKeyRef = useRef<string | null>(null);
+  const lastDiagUpdateTimestampRef = useRef<number>(0);
 
   // Helper: Convert frequency to closest chromatic note
   const getNoteFromFrequency = useCallback((frequency: number): NoteInfo => {
     const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2));
     const midiNumber = Math.round(noteNum) + 69;
-    const cents = Math.floor((noteNum - Math.round(noteNum)) * 100);
     const noteIndex = ((midiNumber % 12) + 12) % 12;
     const octave = Math.floor(midiNumber / 12) - 1;
     const targetFrequency = 440 * Math.pow(2, (midiNumber - 69) / 12);
+    // Continuous accurate cents calculation using log2
+    const cents = Math.round(1200 * (Math.log(frequency / targetFrequency) / Math.log(2)));
 
     return {
       name: NOTE_STRINGS[noteIndex],
@@ -158,12 +188,16 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
     };
   }, []);
 
-  // High-Precision YIN Pitch Detection Algorithm (Standard for Musical Instrument Tuning)
-  const detectPitchYin = (buffer: Float32Array, sampleRate: number): number => {
+  // Professional YIN Pitch Detection Algorithm with Sub-harmonic & Octave Verification
+  const detectPitchYin = (
+    buffer: Float32Array,
+    sampleRate: number,
+    isAudioActive: boolean
+  ): { pitch: number; confidence: number; rms: number } => {
     const bufferSize = buffer.length;
     const halfBuffer = Math.floor(bufferSize / 2);
 
-    // 1. Calculate RMS energy
+    // 1. RMS Energy Calculation
     let sumSq = 0;
     for (let i = 0; i < bufferSize; i++) {
       const v = buffer[i];
@@ -171,14 +205,22 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
     }
     const rms = Math.sqrt(sumSq / bufferSize);
 
-    // Ultra-sensitive RMS threshold for acoustic guitar sustain (0.003)
-    if (rms < 0.003) {
-      return -1;
+    // Schmitt-trigger Noise Gate
+    const thresholdRms = isAudioActive ? GATE_HOLD_RMS : GATE_OPEN_RMS;
+    if (rms < thresholdRms) {
+      return { pitch: -1, confidence: 0, rms };
     }
 
-    // 2. Difference function
+    // Frequency range bounds: 35 Hz (low bass) to 1400 Hz (high guitar harmonics)
+    const minTau = Math.max(2, Math.floor(sampleRate / 1400));
+    const maxTau = Math.min(halfBuffer - 1, Math.floor(sampleRate / 35));
+    // Safe bound: calculating tau up to maxTau + 2 guarantees exact values for all threshold,
+    // subharmonic, and parabolic interpolation steps while eliminating ~1.6M unused iterations.
+    const tauLimit = Math.min(halfBuffer - 1, maxTau + 2);
+
+    // 2. Difference function bounded to musical range
     const yinBuffer = new Float32Array(halfBuffer);
-    for (let tau = 0; tau < halfBuffer; tau++) {
+    for (let tau = 1; tau <= tauLimit; tau++) {
       let sum = 0;
       for (let i = 0; i < halfBuffer; i++) {
         const delta = buffer[i] - buffer[i + tau];
@@ -187,22 +229,21 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
       yinBuffer[tau] = sum;
     }
 
-    // 3. Cumulative mean normalized difference function
+    // 3. Cumulative mean normalized difference (CMND)
     yinBuffer[0] = 1;
     let runningSum = 0;
-    for (let tau = 1; tau < halfBuffer; tau++) {
+    for (let tau = 1; tau <= tauLimit; tau++) {
       runningSum += yinBuffer[tau];
       yinBuffer[tau] = runningSum === 0 ? 1 : (yinBuffer[tau] * tau) / runningSum;
     }
 
-    // 4. Thresholding - find first local minimum below threshold (avoids octave errors)
-    const threshold = 0.20;
-    const minTau = Math.max(2, Math.floor(sampleRate / 1400));
-    const maxTau = Math.min(halfBuffer - 1, Math.floor(sampleRate / 35));
+    // 4. Thresholding - search for first local minimum below threshold
+    const primaryThreshold = 0.15; // Strict periodic confidence for musical instruments
     let foundTau = -1;
 
     for (let tau = minTau; tau <= maxTau; tau++) {
-      if (yinBuffer[tau] < threshold) {
+      if (yinBuffer[tau] < primaryThreshold) {
+        // Find the bottom of the trough
         while (tau + 1 < maxTau && yinBuffer[tau + 1] < yinBuffer[tau]) {
           tau++;
         }
@@ -211,21 +252,59 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
       }
     }
 
-    // Fallback to global minimum if no valley below threshold (relaxed to 0.65 for guitar harmonics)
-    if (foundTau === -1) {
-      let minVal = 100;
-      for (let tau = minTau; tau <= maxTau; tau++) {
-        if (yinBuffer[tau] < minVal) {
-          minVal = yinBuffer[tau];
-          foundTau = tau;
+    // 5. Octave / Sub-harmonic verification:
+    // If foundTau was found, verify if 2 * foundTau (fundamental period) has comparable or strong trough
+    // (prevents octave jumps where 2nd harmonic was mistaken for fundamental)
+    if (foundTau > 0 && foundTau * 2 < maxTau) {
+      const doubleTau = foundTau * 2;
+      let bestDoubleTau = doubleTau;
+      let minDoubleVal = yinBuffer[doubleTau];
+
+      const searchStart = Math.max(minTau, doubleTau - 6);
+      const searchEnd = Math.min(maxTau, doubleTau + 6);
+      for (let dt = searchStart; dt <= searchEnd; dt++) {
+        if (yinBuffer[dt] < minDoubleVal) {
+          minDoubleVal = yinBuffer[dt];
+          bestDoubleTau = dt;
         }
       }
-      if (minVal > 0.65) {
-        return -1; // Unclear pitch / background noise
+
+      // If the fundamental period has strong periodicity (< 0.22) and is comparable to foundTau,
+      // select the longer period (the true fundamental frequency)
+      if (minDoubleVal < 0.22 && minDoubleVal <= yinBuffer[foundTau] + 0.06) {
+        foundTau = bestDoubleTau;
       }
     }
 
-    // 5. Parabolic interpolation for sub-sample accuracy
+    // 6. Strict Fallback only for sustaining notes (rejects environmental noise)
+    if (foundTau === -1) {
+      if (!isAudioActive) {
+        // Do not guess pitch from background noise when starting from silence
+        return { pitch: -1, confidence: 0, rms };
+      }
+
+      let minVal = 100;
+      let bestTau = -1;
+      for (let tau = minTau; tau <= maxTau; tau++) {
+        if (yinBuffer[tau] < minVal) {
+          minVal = yinBuffer[tau];
+          bestTau = tau;
+        }
+      }
+
+      // Rejects non-periodic noise (max allowable aperiodicity is 0.35, much safer than 0.65)
+      if (bestTau > 0 && minVal <= 0.35 && bestTau > minTau && bestTau < maxTau) {
+        if (yinBuffer[bestTau - 1] > minVal && yinBuffer[bestTau + 1] > minVal) {
+          foundTau = bestTau;
+        }
+      }
+
+      if (foundTau === -1) {
+        return { pitch: -1, confidence: 0, rms };
+      }
+    }
+
+    // 7. Parabolic interpolation for sub-sample accuracy
     let betterTau = foundTau;
     if (foundTau > 0 && foundTau < halfBuffer - 1) {
       const x1 = yinBuffer[foundTau - 1];
@@ -237,7 +316,10 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
       }
     }
 
-    return sampleRate / betterTau;
+    const calculatedPitch = sampleRate / betterTau;
+    const confidence = Math.max(0, Math.min(1, 1 - yinBuffer[foundTau]));
+
+    return { pitch: calculatedPitch, confidence, rms };
   };
 
   const stopAudioCapture = useCallback(() => {
@@ -255,16 +337,23 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
     }
     circularBufferRef.current.fill(0);
     circularWritePointerRef.current = 0;
-    freqSmaBufferRef.current = [];
-    centsSmaBufferRef.current = [];
+    recentPitchesRef.current = [];
+    confirmedNoteRef.current = null;
+    confirmedNoteKeyRef.current = null;
+    candidateNoteKeyRef.current = null;
+    candidateNoteCountRef.current = 0;
     smoothedCentsRef.current = 0;
-    lastNoteNameRef.current = null;
+    smoothedFreqRef.current = 0;
     silenceCounterRef.current = 0;
+    isAudioActiveRef.current = false;
+    lastSignalLevelRef.current = 0;
+    lastRenderedNoteKeyRef.current = null;
 
     setIsListening(false);
     setDetectedNote(null);
     setRawFreq(null);
     setSignalLevel(0);
+    setDiagMetrics(null);
   }, []);
 
   const startAudioCapture = useCallback(async () => {
@@ -272,8 +361,6 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
     stopAudioCapture();
 
     try {
-      // Must disable echoCancellation and noiseSuppression so browser audio pipeline
-      // does not treat guitar sustain as background noise and gate the mic!
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -298,9 +385,6 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
       const chunkBuffer = new Float32Array(analyser.fftSize);
       const yinWindowBuffer = new Float32Array(analyser.fftSize);
 
-      const FREQ_SMA_SIZE = 6;
-      const CENTS_SMA_SIZE = 6;
-
       const detectLoop = () => {
         if (!analyserRef.current || !audioContextRef.current) return;
 
@@ -310,22 +394,11 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
         const circCap = circBuf.length;
         let wPtr = circularWritePointerRef.current;
 
-        let sumSq = 0;
         for (let i = 0; i < chunkBuffer.length; i++) {
-          const sample = chunkBuffer[i];
-          sumSq += sample * sample;
-          circBuf[wPtr] = sample;
+          circBuf[wPtr] = chunkBuffer[i];
           wPtr = (wPtr + 1) % circCap;
         }
         circularWritePointerRef.current = wPtr;
-
-        // Calculate RMS Signal Level (0 to 100%)
-        const rms = Math.sqrt(sumSq / chunkBuffer.length);
-        const currentVol = Math.min(100, Math.max(0, Math.round((rms / 0.08) * 100)));
-        if (Math.abs(currentVol - lastSignalLevelRef.current) >= 2 || (currentVol === 0 && lastSignalLevelRef.current !== 0)) {
-          lastSignalLevelRef.current = currentVol;
-          setSignalLevel(currentVol);
-        }
 
         // Extract continuous window from circular buffer for YIN pitch detection
         let rPtr = (wPtr - analyser.fftSize + circCap) % circCap;
@@ -334,58 +407,195 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
           rPtr = (rPtr + 1) % circCap;
         }
 
-        const rawPitch = detectPitchYin(yinWindowBuffer, audioContextRef.current.sampleRate);
+        const now = performance.now();
+        const tDspStart = performance.now();
+        const { pitch: rawPitch, confidence, rms } = detectPitchYin(
+          yinWindowBuffer,
+          audioContextRef.current.sampleRate,
+          isAudioActiveRef.current
+        );
+        const dspTimeMs = performance.now() - tDspStart;
+
+        let diagMedianPitch: number | null = null;
+        let diagCandidateKey: string | null = null;
+
+        // Update VU Signal Level (0 to 100%)
+        const currentVol = Math.min(100, Math.max(0, Math.round((rms / 0.08) * 100)));
+        if (Math.abs(currentVol - lastSignalLevelRef.current) >= 3 || (currentVol === 0 && lastSignalLevelRef.current !== 0)) {
+          lastSignalLevelRef.current = currentVol;
+          setSignalLevel(currentVol);
+        }
 
         if (rawPitch > 35 && rawPitch < 1400) {
+          isAudioActiveRef.current = true;
           silenceCounterRef.current = 0;
 
-          // 2. Simple Moving Average (SMA - Média Móvel Simples) for Frequency
-          const fBuf = freqSmaBufferRef.current;
-          fBuf.push(rawPitch);
-          if (fBuf.length > FREQ_SMA_SIZE) {
-            fBuf.shift();
+          // 2. Median Filter on Raw Pitch (5 samples) - eliminates 100% of single-frame anomalies
+          const pBuf = recentPitchesRef.current;
+          pBuf.push(rawPitch);
+          if (pBuf.length > 5) {
+            pBuf.shift();
           }
-          const smaFreq = fBuf.reduce((sum, val) => sum + val, 0) / fBuf.length;
 
-          setRawFreq(Number(smaFreq.toFixed(1)));
-          const rawNote = getNoteFromFrequency(smaFreq);
-          const fullNoteName = `${rawNote.name}${rawNote.octave}`;
+          const sortedPitches = [...pBuf].sort((a, b) => a - b);
+          const medianPitch = sortedPitches[Math.floor(sortedPitches.length / 2)];
+          diagMedianPitch = medianPitch;
 
-          // 3. Simple Moving Average (SMA) for Cents / Needle Position
-          const cBuf = centsSmaBufferRef.current;
+          // 3. Determine Candidate Chromatic Note
+          const candidateNote = getNoteFromFrequency(medianPitch);
+          const candidateKey = `${candidateNote.name}${candidateNote.octave}`;
+          diagCandidateKey = candidateKey;
 
-          // Reset cents buffer on note change to maintain instantaneous note transition
-          if (lastNoteNameRef.current && lastNoteNameRef.current !== fullNoteName) {
-            cBuf.length = 0;
+          // 4. Note Confirmation Hysteresis
+          if (!confirmedNoteRef.current) {
+            // Immediately lock on first sound from silence
+            confirmedNoteRef.current = candidateNote;
+            confirmedNoteKeyRef.current = candidateKey;
+            smoothedCentsRef.current = candidateNote.cents;
+            smoothedFreqRef.current = medianPitch;
+            candidateNoteCountRef.current = 0;
+          } else if (candidateKey === confirmedNoteKeyRef.current) {
+            // Note is stable, reset candidate counter
+            candidateNoteCountRef.current = 0;
+          } else {
+            // Candidate note differs from currently confirmed note
+            if (candidateKey === candidateNoteKeyRef.current) {
+              candidateNoteCountRef.current += 1;
+              // Require 3 consecutive coherent frames (~50ms) to confirm note change
+              if (candidateNoteCountRef.current >= 3) {
+                confirmedNoteRef.current = candidateNote;
+                confirmedNoteKeyRef.current = candidateKey;
+                candidateNoteCountRef.current = 0;
+                // Reset smoothing to snap instantly to new note without needle dragging
+                smoothedCentsRef.current = candidateNote.cents;
+                smoothedFreqRef.current = medianPitch;
+                recentPitchesRef.current = [medianPitch];
+              }
+            } else {
+              candidateNoteKeyRef.current = candidateKey;
+              candidateNoteCountRef.current = 1;
+            }
           }
-          lastNoteNameRef.current = fullNoteName;
 
-          cBuf.push(rawNote.cents);
-          if (cBuf.length > CENTS_SMA_SIZE) {
-            cBuf.shift();
+          // Single authority for this frame: strictly the confirmed note
+          const activeConfirmedNote = confirmedNoteRef.current!;
+          const confirmedTargetFreq = activeConfirmedNote.frequency;
+
+          // 5. Harmonic-Invariant and Outlier-Proof Cents Calculation
+          // Reconstruct fundamental from harmonic overtones (1st, 2nd, 3rd, 4th, 5th, 6th) to completely
+          // eliminate the jumps caused when an acoustic string resonates with an overtone of a different note name (e.g. 3rd harmonic quinta).
+          const harmonicRatio = medianPitch / confirmedTargetFreq;
+          const kHarmonic = Math.round(harmonicRatio);
+          let targetCents: number;
+
+          if (kHarmonic >= 1 && kHarmonic <= 8) {
+            const impliedFundamental = medianPitch / kHarmonic;
+            const deviationCents = 1200 * (Math.log(impliedFundamental / confirmedTargetFreq) / Math.log(2));
+
+            if (Math.abs(deviationCents) <= 50) {
+              targetCents = deviationCents;
+            } else if (candidateNote.name === activeConfirmedNote.name) {
+              targetCents = 1200 * (Math.log(medianPitch / candidateNote.frequency) / Math.log(2));
+            } else {
+              targetCents = smoothedCentsRef.current;
+            }
+          } else if (candidateNote.name === activeConfirmedNote.name) {
+            targetCents = 1200 * (Math.log(medianPitch / candidateNote.frequency) / Math.log(2));
+          } else {
+            // Unconfirmed transition or transient noise: preserve position without leaping
+            targetCents = smoothedCentsRef.current;
           }
-          const smaCents = cBuf.reduce((sum, val) => sum + val, 0) / cBuf.length;
-          smoothedCentsRef.current = smaCents;
 
-          setDetectedNote({
-            ...rawNote,
-            cents: Number(smaCents.toFixed(1))
-          });
+          targetCents = Math.max(-50, Math.min(50, targetCents));
+          const centsDiff = targetCents - smoothedCentsRef.current;
+
+          // 6. Slew-Rate Limiting + Velocity-Scaled Smoothing (Galvanometer Physics like Cifra Club)
+          // Reject low-confidence frames (< 0.65) from shifting the needle
+          if (confidence >= 0.65) {
+            const absDiff = Math.abs(centsDiff);
+            let alphaCents: number;
+            if (absDiff > 12) {
+              alphaCents = 0.40; // Responsive tracking for rapid peg turning
+            } else if (absDiff > 5) {
+              alphaCents = 0.20; // Smooth approach
+            } else if (absDiff > 1.5) {
+              alphaCents = 0.10; // Fine tuning
+            } else {
+              alphaCents = 0.05; // Rock-solid needle stabilization on sustained notes
+            }
+
+            // Slew-rate limiter: prevents any instantaneous needle teleportation/twitch
+            const rawStep = centsDiff * alphaCents;
+            const maxStep = 1.6;
+            const clampedStep = Math.max(-maxStep, Math.min(maxStep, rawStep));
+            smoothedCentsRef.current += clampedStep;
+          }
+
+          // Frequency EMA
+          const freqDiff = medianPitch - smoothedFreqRef.current;
+          smoothedFreqRef.current += freqDiff * 0.25;
+
+          // 7. Throttled UI State Update (~30 FPS or immediate note change)
+          const isNoteChange = lastRenderedNoteKeyRef.current !== confirmedNoteKeyRef.current;
+          const timeSinceLastUi = now - lastUiUpdateTimestampRef.current;
+
+          if (isNoteChange || timeSinceLastUi >= 33) {
+            lastUiUpdateTimestampRef.current = now;
+            lastRenderedNoteKeyRef.current = confirmedNoteKeyRef.current;
+
+            const finalCents = Number(smoothedCentsRef.current.toFixed(1));
+            const finalFreq = Number(smoothedFreqRef.current.toFixed(1));
+
+            setRawFreq(finalFreq);
+            // CRITICAL: Name, octave, target frequency, and cents belong strictly to the SAME confirmed note
+            setDetectedNote({
+              name: activeConfirmedNote.name,
+              octave: activeConfirmedNote.octave,
+              frequency: activeConfirmedNote.frequency,
+              cents: finalCents
+            });
+          }
         } else {
+          // No valid pitch detected in this frame
           silenceCounterRef.current += 1;
 
-          // Smooth hold and decay during silent intervals / string ringing out
-          // Keep display stable for ~3 seconds (180 frames at 60fps) before clearing note
-          if (silenceCounterRef.current > 90 && silenceCounterRef.current <= 180) {
-            smoothedCentsRef.current *= 0.96; // slow, gentle decay to center zero
-            setDetectedNote(prev => prev ? { ...prev, cents: Number(smoothedCentsRef.current.toFixed(1)) } : null);
-          } else if (silenceCounterRef.current > 180) {
-            freqSmaBufferRef.current = [];
-            centsSmaBufferRef.current = [];
-            lastNoteNameRef.current = null;
-            setDetectedNote(null);
-            setRawFreq(null);
+          // Short persistence hold: keep last stable note visible for ~20 frames (~330ms)
+          // to prevent display blinking during natural string decay fluctuations
+          if (silenceCounterRef.current > 20) {
+            isAudioActiveRef.current = false;
+            recentPitchesRef.current = [];
+            confirmedNoteRef.current = null;
+            confirmedNoteKeyRef.current = null;
+            candidateNoteKeyRef.current = null;
+            candidateNoteCountRef.current = 0;
+            lastRenderedNoteKeyRef.current = null;
+            smoothedCentsRef.current = 0;
+            smoothedFreqRef.current = 0;
+
+            if (now - lastUiUpdateTimestampRef.current >= 33) {
+              lastUiUpdateTimestampRef.current = now;
+              setDetectedNote(null);
+              setRawFreq(null);
+            }
           }
+        }
+
+        // 8. Low-overhead Diagnostic Instrumentation (~5 Hz throttle = 200ms)
+        if (now - lastDiagUpdateTimestampRef.current >= 200) {
+          lastDiagUpdateTimestampRef.current = now;
+          const isSounding = rawPitch > 35 && rawPitch < 1400;
+          setDiagMetrics({
+            rawPitch: isSounding ? Number(rawPitch.toFixed(2)) : null,
+            medianPitch: diagMedianPitch ? Number(diagMedianPitch.toFixed(2)) : null,
+            smoothedFreq: smoothedFreqRef.current > 0 ? Number(smoothedFreqRef.current.toFixed(2)) : null,
+            candidateKey: diagCandidateKey,
+            confirmedKey: confirmedNoteKeyRef.current,
+            targetFreq: confirmedNoteRef.current ? confirmedNoteRef.current.frequency : null,
+            cents: confirmedNoteRef.current ? Number(smoothedCentsRef.current.toFixed(1)) : null,
+            rms: Number(rms.toFixed(5)),
+            confidence: Number(confidence.toFixed(3)),
+            dspTimeMs: Number(dspTimeMs.toFixed(2))
+          });
         }
 
         rafIdRef.current = requestAnimationFrame(detectLoop);
@@ -830,7 +1040,7 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
                   id="tuner-needle"
                   transform={`translate(130, 120) rotate(${detectedNote ? Math.max(-60, Math.min(60, detectedNote.cents * 1.2)) : 0})`}
                   style={{
-                    transition: 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                    transition: detectedNote ? 'none' : 'transform 0.25s cubic-bezier(0.2, 0.8, 0.4, 1)',
                     willChange: 'transform'
                   }}
                 >
@@ -1114,6 +1324,105 @@ export const ChromaticTunerModal: React.FC<ChromaticTunerModalProps> = ({
               </button>
             </div>
           )}
+
+          {/* PAINEL DE DIAGNÓSTICO TEMPORÁRIO DSP */}
+          <div className={cn(
+            "w-full rounded-2xl border p-3 mb-4 z-10 transition-colors text-left",
+            isLight
+              ? "bg-slate-900 text-slate-100 border-slate-700 shadow-md"
+              : "bg-slate-950 text-slate-200 border-emerald-900/60 shadow-lg"
+          )}>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-cyan-300">
+                  DIAGNÓSTICO TEMPORÁRIO DSP (5 Hz)
+                </span>
+              </div>
+              <button
+                onClick={() => setShowDiagPanel(prev => !prev)}
+                className="flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                title={showDiagPanel ? "Recolher painel de diagnóstico" : "Expandir painel de diagnóstico"}
+              >
+                <span>{showDiagPanel ? 'Ocultar' : 'Ver Dados'}</span>
+                {showDiagPanel ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+            </div>
+
+            {showDiagPanel && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2 pt-2.5 text-[10px] font-mono">
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Bruto (YIN):</span>
+                  <span className="font-bold text-white text-xs">
+                    {diagMetrics?.rawPitch ? `${diagMetrics.rawPitch.toFixed(2)} Hz` : '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Mediana (5 am.):</span>
+                  <span className="font-bold text-cyan-300 text-xs">
+                    {diagMetrics?.medianPitch ? `${diagMetrics.medianPitch.toFixed(2)} Hz` : '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Suavizada (EMA):</span>
+                  <span className="font-bold text-emerald-300 text-xs">
+                    {diagMetrics?.smoothedFreq ? `${diagMetrics.smoothedFreq.toFixed(2)} Hz` : '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Nota Candidata:</span>
+                  <span className="font-bold text-amber-300 text-xs">
+                    {diagMetrics?.candidateKey || '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Nota Confirmada:</span>
+                  <span className="font-bold text-emerald-400 text-xs">
+                    {diagMetrics?.confirmedKey || '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Freq. Alvo Ref:</span>
+                  <span className="font-bold text-white text-xs">
+                    {diagMetrics?.targetFreq ? `${diagMetrics.targetFreq.toFixed(2)} Hz` : '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Cents p/ Agulha:</span>
+                  <span className={cn("font-black text-xs", diagMetrics?.cents !== null && diagMetrics?.cents !== undefined ? (Math.abs(diagMetrics.cents) <= 4 ? "text-emerald-400" : "text-amber-300") : "text-slate-500")}>
+                    {diagMetrics?.cents !== null && diagMetrics?.cents !== undefined
+                      ? `${diagMetrics.cents > 0 ? `+${diagMetrics.cents}` : diagMetrics.cents} cents`
+                      : '--'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">RMS do Áudio:</span>
+                  <span className="font-bold text-slate-200 text-xs">
+                    {diagMetrics?.rms !== undefined ? diagMetrics.rms.toFixed(5) : '0.00000'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] uppercase tracking-tighter">Confiança YIN:</span>
+                  <span className="font-bold text-cyan-300 text-xs">
+                    {diagMetrics?.confidence !== undefined ? `${(diagMetrics.confidence * 100).toFixed(1)}%` : '--'}
+                  </span>
+                </div>
+
+                <div className="col-span-2 sm:col-span-3 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[9px] text-slate-400">
+                  <span>Tempo DSP: <strong className="text-white">{diagMetrics?.dspTimeMs !== undefined ? `${diagMetrics.dspTimeMs.toFixed(2)} ms` : '--'}</strong></span>
+                  <span>Captura: <strong className={isListening ? "text-emerald-400" : "text-slate-500"}>{isListening ? "Ativa (5 Hz)" : "Pausada"}</strong></span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Bottom Section: Diapasão Toggle + Heavy Metallic 3D Stomp Switch */}
           <div className={cn(
