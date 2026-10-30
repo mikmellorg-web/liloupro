@@ -15622,16 +15622,65 @@ function CalendarView({
     openScaleWhatsAppShare(message, "Escala copiada! Abrindo WhatsApp...");
   };
 
+  const getScaleReferenceMonth = (targetServicesList: any[]) => {
+    let referenceDate = new Date();
+    let targetMonthKey = '';
+
+    if (filterDate) {
+      const parts = filterDate.split('-');
+      if (parts.length >= 2) {
+        targetMonthKey = `${parts[0]}-${parts[1]}`;
+        const pDate = new Date(`${filterDate}T12:00:00`);
+        if (!isNaN(pDate.getTime())) referenceDate = pDate;
+      }
+    }
+
+    if (!targetMonthKey && targetServicesList.length > 0) {
+      // Conta a frequência de cada mês entre os cultos da escala para identificar o mês real da escala
+      const monthCounts: Record<string, { count: number; date: Date }> = {};
+      targetServicesList.forEach(s => {
+        const d = s.date?.toDate ? s.date.toDate() : new Date(s.date);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (!monthCounts[key]) {
+            monthCounts[key] = { count: 0, date: d };
+          }
+          monthCounts[key].count++;
+        }
+      });
+
+      const sortedEntries = Object.entries(monthCounts).sort((a, b) => b[1].count - a[1].count);
+      if (sortedEntries.length > 0) {
+        targetMonthKey = sortedEntries[0][0];
+        referenceDate = sortedEntries[0][1].date;
+      }
+    }
+
+    const rawMonthYear = formatDate(referenceDate, { month: 'long', year: 'numeric' });
+    const monthYear = rawMonthYear ? rawMonthYear.charAt(0).toUpperCase() + rawMonthYear.slice(1) : '';
+
+    return { referenceDate, targetMonthKey, monthYear };
+  };
+
   const generateMonthPDF = () => {
-    if (services.length === 0) return null;
+    const targetServices = (filterTitle || filterDate) && filteredServices.length > 0 ? filteredServices : services;
+    if (targetServices.length === 0) return null;
     
     // Configura a folha como paisagem (landscape)
     const doc = new jsPDF({ orientation: 'landscape' });
-    const now = new Date();
-    const monthYear = formatDate(now, { month: 'long', year: 'numeric' });
+    const { referenceDate, targetMonthKey, monthYear } = getScaleReferenceMonth(targetServices);
+    
+    // Filtra para os cultos correspondentes ao mês de referência da escala
+    const servicesForMonth = targetMonthKey ? targetServices.filter(s => {
+      const d = s.date?.toDate ? s.date.toDate() : new Date(s.date);
+      if (isNaN(d.getTime())) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === targetMonthKey;
+    }) : targetServices;
+
+    const exportServices = servicesForMonth.length > 0 ? servicesForMonth : targetServices;
     
     // Ordena os cultos por data
-    const sortedServices = [...services].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedServices = [...exportServices].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     doc.setFontSize(22);
     doc.setTextColor(43, 169, 184); // cor da marca
@@ -15733,9 +15782,17 @@ function CalendarView({
   };
 
   const shareMonthWhatsApp = async () => {
-    const now = new Date();
-    const monthYear = formatDate(now, { month: 'long', year: 'numeric' });
-    const sortedServices = [...services].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const targetServices = (filterTitle || filterDate) && filteredServices.length > 0 ? filteredServices : services;
+    const { targetMonthKey, monthYear } = getScaleReferenceMonth(targetServices);
+
+    const servicesForMonth = targetMonthKey ? targetServices.filter(s => {
+      const d = s.date?.toDate ? s.date.toDate() : new Date(s.date);
+      if (isNaN(d.getTime())) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === targetMonthKey;
+    }) : targetServices;
+
+    const exportServices = servicesForMonth.length > 0 ? servicesForMonth : targetServices;
+    const sortedServices = [...exportServices].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     let message = `📢 *ESCALA MENSAL DE LOUVOR - ${monthYear.toUpperCase()}* 📢\n\n`;
 
@@ -17193,6 +17250,16 @@ function MembersView() {
       <div className="grid gap-4">
         {members.map(member => {
           const upcomingSchedule = memberScheduleMap.get(member.id) || (member.uid ? memberScheduleMap.get(member.uid) : undefined);
+          const isCurrentMemberSelf = Boolean(
+            user && (
+              member.id === user.uid ||
+              member.uid === user.uid ||
+              (memberData?.id && member.id === memberData.id) ||
+              (user.email && member.email && member.email.toLowerCase().trim() === user.email.toLowerCase().trim())
+            )
+          );
+          const canEditRoles = isAdmin || isCurrentMemberSelf;
+
           return (
             <Card 
               key={member.id} 
@@ -17286,28 +17353,28 @@ function MembersView() {
                     {member.isAdmin ? "Remover ADM" : "Tornar ADM"}
                   </button>
                 )}
+                {(isAdmin || isCurrentMemberSelf) && (
+                  <button 
+                    onClick={() => startEdit(member)}
+                    className="p-1 px-3 bg-brand/10 text-brand rounded-lg text-[10px] font-bold uppercase hover:bg-brand/20 transition-all border border-brand/20"
+                  >
+                    Editar
+                  </button>
+                )}
                 {isAdmin && (
-                  <>
-                    <button 
-                      onClick={() => startEdit(member)}
-                      className="p-1 px-3 bg-brand/10 text-brand rounded-lg text-[10px] font-bold uppercase hover:bg-brand/20 transition-all border border-brand/20"
-                    >
-                      Editar
-                    </button>
-                    <ConfirmButton 
-                      onConfirm={async () => { 
-                        const memberPath = `members/${member.id}`;
-                        try {
-                          await deleteDoc(doc(db, 'members', member.id));
-                        } catch (error) {
-                          handleFirestoreError(error, OperationType.DELETE, memberPath);
-                        }
-                      }}
-                      className="sm:hidden p-1 px-3 bg-red-500/10 text-red-500 rounded-lg text-[10px] font-bold uppercase border border-red-500/10"
-                    >
-                      Excluir
-                    </ConfirmButton>
-                  </>
+                  <ConfirmButton 
+                    onConfirm={async () => { 
+                      const memberPath = `members/${member.id}`;
+                      try {
+                        await deleteDoc(doc(db, 'members', member.id));
+                      } catch (error) {
+                        handleFirestoreError(error, OperationType.DELETE, memberPath);
+                      }
+                    }}
+                    className="sm:hidden p-1 px-3 bg-red-500/10 text-red-500 rounded-lg text-[10px] font-bold uppercase border border-red-500/10"
+                  >
+                    Excluir
+                  </ConfirmButton>
                 )}
             </div>
 
@@ -17315,14 +17382,15 @@ function MembersView() {
               {rolesList.map(role => (
                 <button
                   key={role}
-                  onClick={() => isAdmin && toggleRole(member, role)}
+                  onClick={() => canEditRoles && toggleRole(member, role)}
                   className={cn(
                     "px-2 sm:px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase transition-all border tracking-tight",
                     member.roles?.includes(role) 
                       ? "bg-brand border-brand text-white shadow-lg shadow-brand/20" 
                       : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:border-brand/40 hover:text-text-main",
-                    !isAdmin && "cursor-default"
+                    canEditRoles ? "cursor-pointer active:scale-95" : "cursor-default"
                   )}
+                  title={canEditRoles ? `Clique para alternar ${role}` : undefined}
                 >
                   {role}
                 </button>
@@ -17485,7 +17553,14 @@ function MembersView() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1">E-mail de Contato</label>
-                  <Input type="email" placeholder="Ex: joao@email.com" value={newMember.email} onChange={e => setNewMember({...newMember, email: e.target.value})} className="bg-white/5 border-white/10 text-white h-12" />
+                  <Input 
+                    type="email" 
+                    placeholder="Ex: joao@email.com" 
+                    value={newMember.email} 
+                    onChange={e => setNewMember({...newMember, email: e.target.value})} 
+                    readOnly={!isAdmin && Boolean(editingMember)}
+                    className={cn("bg-white/5 border-white/10 text-white h-12", !isAdmin && Boolean(editingMember) && "opacity-75 cursor-not-allowed")} 
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1">WhatsApp</label>
@@ -17494,6 +17569,35 @@ function MembersView() {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1">Data de Nascimento (Opcional)</label>
                   <EasyBirthDatePicker value={newMember.birthDate || ''} onChange={val => setNewMember({...newMember, birthDate: val})} variant="dark" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1">Instrumento / Vocal</label>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {rolesList.map(role => {
+                      const isSelected = newMember.roles?.includes(role);
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => {
+                            const currentRoles = newMember.roles || [];
+                            const updated = currentRoles.includes(role)
+                              ? currentRoles.filter(r => r !== role)
+                              : [...currentRoles, role];
+                            setNewMember({ ...newMember, roles: updated });
+                          }}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase transition-all border tracking-tight cursor-pointer active:scale-95",
+                            isSelected
+                              ? "bg-brand border-brand text-white shadow-md shadow-brand/20"
+                              : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-brand/40"
+                          )}
+                        >
+                          {role}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
