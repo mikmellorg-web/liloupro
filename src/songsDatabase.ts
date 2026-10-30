@@ -142,15 +142,22 @@ Só o Senhor tem o poder`
     };
   }
 
-  // 1. Santos Pra Sempre / Holy Forever
-  if (normalizedTitle.includes("santos pra sempre") || normalizedTitle.includes("santos para sempre") || normalizedTitle.includes("holy forever")) {
+  // 1. Santo Pra Sempre / Santos Pra Sempre / Holy Forever
+  if (
+    normalizedTitle.includes("santo pra sempre") ||
+    normalizedTitle.includes("santos pra sempre") ||
+    normalizedTitle.includes("santo para sempre") ||
+    normalizedTitle.includes("santos para sempre") ||
+    normalizedTitle.includes("holy forever")
+  ) {
+    const isMarine = normalizedArtist.includes("marine") || normalizedTitle.includes("marine");
     return {
-      title: "Santos Pra Sempre",
-      artist: "Gabriel Guedes",
-      key: "C",
+      title: isMarine ? "Santo Pra Sempre" : "Santos Pra Sempre",
+      artist: isMarine ? "Marine Friesen" : "Gabriel Guedes",
+      key: isMarine ? "Db" : "C",
       bpm: 72,
       timeSignature: "4/4",
-      youtube: "https://www.youtube.com/watch?v=Oshg8mX2e1U",
+      youtube: isMarine ? "https://www.youtube.com/watch?v=Ao-vBEhBxr0" : "https://www.youtube.com/watch?v=ijNCc7ICCck",
       chords: `[Intro]
 C  C4  C  C4
 

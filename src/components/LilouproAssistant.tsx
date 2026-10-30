@@ -33,8 +33,8 @@ export const LILOU_OFFICIAL_VOICE_CONFIG = {
   voiceName: 'Puck' as const,
   gender: 'male' as const,
   engine: 'gemini-tts' as const,
-  model: 'gemini-3.8-flash-tts' as const,
-  fallbackModel: 'gemini-3.8-flash-lite-tts' as const,
+  model: 'gemini-3.8-flash-lite-tts' as const,
+  fallbackModel: 'gemini-3.8-flash-tts' as const,
   style: 'Voz masculina brasileira jovem, natural, clara, amigável e conversacional',
   mimeType: 'audio/wav' as const,
 } as const;
@@ -343,6 +343,15 @@ export function LilouproAssistant({
     }
   });
 
+  // Estado para armazenar payload de áudio caso a reprodução automática seja bloqueada pelo navegador móvel (NotAllowedError)
+  const [blockedAudioPayload, setBlockedAudioPayload] = useState<{
+    text: string;
+    audioBase64: string;
+    id: string;
+  } | null>(null);
+
+  const primeAudioRef = useRef<(() => void) | null>(null);
+
   // Retractable floating button state (can dock to lateral edge)
   const [isRetracted, setIsRetracted] = useState<boolean>(() => {
     try {
@@ -381,15 +390,16 @@ export function LilouproAssistant({
     };
 
     const handleCustomVoiceOpen = () => {
+      // Pré-desbloqueia o elemento de áudio no contexto síncrono do gesto do usuário
+      primeAudioRef.current?.();
       setIsOpen(true);
       setIsRetracted(false);
       try {
         localStorage.setItem('liloupro_assistant_retracted', 'false');
       } catch {}
-      // Inicia a escuta visual e transcrição instantânea no painel
-      setTimeout(() => {
-        startListening();
-      }, 750);
+      // Inicia a escuta visual e transcrição imediatamente na mesma pilha de interação, preservando user activation
+      isManualMicSessionActiveRef.current = true;
+      startListeningRef.current?.();
     };
 
     window.addEventListener('liloupro:open-assistant', handleCustomOpen);
@@ -534,6 +544,10 @@ export function LilouproAssistant({
 
   // Audio player ref for high-fidelity Gemini TTS male voice (Voz Oficial Puck)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Elemento de áudio persistente e pré-desbloqueado no gesto do usuário para conformidade de autoplay mobile
+  const unlockedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const currentSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const ttsClientCacheRef = useRef<Map<string, string>>(new Map());
   const prefetchedUserNameRef = useRef<string>('');
   const prefetchingUserNameRef = useRef<string>('');
@@ -713,6 +727,58 @@ export function LilouproAssistant({
   }, [setPlayerAudioPlaying]);
 
   /**
+   * Desbloqueio e pré-ativação de áudio para conformidade com a política de autoplay
+   * em navegadores móveis (Safari no iOS e Chrome no Android).
+   * Executado de forma síncrona dentro da pilha do gesto do usuário (toque no microfone,
+   * envio de texto ou abertura de voz), garantindo que a reprodução subsequente da resposta
+   * recebida assincronamente da API /api/assistant/tts não seja barrada por NotAllowedError.
+   */
+  const primeAudio = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new AudioCtx();
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume().catch(() => {});
+        }
+      }
+    } catch {}
+
+    try {
+      if (!unlockedAudioRef.current) {
+        const audio = new Audio();
+        // 1 sample silent WAV (formato RIFF padrão)
+        audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        audio.volume = 1.0;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          }).catch(() => {});
+        }
+        unlockedAudioRef.current = audio;
+      } else {
+        const audio = unlockedAudioRef.current;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn("[LiLou Voice]: Falha ao pré-ativar áudio:", err);
+    }
+  }, []);
+
+  primeAudioRef.current = primeAudio;
+
+  /**
    * Função oficial de reprodução vocal do LiLou.
    * Utiliza exclusivamente o motor Gemini TTS com a voz de estúdio 'Puck'.
    * 
@@ -731,7 +797,7 @@ export function LilouproAssistant({
           if (isManualMicSessionActiveRef.current && !isSpeakingRef.current && !isListeningRef.current && !isPlayerAudioPlayingRef.current) {
             startListeningRef.current?.();
           }
-        }, 150);
+        }, 250);
       }
     };
 
@@ -740,9 +806,18 @@ export function LilouproAssistant({
       return;
     }
 
-    // Cancela qualquer reprodução em andamento imediatamente
+    // Cancela qualquer reprodução em andamento imediatamente e desanexa listeners
+    if (currentSourceNodeRef.current) {
+      try {
+        currentSourceNodeRef.current.stop();
+        currentSourceNodeRef.current.disconnect();
+      } catch {}
+      currentSourceNodeRef.current = null;
+    }
     if (currentAudioRef.current) {
       try {
+        currentAudioRef.current.onended = null;
+        currentAudioRef.current.onerror = null;
         currentAudioRef.current.pause();
         currentAudioRef.current.currentTime = 0;
       } catch {}
@@ -771,24 +846,126 @@ export function LilouproAssistant({
     // eliminando a janela cega contra ativações indevidas de SpeechRecognition
     isSpeakingRef.current = true;
 
-    const attachAndPlay = (audio: HTMLAudioElement) => {
+    // Isola e interrompe o microfone durante a fala para impedir que o áudio
+    // emitido pelo alto-falante do dispositivo seja capturado pelo microfone e interrompa a si mesmo
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    isListeningRef.current = false;
+
+    const attachAndPlay = (audio: HTMLAudioElement, text: string, audioBase64: string) => {
+      // 1. Prioriza reprodução direta via Web Audio API (imune a restrições de autoplay de HTMLMediaElement em iOS/Android)
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new AudioCtx();
+          }
+          const ctx = audioCtxRef.current;
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+
+          const binary = window.atob(audioBase64);
+          const len = binary.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+
+          ctx.decodeAudioData(
+            bytes.buffer.slice(0),
+            (audioBuffer) => {
+              if (currentSourceNodeRef.current) {
+                try {
+                  currentSourceNodeRef.current.stop();
+                  currentSourceNodeRef.current.disconnect();
+                } catch {}
+                currentSourceNodeRef.current = null;
+              }
+
+              const source = ctx.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(ctx.destination);
+              currentSourceNodeRef.current = source;
+              isSpeakingRef.current = true;
+              setBlockedAudioPayload(null);
+
+              source.onended = () => {
+                currentSourceNodeRef.current = null;
+                finishSpeechAndResume();
+              };
+
+              source.start(0);
+            },
+            () => {
+              // Se a decodificação Web Audio falhar, usa HTML Audio
+              playViaHtmlAudio(audio, text, audioBase64);
+            }
+          );
+          return;
+        }
+      } catch (err) {
+        console.warn("[LiLou Voice] Web Audio error:", err);
+      }
+
+      playViaHtmlAudio(audio, text, audioBase64);
+    };
+
+    const playViaHtmlAudio = (audio: HTMLAudioElement, text: string, audioBase64: string) => {
       currentAudioRef.current = audio;
       isSpeakingRef.current = true;
+      setBlockedAudioPayload(null);
+
       audio.onended = () => {
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null;
+        }
         finishSpeechAndResume();
       };
-      audio.play().catch((err) => {
-        console.warn("[LiLou Voice]: Reprodução de áudio:", err);
+
+      audio.onerror = (e) => {
+        console.warn("[LiLou Voice]: Erro na reprodução de áudio:", e);
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null;
+        }
         finishSpeechAndResume();
-      });
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err: any) => {
+          console.warn("[LiLou Voice]: Reprodução automática bloqueada pelo navegador:", err);
+          setBlockedAudioPayload({
+            text,
+            audioBase64,
+            id: Date.now().toString()
+          });
+          if (currentAudioRef.current === audio) {
+            currentAudioRef.current = null;
+          }
+          finishSpeechAndResume();
+        });
+      }
     };
 
     const cacheKey = clean.toLowerCase();
     const cached = ttsClientCacheRef.current.get(cacheKey);
     if (cached) {
       try {
-        const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${cached}`);
-        attachAndPlay(audio);
+        let audio = unlockedAudioRef.current;
+        if (!audio) {
+          audio = new Audio();
+          unlockedAudioRef.current = audio;
+        }
+        audio.src = `data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${cached}`;
+        audio.currentTime = 0;
+        attachAndPlay(audio, clean, cached);
         return;
       } catch (err) {
         console.warn("[LiLou Voice]: Falha ao instanciar áudio cache:", err);
@@ -808,8 +985,14 @@ export function LilouproAssistant({
         const data = await res.json();
         if (data?.audioBase64) {
           ttsClientCacheRef.current.set(cacheKey, data.audioBase64);
-          const audio = new Audio(`data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${data.audioBase64}`);
-          attachAndPlay(audio);
+          let audio = unlockedAudioRef.current;
+          if (!audio) {
+            audio = new Audio();
+            unlockedAudioRef.current = audio;
+          }
+          audio.src = `data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${data.audioBase64}`;
+          audio.currentTime = 0;
+          attachAndPlay(audio, clean, data.audioBase64);
         } else {
           finishSpeechAndResume();
         }
@@ -822,7 +1005,58 @@ export function LilouproAssistant({
       });
   }, [speechSynthesisEnabled]);
 
+  const handlePlayBlockedAudio = useCallback(() => {
+    if (!blockedAudioPayload) return;
+    const { audioBase64 } = blockedAudioPayload;
+    setBlockedAudioPayload(null);
+    primeAudio();
+
+    let audio = unlockedAudioRef.current;
+    if (!audio) {
+      audio = new Audio();
+      unlockedAudioRef.current = audio;
+    }
+    audio.src = `data:${LILOU_OFFICIAL_VOICE_CONFIG.mimeType};base64,${audioBase64}`;
+    audio.currentTime = 0;
+
+    currentAudioRef.current = audio;
+    isSpeakingRef.current = true;
+
+    // Pausa reconhecimento enquanto fala
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    isListeningRef.current = false;
+
+    audio.onended = () => {
+      if (currentAudioRef.current === audio) {
+        currentAudioRef.current = null;
+      }
+      isSpeakingRef.current = false;
+    };
+    audio.onerror = () => {
+      if (currentAudioRef.current === audio) {
+        currentAudioRef.current = null;
+      }
+      isSpeakingRef.current = false;
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn("[LiLou Voice]: Falha ao reproduzir áudio com toque direto:", err);
+        isSpeakingRef.current = false;
+      });
+    }
+  }, [blockedAudioPayload, primeAudio]);
+
   const toggleSpeechSynthesis = () => {
+    primeAudio();
     setSpeechSynthesisEnabled(prev => {
       const next = !prev;
       try {
@@ -831,6 +1065,8 @@ export function LilouproAssistant({
       if (!next) {
         if (currentAudioRef.current) {
           try {
+            currentAudioRef.current.onended = null;
+            currentAudioRef.current.onerror = null;
             currentAudioRef.current.pause();
             currentAudioRef.current.currentTime = 0;
           } catch {}
@@ -847,7 +1083,20 @@ export function LilouproAssistant({
   // Initialize Speech Recognition
   const startListening = () => {
     if (typeof window === 'undefined') return;
-    if (isSpeakingRef.current) return;
+    // Se o usuário explicitamente tocar no microfone enquanto o assistente fala, interrompe a fala para dar a vez ao usuário
+    if (isSpeakingRef.current) {
+      if (currentAudioRef.current) {
+        try {
+          currentAudioRef.current.onended = null;
+          currentAudioRef.current.onerror = null;
+          currentAudioRef.current.pause();
+          currentAudioRef.current.currentTime = 0;
+        } catch {}
+        currentAudioRef.current = null;
+      }
+      isSpeakingRef.current = false;
+    }
+    primeAudio();
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       addMessage({
@@ -913,24 +1162,16 @@ export function LilouproAssistant({
       };
 
       recognition.onresult = (event: any) => {
+        // Se o assistente estiver ativamente falando, descarta completamente o áudio capturado
+        // para evitar que o microfone capture o alto-falante e corte prematuramente a própria resposta
+        if (isSpeakingRef.current) {
+          return;
+        }
+
         // Proteção do player: Se o player estiver ativamente reproduzindo áudio,
         // não interpreta o som como fala ou comando do usuário
         if (isPlayerAudioPlayingRef.current) {
           return;
-        }
-
-        // Se houver áudio do assistente ainda tocando no momento em que a fala do usuário é detectada,
-        // interrompe o áudio imediatamente para priorizar a voz do usuário e evitar que o microfone capture o som do alto-falante.
-        // Nunca descarta a transcrição do usuário por causa de referências residuais de áudio.
-        if (currentAudioRef.current) {
-          const audio = currentAudioRef.current;
-          if (!audio.paused && !audio.ended && audio.currentTime > 0 && audio.currentTime < (audio.duration || Infinity)) {
-            try {
-              audio.pause();
-              audio.currentTime = 0;
-            } catch {}
-          }
-          currentAudioRef.current = null;
         }
 
         if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -1066,6 +1307,7 @@ export function LilouproAssistant({
 
   // Process user input (from speech or text)
   const handleProcessInput = async (rawInput: string) => {
+    primeAudio();
     if (isPlayerAudioPlayingRef.current) {
       return;
     }
@@ -1651,9 +1893,30 @@ export function LilouproAssistant({
       const playlistSongs = getServicePlaylistSongs(targetService, allSongs);
 
       if (!playlistSongs || playlistSongs.length === 0) {
+        if (targetService.playlistUrl) {
+          const synthSong = [{ id: targetService.id || 'service_pl', title: targetService.title || 'Playlist do Culto', youtube: targetService.playlistUrl }];
+          onStartPlaylist?.(synthSong);
+          const replyText = `Iniciando a playlist vinculada do culto **${targetService.title}**!`;
+          const speakText = 'Pronto! A playlist está aberta.';
+          setPlayerAudioPlaying(true);
+          addMessage({
+            id: getUniqueAssistantMsgId('assistant'),
+            sender: 'assistant',
+            text: replyText,
+            timestamp: new Date(),
+            actionLabel: '▶️ Tocar Playlist',
+            actionIcon: <Play size={15} />,
+            onActionClick: () => {
+              onStartPlaylist?.(synthSong);
+            }
+          });
+          speak(speakText);
+          return;
+        }
+
         const allLiturgySongs = getServiceSongs(targetService, allSongs);
         const replyText = allLiturgySongs.length > 0
-          ? `O culto **${targetService.title}** possui ${allLiturgySongs.length} música(s) na liturgia, mas nenhuma possui link do YouTube cadastrado para reprodução. Cadastre os links do YouTube nas músicas para liberar a playlist do culto!`
+          ? `O culto **${targetService.title}** possui ${allLiturgySongs.length} música(s) na liturgia, mas nenhuma possui link do YouTube ou áudio cadastrado. Cadastre os links nas músicas para liberar a playlist do culto!`
           : `O culto **${targetService.title}** ainda não possui músicas vinculadas à liturgia. Acesse a aba **Liturgia** ou **Músicas** para adicionar as músicas do culto.`;
 
         addMessage({
@@ -4046,11 +4309,17 @@ export function LilouproAssistant({
 
   useEffect(() => {
     const handleMicAction = () => {
+      primeAudio();
       // Se qualquer modo de escuta ou microfone estiver ativo, desliga completamente
       const isCurrentlyActive = isListeningRef.current || wakeWordEnabledRef.current || isWakeWordActive || isManualMicSessionActiveRef.current || Boolean(recognitionRef.current);
       if (isCurrentlyActive) {
         turnOffAllListening();
       } else {
+        setIsOpen(true);
+        setIsRetracted(false);
+        try {
+          localStorage.setItem('liloupro_assistant_retracted', 'false');
+        } catch {}
         isManualMicSessionActiveRef.current = true;
         startListening();
       }
@@ -4466,6 +4735,21 @@ export function LilouproAssistant({
                                 <ArrowRight size={13} strokeWidth={3} className="ml-auto" />
                               </button>
                             )}
+                          </div>
+                        )}
+
+                        {/* Acionador explícito caso a reprodução automática seja bloqueada pelo navegador móvel (NotAllowedError) */}
+                        {!isUser && blockedAudioPayload && (index === messages.length - 1 || blockedAudioPayload.id === msg.id) && (
+                          <div className="mt-2.5 pt-2 border-t border-sky-500/20">
+                            <button
+                              type="button"
+                              onClick={handlePlayBlockedAudio}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-sky-500/25 active:scale-95 cursor-pointer min-h-[44px]"
+                              title="Tocar resposta falada do LiLou"
+                            >
+                              <Volume2 size={16} className="text-amber-300 animate-pulse shrink-0" />
+                              <span>🔊 Ouvir Resposta em Áudio</span>
+                            </button>
                           </div>
                         )}
                       </div>

@@ -1181,15 +1181,31 @@ export function resolveSongForLiturgyItem(item: any, allSongs: any[] = []): any 
 }
 
 function parseYoutubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  if (match && match[2] && match[2].length === 11) {
-    return match[2];
-  }
+  if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
+  }
+  
+  const vMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (vMatch && vMatch[1]) {
+    return vMatch[1];
+  }
+
+  const pathMatch = trimmed.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed|shorts|live|v)\/)([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pathMatch[1];
+  }
+
+  return null;
+}
+
+function parseYoutubePlaylistId(url: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const match = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)(?:[&?#]|$)/i);
+  if (match && match[1]) {
+    return match[1];
   }
   return null;
 }
@@ -1872,13 +1888,21 @@ export default function LiturgyView({
               </Button>
             )}
             {selectedService.playlistUrl && (
-              <Button 
-                onClick={() => { window.open(selectedService.playlistUrl, '_blank'); }} 
-                className="bg-white text-[#E60000] hover:bg-white/90 px-6 border border-[#E60000]/20 shadow-md transition-all font-bold"
+              <a 
+                href={selectedService.playlistUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  if (onStartPlaylist && (parseYoutubePlaylistId(selectedService.playlistUrl) || parseYoutubeVideoId(selectedService.playlistUrl))) {
+                    e.preventDefault();
+                    onStartPlaylist([{ id: selectedService.id || 'service_pl', title: selectedService.title || 'Playlist do Culto', youtube: selectedService.playlistUrl }]);
+                  }
+                }}
+                className="inline-flex items-center gap-2 bg-white text-[#E60000] hover:bg-white/90 px-6 py-2.5 rounded-xl border border-[#E60000]/20 shadow-md transition-all font-bold text-sm cursor-pointer"
               >
                 <Youtube size={18} fill="#E60000" />
                 Playlist Externa
-              </Button>
+              </a>
             )}
             {selectedService.liturgy?.length > 0 && (
               <>
@@ -2029,13 +2053,21 @@ export default function LiturgyView({
                       </Button>
                     )}
                     {selectedService.playlistUrl && (
-                      <Button 
-                        onClick={() => { window.open(selectedService.playlistUrl, '_blank'); }} 
-                        className="bg-white text-[#E60000] hover:bg-white/90 text-xs px-5 h-9 border border-[#E60000]/20 shadow-sm transition-all font-bold rounded-full"
+                      <a 
+                        href={selectedService.playlistUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          if (onStartPlaylist && (parseYoutubePlaylistId(selectedService.playlistUrl) || parseYoutubeVideoId(selectedService.playlistUrl))) {
+                            e.preventDefault();
+                            onStartPlaylist([{ id: selectedService.id || 'service_pl', title: selectedService.title || 'Playlist do Culto', youtube: selectedService.playlistUrl }]);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 bg-white text-[#E60000] hover:bg-white/90 text-xs px-5 h-9 border border-[#E60000]/20 shadow-sm transition-all font-bold rounded-full cursor-pointer"
                       >
                         <Youtube size={14} fill="#E60000" className="mr-1" />
                         YouTube
-                      </Button>
+                      </a>
                     )}
                     {selectedService.liturgy?.length > 0 && (
                       <>

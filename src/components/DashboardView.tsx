@@ -1158,15 +1158,31 @@ export function findBestSongMatch<T extends { title: string }>(songs: T[], rawSe
 }
 
 function parseYoutubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  if (match && match[2] && match[2].length === 11) {
-    return match[2];
-  }
+  if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
+  }
+  
+  const vMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (vMatch && vMatch[1]) {
+    return vMatch[1];
+  }
+
+  const pathMatch = trimmed.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed|shorts|live|v)\/)([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pathMatch[1];
+  }
+
+  return null;
+}
+
+function parseYoutubePlaylistId(url: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const match = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)(?:[&?#]|$)/i);
+  if (match && match[1]) {
+    return match[1];
   }
   return null;
 }
@@ -1931,18 +1947,23 @@ export default function DashboardView({
         <div className="flex flex-col items-start xl:items-end gap-1.5 w-full xl:w-auto shrink-0">
           {/* Assistente Liloupro com Apresentação */}
           <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 xl:max-w-2xl shadow-sm">
+            {/* Botão de Voz Principal: Arma a escuta de voz diretamente */}
             <button
               type="button"
               onClick={() => {
                 if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
+                  window.dispatchEvent(new CustomEvent('liloupro:mic-tap'));
                 }
               }}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-sky-400/30 active:scale-95 shrink-0"
-              title="Abrir Assistente Liloupro (Voz e Texto)"
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer border active:scale-95 shrink-0 ${
+                isWakeWordActive || isSoundDetected || isCommandCaptured
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-400/60 ring-2 ring-emerald-400/40 animate-pulse'
+                  : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white border-sky-400/30'
+              }`}
+              title="Ativar escuta de voz da Lilou ('Oi Lilou' ou fale um comando)"
             >
-              <Sparkles size={15} className="text-amber-300 animate-pulse shrink-0" />
-              <span>Assistente 🎙️</span>
+              <Mic size={16} className={isWakeWordActive || isSoundDetected ? "text-amber-300 animate-bounce" : "text-sky-200"} />
+              <span>{isCommandCaptured ? 'Captado!' : isSoundDetected ? 'Ouvindo...' : isWakeWordActive ? 'Lilou na Escuta' : 'Falar Comando 🎙️'}</span>
             </button>
             <div className="text-xs sm:text-sm text-text-muted leading-relaxed space-y-1">
               <p>
@@ -1950,7 +1971,7 @@ export default function DashboardView({
               </p>
               <div className="text-[11px] sm:text-xs text-sky-600 dark:text-sky-400 font-medium flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2 pt-0.5">
                 <span className="inline-flex items-center gap-1 font-bold bg-sky-500/10 dark:bg-sky-400/10 px-1.5 py-0.5 rounded border border-sky-500/20 text-[10px] uppercase tracking-wider shrink-0">💡 Dica</span>
-                <span className="shrink-0">ative a escuta do assistente e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong></span>
+                <span className="shrink-0">toque no mic e diga seu comando ou <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong></span>
                 
                 {/* Microfone Elegante e Compacto MIC ao final da frase */}
                 <button

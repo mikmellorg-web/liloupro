@@ -929,28 +929,16 @@ export function SongDetailView({
     }
   };
 
-  const getYoutubeId = (url: string) => {
-    if (!url) return null;
-    const trimmed = url.trim();
-    if (trimmed.length === 11 && !trimmed.includes('/') && !trimmed.includes('.')) return trimmed;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = trimmed.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
-
   const effectiveYoutubeSrc = useMemo(() => {
-    if (editedSong?.youtube) {
-      const id = getYoutubeId(editedSong.youtube);
+    const rawUrl = editedSong?.youtube || editedSong?.youtubeUrl || editedSong?.videoUrl || editedSong?.link;
+    if (rawUrl) {
+      const id = parseYoutubeVideoId(rawUrl);
       if (id) {
-        return `https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1`;
+        return `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
       }
     }
-    const query = `${editedSong?.title || ''} ${editedSong?.artist || ''}`.trim();
-    if (query) {
-      return `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
-    }
     return null;
-  }, [editedSong?.youtube, editedSong?.title, editedSong?.artist]);
+  }, [editedSong?.youtube, editedSong?.youtubeUrl, editedSong?.videoUrl, editedSong?.link]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPracticePlayer, setShowPracticePlayer] = useState(initialShowPlayer);
@@ -1876,9 +1864,12 @@ export function SongDetailView({
       const sanitizedLyrics = cleanTablatures(editedSong.lyrics || '');
 
       const cleanCategory = sanitizeCategory(editedSong.category);
+      const cleanYoutube = (editedSong.youtube || (editedSong as any).youtubeUrl || '').trim();
       const { initialEdit: _discardInitialEdit, ...dataToSave } = (editedSong as any);
       const finalData = { 
         ...dataToSave,
+        youtube: cleanYoutube,
+        youtubeUrl: cleanYoutube,
         category: cleanCategory || null,
         artistImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         customImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',

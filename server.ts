@@ -4647,8 +4647,8 @@ Diretrizes:
     voiceName: 'Puck' as const,
     gender: 'male' as const,
     engine: 'gemini-tts' as const,
-    model: 'gemini-3.8-flash-tts' as const,
-    fallbackModel: 'gemini-3.8-flash-lite-tts' as const,
+    model: 'gemini-3.8-flash-lite-tts' as const,
+    fallbackModel: 'gemini-3.8-flash-tts' as const,
     style: 'Voz masculina brasileira jovem, natural, clara, amigável e conversacional',
     mimeType: 'audio/wav' as const,
   } as const;
@@ -4727,6 +4727,7 @@ Diretrizes:
       // Preserva rigorosamente o modelo oficial Puck do Gemini TTS
       const modelsToTry = [LILOU_OFFICIAL_VOICE_CONFIG.model, LILOU_OFFICIAL_VOICE_CONFIG.fallbackModel];
       let audioBase64: string | undefined;
+      let lastModelError: any = null;
 
       for (const model of modelsToTry) {
         try {
@@ -4758,12 +4759,16 @@ Diretrizes:
           audioBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
           if (audioBase64) break;
         } catch (mErr: any) {
-          console.warn(`[TTS] Model ${model} unavailable:`, mErr?.message?.slice(0, 100));
+          lastModelError = mErr;
+          // Continua para o próximo modelo sem poluir o console caso o fallback atenda
         }
       }
 
-      // Se a síntese ao vivo falhar, não substitui por frase arbitrária ou incompatível
+      // Se todos os modelos falharem, loga e responde 503
       if (!audioBase64) {
+        if (lastModelError) {
+          console.warn('[Assistant TTS] Síntese indisponível em todos os modelos:', lastModelError?.message?.slice(0, 100));
+        }
         return res.status(503).json({ error: "Não foi possível sintetizar a frase solicitada no momento." });
       }
 

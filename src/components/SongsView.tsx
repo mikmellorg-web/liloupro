@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { getArtistImage, ArtistAvatar } from './songsShared';
 import { DEFAULT_LOCAL_SONGS } from '../songsDatabase';
+import { findBestSongMatch } from '../utils/servicePlaylistUtils';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
 import ContextualHelp from './ContextualHelp';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
@@ -370,7 +371,10 @@ export function SongsView({
       rawList = songItems
         .map((item: any) => {
           const sId = item.songId || item.id;
-          const found = songs.find((s) => s.id === sId || s.title?.toLowerCase().trim() === (item.title || item.songTitle || '').toLowerCase().trim());
+          const found = (sId ? songs.find((s) => s.id === sId) : null)
+            || songs.find((s) => s.title?.toLowerCase().trim() === (item.title || item.songTitle || '').toLowerCase().trim())
+            || (item.title ? findBestSongMatch(songs, item.title || item.songTitle) : null);
+
           if (found) {
             return {
               ...found,
@@ -381,7 +385,10 @@ export function SongsView({
               artistImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
               customImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
               tone: item.tone || item.key || found.tone || found.key,
-              category: item.category || getSongCategory(found) || null
+              category: item.category || getSongCategory(found) || null,
+              youtube: found.youtube || found.youtubeUrl || item.youtube || item.youtubeUrl || found.link || found.video,
+              youtubeUrl: found.youtubeUrl || found.youtube || item.youtubeUrl || item.youtube || found.link || found.video,
+              audio: (Array.isArray(item.audio) && item.audio.length > 0) ? item.audio : (found.audio || []),
             };
           }
           if (item.type === 'song' || item.songId) {
@@ -392,7 +399,10 @@ export function SongsView({
               tone: item.tone || item.key || 'C',
               category: item.category || null,
               lyrics: item.lyrics || '',
-              chords: item.chords || ''
+              chords: item.chords || '',
+              youtube: item.youtube || item.youtubeUrl || '',
+              youtubeUrl: item.youtubeUrl || item.youtube || '',
+              audio: item.audio || [],
             };
           }
           return null;

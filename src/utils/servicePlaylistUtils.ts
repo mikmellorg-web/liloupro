@@ -61,15 +61,33 @@ export function findBestSongMatch<T extends { title: string }>(songs: T[], rawSe
 }
 
 export function parseYoutubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  if (match && match[2] && match[2].length === 11) {
-    return match[2];
-  }
+  if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
+  }
+  
+  // 1. Parameter v= anywhere in query string (watch?v=..., watch?feature=shared&v=..., etc.)
+  const vMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (vMatch && vMatch[1]) {
+    return vMatch[1];
+  }
+
+  // 2. Path-based IDs: youtu.be/ID, embed/ID, shorts/ID, live/ID, v/ID
+  const pathMatch = trimmed.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed|shorts|live|v)\/)([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pathMatch[1];
+  }
+
+  return null;
+}
+
+export function parseYoutubePlaylistId(url: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const match = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)(?:[&?#]|$)/i);
+  if (match && match[1]) {
+    return match[1];
   }
   return null;
 }
@@ -80,25 +98,21 @@ export function parseYoutubeVideoId(url: string): string | null {
  * - Non-song liturgy items (reading, prayer, speech, announcements, offering, etc.) are strictly ignored.
  * - Falls back to setlist only when liturgy has no song items.
  */
-export function getServiceSongIds(service: any, allSongs: any[] = []): string[] {
+export function getServiceSongs(service: any, allSongs: any[] = []): any[] {
   if (!service) return [];
-
-  const songIds: string[] = [];
-  const seenIds = new Set<string>();
-
   const liturgy = Array.isArray(service.liturgy) ? service.liturgy : [];
 
   // Filter liturgy for genuine song items only
   const liturgySongItems = liturgy.filter((item: any) => {
     if (!item) return false;
     if (typeof item === 'string') return true;
-    
+
     const type = String(item.type || '').toLowerCase();
     // Strictly exclude non-song liturgy moments
     if (['reading', 'speech', 'prayer', 'announcements', 'announcement', 'offering', 'moment', 'other'].includes(type)) {
       return false;
     }
-    
+
     if (type === 'song' || item.songId) return true;
 
     // Legacy / un-typed item: only treat as a song if it matches an actual song in the database
@@ -111,82 +125,74 @@ export function getServiceSongIds(service: any, allSongs: any[] = []): string[] 
 
   // If liturgy has song items, liturgy is the definitive source of order and songs
   if (liturgySongItems.length > 0) {
-    for (const item of liturgySongItems) {
+    return liturgySongItems.map((item: any, idx: number) => {
       if (typeof item === 'string') {
         const match = allSongs.find(s => s.id === item) || findBestSongMatch(allSongs, item);
-        const matchedId = match ? match.id : item;
-        if (matchedId && !seenIds.has(matchedId)) {
-          seenIds.add(matchedId);
-          songIds.push(matchedId);
-        }
-      } else if (typeof item === 'object') {
-        if (item.songId) {
-          if (!seenIds.has(item.songId)) {
-            seenIds.add(item.songId);
-            songIds.push(item.songId);
-          }
-        } else if (item.title) {
-          const match = findBestSongMatch(allSongs, item.title);
-          if (match && !seenIds.has(match.id)) {
-            seenIds.add(match.id);
-            songIds.push(match.id);
-          } else if (item.id && allSongs.some(s => s.id === item.id) && !seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            songIds.push(item.id);
-          }
-        }
+        return match || { id: item, title: item, artist: '' };
       }
-    }
-    return songIds;
+      const sId = item.songId || item.id;
+      const found = (sId ? allSongs.find(s => s.id === sId) : null)
+        || (item.title ? allSongs.find(s => s.title?.toLowerCase().trim() === item.title?.toLowerCase().trim()) : null)
+        || (item.title ? findBestSongMatch(allSongs, item.title) : null);
+
+      if (found) {
+        return {
+          ...found,
+          ...item,
+          id: found.id || sId || `liturgy-song-${idx}`,
+          title: item.title || item.songTitle || found.title,
+          artist: item.artist || item.songArtist || found.artist,
+          youtube: found.youtube || found.youtubeUrl || item.youtube || item.youtubeUrl || found.link || found.video,
+          youtubeUrl: found.youtubeUrl || found.youtube || item.youtubeUrl || item.youtube || found.link || found.video,
+          audio: (Array.isArray(item.audio) && item.audio.length > 0) ? item.audio : (found.audio || []),
+        };
+      }
+      return {
+        id: sId || `liturgy-song-${idx}`,
+        title: item.title || item.songTitle || 'Música',
+        artist: item.artist || item.songArtist || '',
+        youtube: item.youtube || item.youtubeUrl || '',
+        youtubeUrl: item.youtubeUrl || item.youtube || '',
+        audio: item.audio || [],
+        ...item
+      };
+    });
   }
 
   // Fallback: If no liturgy song items exist, inspect service.setlist
   const setlist = Array.isArray(service.setlist) ? service.setlist : [];
-  for (const item of setlist) {
-    if (!item) continue;
-    if (typeof item === 'string') {
-      const match = allSongs.find(s => s.id === item) || findBestSongMatch(allSongs, item);
-      const matchedId = match ? match.id : item;
-      if (matchedId && !seenIds.has(matchedId)) {
-        seenIds.add(matchedId);
-        songIds.push(matchedId);
-      }
-    } else if (typeof item === 'object') {
-      if (item.songId && !seenIds.has(item.songId)) {
-        seenIds.add(item.songId);
-        songIds.push(item.songId);
-      } else if (item.id && !seenIds.has(item.id)) {
-        seenIds.add(item.id);
-        songIds.push(item.id);
-      } else if (item.title) {
-        const match = findBestSongMatch(allSongs, item.title);
-        if (match && !seenIds.has(match.id)) {
-          seenIds.add(match.id);
-          songIds.push(match.id);
-        }
-      }
-    }
+  if (setlist.length > 0) {
+    return setlist.map((idOrItem: any, idx: number) => {
+      const sId = typeof idOrItem === 'string' ? idOrItem : idOrItem.songId || idOrItem.id;
+      const match = allSongs.find(s => s.id === sId) || (typeof idOrItem === 'string' ? findBestSongMatch(allSongs, idOrItem) : null);
+      return match || (typeof idOrItem === 'object' ? idOrItem : { id: sId || `setlist-${idx}`, title: String(idOrItem), artist: '' });
+    }).filter(Boolean);
   }
 
-  return songIds;
+  return [];
 }
 
 /**
- * Resolves full song objects in service order.
+ * Extracts all unique, ordered song IDs linked to a service.
  */
-export function getServiceSongs(service: any, allSongs: any[] = []): any[] {
-  const ids = getServiceSongIds(service, allSongs);
-  return ids
-    .map(id => allSongs.find(s => s.id === id))
-    .filter(Boolean);
+export function getServiceSongIds(service: any, allSongs: any[] = []): string[] {
+  const songs = getServiceSongs(service, allSongs);
+  const seenIds = new Set<string>();
+  const ids: string[] = [];
+  for (const s of songs) {
+    if (s && s.id && !seenIds.has(s.id)) {
+      seenIds.add(s.id);
+      ids.push(s.id);
+    }
+  }
+  return ids;
 }
 
 /**
- * Returns playable songs for in-app or external playlist with valid YouTube videos.
+ * Returns songs for in-app or external playlist in exact service liturgy order.
  */
 export function getServicePlaylistSongs(service: any, allSongs: any[] = []): any[] {
-  const serviceSongs = getServiceSongs(service, allSongs);
-  return serviceSongs.filter(s => s && s.youtube && parseYoutubeVideoId(s.youtube));
+  return getServiceSongs(service, allSongs);
 }
 
 /**

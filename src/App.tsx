@@ -69,7 +69,7 @@ import { LilouproAssistant } from './components/LilouproAssistant';
 import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { StudyMetronomeModal } from './components/StudyMetronomeModal';
 import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
-import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl } from './utils/servicePlaylistUtils';
+import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl, parseYoutubeVideoId, parseYoutubePlaylistId } from './utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
@@ -1182,19 +1182,6 @@ export function findBestSongMatch<T extends { title: string }>(songs: T[], rawSe
   return bestSong;
 }
 
-function parseYoutubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  if (match && match[2] && match[2].length === 11) {
-    return match[2];
-  }
-  const trimmed = url.trim();
-  if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
-    return trimmed;
-  }
-  return null;
-}
 
 // --- Main App Logic ---
 
@@ -2650,8 +2637,13 @@ function MainContent() {
   const handleToggleAudioGuide = (url: string) => {
     if (!globalAudioGuideRef.current) {
       globalAudioGuideRef.current = new Audio();
-      globalAudioGuideRef.current.onended = () => setActiveAudioGuideUrl(null);
     }
+    globalAudioGuideRef.current.onended = () => {
+      setActiveAudioGuideUrl(null);
+      if (activePlaylistSongs && activePlaylistSongs.length > 1) {
+        setCurrentPlaylistIndex(prev => (prev < activePlaylistSongs.length - 1 ? prev + 1 : prev));
+      }
+    };
     const audio = globalAudioGuideRef.current;
     if (activeAudioGuideUrl === url) {
       audio.pause();
@@ -2670,6 +2662,34 @@ function MainContent() {
     setActiveAudioGuideUrl(null);
   };
 
+  // Avanço automático na playlist do culto quando o vídeo do YouTube termina
+  useEffect(() => {
+    if (!isPlaylistPlayerOpen || !activePlaylistSongs || activePlaylistSongs.length <= 1) return;
+
+    const handleYouTubeMessage = (event: MessageEvent) => {
+      try {
+        if (!event.data) return;
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        // O player do YouTube emite { event: 'onStateChange', info: 0 } quando o vídeo termina (0 = YT.PlayerState.ENDED)
+        if (data && (data.event === 'onStateChange' || typeof data.info !== 'undefined')) {
+          if (data.info === 0) {
+            setCurrentPlaylistIndex(prev => {
+              if (activePlaylistSongs && prev < activePlaylistSongs.length - 1) {
+                return prev + 1;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch {
+        // Ignora mensagens de outras fontes que não são JSON do YouTube
+      }
+    };
+
+    window.addEventListener('message', handleYouTubeMessage);
+    return () => window.removeEventListener('message', handleYouTubeMessage);
+  }, [isPlaylistPlayerOpen, activePlaylistSongs]);
+
   const handleClosePlayer = () => {
     handleStopAudioGuide();
     setIsPlaylistPlayerOpen(false);
@@ -2680,23 +2700,30 @@ function MainContent() {
     if (!songs || songs.length === 0) return '';
     const currentSong = songs[index];
     if (!currentSong) return '';
-    const currentId = parseYoutubeVideoId(currentSong.youtube);
-    
-    // Get all valid YouTube video IDs
-    const allIds = songs.map(s => parseYoutubeVideoId(s.youtube)).filter(Boolean);
-    
+
+    // Prioridade máxima: buscar a música atualizada em tempo real em allSongs (para refletir edições feitas pelo usuário)
+    const matchInAll = (currentSong.id ? allSongs.find(s => s.id === currentSong.id) : null)
+      || (currentSong.title ? allSongs.find(s => s.title?.toLowerCase().trim() === currentSong.title?.toLowerCase().trim()) : null)
+      || (currentSong.title ? findBestSongMatch(allSongs, currentSong.title) : null);
+
+    // Prioriza o link atualizado pelo usuário no cadastro de músicas (matchInAll), seguido do link presente no item
+    const rawYt = matchInAll?.youtube || matchInAll?.youtubeUrl || matchInAll?.videoUrl || matchInAll?.link || matchInAll?.video
+      || currentSong.youtube || currentSong.youtubeUrl || currentSong.videoUrl || currentSong.link || currentSong.video;
+
+    const currentId = parseYoutubeVideoId(rawYt);
+
+    const servicePlaylistId = activeLiturgyService?.playlistUrl ? parseYoutubePlaylistId(activeLiturgyService.playlistUrl) : null;
+
     if (currentId) {
-      if (allIds.length > 1) {
-        return `https://www.youtube.com/embed/${currentId}?playlist=${allIds.join(',')}&autoplay=1&enablejsapi=1`;
-      }
-      return `https://www.youtube.com/embed/${currentId}?autoplay=1&enablejsapi=1`;
+      // Importante: NÃO incluir &playlist= com IDs de outras músicas aqui.
+      // A inclusão de &playlist= fazia o player do YouTube ignorar o currentId e tocar a primeira música da fila ou reiniciar em loop
+      return `https://www.youtube.com/embed/${currentId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
     }
 
-    // Fallback: se não tiver link direto do YouTube, busca pelo nome e artista
-    const query = `${currentSong.title || ''} ${currentSong.artist || ''}`.trim();
-    if (query) {
-      return `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    if (servicePlaylistId) {
+      return `https://www.youtube.com/embed/videoseries?list=${servicePlaylistId}&autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
     }
+
     return '';
   };
 
@@ -2850,18 +2877,37 @@ function MainContent() {
             <div className="w-full aspect-video bg-black relative border-b border-white/5 shrink-0">
               {embedUrl ? (
                 <iframe
+                  key={currentSong?.id ? `${currentSong.id}-${currentPlaylistIndex}` : `embed-${currentPlaylistIndex}`}
                   width="100%"
                   height="100%"
                   src={embedUrl}
                   title="LiLouPro Player"
                   frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope"
                   allowFullScreen
                   className="absolute inset-0 w-full h-full"
                 ></iframe>
+              ) : currentSong.audio && currentSong.audio.length > 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2.5">
+                  <div className="w-10 h-10 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand">
+                    <Music2 size={20} />
+                  </div>
+                  <div className="min-w-0 max-w-[260px]">
+                    <p className="text-[10px] font-black uppercase text-brand tracking-wider">Áudio da Música</p>
+                    <p className="text-xs font-bold text-zinc-100 truncate mt-0.5">{currentSong.audio[0].name}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAudioGuide(currentSong.audio[0].url)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand hover:brightness-110 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                  >
+                    {activeAudioGuideUrl === currentSong.audio[0].url ? <Pause size={14} /> : <Play size={14} className="fill-white" />}
+                    <span>{activeAudioGuideUrl === currentSong.audio[0].url ? 'Pausar Áudio' : 'Ouvir Guia de Áudio'}</span>
+                  </button>
+                </div>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2">
-                  <p className="text-xs text-zinc-400 italic">Vídeo indisponível para este louvor.</p>
+                  <p className="text-xs text-zinc-400 italic">Vídeo do YouTube indisponível para este louvor.</p>
                   <a
                     href={`https://www.youtube.com/results?search_query=${encodeURIComponent((currentSong.title || '') + ' ' + (currentSong.artist || ''))}`}
                     target="_blank"

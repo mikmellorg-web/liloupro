@@ -2068,15 +2068,33 @@ export function findBestSongMatch<T extends { title: string }>(songs: T[], rawSe
 }
 
 export function parseYoutubeVideoId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  if (match && match[2] && match[2].length === 11) {
-    return match[2];
-  }
+  if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (trimmed.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
+  }
+  
+  // 1. Parameter v= anywhere in query string (watch?v=..., watch?feature=shared&v=..., etc.)
+  const vMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (vMatch && vMatch[1]) {
+    return vMatch[1];
+  }
+
+  // 2. Path-based IDs: youtu.be/ID, embed/ID, shorts/ID, live/ID, v/ID
+  const pathMatch = trimmed.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed|shorts|live|v)\/)([a-zA-Z0-9_-]{11})(?:[&?#]|$)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pathMatch[1];
+  }
+
+  return null;
+}
+
+export function parseYoutubePlaylistId(url: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const match = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)(?:[&?#]|$)/i);
+  if (match && match[1]) {
+    return match[1];
   }
   return null;
 }
