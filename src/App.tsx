@@ -18673,7 +18673,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                    variant="secondary"
                    onClick={() => {
                      try {
-                       localStorage.setItem('liloupro_assistant_retracted', 'false');
+                       localStorage.setItem('liloupro_assistant_retracted_v2', 'true');
                        window.dispatchEvent(new CustomEvent('liloupro:reset-assistant-pos'));
                        alert('Posição do botão do assistente restaurada com sucesso!');
                      } catch {}

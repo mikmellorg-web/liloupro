@@ -352,13 +352,13 @@ export function LilouproAssistant({
 
   const primeAudioRef = useRef<(() => void) | null>(null);
 
-  // Retractable floating button state (can dock to lateral edge)
+  // Retractable floating button state (can dock to lateral edge) - Por padrão sempre recolhido
   const [isRetracted, setIsRetracted] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('liloupro_assistant_retracted');
-      return saved !== null ? saved === 'true' : false;
+      const saved = localStorage.getItem('liloupro_assistant_retracted_v2');
+      return saved !== null ? saved === 'true' : true;
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -366,7 +366,7 @@ export function LilouproAssistant({
     setIsRetracted(prev => {
       const next = val !== undefined ? val : !prev;
       try {
-        localStorage.setItem('liloupro_assistant_retracted', String(next));
+        localStorage.setItem('liloupro_assistant_retracted_v2', String(next));
       } catch {}
       return next;
     });
@@ -376,16 +376,12 @@ export function LilouproAssistant({
   useEffect(() => {
     const handleCustomOpen = () => {
       setIsOpen(true);
-      setIsRetracted(false);
-      try {
-        localStorage.setItem('liloupro_assistant_retracted', 'false');
-      } catch {}
     };
 
     const handleResetPos = () => {
-      setIsRetracted(false);
+      setIsRetracted(true);
       try {
-        localStorage.setItem('liloupro_assistant_retracted', 'false');
+        localStorage.setItem('liloupro_assistant_retracted_v2', 'true');
       } catch {}
     };
 
@@ -393,10 +389,6 @@ export function LilouproAssistant({
       // Pré-desbloqueia o elemento de áudio no contexto síncrono do gesto do usuário
       primeAudioRef.current?.();
       setIsOpen(true);
-      setIsRetracted(false);
-      try {
-        localStorage.setItem('liloupro_assistant_retracted', 'false');
-      } catch {}
       // Inicia a escuta visual e transcrição imediatamente na mesma pilha de interação, preservando user activation
       isManualMicSessionActiveRef.current = true;
       startListeningRef.current?.();
@@ -1240,7 +1232,6 @@ export function LilouproAssistant({
         // abre o painel do assistente para oferecer botões rápidos e campo de texto direto
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
           setIsOpen(true);
-          setIsRetracted(false);
           addMessage({
             id: getUniqueAssistantMsgId('assistant'),
             sender: 'assistant',
@@ -3943,7 +3934,6 @@ export function LilouproAssistant({
 
     if (!isOpenRef.current) {
       setIsOpen(true);
-      setIsRetracted(false);
     }
 
     const greetingSpoken = getRandomGreeting(userFirstName);
@@ -4316,10 +4306,6 @@ export function LilouproAssistant({
         turnOffAllListening();
       } else {
         setIsOpen(true);
-        setIsRetracted(false);
-        try {
-          localStorage.setItem('liloupro_assistant_retracted', 'false');
-        } catch {}
         isManualMicSessionActiveRef.current = true;
         startListening();
       }
