@@ -2135,6 +2135,9 @@ function MainContent() {
         const updated = filteredSongs.find(s => s.id === prev.id);
         return updated || prev;
       });
+    }, (error) => {
+      if (error?.message?.includes('CANCELLED') || error?.message?.includes('idle stream')) return;
+      console.warn('[Songs snapshot]:', error);
     });
     return unsub;
   }, [user, userChurchId]);
@@ -15113,6 +15116,9 @@ function CalendarView({
   useEffect(() => {
     return onSnapshot(collection(db, 'songs'), (snap) => {
       setAllSongs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      if (error?.message?.includes('CANCELLED') || error?.message?.includes('idle stream')) return;
+      console.warn('[Calendar songs snapshot]:', error);
     });
   }, []);
 

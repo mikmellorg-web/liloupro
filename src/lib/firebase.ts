@@ -12,10 +12,32 @@ import {
 import { 
   initializeFirestore, 
   persistentLocalCache, 
-  persistentMultipleTabManager 
+  persistentMultipleTabManager,
+  setLogLevel
 } from 'firebase/firestore';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Suppress Firestore verbose internal transport and idle stream disconnect logs
+try {
+  setLogLevel('silent');
+} catch {}
+
+if (typeof window !== 'undefined') {
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    const msg = typeof args[0] === 'string' ? args[0] : '';
+    // Benign Firestore connection housekeeping when no targets are active
+    if (
+      msg.includes('Disconnecting idle stream') ||
+      msg.includes('Timed out waiting for new targets') ||
+      (msg.includes('@firebase/firestore') && msg.includes('CANCELLED'))
+    ) {
+      return;
+    }
+    originalConsoleError.apply(console, args);
+  };
+}
 
 const app = initializeApp(firebaseConfig);
 
