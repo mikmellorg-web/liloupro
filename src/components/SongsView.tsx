@@ -176,6 +176,7 @@ export function SongsView({
 }: SongsViewProps) {
   const { churchData, isAdmin, user } = useAuth();
   const churchId = churchData?.id || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const isLight = theme === 'light' || (typeof document !== 'undefined' && document.documentElement.classList.contains('light'));
 
   // Lista de músicas principal
   const [songs, setSongs] = useState<any[]>(() => {
@@ -1048,13 +1049,13 @@ export function SongsView({
   }, [songs, searchQuery, selectedArtist, selectedCategory, showOnlyFavorites, favoriteIds, sortBy]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#080d1a] text-slate-100 px-4 sm:px-8 py-6">
+    <div className={`flex-1 flex flex-col min-h-screen ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-[#080d1a] text-slate-100'} px-4 sm:px-8 py-6`}>
       {/* Título e Subtítulo Centralizados */}
       <div className="text-center max-w-2xl mx-auto mb-4">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+        <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
           Repertório Musical
         </h1>
-        <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
+        <p className={`text-xs sm:text-sm font-medium mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
           Gerencie letras, cifras e transposição.
         </p>
 
@@ -1160,36 +1161,36 @@ export function SongsView({
       {/* ============================================================== */}
       {showOnlyLiturgy ? (
         <div className="max-w-5xl mx-auto w-full space-y-4 flex-1 pb-16">
-          {/* Card Azul de Cabeçalho do Culto */}
-          <div className="bg-[#0b1633] border border-blue-900/60 rounded-3xl p-5 sm:p-7 shadow-xl relative overflow-hidden">
+          {/* Card de Cabeçalho do Culto */}
+          <div className={`${isLight ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5' : 'bg-[#0b1633] border-blue-900/60 shadow-xl'} border rounded-3xl p-5 sm:p-7 relative overflow-hidden`}>
             {/* Ícone de música estilizado no canto superior direito */}
-            <div className="absolute top-5 right-5 sm:top-7 sm:right-7 w-12 h-12 rounded-full bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400">
+            <div className={`absolute top-5 right-5 sm:top-7 sm:right-7 w-12 h-12 rounded-full ${isLight ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-blue-950/80 border-blue-800/60 text-blue-400'} border flex items-center justify-center`}>
               <Music size={22} />
             </div>
 
             <div className="pr-14">
               <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-blue-400">
+                <span className={`text-[11px] font-black uppercase tracking-widest ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
                   Próximo Culto
                 </span>
                 {orderedLiturgySongs.length === 0 ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isLight ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} border animate-pulse`}>
                     <Clock size={11} />
                     <span>Aguardando definição das músicas</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isLight ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'} border`}>
                     <Sparkles size={11} />
                     <span>Liturgia Definida ({orderedLiturgySongs.length} músicas)</span>
                   </span>
                 )}
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
                 {currentService?.title || currentService?.name || 'Culto de Celebração'}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 font-semibold mt-1 flex items-center gap-2">
-                <Calendar size={14} className="text-blue-400 shrink-0" />
+              <p className={`text-xs sm:text-sm font-semibold mt-1 flex items-center gap-2 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                <Calendar size={14} className={isLight ? 'text-blue-600 shrink-0' : 'text-blue-400 shrink-0'} />
                 <span>{formatServiceDateTime(currentService?.date, currentService?.time)}</span>
               </p>
             </div>
@@ -1204,11 +1205,11 @@ export function SongsView({
                 className={`px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
                   orderedLiturgySongs.length > 0
                     ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
-                    : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60'
+                    : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
                 }`}
                 title={orderedLiturgySongs.length === 0 ? "Aguardando definição das músicas para liberar a playlist" : "Tocar playlist do culto"}
               >
-                <Play size={14} className={orderedLiturgySongs.length > 0 ? "fill-white" : "fill-slate-500"} />
+                <Play size={14} className={orderedLiturgySongs.length > 0 ? "fill-white" : (isLight ? "fill-slate-400" : "fill-slate-500")} />
                 <span>PLAYLIST DO CULTO ({orderedLiturgySongs.length})</span>
               </button>
 
@@ -1220,7 +1221,7 @@ export function SongsView({
                 className={`px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
                   orderedLiturgySongs.length > 0
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
-                    : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60'
+                    : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
                 }`}
                 title={orderedLiturgySongs.length === 0 ? "Aguardando definição das músicas para gerar o caderno de cifras" : "Gerar caderno de cifras do culto"}
               >
@@ -1228,7 +1229,7 @@ export function SongsView({
                 <span>CIFRAS DO CULTO</span>
               </button>
 
-              {/* VINCULAR PLAYLIST (YouTube outline/dark) */}
+              {/* VINCULAR PLAYLIST (YouTube) */}
               {orderedLiturgySongs.length > 0 && (
                 <button
                   type="button"
@@ -1236,7 +1237,11 @@ export function SongsView({
                     setPlaylistUrlInput(currentService?.playlistUrl || currentService?.youtubePlaylistUrl || '');
                     setIsPlaylistModalOpen(true);
                   }}
-                  className="px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide bg-[#0d1a3a] hover:bg-[#122452] text-slate-200 border border-slate-700/80 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                  className={`px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide ${
+                    isLight
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                      : 'bg-[#0d1a3a] hover:bg-[#122452] text-slate-200 border-slate-700/80'
+                  } border flex items-center gap-2 transition-all active:scale-95 cursor-pointer`}
                 >
                   <Youtube size={15} className="text-red-500" />
                   <span>+ VINCULAR PLAYLIST</span>
@@ -1331,7 +1336,11 @@ export function SongsView({
                   <div
                     key={`${song.id}-${index}`}
                     onClick={() => onSelectSong(song)}
-                    className="bg-[#121b33]/90 hover:bg-[#162244] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 sm:p-5 flex items-center justify-between transition-all duration-150 cursor-pointer group shadow-sm"
+                    className={`${
+                      isLight 
+                        ? 'bg-white hover:bg-blue-50/40 border-slate-200 hover:border-blue-300 shadow-sm shadow-slate-200/50' 
+                        : 'bg-[#121b33]/90 hover:bg-[#162244] border-slate-800 hover:border-slate-700/80'
+                    } border rounded-2xl p-4 sm:p-5 flex items-center justify-between transition-all duration-150 cursor-pointer group shadow-sm`}
                   >
                     <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
                       {/* Estrela de Favorito */}
@@ -1341,7 +1350,7 @@ export function SongsView({
                           e.stopPropagation();
                           toggleFavorite(song.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-amber-400 transition-colors shrink-0 cursor-pointer"
+                        className={`p-1 ${isLight ? 'text-slate-400 hover:text-amber-500' : 'text-slate-500 hover:text-amber-400'} transition-colors shrink-0 cursor-pointer`}
                         title={isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                       >
                         <Star
@@ -1349,13 +1358,13 @@ export function SongsView({
                           className={
                             isFav
                               ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-500 hover:text-slate-300 stroke-[1.5]'
+                              : `${isLight ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'} stroke-[1.5]`
                           }
                         />
                       </button>
 
                       {/* Thumbnail do Artista */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden shrink-0 bg-slate-800 border border-slate-700/60 shadow-xs flex items-center justify-center">
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden shrink-0 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700/60'} border shadow-xs flex items-center justify-center`}>
                         <ArtistAvatar
                           artist={song.artist}
                           customImageUrl={song.artistImageUrl || song.customImageUrl || song.coverImage}
@@ -1366,19 +1375,25 @@ export function SongsView({
                       {/* Ordem Litúrgica (1ª, 2ª, 3ª...) + Título, Artista e Badge */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 truncate">
-                          <span className="text-base sm:text-lg font-black text-blue-400 shrink-0">
+                          <span className={`text-base sm:text-lg font-black shrink-0 ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
                             {index + 1}ª
                           </span>
-                          <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-blue-400 transition-colors truncate tracking-tight">
+                          <h3 className={`text-base sm:text-lg font-bold truncate tracking-tight transition-colors ${
+                            isLight ? 'text-slate-900 group-hover:text-blue-600' : 'text-white group-hover:text-blue-400'
+                          }`}>
                             {song.title}
                           </h3>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="text-xs sm:text-sm text-slate-300 italic font-medium truncate max-w-[200px] sm:max-w-xs">
+                          <span className={`text-xs sm:text-sm italic font-medium truncate max-w-[200px] sm:max-w-xs ${
+                            isLight ? 'text-slate-600' : 'text-slate-300'
+                          }`}>
                             {song.artist || 'Artista Desconhecido'}
                           </span>
                           {categoryBadge && (
-                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-[#0e162b] border border-slate-700/80 text-slate-200 px-2.5 py-0.5 rounded-md shrink-0">
+                            <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shrink-0 border ${
+                              isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0e162b] border-slate-700/80 text-slate-200'
+                            }`}>
                               {categoryBadge}
                             </span>
                           )}
@@ -1395,9 +1410,13 @@ export function SongsView({
                           disabled={isFirst}
                           onClick={() => handleMoveSongUp(index, song.title)}
                           className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                            isFirst 
-                              ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
-                              : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
+                            isLight
+                              ? (isFirst 
+                                  ? 'opacity-30 border-slate-200 text-slate-400 cursor-not-allowed bg-slate-100' 
+                                  : 'border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 active:scale-95')
+                              : (isFirst 
+                                  ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
+                                  : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95')
                           }`}
                           title="Mover para cima"
                         >
@@ -1410,9 +1429,13 @@ export function SongsView({
                           disabled={isLast}
                           onClick={() => handleMoveSongDown(index, song.title)}
                           className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                            isLast 
-                              ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
-                              : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95'
+                            isLight
+                              ? (isLast 
+                                  ? 'opacity-30 border-slate-200 text-slate-400 cursor-not-allowed bg-slate-100' 
+                                  : 'border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 active:scale-95')
+                              : (isLast 
+                                  ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed bg-slate-900/40' 
+                                  : 'border-slate-800 bg-[#0f172a] hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95')
                           }`}
                           title="Mover para baixo"
                         >
@@ -1423,7 +1446,11 @@ export function SongsView({
                         <button
                           type="button"
                           onClick={() => handleRemoveSongFromLiturgy(index)}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-red-950/60 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer ml-0.5"
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border flex items-center justify-center transition-all active:scale-95 cursor-pointer ml-0.5 ${
+                            isLight 
+                              ? 'border-red-200 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700' 
+                              : 'border-red-950/60 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300'
+                          }`}
                           title="Remover da liturgia deste culto"
                         >
                           <X size={18} />
@@ -1444,20 +1471,24 @@ export function SongsView({
           {/* Barra de Busca e Filtros de Seleção */}
           <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row sm:flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-3 mb-6">
             {/* Campo de Busca por Título ou Artista com Microfone */}
-            <div className="relative flex-1 min-w-[200px] bg-[#101a35]/90 border border-slate-800/90 rounded-2xl flex items-center px-4 py-1.5 focus-within:border-blue-500/80 transition shadow-inner">
-              <Search size={18} className="text-slate-400 mr-2.5 shrink-0" />
+            <div className={`relative flex-1 min-w-[200px] ${
+              isLight 
+                ? 'bg-white border-slate-200 focus-within:border-blue-500 shadow-xs' 
+                : 'bg-[#101a35]/90 border-slate-800/90 focus-within:border-blue-500/80 shadow-inner'
+            } border rounded-2xl flex items-center px-4 py-1.5 transition`}>
+              <Search size={18} className={`${isLight ? 'text-slate-500' : 'text-slate-400'} mr-2.5 shrink-0`} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar por título ou artista..."
-                className="w-full bg-transparent text-sm text-white placeholder-slate-400 focus:outline-none py-2"
+                className={`w-full bg-transparent text-sm ${isLight ? 'text-slate-900 placeholder-slate-400' : 'text-white placeholder-slate-400'} focus:outline-none py-2`}
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="p-1 text-slate-400 hover:text-white transition mr-1 cursor-pointer"
+                  className={`p-1 ${isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-400 hover:text-white'} transition mr-1 cursor-pointer`}
                 >
                   <X size={16} />
                 </button>
@@ -1467,7 +1498,7 @@ export function SongsView({
                 onClick={toggleVoiceSearch}
                 title={isListening ? 'Ouvindo... Clique para pausar busca por voz' : 'Buscar por voz (fale o título ou artista)'}
                 className={`p-1.5 rounded-lg transition cursor-pointer ${
-                  isListening ? 'text-red-500 animate-pulse bg-red-500/10' : 'text-slate-400 hover:text-white'
+                  isListening ? 'text-red-500 animate-pulse bg-red-500/10' : (isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-white')
                 }`}
               >
                 <Mic size={18} />
@@ -1479,7 +1510,11 @@ export function SongsView({
               <select
                 value={selectedArtist}
                 onChange={(e) => setSelectedArtist(e.target.value)}
-                className="w-full lg:w-48 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner min-h-[44px]"
+                className={`w-full lg:w-48 ${
+                  isLight 
+                    ? 'bg-white border-slate-200 text-slate-800 shadow-xs' 
+                    : 'bg-[#101a35]/90 border-slate-800/90 text-slate-200 shadow-inner'
+                } border rounded-2xl px-4 py-3 text-xs sm:text-sm font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition min-h-[44px]`}
               >
                 <option value="all">Todos os Artistas</option>
                 {uniqueArtists.map((artist) => (
@@ -1495,7 +1530,11 @@ export function SongsView({
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full lg:w-48 bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition shadow-inner min-h-[44px]"
+                className={`w-full lg:w-48 ${
+                  isLight 
+                    ? 'bg-white border-slate-200 text-slate-800 shadow-xs' 
+                    : 'bg-[#101a35]/90 border-slate-800/90 text-slate-200 shadow-inner'
+                } border rounded-2xl px-4 py-3 text-xs sm:text-sm font-medium cursor-pointer focus:outline-none focus:border-blue-500 transition min-h-[44px]`}
               >
                 <option value="all">Todas as Categorias</option>
                 {uniqueCategories.map((cat) => (
@@ -1508,21 +1547,25 @@ export function SongsView({
 
             {/* Seletor Compacto: Ordenar por */}
             <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
-              <div className="bg-[#101a35]/90 border border-slate-800/90 rounded-2xl px-3.5 py-2.5 sm:py-3 focus-within:border-blue-500 transition shadow-inner flex items-center gap-2 min-h-[44px]">
-                <label htmlFor="sort-by-select" className="text-xs sm:text-sm font-semibold text-slate-400 shrink-0 whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-                  <ArrowUpDown size={14} className="text-blue-400 shrink-0" />
+              <div className={`${
+                isLight 
+                  ? 'bg-white border-slate-200 text-slate-800 shadow-xs' 
+                  : 'bg-[#101a35]/90 border-slate-800/90 text-slate-200 shadow-inner'
+              } border rounded-2xl px-3.5 py-2.5 sm:py-3 focus-within:border-blue-500 transition flex items-center gap-2 min-h-[44px]`}>
+                <label htmlFor="sort-by-select" className={`text-xs sm:text-sm font-semibold ${isLight ? 'text-slate-600' : 'text-slate-400'} shrink-0 whitespace-nowrap flex items-center gap-1.5 cursor-pointer`}>
+                  <ArrowUpDown size={14} className={`${isLight ? 'text-blue-600' : 'text-blue-400'} shrink-0`} />
                   <span>Ordenar por:</span>
                 </label>
                 <select
                   id="sort-by-select"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SongSortOption)}
-                  className="w-full lg:w-auto bg-transparent text-xs sm:text-sm text-slate-200 font-medium cursor-pointer focus:outline-none pr-1"
+                  className={`w-full lg:w-auto bg-transparent text-xs sm:text-sm ${isLight ? 'text-slate-800' : 'text-slate-200'} font-medium cursor-pointer focus:outline-none pr-1`}
                   aria-label="Ordenar por"
                 >
-                  <option value="recent" className="bg-[#101a35] text-slate-200">Mais recente</option>
-                  <option value="alphabetical" className="bg-[#101a35] text-slate-200">Ordem alfabética</option>
-                  <option value="artist" className="bg-[#101a35] text-slate-200">Artista</option>
+                  <option value="recent" className={isLight ? "bg-white text-slate-800" : "bg-[#101a35] text-slate-200"}>Mais recente</option>
+                  <option value="alphabetical" className={isLight ? "bg-white text-slate-800" : "bg-[#101a35] text-slate-200"}>Ordem alfabética</option>
+                  <option value="artist" className={isLight ? "bg-white text-slate-800" : "bg-[#101a35] text-slate-200"}>Artista</option>
                 </select>
               </div>
             </div>
@@ -1531,14 +1574,14 @@ export function SongsView({
           {/* Lista Vertical de Músicas (Cards Horizontais Empilhados) */}
           <div className="max-w-5xl mx-auto w-full space-y-3 flex-1 pb-16">
             {loading ? (
-              <div className="text-center py-20 text-slate-400 text-sm">
+              <div className={`text-center py-20 ${isLight ? 'text-slate-500' : 'text-slate-400'} text-sm`}>
                 Carregando repertório musical...
               </div>
             ) : filteredAllSongs.length === 0 ? (
-              <div className="text-center py-16 bg-[#101a35]/60 border border-dashed border-slate-800 rounded-2xl p-8 max-w-md mx-auto">
-                <Music size={42} className="mx-auto text-slate-600 mb-3" />
-                <h3 className="text-base font-bold text-white mb-1">Nenhuma música encontrada</h3>
-                <p className="text-xs text-slate-400 mb-5">
+              <div className={`text-center py-16 ${isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#101a35]/60 border-slate-800'} border border-dashed rounded-2xl p-8 max-w-md mx-auto`}>
+                <Music size={42} className={`mx-auto ${isLight ? 'text-slate-400' : 'text-slate-600'} mb-3`} />
+                <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'} mb-1`}>Nenhuma música encontrada</h3>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} mb-5`}>
                   {searchQuery || selectedArtist !== 'all' || selectedCategory !== 'all' || showOnlyFavorites
                     ? 'Tente ajustar os filtros ou limpar os termos de busca.'
                     : 'Cadastre sua primeira música para começar o repertório.'}
@@ -1552,7 +1595,7 @@ export function SongsView({
                     setShowOnlyFavorites(false);
                     setSortBy('recent');
                   }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition"
+                  className={`px-4 py-2 rounded-xl ${isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'} text-xs font-semibold transition cursor-pointer`}
                 >
                   Limpar todos os filtros
                 </button>
@@ -1566,7 +1609,11 @@ export function SongsView({
                   <div
                     key={song.id}
                     onClick={() => onSelectSong(song)}
-                    className="bg-[#121b33]/90 hover:bg-[#162244] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 sm:p-5 flex items-center justify-between transition-all duration-150 cursor-pointer group shadow-sm"
+                    className={`${
+                      isLight 
+                        ? 'bg-white hover:bg-blue-50/40 border-slate-200 hover:border-blue-300 shadow-sm shadow-slate-200/50' 
+                        : 'bg-[#121b33]/90 hover:bg-[#162244] border-slate-800 hover:border-slate-700/80'
+                    } border rounded-2xl p-4 sm:p-5 flex items-center justify-between transition-all duration-150 cursor-pointer group shadow-sm`}
                   >
                     <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
                       {/* Estrela de Favorito */}
@@ -1576,7 +1623,7 @@ export function SongsView({
                           e.stopPropagation();
                           toggleFavorite(song.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-amber-400 transition-colors shrink-0 cursor-pointer"
+                        className={`p-1 ${isLight ? 'text-slate-400 hover:text-amber-500' : 'text-slate-500 hover:text-amber-400'} transition-colors shrink-0 cursor-pointer`}
                         title={isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                       >
                         <Star
@@ -1584,13 +1631,13 @@ export function SongsView({
                           className={
                             isFav
                               ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-500 hover:text-slate-300 stroke-[1.5]'
+                              : `${isLight ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'} stroke-[1.5]`
                           }
                         />
                       </button>
 
                       {/* Thumbnail / Foto do Artista */}
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden shrink-0 bg-slate-800 border border-slate-700/60 shadow-xs flex items-center justify-center">
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden shrink-0 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700/60'} border shadow-xs flex items-center justify-center`}>
                         <ArtistAvatar
                           artist={song.artist}
                           customImageUrl={song.artistImageUrl || song.customImageUrl || song.coverImage}
@@ -1600,15 +1647,21 @@ export function SongsView({
 
                       {/* Título, Artista em Itálico e Categoria Litúrgica */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-blue-400 transition-colors truncate tracking-tight">
+                        <h3 className={`text-base sm:text-lg font-bold truncate tracking-tight transition-colors ${
+                          isLight ? 'text-slate-900 group-hover:text-blue-600' : 'text-white group-hover:text-blue-400'
+                        }`}>
                           {song.title}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="text-xs sm:text-sm text-slate-300 italic font-medium truncate max-w-[200px] sm:max-w-xs">
+                          <span className={`text-xs sm:text-sm italic font-medium truncate max-w-[200px] sm:max-w-xs ${
+                            isLight ? 'text-slate-600' : 'text-slate-300'
+                          }`}>
                             {song.artist || 'Artista Desconhecido'}
                           </span>
                           {categoryBadge && (
-                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-[#0e162b] border border-slate-700/80 text-slate-200 px-2.5 py-0.5 rounded-md shrink-0">
+                            <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shrink-0 border ${
+                              isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0e162b] border-slate-700/80 text-slate-200'
+                            }`}>
                               {categoryBadge}
                             </span>
                           )}
@@ -1617,7 +1670,7 @@ export function SongsView({
                     </div>
 
                     {/* Seta Direita */}
-                    <div className="shrink-0 flex items-center text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-all">
+                    <div className={`shrink-0 flex items-center ${isLight ? 'text-slate-400 group-hover:text-slate-700' : 'text-slate-500 group-hover:text-slate-300'} group-hover:translate-x-0.5 transition-all`}>
                       <ChevronRight size={20} />
                     </div>
                   </div>
@@ -1633,22 +1686,22 @@ export function SongsView({
       {/* ============================================================== */}
       {isAddToServiceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-[#101a35] border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className={`w-full max-w-xl ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-6 max-h-[85vh] flex flex-col`}>
+            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2">
                 <Plus className="text-blue-500" size={20} />
-                <h3 className="font-bold text-base text-white">Adicionar Música ao Culto</h3>
+                <h3 className={`font-bold text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>Adicionar Música ao Culto</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddToServiceModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className={`p-1.5 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'} cursor-pointer`}
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 mt-2">
+            <p className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'} mt-2`}>
               Selecione uma música do acervo para adicionar à liturgia de <strong>{currentService?.title || 'Culto Domingo'}</strong>:
             </p>
 
@@ -1661,10 +1714,14 @@ export function SongsView({
                 return (
                   <div
                     key={song.id}
-                    className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between hover:border-slate-700 transition"
+                    className={`p-3 rounded-xl border flex items-center justify-between transition ${
+                      isLight 
+                        ? 'bg-slate-50 border-slate-200 hover:border-slate-300' 
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-800 flex items-center justify-center">
+                      <div className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 ${isLight ? 'bg-slate-200' : 'bg-slate-800'} flex items-center justify-center`}>
                         <ArtistAvatar 
                           artist={song.artist} 
                           customImageUrl={song.artistImageUrl || song.customImageUrl || song.coverImage}
@@ -1672,8 +1729,8 @@ export function SongsView({
                         />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-white">{song.title}</h4>
-                        <p className="text-xs text-slate-400 italic">{song.artist}</p>
+                        <h4 className={`text-sm font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{song.title}</h4>
+                        <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} italic`}>{song.artist}</p>
                       </div>
                     </div>
 
@@ -1710,7 +1767,7 @@ export function SongsView({
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
                         alreadyInLiturgy 
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          ? (isLight ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-800 text-slate-500 cursor-not-allowed')
                           : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30'
                       }`}
                     >
@@ -1729,16 +1786,16 @@ export function SongsView({
       {/* ============================================================== */}
       {isPlaylistModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#101a35] border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className={`w-full max-w-md ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-6`}>
+            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2.5">
                 <Youtube size={20} className="text-red-500" />
-                <h3 className="font-bold text-base text-white">Vincular Playlist de Estudo</h3>
+                <h3 className={`font-bold text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>Vincular Playlist de Estudo</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsPlaylistModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className={`p-1 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-400 hover:text-white'} cursor-pointer`}
               >
                 ✕
               </button>
@@ -1746,7 +1803,7 @@ export function SongsView({
 
             <form onSubmit={handleSavePlaylistUrl} className="py-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className={`block text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'} mb-1.5`}>
                   Link da Playlist do YouTube ou Spotify
                 </label>
                 <input
@@ -1754,9 +1811,9 @@ export function SongsView({
                   value={playlistUrlInput}
                   onChange={(e) => setPlaylistUrlInput(e.target.value)}
                   placeholder="https://www.youtube.com/playlist?list=..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
+                  className={`w-full px-3.5 py-2.5 rounded-xl ${isLight ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'} border text-xs sm:text-sm focus:outline-none focus:border-blue-500`}
                 />
-                <p className="text-[11px] text-slate-400 mt-2">
+                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} mt-2`}>
                   Cole o link da playlist com as versões de referência que a equipe ensaiará para este culto.
                 </p>
               </div>
@@ -1765,13 +1822,13 @@ export function SongsView({
                 <button
                   type="button"
                   onClick={() => setIsPlaylistModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+                  className={`px-4 py-2 rounded-xl ${isLight ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} text-xs font-semibold cursor-pointer`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-600/30 flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-600/30 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save size={14} />
                   <span>Salvar Link</span>
@@ -1807,16 +1864,16 @@ export function SongsView({
       {/* ============================================================== */}
       {isDriveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#101a35] border border-slate-800 rounded-2xl p-6 shadow-2xl text-slate-100">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className={`w-full max-w-md ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-6`}>
+            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2.5">
                 <GoogleDriveIcon size={20} />
-                <h3 className="font-bold text-base text-white">Google Drive da Equipe</h3>
+                <h3 className={`font-bold text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>Google Drive da Equipe</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsDriveModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className={`p-1 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-400 hover:text-white'} cursor-pointer`}
               >
                 ✕
               </button>
@@ -1824,7 +1881,7 @@ export function SongsView({
 
             <form onSubmit={handleSaveDriveUrl} className="py-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className={`block text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'} mb-1.5`}>
                   Link da Pasta Compartilhada no Google Drive
                 </label>
                 <input
@@ -1832,9 +1889,9 @@ export function SongsView({
                   value={driveUrlInput}
                   onChange={(e) => setDriveUrlInput(e.target.value)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
+                  className={`w-full px-3.5 py-2.5 rounded-xl ${isLight ? 'bg-slate-50 border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'} border text-xs sm:text-sm focus:outline-none focus:border-blue-500`}
                 />
-                <p className="text-[11px] text-slate-400 mt-2">
+                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} mt-2`}>
                   Cole aqui o link público ou da equipe para partituras, cifras em PDF, gravações e multitracks.
                 </p>
               </div>
@@ -1843,14 +1900,14 @@ export function SongsView({
                 <button
                   type="button"
                   onClick={() => setIsDriveModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+                  className={`px-4 py-2 rounded-xl ${isLight ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} text-xs font-semibold cursor-pointer`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingDriveUrl}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save size={14} />
                   <span>{savingDriveUrl ? 'Salvando...' : 'Salvar & Abrir'}</span>
@@ -1864,26 +1921,23 @@ export function SongsView({
       {/* ============================================================== */}
       {/* MODAL: CADASTRAR NOVA MÚSICA                                   */}
       {/* ============================================================== */}
-      {/* ============================================================== */}
-      {/* MODAL: CADASTRAR NOVA MÚSICA                                   */}
-      {/* ============================================================== */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-[#101a35] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-100 flex flex-col animate-in zoom-in-95 duration-150 scrollbar-thin">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className={`w-full max-w-md max-h-[92vh] overflow-y-auto ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-5 sm:p-6 flex flex-col animate-in zoom-in-95 duration-150 scrollbar-thin`}>
+            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <div className={`w-8 h-8 rounded-lg ${isLight ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-blue-600/20 text-blue-400 border border-blue-500/30'} flex items-center justify-center`}>
                   <Music size={18} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Cadastrar Nova Música</h3>
-                  <p className="text-[11px] text-slate-400">Pesquise a cifra na web ou cadastre manualmente</p>
+                  <h3 className={`font-bold text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>Cadastrar Nova Música</h3>
+                  <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Pesquise a cifra na web ou cadastre manualmente</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleCloseAddModal}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className={`p-1.5 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'} transition-colors cursor-pointer`}
                 title="Fechar"
               >
                 ✕
@@ -1892,7 +1946,7 @@ export function SongsView({
 
             <form onSubmit={handleAddSongSubmit} className="py-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className={`block text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'} mb-1.5`}>
                   Título da Música *
                 </label>
                 <input
@@ -1906,12 +1960,12 @@ export function SongsView({
                     if (searchError) setSearchError(null);
                   }}
                   placeholder="Ex: Bondade de Deus"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className={`w-full px-3.5 py-2.5 rounded-xl ${isLight ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400' : 'bg-slate-900 border-slate-700 text-white placeholder-slate-500'} border text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className={`block text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'} mb-1.5`}>
                   Artista / Ministério
                 </label>
                 <input
@@ -1923,15 +1977,15 @@ export function SongsView({
                     if (searchError) setSearchError(null);
                   }}
                   placeholder="Ex: Isaías Saad"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className={`w-full px-3.5 py-2.5 rounded-xl ${isLight ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400' : 'bg-slate-900 border-slate-700 text-white placeholder-slate-500'} border text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
                 />
               </div>
 
               {/* Dica de busca rápida */}
-              <div className="flex items-start gap-1.5 px-0.5 text-[11px] text-slate-400 leading-snug">
-                <span className="text-amber-400 shrink-0 text-xs">💡</span>
-                <span>
-                  <strong className="text-slate-300 font-semibold">Dica:</strong> Escolha a música e o artista para uma pesquisa mais rápida e precisa.
+              <div className="flex items-start gap-1.5 px-0.5 text-[11px] leading-snug">
+                <span className="text-amber-500 shrink-0 text-xs">💡</span>
+                <span className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                  <strong className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>Dica:</strong> Escolha a música e o artista para uma pesquisa mais rápida e precisa.
                 </span>
               </div>
 
@@ -1961,10 +2015,10 @@ export function SongsView({
               {searchCandidates.length > 0 && (
                 <div className="space-y-2 pt-1 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                    <label className={`block text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-emerald-700' : 'text-emerald-400'}`}>
                       Cifras Encontradas (Toque para importar):
                     </label>
-                    <span className="text-[10px] text-slate-400 font-medium">
+                    <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'} font-medium`}>
                       {searchCandidates.length} opções
                     </span>
                   </div>
@@ -1975,25 +2029,29 @@ export function SongsView({
                         type="button"
                         onClick={() => handleSelectCandidate(candidate)}
                         disabled={importingCandidateId !== null}
-                        className="w-full text-left p-2.5 sm:p-3 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-emerald-950/40 hover:border-emerald-500/50 transition-all cursor-pointer flex items-center justify-between gap-2.5 group active:scale-98 disabled:opacity-60"
+                        className={`w-full text-left p-2.5 sm:p-3 rounded-xl border ${
+                          isLight 
+                            ? 'border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-400' 
+                            : 'border-slate-700 bg-slate-900/90 hover:bg-emerald-950/40 hover:border-emerald-500/50'
+                        } transition-all cursor-pointer flex items-center justify-between gap-2.5 group active:scale-98 disabled:opacity-60`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+                            <span className={`text-xs font-bold ${isLight ? 'text-slate-900 group-hover:text-emerald-700' : 'text-white group-hover:text-emerald-300'} transition-colors truncate`}>
                               {candidate.title}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide ${isLight ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'} border shrink-0`}>
                               {candidate.badge}
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="text-emerald-400 font-semibold">{candidate.artist || 'Artista'}</span>
+                          <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-400'} flex items-center gap-1.5 mt-0.5 flex-wrap`}>
+                            <span className={`${isLight ? 'text-emerald-700' : 'text-emerald-400'} font-semibold`}>{candidate.artist || 'Artista'}</span>
                             <span>•</span>
-                            <span className="text-slate-400">{candidate.source}</span>
+                            <span className={isLight ? 'text-slate-500' : 'text-slate-400'}>{candidate.source}</span>
                             {candidate.key && (
                               <>
                                 <span>•</span>
-                                <span className="text-amber-300 font-bold">Tom: {candidate.key}</span>
+                                <span className={`${isLight ? 'text-amber-700' : 'text-amber-300'} font-bold`}>Tom: {candidate.key}</span>
                               </>
                             )}
                           </div>
@@ -2001,12 +2059,12 @@ export function SongsView({
 
                         <div className="shrink-0 pl-1">
                           {importingCandidateId === candidate.id ? (
-                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
-                              <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shrink-0" />
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold">
+                              <div className="w-3.5 h-3.5 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin shrink-0" />
                               <span className="hidden sm:inline">Importando...</span>
                             </div>
                           ) : (
-                            <span className="text-xs font-bold text-emerald-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                            <span className={`text-xs font-bold ${isLight ? 'text-emerald-700' : 'text-emerald-400'} group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5`}>
                               Importar <ChevronRight size={14} />
                             </span>
                           )}
@@ -2019,29 +2077,29 @@ export function SongsView({
 
               {/* Mensagem de Erro / Informação da Busca */}
               {searchError && (
-                <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-200 leading-relaxed">
+                <div className={`p-2.5 rounded-xl ${isLight ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-amber-950/30 border-amber-800/40 text-amber-200'} border text-[11px] leading-relaxed`}>
                   ⚠️ {searchError}
                 </div>
               )}
 
               {/* Dica amigável */}
-              <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-800/30 text-[11px] text-blue-300/80 leading-relaxed">
+              <div className={`p-2.5 rounded-xl ${isLight ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-blue-950/30 border-blue-800/30 text-blue-300/80'} border text-[11px] leading-relaxed`}>
                 💡 Escolha uma das opções na lista acima para importar tudo automaticamente, ou salve sem cifra para digitar os acordes manualmente.
               </div>
 
               {/* Botões Inferiores */}
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+              <div className={`pt-3 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'} flex items-center justify-end gap-2.5`}>
                 <button
                   type="button"
                   onClick={handleCloseAddModal}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+                  className={`px-4 py-2.5 rounded-xl ${isLight ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} text-xs font-semibold transition-colors cursor-pointer`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingSong || importingCandidateId !== null || !newTitle.trim()}
-                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  className={`px-4 sm:px-5 py-2.5 rounded-xl ${isLight ? 'bg-slate-800 hover:bg-slate-900 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'} text-xs font-bold shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50`}
                   title="Salvar e continuar para o editor manual"
                 >
                   {savingSong ? 'Salvando...' : 'Salvar sem Cifra (Manual)'}
@@ -2060,18 +2118,18 @@ export function SongsView({
           onClick={() => setReorderConfirm(null)}
         >
           <div 
-            className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-5 sm:p-6 max-w-xs w-full shadow-2xl space-y-4 text-center animate-in fade-in zoom-in-95"
+            className={`${isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0f172a] border-slate-700/80 text-white'} border rounded-2xl p-5 sm:p-6 max-w-xs w-full shadow-2xl space-y-4 text-center animate-in fade-in zoom-in-95`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 mx-auto rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner">
+            <div className={`w-12 h-12 mx-auto rounded-full ${isLight ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'} flex items-center justify-center shadow-inner`}>
               <ArrowUpDown size={22} />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h3 className={`text-base sm:text-lg font-bold ${isLight ? 'text-slate-900' : 'text-white'} tracking-tight`}>
                 Mudar a ordem?
               </h3>
-              <p className="text-xs text-slate-400 font-medium truncate px-2">
+              <p className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'} font-medium truncate px-2`}>
                 "{reorderConfirm.songTitle}"
               </p>
             </div>
@@ -2080,7 +2138,7 @@ export function SongsView({
               <button
                 type="button"
                 onClick={() => setReorderConfirm(null)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wide cursor-pointer transition-all active:scale-95 min-h-[44px]"
+                className={`flex-1 px-4 py-2.5 rounded-xl border ${isLight ? 'border-slate-200 hover:bg-slate-100 text-slate-700' : 'border-slate-700 hover:bg-slate-800 text-slate-300'} font-bold text-xs uppercase tracking-wide cursor-pointer transition-all active:scale-95 min-h-[44px]`}
               >
                 Cancelar
               </button>

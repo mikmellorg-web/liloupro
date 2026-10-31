@@ -1091,7 +1091,7 @@ const Input = ({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input 
     {...props}
     className={cn(
-      "w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand bg-black/25 text-text-main text-sm transition-all placeholder:text-text-muted/50 notranslate",
+      "w-full px-4 py-2 border border-slate-300 dark:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/35 focus:border-brand bg-white dark:bg-black/25 text-slate-900 dark:text-text-main text-sm transition-all placeholder:text-slate-400 dark:placeholder:text-text-muted/50 notranslate",
       props.className
     )}
     translate="no"
@@ -1295,17 +1295,17 @@ function AuthView({
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-surface p-6 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-surface p-6 relative">
       {onBackToLanding && (
         <button 
           type="button"
           onClick={onBackToLanding}
-          className="absolute top-6 left-6 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted hover:text-white transition-colors py-2 px-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer z-50 shadow-md"
+          className="absolute top-6 left-6 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-text-muted hover:text-slate-900 dark:hover:text-white transition-colors py-2 px-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer z-50 shadow-md"
         >
           ← Voltar para o site
         </button>
       )}
-      <Card className="max-w-md w-full p-8 space-y-6 bg-white/5 border-white/10 backdrop-blur-xl">
+      <Card className="max-w-md w-full p-8 space-y-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl backdrop-blur-xl">
         <div className="text-center space-y-2">
           <div className="relative inline-block mx-auto cursor-pointer group" onClick={() => setShowInstallModal(true)} title="Instalar aplicativo oficial no celular">
             <img 
@@ -1317,8 +1317,8 @@ function AuthView({
               <Sparkles size={10} className="fill-slate-950 stroke-slate-950" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-white leading-tight tracking-tight">LiLouPro</h1>
-          <p className="text-white/90 text-sm font-medium">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight">LiLouPro</h1>
+          <p className="text-slate-600 dark:text-white/90 text-sm font-medium">
             {mode === 'login' && 'Faça login para acessar sua escala.'}
             {mode === 'signup' && 'Crie sua conta para começar.'}
             {mode === 'forgot' && 'Recupere o acesso à sua conta.'}
@@ -1327,15 +1327,15 @@ function AuthView({
           <button
             type="button"
             onClick={() => setShowInstallModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:scale-105 mt-1"
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:scale-105 mt-1"
           >
-            <Smartphone size={12} className="text-amber-400" />
+            <Smartphone size={12} className="text-amber-500 dark:text-amber-400" />
             <span>Já baixou o app no celular?</span>
             <ChevronRight size={12} />
           </button>
           
           {error && error.includes('auth/network-request-failed') && (
-            <div className="p-4 mt-4 bg-orange-500/20 border border-orange-500/40 rounded-xl text-xs text-orange-200 leading-relaxed text-left">
+            <div className="p-4 mt-4 bg-orange-500/20 border border-orange-500/40 rounded-xl text-xs text-orange-800 dark:text-orange-200 leading-relaxed text-left">
               <p className="font-bold mb-1 uppercase tracking-widest flex items-center gap-2">
                 <Settings size={12} /> Dica Técnica (Erro de Rede):
               </p>
@@ -1352,7 +1352,7 @@ function AuthView({
         <form onSubmit={handleAuth} className="space-y-4">
           {mode === 'signup' && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-white/70 uppercase tracking-widest pl-1">Nome Completo</label>
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Nome Completo</label>
               <Input 
                 placeholder="Seu nome" 
                 value={name} 
@@ -1363,7 +1363,7 @@ function AuthView({
           )}
           
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-white/70 uppercase tracking-widest pl-1">E-mail</label>
+            <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">E-mail</label>
             <Input 
               type="email"
               placeholder="seu@email.com" 
@@ -1375,7 +1375,7 @@ function AuthView({
 
           {mode !== 'forgot' && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-white/70 uppercase tracking-widest pl-1">Senha</label>
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Senha</label>
               <Input 
                 type="password"
                 placeholder="******" 
@@ -1387,7 +1387,7 @@ function AuthView({
           )}
 
           {error && (
-            <p className="text-[11px] text-red-400 font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20 italic text-center">
+            <p className="text-[11px] text-red-600 dark:text-red-400 font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20 italic text-center">
               {error}
             </p>
           )}
@@ -1411,22 +1411,22 @@ function AuthView({
             <div className="flex flex-col gap-4">
               <button 
                 onClick={() => setMode('forgot')}
-                className="text-[11px] text-white/60 hover:text-white transition-colors font-black uppercase tracking-widest text-center"
+                className="text-[11px] text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white transition-colors font-black uppercase tracking-widest text-center cursor-pointer"
               >
                 Esqueceu sua senha?
               </button>
               
               <div className="relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-                <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest text-white/50"><span className="bg-surface px-2">ou</span></div>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-white/10"></div></div>
+                <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-white/50"><span className="bg-white dark:bg-surface px-2">ou</span></div>
               </div>
 
               <Button 
                 onClick={loginWithGoogle} 
                 variant="ghost" 
-                className="w-full py-4 flex items-center justify-center gap-3 border border-white/10 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-xs h-14 rounded-xl shadow-sm"
+                className="w-full py-4 flex items-center justify-center gap-3 border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-800 dark:text-white font-black uppercase tracking-widest text-xs h-14 rounded-xl shadow-sm cursor-pointer"
               >
-                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all" alt="Google" />
+                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 transition-all" alt="Google" />
                  Entrar com Google
               </Button>
             </div>
@@ -1439,7 +1439,7 @@ function AuthView({
                 setSuccess(null);
                 setMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup');
               }}
-              className="text-[11px] font-black text-brand hover:text-cyan-300 uppercase tracking-widest underline decoration-2 underline-offset-4"
+              className="text-[11px] font-black text-brand hover:text-blue-700 dark:hover:text-cyan-300 uppercase tracking-widest underline decoration-2 underline-offset-4 cursor-pointer"
             >
               {mode === 'signup' ? 'Já tem uma conta? Faça Login' : mode === 'forgot' ? 'Voltar para o Login' : 'Não tem uma conta? Cadastre-se'}
             </button>
@@ -2006,8 +2006,10 @@ function MainContent() {
     localStorage.setItem('app-theme', theme);
     if (theme === 'light') {
       document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
     } else {
       document.documentElement.classList.remove('light');
+      document.documentElement.classList.add('dark');
     }
   }, [theme]);
 

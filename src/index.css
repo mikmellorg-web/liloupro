@@ -82,8 +82,8 @@
   .light h4, 
   .light h5, 
   .light h6 {
-    color: #000000 !important;
-    font-weight: 700 !important;
+    color: #0f172a;
+    font-weight: 700;
   }
 
   /* Fix Next Service Card legibility in light mode */
