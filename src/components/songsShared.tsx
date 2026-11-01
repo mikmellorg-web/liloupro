@@ -1222,7 +1222,21 @@ export function parseBracketSubContent(content: string): { isSection: boolean; s
  */
 export function normalizeSpacedTags(line: string): string {
   if (!line) return '';
-  return line.replace(/(\[[^\]]+\]|\([^)]+\))/g, (match) => {
+
+  // 1. Normalize mismatched or valid tag delimiters like (N3 🌓 Suave], [Intro), {Verso 1]
+  const tagRegex = /([\(\[\{][^\)\]\n\r]+[\)\]\}])/g;
+  const normalized = line.replace(tagRegex, (match) => {
+    const inner = match.slice(1, -1).trim();
+    const isSection = isSectionHeaderContent(inner.toLowerCase());
+    const isDyn = /^(N[1-7]|Sutil|Quase Silêncio|Quase Silencio|Bem Suave|Suave|Moderado|Meio Forte|Forte|Clímax|Climax|Crescendo|Decrescendo|Pausa|Parada|Acapella|Só Bateria|Apenas Bateria|Violão Marcando|Violao Marcando|Sobe o Tom|Sobe Tom|Modulação|Modulacao|Tutti)/i.test(inner);
+    const isRep = /^([0-9]+x|bis)$/i.test(inner);
+    if (isSection || isDyn || isRep) {
+      return `[${inner}]`;
+    }
+    return match;
+  });
+
+  return normalized.replace(/(\[[^\]]+\]|\([^)]+\))/g, (match) => {
     const isBracket = match.startsWith('[');
     const inner = match.slice(1, -1).trim();
     const parts = inner.split(/\s{2,}/);
@@ -1391,8 +1405,9 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
 export function RenderTextWithInlineBadges({ text, baseClasses = '' }: { text: string; baseClasses?: string }) {
   if (!text) return null;
 
+  const normalizedText = normalizeSpacedTags(text);
   const tagRegex = /(\([^)]+\)|\[[^\]]+\])/g;
-  const parts = text.split(tagRegex);
+  const parts = normalizedText.split(tagRegex);
 
   return (
     <>
@@ -1551,7 +1566,7 @@ export function RenderTextWithInlineBadges({ text, baseClasses = '' }: { text: s
 
 export function RenderSectionOrDynamicsLine({ parsed }: { parsed: ParsedSectionAndDynamics }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 mt-1 mb-1 sm:mt-1.5 sm:mb-1.5 select-none notranslate" translate="no">
+    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mt-1 mb-1 sm:mt-1.5 sm:mb-1.5 select-none notranslate" translate="no">
       {parsed.sections.map((sec, i) => {
         return (
           <button
@@ -1561,7 +1576,7 @@ export function RenderSectionOrDynamicsLine({ parsed }: { parsed: ParsedSectionA
               e.stopPropagation();
               triggerDynamicsGuideModal();
             }}
-            className="sec-badge flex items-center px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border transition-all shadow-xs bg-gradient-to-r from-brand to-cyan-500 text-white border-brand/20 shadow-brand/15 cursor-pointer hover:scale-105 active:scale-95 hover:brightness-110"
+            className="sec-badge flex items-center shrink-0 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border transition-all shadow-xs bg-gradient-to-r from-brand to-cyan-500 text-white border-brand/20 shadow-brand/15 cursor-pointer hover:scale-105 active:scale-95 hover:brightness-110"
             title="Clique para abrir o Guia de Seções e Dinâmicas"
           >
             <span>{sec.title}</span>
@@ -1580,7 +1595,7 @@ export function RenderSectionOrDynamicsLine({ parsed }: { parsed: ParsedSectionA
               triggerDynamicExplanation(dyn.label);
             }}
             className={cn(
-              "dyn-btn flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer hover:scale-105 active:scale-95 hover:brightness-110 shadow-xs",
+              "dyn-btn flex items-center shrink-0 gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer hover:scale-105 active:scale-95 hover:brightness-110 shadow-xs",
               details.badgeClasses
             )}
             title="Clique para ver a explicação da dinâmica"
@@ -1591,13 +1606,13 @@ export function RenderSectionOrDynamicsLine({ parsed }: { parsed: ParsedSectionA
       })}
 
       {parsed.repeats.map((rep, i) => (
-        <div key={`rep-${i}`} className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+        <div key={`rep-${i}`} className="flex items-center shrink-0 gap-1 px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
           <span>🔁 {rep}</span>
         </div>
       ))}
 
       {parsed.remainingText ? (
-        <span className="text-xs font-bold italic text-text-muted ml-1">
+        <span className="text-xs font-bold italic text-text-muted ml-1 shrink-0">
           {parsed.remainingText}
         </span>
       ) : null}

@@ -2674,15 +2674,41 @@ export function SongDetailView({
                         );
                         lIdx += 2;
                       } else {
-                        rows.push(
-                          <SingleLineRow 
-                            key={`single-${lIdx}`}
-                            line={currentLine}
-                            isChord={isCurrentChord}
-                            setActiveChordInDict={setActiveChordInDict}
-                          />
-                        );
-                        lIdx += 1;
+                        // Check if currentLine is a section tag and nextLine is a dynamic tag on the consecutive line
+                        const currentParsed = parseLineSectionAndDynamics(currentLine);
+                        const nextParsed = hasNext ? parseLineSectionAndDynamics(nextLine) : null;
+                        if (
+                          currentParsed.isMatch && 
+                          currentParsed.sections.length > 0 && 
+                          currentParsed.dynamics.length === 0 && 
+                          nextParsed && 
+                          nextParsed.isMatch && 
+                          nextParsed.sections.length === 0 && 
+                          nextParsed.dynamics.length > 0
+                        ) {
+                          // Merge them into a single row side-by-side
+                          const mergedParsed = {
+                            isMatch: true,
+                            sections: currentParsed.sections,
+                            dynamics: nextParsed.dynamics,
+                            repeats: [...currentParsed.repeats, ...nextParsed.repeats],
+                            remainingText: (currentParsed.remainingText + ' ' + nextParsed.remainingText).trim()
+                          };
+                          rows.push(
+                            <RenderSectionOrDynamicsLine key={`merged-sec-dyn-${lIdx}`} parsed={mergedParsed} />
+                          );
+                          lIdx += 2;
+                        } else {
+                          rows.push(
+                            <SingleLineRow 
+                              key={`single-${lIdx}`}
+                              line={currentLine}
+                              isChord={isCurrentChord}
+                              setActiveChordInDict={setActiveChordInDict}
+                            />
+                          );
+                          lIdx += 1;
+                        }
                       }
                     }
 

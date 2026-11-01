@@ -777,6 +777,18 @@ export function cleanCifraHtml(text: string): string {
   // 0. Remove zero-width characters (U+200B-U+200D, U+FEFF) and control spaces
   str = str.replace(/[\u200B-\u200D\uFEFF]/g, '');
 
+  // 0.5. Normalize mismatched or malformed tag delimiters (e.g. "(N3 🌓 Suave]" or "[N6 🔥 Forte)") into standard "[...]"
+  str = str.replace(/([\(\[\{][^\)\]\n\r]+[\)\]\}])/g, (match) => {
+    const inner = match.slice(1, -1).trim();
+    const isSection = isSectionHeaderContent(inner.toLowerCase());
+    const isDyn = /^(N[1-7]|Sutil|Quase Silêncio|Quase Silencio|Bem Suave|Suave|Moderado|Meio Forte|Forte|Clímax|Climax|Crescendo|Decrescendo|Pausa|Parada|Acapella|Só Bateria|Apenas Bateria|Violão Marcando|Violao Marcando|Sobe o Tom|Sobe Tom|Modulação|Modulacao|Tutti)/i.test(inner);
+    const isRep = /^([0-9]+x|bis)$/i.test(inner);
+    if (isSection || isDyn || isRep) {
+      return `[${inner}]`;
+    }
+    return match;
+  });
+
   // 1. Replace Cifra Club / web line break containers
   // e.g. </div><div class="kvMV"> or </div><div ...> -> \n
   str = str.replace(/<\/div>\s*<div[^>]*>/gi, '\n');
@@ -886,10 +898,31 @@ export function cleanCifraHtml(text: string): string {
 
   str = filteredLines.join('\n');
 
-  // 6. Ensure section headers are cleanly isolated on their own line
-  // Handles cases where headers are fused with chords/lyrics (e.g. "G/D D[Primeira Parte]" or "[Intro]G/D D")
-  str = str.replace(/([^\n])\s*(\[[^\]\n]+\])/g, '$1\n$2');
-  str = str.replace(/(\[[^\]\n]+\])\s*([^\r\n\s])/g, '$1\n$2');
+  // 6. Ensure section headers are cleanly isolated when fused with chords/lyrics (e.g. "G/D D[Primeira Parte]" or "[Intro]G/D D")
+  // Do NOT split when multiple tags are placed side-by-side on the same line (e.g. "[Refrão] [N1 ⚙ Sutil]", "[Intro] [N2 🌘 Bem Suave]", "[Refrão] (2x)")
+  const rawLinesStep6 = str.split(/\r?\n/);
+  const resultLinesStep6: string[] = [];
+  for (const line of rawLinesStep6) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      resultLinesStep6.push(line);
+      continue;
+    }
+    // If the line consists entirely of bracketed tags, parentheses, or braces (e.g. "[Refrão] [N1 ⚙ Sutil]"), preserve it intact!
+    const nonTagContent = trimmed.replace(/\[[^\]]+\]|\([^)]+\)|\{[^}]+\}/g, '').trim();
+    if (nonTagContent === '') {
+      resultLinesStep6.push(line);
+      continue;
+    }
+
+    let l = line;
+    // Fused before bracket: e.g. "G/D D[Primeira Parte]" -> "G/D D\n[Primeira Parte]"
+    l = l.replace(/([^\s\[\(\{])\s*(\[[^\]]+\])/g, '$1\n$2');
+    // Fused after bracket: e.g. "[Intro]G/D D" -> "[Intro]\nG/D D"
+    l = l.replace(/(\[[^\]]+\])\s*([^\s\]\)\}])/g, '$1\n$2');
+    resultLinesStep6.push(l);
+  }
+  str = resultLinesStep6.join('\n');
   str = str.replace(/^(Intro|Introdução|Introducao|Solo|Ponte|Verso\s*\d*|Refrão|Refrao|Chorus):[ \t]+([A-G][#b]?(?:[a-zA-Z0-9\/\+]*)?(?:\s+[A-G]|\s*$))/gim, '[$1]\n$2');
 
   // Padronização e normalização de seções para a convenção oficial do LiLouPro
@@ -1113,9 +1146,17 @@ export function standardizeSectionName(name: string): string {
   return clean;
 }
 
+export function isSectionHeaderContent(clean: string): boolean {
+  if (!clean) return false;
+  if (isDedilhadoOrTabPartLine(clean) || /^dedilhado\b/i.test(clean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean)) {
+    return false;
+  }
+  return /^(intro|introdução|introducao|instr|instrumental|verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|pre refrão|pre refrao|bis|coda|vocal|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|1a parte|2a parte|3a parte|4a parte|5a parte|primeir a parte|segund a parte|parte)(\s*[\d\wáéíóúÁÉÍÓÚa-zA-Z\-\_\&]+)*$/i.test(clean);
+}
+
 /**
  * Detecta se uma linha corresponde a um cabeçalho de seção musical
- * (ex: [Intro], [Primeira Parte], [Refrão], [Ponte], Primeira Parte, Refrão, etc.)
+ * (ex: [Intro], [Primeira Parte], [Refrão], [Ponte], [Refrão] [N1 ⚙ Sutil], etc.)
  */
 export function isSectionHeaderLine(line: string): boolean {
   const trimmed = (line || '').trim();
@@ -1124,16 +1165,42 @@ export function isSectionHeaderLine(line: string): boolean {
   if (/^\[[^\]]+\]$/.test(trimmed) || /^\{[^\}]+\}$/.test(trimmed)) {
     return !/^\[(?:tab|riff|dedilhado)\b/i.test(trimmed);
   }
-  if (trimmed.length > 40) return false;
-  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|verse|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|primeir a parte|segund a parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|pre refrão|coda|tag|hook|instrumental)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}\(2-9x]*$/i;
+  if (trimmed.length > 80) return false;
+
+  // Check if line contains one or more section tags like [Refrão], [Intro] (optionally accompanied by dynamics like [N1 ⚙ Sutil])
+  const bracketMatches = trimmed.match(/\[([^\]]+)\]/g);
+  if (bracketMatches && bracketMatches.length > 0) {
+    for (const b of bracketMatches) {
+      const inner = b.slice(1, -1).trim().toLowerCase();
+      if (isSectionHeaderContent(inner)) {
+        return true;
+      }
+    }
+  }
+
+  const sectionRegex = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|verse|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|primeira parte|segunda parte|terceira parte|quarta parte|quinta parte|1ª parte|2ª parte|3ª parte|4ª parte|5ª parte|primeir a parte|segund a parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|pre refrão|coda|tag|hook|instrumental)/i;
   return sectionRegex.test(trimmed);
 }
 
 /**
  * Normaliza cabeçalhos de seção para o formato padrão do Liloupro: [Nome da Seção]
+ * Preserva dinâmicas ou repetições lado a lado na mesma linha (ex: [Refrão] [N1 ⚙ Sutil])
  */
 export function normalizeSectionHeader(line: string): string {
   const trimmed = (line || '').trim();
+
+  // If line has multiple bracketed tags (e.g. [Refrão] [N1 ⚙ Sutil]), standardize section tags and preserve other tags side by side
+  if (/\[[^\]]+\]\s*\[[^\]]+\]/.test(trimmed)) {
+    return trimmed.replace(/\[([^\]]+)\]/g, (full, inner) => {
+      const clean = inner.trim();
+      const lower = clean.toLowerCase();
+      if (isSectionHeaderContent(lower)) {
+        return `[${standardizeSectionName(clean)}]`;
+      }
+      return full;
+    });
+  }
+
   const clean = trimmed.replace(/^[\s\[\(\{]+|[\s\]\)\}\:]+$/g, '');
   const std = standardizeSectionName(clean);
   return '[' + std + ']';
