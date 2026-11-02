@@ -13,7 +13,7 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX
+  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2
 } from 'lucide-react';
 import { Music2 } from './components/MusicIcon';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -1232,6 +1232,14 @@ function AuthView({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>('church_trial');
+  const [churchNameInput, setChurchNameInput] = useState('');
+  const [memberInviteCode, setMemberInviteCode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pending_invite_code') || '';
+    }
+    return '';
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -1263,10 +1271,92 @@ function AuthView({
 
     try {
       if (mode === 'signup') {
-        if (!name) throw new Error('Por favor, informe seu nome.');
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: name });
-        // The useAuth hook will detect the user change and sync with Firestore
+        if (!name.trim()) throw new Error('Por favor, informe seu nome completo.');
+
+        if (signupIntent === 'church_trial') {
+          if (!churchNameInput.trim()) {
+            throw new Error('Por favor, informe o nome da sua igreja.');
+          }
+
+          localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          await updateProfile(userCredential.user, { displayName: name.trim() });
+
+          const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
+
+          // 1. Create brand new church tenant with 30-day trial
+          await setDoc(doc(db, 'churches', newChurchId), {
+            name: churchNameInput.trim(),
+            inviteCode: newInvite,
+            createdAt: new Date().toISOString(),
+            createdBy: userCredential.user.uid,
+            planStatus: 'trial',
+            planId: 'completo',
+            isTrial: true,
+            trialStartDate: new Date().toISOString(),
+            contactEmail: email.trim().toLowerCase(),
+            maxMembers: 50,
+            maxSongs: 9999,
+            roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
+          });
+
+          // 2. Create member profile as Admin of their church
+          await setDoc(doc(db, 'members', userCredential.user.uid), {
+            uid: userCredential.user.uid,
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            churchId: newChurchId,
+            isAdmin: true,
+            roles: ['Coordenador/Líder'],
+            availability: {},
+            defaultBibleVersion: 'BLIVRE',
+            dismissedOnboarding: true,
+            createdAt: new Date().toISOString()
+          });
+
+          // 3. Create admin privileges
+          await setDoc(doc(db, 'admins', userCredential.user.uid), {
+            active: true,
+            churchId: newChurchId,
+            role: 'admin'
+          });
+
+          localStorage.removeItem('pending_church_name_for_signup');
+          localStorage.removeItem('pending_invite_code');
+          localStorage.setItem('lilo_active_church_id', newChurchId);
+        } else {
+          // Member joining existing church
+          const code = (memberInviteCode.trim() || localStorage.getItem('pending_invite_code') || '').toUpperCase();
+          if (!code) throw new Error('Por favor, informe o código de ingresso da sua igreja.');
+
+          const { collection, query, where, getDocs } = await import('firebase/firestore');
+          const snap = await getDocs(query(collection(db, 'churches'), where('inviteCode', '==', code)));
+          if (snap.empty) {
+            throw new Error(`Código "${code}" não encontrado. Verifique com seu líder ou selecione "Cadastrar Minha Igreja".`);
+          }
+          const churchDoc = snap.docs[0];
+          const targetChurchId = churchDoc.id;
+
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          await updateProfile(userCredential.user, { displayName: name.trim() });
+
+          await setDoc(doc(db, 'members', userCredential.user.uid), {
+            uid: userCredential.user.uid,
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            churchId: targetChurchId,
+            isAdmin: false,
+            roles: [],
+            availability: {},
+            defaultBibleVersion: 'BLIVRE',
+            dismissedOnboarding: true,
+            createdAt: new Date().toISOString()
+          });
+
+          localStorage.removeItem('pending_invite_code');
+          localStorage.setItem('lilo_active_church_id', targetChurchId);
+        }
       } else if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email, password);
       } else if (mode === 'forgot') {
@@ -1284,14 +1374,21 @@ function AuthView({
       else if (err.code === 'auth/invalid-email') message = 'E-mail inválido.';
       else if (err.code === 'auth/email-already-in-use') message = 'Este e-mail já está em uso por outro usuário.';
       else if (err.code === 'auth/weak-password') message = 'A senha deve ter pelo menos 6 caracteres.';
-      else if (err.code === 'auth/operation-not-allowed') message = 'ERRO CRÍTICO: O login com E-mail/Senha não está ativado no seu Firebase Console. Por favor, ative-o em Authentication > Sign-in method.';
-      else if (err.code === 'auth/configuration-not-found') message = 'Erro de configuração. Verifique se o projeto Firebase existe e está configurado corretamente.';
+      else if (err.code === 'auth/operation-not-allowed') message = 'ERRO CRÍTICO: O login com E-mail/Senha não está ativado no seu Firebase Console.';
+      else if (err.code === 'auth/configuration-not-found') message = 'Erro de configuração. Verifique as credenciais do Firebase.';
       else if (err.code === 'auth/network-request-failed') message = 'Erro de rede. Verifique sua conexão.';
       
-      setError(`${message} (${errorCode})`);
+      setError(err?.message && !err?.code ? err.message : `${message} (${errorCode})`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleAuth = () => {
+    if (churchNameInput.trim()) {
+      localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
+    }
+    loginWithGoogle();
   };
 
   return (
@@ -1319,8 +1416,8 @@ function AuthView({
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight">LiLouPro</h1>
           <p className="text-slate-600 dark:text-white/90 text-sm font-medium">
-            {mode === 'login' && 'Faça login para acessar sua escala.'}
-            {mode === 'signup' && 'Crie sua conta para começar.'}
+            {mode === 'login' && 'Faça login para acessar sua escala e repertório.'}
+            {mode === 'signup' && 'Comece seu período de teste ou acesse sua equipe.'}
             {mode === 'forgot' && 'Recupere o acesso à sua conta.'}
           </p>
 
@@ -1333,26 +1430,85 @@ function AuthView({
             <span>Já baixou o app no celular?</span>
             <ChevronRight size={12} />
           </button>
-          
-          {error && error.includes('auth/network-request-failed') && (
-            <div className="p-4 mt-4 bg-orange-500/20 border border-orange-500/40 rounded-xl text-xs text-orange-800 dark:text-orange-200 leading-relaxed text-left">
-              <p className="font-bold mb-1 uppercase tracking-widest flex items-center gap-2">
-                <Settings size={12} /> Dica Técnica (Erro de Rede):
-              </p>
-              Para resolver este erro, acesse seu <b>Firestore Console &gt; Authentication &gt; Settings &gt; Authorized Domains</b> e adicione os seguintes domínios:
-              <ul className="list-disc ml-4 mt-1 space-y-0.5 opacity-80">
-                <li>liloupro.ai.studio</li>
-                <li>ais-dev-db6wdygdzybm7rptwxhxjc-239798971644.us-east5.run.app</li>
-                <li>ais-pre-db6wdygdzybm7rptwxhxjc-239798971644.us-east5.run.app</li>
-              </ul>
-            </div>
-          )}
         </div>
 
+        {/* Signup Intent Switcher */}
+        {mode === 'signup' && (
+          <div className="space-y-3">
+            <div className="flex rounded-xl bg-slate-100 dark:bg-white/10 p-1 border border-slate-200 dark:border-white/10 text-xs">
+              <button
+                type="button"
+                onClick={() => setSignupIntent('church_trial')}
+                className={`flex-1 py-2 px-2.5 rounded-lg font-black text-xs text-center transition-all cursor-pointer ${
+                  signupIntent === 'church_trial'
+                    ? 'bg-brand text-white shadow-md'
+                    : 'text-slate-600 dark:text-white/70 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Cadastrar Minha Igreja
+              </button>
+              <button
+                type="button"
+                onClick={() => setSignupIntent('member_join')}
+                className={`flex-1 py-2 px-2.5 rounded-lg font-black text-xs text-center transition-all cursor-pointer ${
+                  signupIntent === 'member_join'
+                    ? 'bg-brand text-white shadow-md'
+                    : 'text-slate-600 dark:text-white/70 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Entrar com Código
+              </button>
+            </div>
+
+            {signupIntent === 'church_trial' ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                <Sparkles size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span><strong>30 Dias Grátis VIP:</strong> Criaremos um espaço exclusivo para a sua igreja testar sem custo!</span>
+              </div>
+            ) : (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-blue-800 dark:text-blue-300 text-xs font-semibold flex items-center gap-2">
+                <Building2 size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                <span>Informe o código de convite da sua congregação para ingressar na equipe.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={handleAuth} className="space-y-4">
+          {mode === 'signup' && signupIntent === 'church_trial' && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">
+                Nome da sua Igreja / Congregação *
+              </label>
+              <Input 
+                placeholder="Ex: Igreja Batista Memorial, Comunidade Viva..." 
+                value={churchNameInput} 
+                onChange={e => setChurchNameInput(e.target.value)} 
+                required 
+              />
+            </div>
+          )}
+
+          {mode === 'signup' && signupIntent === 'member_join' && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">
+                Código de Ingresso da Igreja *
+              </label>
+              <Input 
+                placeholder="Ex: SEMENTE123 ou IGREJA-123456" 
+                value={memberInviteCode} 
+                onChange={e => setMemberInviteCode(e.target.value.toUpperCase())} 
+                className="font-mono uppercase"
+                required 
+              />
+            </div>
+          )}
+
           {mode === 'signup' && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Nome Completo</label>
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">
+                {signupIntent === 'church_trial' ? 'Seu Nome Completo (Líder / Ministro) *' : 'Seu Nome Completo *'}
+              </label>
               <Input 
                 placeholder="Seu nome" 
                 value={name} 
@@ -1363,7 +1519,7 @@ function AuthView({
           )}
           
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">E-mail</label>
+            <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">E-mail *</label>
             <Input 
               type="email"
               placeholder="seu@email.com" 
@@ -1375,7 +1531,7 @@ function AuthView({
 
           {mode !== 'forgot' && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Senha</label>
+              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Senha *</label>
               <Input 
                 type="password"
                 placeholder="******" 
@@ -1400,9 +1556,15 @@ function AuthView({
 
           <Button 
             disabled={loading}
-            className="w-full py-4 bg-brand hover:bg-brand/90 text-white shadow-xl shadow-brand/20 uppercase tracking-widest font-black text-xs h-14 rounded-xl"
+            className="w-full py-4 bg-brand hover:bg-brand/90 text-white shadow-xl shadow-brand/20 uppercase tracking-widest font-black text-xs h-14 rounded-xl cursor-pointer"
           >
-            {loading ? 'Processando...' : (mode === 'login' ? 'Entrar' : mode === 'signup' ? 'Cadastrar' : 'Enviar Link')}
+            {loading ? 'Processando...' : (
+              mode === 'login' 
+                ? 'Entrar' 
+                : mode === 'signup' 
+                  ? (signupIntent === 'church_trial' ? 'Criar Igreja & Iniciar 30 Dias Grátis' : 'Cadastrar & Entrar na Igreja')
+                  : 'Enviar Link'
+            )}
           </Button>
         </form>
 
@@ -1422,7 +1584,7 @@ function AuthView({
               </div>
 
               <Button 
-                onClick={loginWithGoogle} 
+                onClick={handleGoogleAuth} 
                 variant="ghost" 
                 className="w-full py-4 flex items-center justify-center gap-3 border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-800 dark:text-white font-black uppercase tracking-widest text-xs h-14 rounded-xl shadow-sm cursor-pointer"
               >
@@ -1722,7 +1884,14 @@ function MainContent() {
   const userEmailLower = user?.email?.toLowerCase() || '';
   const isMasterAdmin = userEmailLower === 'miqueiasmellopro@gmail.com' || userEmailLower === 'mikmellorg@gmail.com' || memberData?.isMasterAdmin === true;
 
-  const [landingMode, setLandingMode] = useState<'landing' | 'login' | 'signup'>('landing');
+  const [landingMode, setLandingMode] = useState<'landing' | 'login' | 'signup'>(() => {
+    if (typeof window === 'undefined') return 'landing';
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('signup') === 'true' || urlParams.get('cadastro') === 'true') {
+      return 'signup';
+    }
+    return 'landing';
+  });
   const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const urlParams = new URLSearchParams(window.location.search);

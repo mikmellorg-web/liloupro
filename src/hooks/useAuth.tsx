@@ -67,21 +67,98 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           let currentMember: any = null;
           
           if (!memberSnap.exists()) {
-            currentMember = {
-              uid: currentUser.uid,
-              name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Membro',
-              email: currentUser.email || '',
-              photoUrl: currentUser.photoURL || '',
-              roles: isMaster ? ['Coordenador/Líder'] : [],
-              isAdmin: isMaster,
-              availability: {},
-              churchId: 'semente', // Default to semente
-              defaultBibleVersion: 'BLIVRE' // Initial default saved in Firestore for each member
-            };
-            try {
-              await setDoc(memberRef, currentMember);
-            } catch (err) {
-              console.error("Erro ao criar perfil de membro inicial:", err);
+            if (isMaster) {
+              currentMember = {
+                uid: currentUser.uid,
+                name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Master Admin',
+                email: currentUser.email || '',
+                photoUrl: currentUser.photoURL || '',
+                roles: ['Coordenador/Líder'],
+                isAdmin: true,
+                availability: {},
+                churchId: 'semente', // Graça Soberana (Seed Church)
+                defaultBibleVersion: 'BLIVRE'
+              };
+              try {
+                await setDoc(memberRef, currentMember);
+              } catch (err) {
+                console.error("Erro ao criar perfil master:", err);
+              }
+            } else {
+              // For any new non-master user: check if there's an invite code, otherwise create an isolated new church tenant
+              const pendingInvite = typeof window !== 'undefined' ? localStorage.getItem('pending_invite_code') : null;
+              const pendingChurchName = typeof window !== 'undefined' ? localStorage.getItem('pending_church_name_for_signup') : null;
+              
+              let targetChurchId = '';
+              let isUserAdmin = true;
+              let initialRoles = ['Coordenador/Líder'];
+
+              if (pendingInvite) {
+                try {
+                  const { collection: col, query: qQuery, where: wWhere, getDocs: gDocs } = await import('firebase/firestore');
+                  const snap = await gDocs(qQuery(col(db, 'churches'), wWhere('inviteCode', '==', pendingInvite.trim().toUpperCase())));
+                  if (!snap.empty) {
+                    targetChurchId = snap.docs[0].id;
+                    isUserAdmin = false;
+                    initialRoles = [];
+                    localStorage.removeItem('pending_invite_code');
+                  }
+                } catch (inviteErr) {
+                  console.warn("Erro ao buscar convite pendente:", inviteErr);
+                }
+              }
+
+              if (!targetChurchId) {
+                // Provision a brand new isolated church tenant with 30-day trial
+                const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+                const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
+                const churchDisplayName = pendingChurchName?.trim() || `Igreja de ${currentUser.displayName || currentUser.email?.split('@')[0] || 'Louvor'}`;
+
+                try {
+                  await setDoc(doc(db, 'churches', newChurchId), {
+                    name: churchDisplayName,
+                    inviteCode: newInvite,
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser.uid,
+                    planStatus: 'trial',
+                    planId: 'completo',
+                    isTrial: true,
+                    trialStartDate: new Date().toISOString(),
+                    contactEmail: currentUser.email || '',
+                    maxMembers: 50,
+                    maxSongs: 9999,
+                    roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
+                  });
+                  targetChurchId = newChurchId;
+                  if (typeof window !== 'undefined') {
+                    localStorage.removeItem('pending_church_name_for_signup');
+                    localStorage.setItem('lilo_active_church_id', newChurchId);
+                  }
+                } catch (chErr) {
+                  console.error("Erro ao provisionar nova igreja para usuário:", chErr);
+                  targetChurchId = newChurchId;
+                }
+              }
+
+              currentMember = {
+                uid: currentUser.uid,
+                name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Líder',
+                email: currentUser.email || '',
+                photoUrl: currentUser.photoURL || '',
+                roles: initialRoles,
+                isAdmin: isUserAdmin,
+                availability: {},
+                churchId: targetChurchId,
+                defaultBibleVersion: 'BLIVRE',
+                dismissedOnboarding: true,
+                createdAt: new Date().toISOString()
+              };
+
+              try {
+                await setDoc(memberRef, currentMember);
+              } catch (err) {
+                console.error("Erro ao criar perfil de membro inicial:", err);
+              }
             }
           } else {
             currentMember = { id: memberSnap.id, ...memberSnap.data() };
@@ -116,13 +193,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
 
-            // Auto-assign default church if they don't have one
+            // Auto-assign church ONLY if missing: master gets semente, normal user gets new church
             if (!currentMember.churchId) {
-              currentMember.churchId = 'semente';
-              try {
-                await setDoc(memberRef, { churchId: 'semente' }, { merge: true });
-              } catch (err) {
-                console.error("Erro ao migrar igreja padrão do membro:", err);
+              if (isMaster) {
+                currentMember.churchId = 'semente';
+                try {
+                  await setDoc(memberRef, { churchId: 'semente' }, { merge: true });
+                } catch (err) {
+                  console.error("Erro ao migrar igreja master:", err);
+                }
+              } else {
+                const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+                const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
+                try {
+                  await setDoc(doc(db, 'churches', newChurchId), {
+                    name: `Igreja de ${currentMember.name || 'Louvor'}`,
+                    inviteCode: newInvite,
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser.uid,
+                    planStatus: 'trial',
+                    planId: 'completo',
+                    isTrial: true,
+                    trialStartDate: new Date().toISOString()
+                  });
+                  currentMember.churchId = newChurchId;
+                  currentMember.isAdmin = true;
+                  await setDoc(memberRef, { churchId: newChurchId, isAdmin: true }, { merge: true });
+                } catch (e) {
+                  console.error("Erro ao criar igreja para membro sem igreja:", e);
+                }
               }
             }
           }
@@ -159,12 +258,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
             if (!churchSnap.exists() && churchId === 'semente') {
-              // Ensure default semente church is created
+              // Ensure default semente church is created with lifetime seed protection
               const defaultChurch = {
-                name: 'Igreja Principal (Semente)',
+                name: 'Graça Soberana',
                 inviteCode: 'SEMENTE123',
-                createdAt: new Date().toISOString(),
-                createdBy: 'system'
+                createdAt: '2024-01-01T00:00:00.000Z',
+                createdBy: 'system',
+                isSeedChurch: true,
+                isVitalicio: true,
+                planStatus: 'active',
+                planName: 'PRO (Vitalício)',
+                planExpiresAt: null,
+                masterNotes: 'Igreja Pioneira e Matriz (Graça Soberana) - Acesso Vitalício Permanente.'
               };
               try {
                 await setDoc(churchRef, defaultChurch);
@@ -174,7 +279,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setChurchData({ id: 'semente', ...defaultChurch });
               }
             } else if (churchSnap.exists()) {
-              setChurchData({ id: churchSnap.id, ...churchSnap.data() });
+              const data = churchSnap.data();
+              const isSeed = churchId === 'semente' || data.isSeedChurch === true || (data.name && data.name.toLowerCase().includes('graça soberana'));
+              setChurchData({ 
+                id: churchSnap.id, 
+                ...data,
+                isSeedChurch: isSeed,
+                isVitalicio: isSeed ? true : data.isVitalicio
+              });
             } else {
               setChurchData(null);
             }

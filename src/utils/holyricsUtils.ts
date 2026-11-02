@@ -190,3 +190,57 @@ export function parseHolyricsTextFile(content: string, fallbackTitle: string): P
     chords: cleanLyrics // Base inicial caso venha apenas a letra
   };
 }
+
+/**
+ * Script oficial em JavaScript (Holyrics JSLib) para automação e importação de cultos do LiLouPro
+ */
+export const HOLYRICS_JAVASCRIPT_SCRIPT = `// ========================================================
+// SCRIPT DE IMPORTAÇÃO AUTOMÁTICA - LILOUPRO PARA HOLYRICS
+// ========================================================
+// 1. No LiLouPro, selecione o culto e clique em:
+//    "Copiar Lista do Culto para o Holyrics"
+// 2. No Holyrics, clique para executar este Script
+// ========================================================
+
+function importarDoLiloupro() {
+    var clipboard = h.getClipboard();
+    if (!clipboard || clipboard.trim() === '') {
+        h.hly('ShowNotification', { 'text': 'Área de transferência vazia! Copie o culto no LiLouPro primeiro.' });
+        h.log('Área de transferência vazia. Copie a lista do culto no LiLouPro.');
+        return;
+    }
+
+    var lines = clipboard.split("\\n");
+    var adicionadas = 0;
+    var naoEncontradas = [];
+
+    for (var i = 0; i < lines.length; i++) {
+        var songTitle = lines[i].trim();
+        // Ignora linhas vazias ou comentários
+        if (songTitle === '' || songTitle.indexOf('//') === 0 || songTitle.indexOf('#') === 0) {
+            continue;
+        }
+
+        // Pesquisa a música no acervo interno do Holyrics
+        var result = h.hly('SearchSong', { 'text': songTitle });
+        if (result && result.data && result.data.length > 0) {
+            var song = result.data[0];
+            // Adiciona a música diretamente na playlist de projeção
+            h.hly('AddToLyricsPlaylist', { 'id_song': song.id });
+            adicionadas++;
+            h.log('✓ Adicionada ao culto: ' + song.title);
+        } else {
+            naoEncontradas.push(songTitle);
+            h.log('⚠ Não encontrada no acervo: ' + songTitle);
+        }
+    }
+
+    if (adicionadas > 0) {
+        h.hly('ShowNotification', { 'text': 'LiLouPro: ' + adicionadas + ' música(s) adicionada(s) à playlist!' });
+    }
+    if (naoEncontradas.length > 0) {
+        h.log('Músicas não encontradas (cadastre-as ou importe o .zip gerado no LiLouPro): ' + naoEncontradas.join(', '));
+    }
+}
+
+importarDoLiloupro();`;

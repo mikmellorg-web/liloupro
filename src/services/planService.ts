@@ -127,14 +127,22 @@ export function isVitalicioPlan(churchData: any): boolean {
   if (!churchData) return false;
   const planId = (churchData.planId || churchData.subscription?.plan || '').toLowerCase();
   const churchName = (churchData.name || churchData.churchName || '').toLowerCase();
+  const churchId = (churchData.id || '').toLowerCase();
   
+  // 1. Igreja pioneira e semente (Graça Soberana) tem acesso perpétuo vitalício incondicional
+  if (
+    churchId === 'semente' ||
+    churchData.isSeedChurch === true ||
+    churchName.includes('graça soberana') ||
+    churchName.includes('graca soberana')
+  ) {
+    return true;
+  }
+
   if (planId === 'vitalicio' || planId === 'lifetime' || churchData.isVitalicio === true) {
     return true;
   }
-  // Igreja pioneira com plano vitalício concedido
-  if (churchName.includes('graça soberana') || churchName.includes('graca soberana')) {
-    return true;
-  }
+
   return false;
 }
 
@@ -163,6 +171,7 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
     };
   }
 
+  // Igreja Pioneira (Graça Soberana / Semente) NUNCA inicia contagem de dias e NUNCA expira
   if (isVitalicioPlan(churchData)) {
     return {
       planId: 'vitalicio',
@@ -188,9 +197,26 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   }
 
   const rawPlanId = (churchData.planId || churchData.subscription?.plan || 'completo').toLowerCase();
-  const createdAt = churchData.createdAt ? new Date(churchData.createdAt).getTime() : Date.now();
+  
+  // Parse createdAt safely across Firestore Timestamp objects, numbers, and ISO strings
+  let createdAtMs = Date.now();
+  if (churchData.createdAt) {
+    if (typeof churchData.createdAt.toDate === 'function') {
+      createdAtMs = churchData.createdAt.toDate().getTime();
+    } else if (churchData.createdAt.seconds) {
+      createdAtMs = churchData.createdAt.seconds * 1000;
+    } else if (typeof churchData.createdAt === 'number') {
+      createdAtMs = churchData.createdAt;
+    } else if (typeof churchData.createdAt === 'string') {
+      const parsed = new Date(churchData.createdAt).getTime();
+      if (!isNaN(parsed)) {
+        createdAtMs = parsed;
+      }
+    }
+  }
+
   const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
-  const elapsed = Date.now() - createdAt;
+  const elapsed = Math.max(0, Date.now() - createdAtMs);
   const trialDaysLeft = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
   const isExpired = elapsed > trialDurationMs && !churchData.subscription?.active;
   const isPaidActive = Boolean(churchData.subscription?.active);

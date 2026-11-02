@@ -148,6 +148,9 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
 
   // WhatsApp Share / Prospecting States
   const appInviteLink = useMemo(() => {
+    if (typeof window !== 'undefined' && !window.location.hostname.includes('liloupro.com.br')) {
+      return `${window.location.origin}/?landing=true`;
+    }
     return 'https://www.liloupro.com.br/?landing=true';
   }, []);
 
@@ -625,6 +628,58 @@ Conte conosco para servir seu ministério com excelência!`
     } catch (err) {
       console.error("Erro ao criar igreja:", err);
       showToast("Erro ao criar igreja no sistema.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleMigrateMemberToNewChurch = async (memberId: string, memberName: string, memberEmail?: string) => {
+    const customChurchName = window.prompt(
+      `Criar igreja exclusiva para este usuário e isolar da Graça Soberana:\n\nInforme o nome da igreja de ${memberName}:`,
+      `Igreja de ${memberName}`
+    );
+    if (!customChurchName || !customChurchName.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // 1. Create brand new church tenant with 30-day trial
+      await setDoc(doc(db, 'churches', newChurchId), {
+        name: customChurchName.trim(),
+        inviteCode: newInvite,
+        createdAt: new Date().toISOString(),
+        createdBy: memberId,
+        planStatus: 'trial',
+        planId: 'completo',
+        isTrial: true,
+        trialStartDate: new Date().toISOString(),
+        contactEmail: memberEmail || '',
+        maxMembers: 50,
+        maxSongs: 9999,
+        roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
+      });
+
+      // 2. Point member to their new church as Leader/Admin
+      await updateDoc(doc(db, 'members', memberId), {
+        churchId: newChurchId,
+        isAdmin: true,
+        roles: ['Coordenador/Líder'],
+        dismissedOnboarding: true
+      });
+
+      // 3. Register admin role
+      await setDoc(doc(db, 'admins', memberId), {
+        active: true,
+        churchId: newChurchId,
+        role: 'admin'
+      });
+
+      showToast(`Usuário "${memberName}" migrado com sucesso para "${customChurchName}" com 30 dias grátis VIP!`, 'success');
+    } catch (err) {
+      console.error("Erro ao migrar usuário para nova igreja:", err);
+      showToast("Erro ao transferir usuário para nova congregação.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -2175,26 +2230,42 @@ Conte conosco para servir seu ministério com excelência!`
                             </p>
                           ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                              {churchMembers.map(m => (
-                                <div key={m.id} className="p-3 bg-black/5 dark:bg-white/5 border border-border/50 rounded-2xl flex items-center gap-3">
-                                  {m.photoUrl ? (
-                                    <img src={m.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover border border-brand/30" />
-                                  ) : (
-                                    <div className="w-9 h-9 rounded-full bg-brand/20 text-brand font-black text-xs flex items-center justify-center">
-                                      {m.name?.charAt(0).toUpperCase() || 'M'}
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5">
-                                      <p className="text-xs font-bold text-text-main truncate">{m.name || 'Membro'}</p>
-                                      {m.isAdmin && (
-                                        <span className="bg-brand/20 text-brand text-[8px] font-black px-1.5 rounded uppercase">ADM</span>
+                              {churchMembers.map(m => {
+                                const isMasterUser = m.email?.toLowerCase() === 'miqueiasmellopro@gmail.com' || m.email?.toLowerCase() === 'mikmellorg@gmail.com';
+                                const canMigrateOut = church.id === 'semente' && !isMasterUser;
+                                return (
+                                  <div key={m.id} className="p-3 bg-black/5 dark:bg-white/5 border border-border/50 rounded-2xl flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      {m.photoUrl ? (
+                                        <img src={m.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover border border-brand/30 shrink-0" />
+                                      ) : (
+                                        <div className="w-9 h-9 rounded-full bg-brand/20 text-brand font-black text-xs flex items-center justify-center shrink-0">
+                                          {m.name?.charAt(0).toUpperCase() || 'M'}
+                                        </div>
                                       )}
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <p className="text-xs font-bold text-text-main truncate">{m.name || 'Membro'}</p>
+                                          {m.isAdmin && (
+                                            <span className="bg-brand/20 text-brand text-[8px] font-black px-1.5 rounded uppercase">ADM</span>
+                                          )}
+                                        </div>
+                                        <p className="text-[10px] text-text-muted truncate">{m.email || 'Sem e-mail'}</p>
+                                      </div>
                                     </div>
-                                    <p className="text-[10px] text-text-muted truncate">{m.email || 'Sem e-mail'}</p>
+
+                                    {canMigrateOut && (
+                                      <button
+                                        onClick={() => handleMigrateMemberToNewChurch(m.id, m.name, m.email)}
+                                        className="px-2 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[9px] font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer shadow-sm hover:scale-105"
+                                        title="Desvincular da Graça Soberana e criar uma igreja própria com 30 dias de teste"
+                                      >
+                                        Criar Igreja (30d)
+                                      </button>
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
