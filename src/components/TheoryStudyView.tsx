@@ -1386,45 +1386,219 @@ export default function TheoryStudyView() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Função 1: Tônica */}
                 <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl relative space-y-4">
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">Função 1</span>
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">Função 1</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Repouso</span>
+                  </div>
                   <h3 className="font-extrabold text-lg text-emerald-500 dark:text-emerald-400 flex items-center gap-1.5">
                     Tônica (Repouso)
                   </h3>
                   <p className="text-sm text-text-muted dark:text-white leading-relaxed font-normal">
                     Representa o chão, a fundação estável onde nos sentimos confortáveis. É a casa, o ponto de partida e o fim absoluto da jornada.
                   </p>
-                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-emerald-500/20 pt-3 space-y-1.5 font-medium">
-                    <div><strong>Sensação:</strong> Conclusão, paz, repouso absoluto.</div>
-                    <div><strong>Graus:</strong> I, VIm, IIIm.</div>
+
+                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-emerald-500/20 pt-3 space-y-2 font-medium">
+                    <div>
+                      <strong className="text-emerald-600 dark:text-emerald-400">Acorde Principal:</strong> <span className="font-mono font-bold">I (ou I7M)</span>
+                    </div>
+                    <div>
+                      <strong className="text-emerald-600 dark:text-emerald-400">Acordes Substitutos:</strong> <span className="font-mono font-bold">IIIm7</span> e <span className="font-mono font-bold">VIm7</span>
+                      <p className="text-[11px] text-text-muted dark:text-zinc-300 mt-0.5 font-normal">
+                        Assumem o papel de <em>Tônica Substituta</em> gerando repouso suave (IIIm) ou contemplativo e intimista (VIm), pois compartilham a maioria das notas com o I grau.
+                      </p>
+                    </div>
+                    <div className="text-[11px] pt-1 border-t border-emerald-500/10">
+                      <strong>Sensação:</strong> Conclusão, paz e descanso absoluto no altar.
+                    </div>
                   </div>
                 </div>
 
+                {/* Função 2: Subdominante */}
                 <div className="bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/20 p-6 rounded-2xl relative space-y-4">
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-blue-500/15 text-blue-500 dark:text-blue-400">Função 2</span>
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-blue-500/15 text-blue-500 dark:text-blue-400">Função 2</span>
+                    <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">Movimento</span>
+                  </div>
                   <h3 className="font-extrabold text-lg text-blue-550 dark:text-blue-450 flex items-center gap-1.5">
                     Subdominante (Passagem)
                   </h3>
                   <p className="text-sm text-text-muted dark:text-white leading-relaxed font-normal">
-                    Representa o caminhar, o afastamento da tônica de forma segura mas em andamento. Preparação que conduz em direção à dominante.
+                    Sensação de afastamento ou transição em relação ao repouso da tônica, servindo como um ponto intermediário que prepara o caminho para a dominante ou retorna à tônica.
                   </p>
-                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-blue-500/20 pt-3 space-y-1.5 font-medium">
-                    <div><strong>Sensação:</strong> Preparação, movimento em andamento.</div>
-                    <div><strong>Graus:</strong> IV, IIm.</div>
+
+                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-blue-500/20 pt-3 space-y-2 font-medium">
+                    <div>
+                      <strong className="text-blue-600 dark:text-blue-400">Acorde Principal:</strong> <span className="font-mono font-bold">IV (ou IV7M)</span>
+                    </div>
+                    <div>
+                      <strong className="text-blue-600 dark:text-blue-400">Acorde Substituto:</strong> <span className="font-mono font-bold">IIm7</span>
+                      <p className="text-[11px] text-text-muted dark:text-zinc-300 mt-0.5 font-normal">
+                        Assume o papel de <em>Subdominante Substituta</em> com sonoridade aveludada, conduzindo com maestria à Dominante na clássica cadência <code>II - V - I</code>.
+                      </p>
+                    </div>
+                    <div className="text-[11px] pt-1 border-t border-blue-500/10">
+                      <strong>Sensação:</strong> Preparação, movimento em andamento e entrega.
+                    </div>
                   </div>
                 </div>
 
+                {/* Função 3: Dominante */}
                 <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 p-6 rounded-2xl relative space-y-4">
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-amber-500/15 text-amber-500 dark:text-amber-400">Função 3</span>
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded bg-amber-500/15 text-amber-500 dark:text-amber-400">Função 3</span>
+                    <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">Tensão</span>
+                  </div>
                   <h3 className="font-extrabold text-lg text-amber-550 dark:text-amber-400 flex items-center gap-1.5">
                     Dominante (Tensão Máxima)
                   </h3>
                   <p className="text-sm text-text-muted dark:text-white leading-relaxed font-normal">
-                    A instabilidade física. Ela abriga o trítono, intervalo tenso que reclama por resolução para um semitom acima/abaixo em direção à tônica.
+                    A instabilidade física. Ela abriga o trítono, intervalo tenso que atrai irresistivelmente a harmonia para a resolução imediata na tônica.
                   </p>
-                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-amber-500/20 pt-3 space-y-1.5 font-medium">
-                    <div><strong>Sensação:</strong> Ansiedade, urgência de resolução.</div>
-                    <div><strong>Graus:</strong> V (ou V7), VIIm(b5).</div>
+
+                  <div className="text-xs sm:text-sm text-text-muted dark:text-white border-t border-amber-500/20 pt-3 space-y-2 font-medium">
+                    <div>
+                      <strong className="text-amber-600 dark:text-amber-400">Acorde Principal:</strong> <span className="font-mono font-bold">V (ou V7)</span>
+                    </div>
+                    <div>
+                      <strong className="text-amber-600 dark:text-amber-400">Acorde Substituto:</strong> <span className="font-mono font-bold">VIIm7(b5) / VII°</span>
+                      <p className="text-[11px] text-text-muted dark:text-zinc-300 mt-0.5 font-normal">
+                        Assume o papel de <em>Dominante Substituta</em> por conter exatamente o mesmo trítono de tensão do V grau, além do substituto cromático <code>SubV (bII7)</code>.
+                      </p>
+                    </div>
+                    <div className="text-[11px] pt-1 border-t border-amber-500/10">
+                      <strong>Sensação:</strong> Urgência, expectativa e atração magnética à Tônica.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quadro Geral de Substituição Harmônica (Conforme diagrama canônico) */}
+              <div className="bg-gradient-to-br from-indigo-500/5 via-slate-500/5 to-purple-500/5 dark:from-indigo-950/20 dark:via-zinc-900/40 dark:to-purple-950/20 border border-indigo-500/30 rounded-3xl p-6 sm:p-8 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-wider border border-indigo-500/30 inline-block mb-1">
+                      Teoria dos Graus Substitutos
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-text-main dark:text-white flex items-center gap-2">
+                      <span>Quadro de Substituição Harmônica</span>
+                    </h3>
+                  </div>
+                  <span className="text-xs text-text-muted dark:text-slate-300 font-medium">
+                    Como acordes secundários assumem o papel das 3 forças principais
+                  </span>
+                </div>
+
+                {/* Diagrama Visual das 3 Colunas com Setas de Substituição */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-black/15 dark:bg-black/35 p-5 sm:p-6 rounded-2xl border border-border">
+                  {/* Coluna 1: TÔNICA */}
+                  <div className="flex flex-col items-center text-center space-y-3 p-4 rounded-xl bg-card/60 dark:bg-zinc-900/60 border border-emerald-500/30">
+                    <span className="px-3 py-1 rounded-lg bg-emerald-500 text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                      TÔNICA
+                    </span>
+                    <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-350">
+                      <span className="block text-xl font-mono font-black">I7M</span>
+                      <span className="text-[10px] uppercase font-bold text-text-muted dark:text-zinc-300">Principal (ex: C7M)</span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-6 py-1 text-emerald-500">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-black">↓</span>
+                        <span className="text-[9px] font-mono font-bold text-text-muted uppercase">substitui</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-black">↓</span>
+                        <span className="text-[9px] font-mono font-bold text-text-muted uppercase">substitui</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <div className="p-2.5 rounded-lg bg-black/10 dark:bg-white/5 border border-border">
+                        <span className="block text-base font-mono font-black text-text-main dark:text-white">IIIm7</span>
+                        <span className="block text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">Substituto Suave</span>
+                        <span className="block text-[9px] text-text-muted font-mono">(ex: Em7)</span>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-black/10 dark:bg-white/5 border border-border">
+                        <span className="block text-base font-mono font-black text-text-main dark:text-white">VIm7</span>
+                        <span className="block text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">Relativa Menor</span>
+                        <span className="block text-[9px] text-text-muted font-mono">(ex: Am7)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Coluna 2: SUBDOMINANTE */}
+                  <div className="flex flex-col items-center text-center space-y-3 p-4 rounded-xl bg-card/60 dark:bg-zinc-900/60 border border-blue-500/30">
+                    <span className="px-3 py-1 rounded-lg bg-blue-600 text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                      SUBDOMINANTE
+                    </span>
+                    <div className="w-full py-3 px-4 rounded-xl bg-blue-500/10 border border-blue-500/40 text-blue-600 dark:text-blue-350">
+                      <span className="block text-xl font-mono font-black">IV7M</span>
+                      <span className="text-[10px] uppercase font-bold text-text-muted dark:text-zinc-300">Principal (ex: F7M)</span>
+                    </div>
+
+                    <div className="flex flex-col items-center py-1 text-blue-500">
+                      <span className="text-xs font-black">↓</span>
+                      <span className="text-[9px] font-mono font-bold text-text-muted uppercase">substitui</span>
+                    </div>
+
+                    <div className="w-full p-2.5 rounded-lg bg-black/10 dark:bg-white/5 border border-border">
+                      <span className="block text-base font-mono font-black text-text-main dark:text-white">IIm7</span>
+                      <span className="block text-[9px] font-bold text-blue-600 dark:text-blue-400 mt-0.5">Sub-Relativa (Preparação)</span>
+                      <span className="block text-[9px] text-text-muted font-mono">(ex: Dm7)</span>
+                    </div>
+                  </div>
+
+                  {/* Coluna 3: DOMINANTE */}
+                  <div className="flex flex-col items-center text-center space-y-3 p-4 rounded-xl bg-card/60 dark:bg-zinc-900/60 border border-amber-500/30">
+                    <span className="px-3 py-1 rounded-lg bg-amber-500 text-white font-black text-xs uppercase tracking-wider shadow-sm">
+                      DOMINANTE
+                    </span>
+                    <div className="w-full py-3 px-4 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-350">
+                      <span className="block text-xl font-mono font-black">V7</span>
+                      <span className="text-[10px] uppercase font-bold text-text-muted dark:text-zinc-300">Principal (ex: G7)</span>
+                    </div>
+
+                    <div className="flex flex-col items-center py-1 text-amber-500">
+                      <span className="text-xs font-black">↓</span>
+                      <span className="text-[9px] font-mono font-bold text-text-muted uppercase">substitui</span>
+                    </div>
+
+                    <div className="w-full p-2.5 rounded-lg bg-black/10 dark:bg-white/5 border border-border">
+                      <span className="block text-base font-mono font-black text-text-main dark:text-white">VIIm7(b5)</span>
+                      <span className="block text-[9px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">Acorde Sensível (Trítono)</span>
+                      <span className="block text-[9px] text-text-muted font-mono">(ex: Bm7(b5) / B°)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Por que as substituições funcionam (Notas em comum) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm text-text-muted dark:text-zinc-200">
+                  <div className="p-4 rounded-xl bg-card border border-border space-y-2">
+                    <strong className="text-text-main dark:text-white font-extrabold flex items-center gap-1.5">
+                      <span>💡 Por que a substituição funciona? (Notas em Comum)</span>
+                    </strong>
+                    <p className="leading-relaxed text-xs">
+                      Acordes substitutos compartilham <strong>3 das 4 notas</strong> da tétrade do acorde principal. Por exemplo, em Dó Maior:
+                    </p>
+                    <ul className="space-y-1 font-mono text-[11px] text-text-main dark:text-zinc-300">
+                      <li>• <strong>C7M</strong> (C - <strong>E - G - B</strong>) ↔ <strong>Em7</strong> (<strong>E - G - B</strong> - D) [3 notas iguais!]</li>
+                      <li>• <strong>C7M</strong> (<strong>C - E - G</strong> - B) ↔ <strong>Am7</strong> (A - <strong>C - E - G</strong>) [3 notas iguais!]</li>
+                      <li>• <strong>F7M</strong> (<strong>F - A - C</strong> - E) ↔ <strong>Dm7</strong> (D - <strong>F - A - C</strong>) [3 notas iguais!]</li>
+                      <li>• <strong>G7</strong> (G - <strong>B - D - F</strong>) ↔ <strong>Bm7(b5)</strong> (<strong>B - D - F</strong> - A) [mesmo trítono B-F!]</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-card border border-border space-y-2">
+                    <strong className="text-text-main dark:text-white font-extrabold flex items-center gap-1.5">
+                      <span>🎸 Como usar no Louvor e no Altar?</span>
+                    </strong>
+                    <p className="leading-relaxed text-xs">
+                      Quando um hino repete muito o acorde <strong>I (Tônica)</strong>, você pode trocar pelo <strong>VIm</strong> no primeiro verso para trazer um sentimento de oração e intimidade.
+                    </p>
+                    <p className="leading-relaxed text-xs">
+                      Se a música usa <code>F → G → C</code> (IV - V - I), experimente tocar <code>Dm7 → G7 → C7M</code> (II - V - I). A substituição do IV pelo II entrega a clássica sonoridade sofisticada e fluida das grandes produções de louvor!
+                    </p>
                   </div>
                 </div>
               </div>

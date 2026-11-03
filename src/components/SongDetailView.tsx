@@ -6419,13 +6419,76 @@ export function SongDetailView({
                       {(() => {
                         const keyBase = (currentKey || 'C').match(/^([A-G][#b]?)/)?.[1] || 'C';
                         const degrees = [
-                          { roman: 'I', abbrev: 'Tôn', name: 'Tônica', desc: 'Repouso / Centro Tonal principal', semitones: 0, minor: false },
-                          { roman: 'IIm', abbrev: 'SubR', name: 'Supertônica / Sub-Relativa', desc: 'Transição e preparação Subdominante', semitones: 2, minor: true },
-                          { roman: 'IIIm', abbrev: 'Med', name: 'Mediante', desc: 'Repouso secundário suave', semitones: 4, minor: true },
-                          { roman: 'IV', abbrev: 'Subd', name: 'Subdominante', desc: 'Afastamento e meio de tensão', semitones: 5, minor: false },
-                          { roman: 'V', abbrev: 'Dom', name: 'Dominante', desc: 'Tensão Máxima (pede resolução na Tônica)', semitones: 7, minor: false },
-                          { roman: 'VIm', abbrev: 'Rel', name: 'Relativa Menor', desc: 'Repouso secundário / Tonalidade íntima', semitones: 9, minor: true },
-                          { roman: 'VIIº', abbrev: 'Sens', name: 'Sensível / Subtônica', desc: 'Tensão direcional rumo à Tônica', semitones: 11, minor: true },
+                          { 
+                            roman: 'I', 
+                            abbrev: 'Tôn', 
+                            name: 'Tônica Principal', 
+                            desc: 'Centro tonal primordial e repouso absoluto', 
+                            roleType: 'Principal',
+                            badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+                            semitones: 0, 
+                            minor: false 
+                          },
+                          { 
+                            roman: 'IIm', 
+                            abbrev: 'Subd', 
+                            name: 'Subdominante Substituta (IIm)', 
+                            desc: 'Substituto do IV grau (preparação fluida para o V)', 
+                            roleType: 'Substituto',
+                            badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30',
+                            semitones: 2, 
+                            minor: true 
+                          },
+                          { 
+                            roman: 'IIIm', 
+                            abbrev: 'Tôn', 
+                            name: 'Tônica Substituta (IIIm)', 
+                            desc: 'Substituto do I grau (repouso suave e meditativo)', 
+                            roleType: 'Substituto',
+                            badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+                            semitones: 4, 
+                            minor: true 
+                          },
+                          { 
+                            roman: 'IV', 
+                            abbrev: 'Subd', 
+                            name: 'Subdominante Principal', 
+                            desc: 'Afastamento primordial e transição em andamento', 
+                            roleType: 'Principal',
+                            badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30',
+                            semitones: 5, 
+                            minor: false 
+                          },
+                          { 
+                            roman: 'V', 
+                            abbrev: 'Dom', 
+                            name: 'Dominante Principal', 
+                            desc: 'Tensão máxima que atrai e clama por resolução na Tônica', 
+                            roleType: 'Principal',
+                            badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                            semitones: 7, 
+                            minor: false 
+                          },
+                          { 
+                            roman: 'VIm', 
+                            abbrev: 'Tôn', 
+                            name: 'Tônica Substituta (VIm / Relativa)', 
+                            desc: 'Substituto do I grau (relativa menor / repouso íntimo)', 
+                            roleType: 'Substituto',
+                            badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
+                            semitones: 9, 
+                            minor: true 
+                          },
+                          { 
+                            roman: 'VIIº', 
+                            abbrev: 'Dom', 
+                            name: 'Dominante Substituta (VII° / Sensível)', 
+                            desc: 'Substituto do V grau (contém o mesmo trítono de tensão)', 
+                            roleType: 'Substituto',
+                            badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                            semitones: 11, 
+                            minor: true 
+                          },
                         ];
 
                         return degrees.map(deg => {
@@ -6436,9 +6499,14 @@ export function SongDetailView({
                             <tr key={deg.roman} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                               <td className="p-2.5 font-mono font-black text-brand text-xs">{deg.roman}</td>
                               <td className="p-2.5">
-                                <span className="px-2 py-0.5 rounded-md bg-brand/10 text-brand font-mono font-black text-[11px]">
-                                  {deg.abbrev}
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-md font-mono font-black text-[11px] ${deg.badgeColor}`}>
+                                    {deg.abbrev}
+                                  </span>
+                                  <span className={`text-[9px] font-extrabold uppercase px-1 py-0.2 rounded ${deg.roleType === 'Principal' ? 'bg-black/10 dark:bg-white/10 text-text-main' : 'bg-transparent text-text-muted border border-border'}`}>
+                                    {deg.roleType}
+                                  </span>
+                                </div>
                               </td>
                               <td className="p-2.5">
                                 <span className="font-black text-text-main block">{deg.name}</span>
@@ -6455,6 +6523,60 @@ export function SongDetailView({
                       })()}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Resumo Visual de Substituição das Funções (Conforme diagrama canônico) */}
+                <div className="bg-gradient-to-r from-emerald-500/5 via-blue-500/5 to-amber-500/5 border border-border rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-text-main flex items-center gap-1.5">
+                      <span>Mapa de Substituição das Funções</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-text-muted">Principal vs. Substitutos</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Tônica */}
+                    <div className="p-2.5 rounded-xl bg-card border border-emerald-500/30 text-center space-y-1">
+                      <span className="text-[10px] font-black uppercase text-emerald-500 dark:text-emerald-400 block">
+                        Tônica (Repouso)
+                      </span>
+                      <div className="text-xs font-mono font-bold text-text-main">
+                        Principal: <strong className="text-emerald-600 dark:text-emerald-400 font-black">I7M</strong>
+                      </div>
+                      <div className="text-[10px] text-emerald-500 font-bold">↓ substitui</div>
+                      <div className="text-[11px] font-mono text-text-muted">
+                        Substitutos: <strong className="text-text-main">IIIm7</strong> e <strong className="text-text-main">VIm7</strong>
+                      </div>
+                    </div>
+
+                    {/* Subdominante */}
+                    <div className="p-2.5 rounded-xl bg-card border border-blue-500/30 text-center space-y-1">
+                      <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 block">
+                        Subdominante (Passagem)
+                      </span>
+                      <div className="text-xs font-mono font-bold text-text-main">
+                        Principal: <strong className="text-blue-600 dark:text-blue-400 font-black">IV7M</strong>
+                      </div>
+                      <div className="text-[10px] text-blue-500 font-bold">↓ substitui</div>
+                      <div className="text-[11px] font-mono text-text-muted">
+                        Substituto: <strong className="text-text-main">IIm7</strong>
+                      </div>
+                    </div>
+
+                    {/* Dominante */}
+                    <div className="p-2.5 rounded-xl bg-card border border-amber-500/30 text-center space-y-1">
+                      <span className="text-[10px] font-black uppercase text-amber-500 dark:text-amber-400 block">
+                        Dominante (Tensão)
+                      </span>
+                      <div className="text-xs font-mono font-bold text-text-main">
+                        Principal: <strong className="text-amber-600 dark:text-amber-400 font-black">V7</strong>
+                      </div>
+                      <div className="text-[10px] text-amber-500 font-bold">↓ substitui</div>
+                      <div className="text-[11px] font-mono text-text-muted">
+                        Substituto: <strong className="text-text-main">VIIm7(b5) / VII°</strong>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
