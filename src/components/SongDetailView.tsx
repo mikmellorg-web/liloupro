@@ -4980,6 +4980,12 @@ export function SongDetailView({
                   >
                     <Volume2 size={18} className={((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? "animate-pulse" : ""} />
                     <span>{((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? 'Ouvindo...' : 'Abrir Player'}</span>
+                    <span className="inline-flex items-center justify-center ml-1 shrink-0 transition-transform hover:scale-105" title="YouTube Player">
+                      <svg className="w-6 h-[17px] shrink-0 rounded-[4px] shadow-sm drop-shadow" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="28" height="20" rx="5" fill="#FF0000" />
+                        <path d="M11.5 5.5L19 10L11.5 14.5V5.5Z" fill="white" />
+                      </svg>
+                    </span>
                   </button>
                 </div>
               </div>
