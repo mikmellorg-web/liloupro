@@ -5,6 +5,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firesto
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { convertSingleChordToHarmonicMode } from '../services/chordService';
+import { ChordHarmonicContextModal } from './ChordHarmonicContextModal';
 
 // NOTES definition
 const NOTES_DICT = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -2938,6 +2939,7 @@ export interface QuickChordPopoverProps {
   availableChords?: string[];
   onSelectChord?: (chord: string) => void;
   songKey?: string;
+  songTitle?: string;
 }
 
 export function QuickChordPopover({
@@ -2945,11 +2947,13 @@ export function QuickChordPopover({
   onClose,
   availableChords = [],
   onSelectChord,
-  songKey
+  songKey,
+  songTitle
 }: QuickChordPopoverProps) {
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
   const [instrument, setInstrument] = useState<'guitar' | 'piano'>('guitar');
+  const [showHarmonicModal, setShowHarmonicModal] = useState(false);
 
   // Close on Escape key
   useEffect(() => {
@@ -2993,7 +2997,7 @@ export function QuickChordPopover({
       dragElastic={0.05}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => setIsDragging(false)}
-      className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] w-[calc(100vw-2rem)] max-w-xs sm:w-80 antialiased notranslate ${
+      className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] w-[calc(100vw-2rem)] max-w-sm sm:w-84 antialiased notranslate ${
         isDragging ? 'shadow-2xl ring-2 ring-brand cursor-grabbing scale-[1.02]' : ''
       }`}
       translate="no"
@@ -3017,19 +3021,19 @@ export function QuickChordPopover({
               dragControls.start(e);
             }
           }}
-          className="flex items-center justify-between px-4 py-2.5 bg-brand/10 border-b border-border/60 cursor-grab active:cursor-grabbing select-none touch-none"
+          className="flex items-center justify-between px-3 sm:px-4 py-2 bg-brand/10 border-b border-border/60 cursor-grab active:cursor-grabbing select-none touch-none gap-2"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <span className="p-1.5 rounded-lg bg-brand text-white shadow-xs shrink-0">
-              <Music size={15} />
+              <Music size={14} />
             </span>
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-base sm:text-lg font-black text-text-main tracking-tight font-mono">
                   {chord}
                 </span>
                 {songKey && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/15 text-brand uppercase shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand/15 text-brand uppercase shrink-0">
                     Tom {songKey}
                   </span>
                 )}
@@ -3037,14 +3041,27 @@ export function QuickChordPopover({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-text-muted hover:text-text-main transition-colors cursor-pointer shrink-0"
-            title="Fechar (Esc)"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Botão de Análise Harmônica */}
+            <button
+              type="button"
+              onClick={() => setShowHarmonicModal(true)}
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 min-h-[34px] rounded-lg bg-brand hover:bg-brand-hover text-white text-[10px] sm:text-[11px] font-black uppercase tracking-tight shadow-sm transition-all cursor-pointer select-none active:scale-95 border border-brand/40"
+              title="Abrir Análise e Contexto Harmônico deste Acorde"
+            >
+              <Sparkles size={12} className="shrink-0 text-amber-300 animate-pulse" />
+              <span>Análise Harmônica</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[34px] min-w-[34px] p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-text-muted hover:text-text-main transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+              title="Fechar (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Instrument Toggle */}
@@ -3134,7 +3151,23 @@ export function QuickChordPopover({
           )}
         </div>
       </div>
+
+      {/* Modal Raio-X de Análise Harmônica em Tela Cheia */}
+      <ChordHarmonicContextModal
+        isOpen={showHarmonicModal}
+        onClose={() => setShowHarmonicModal(false)}
+        chord={chord}
+        songKey={songKey}
+        availableChords={availableChords}
+        onSelectChord={(newChord) => {
+          if (onSelectChord) onSelectChord(newChord);
+        }}
+        songTitle={songTitle}
+      />
     </motion.div>
   );
 }
+
+export { ChordHarmonicContextModal } from './ChordHarmonicContextModal';
+
 

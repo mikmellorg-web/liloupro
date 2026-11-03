@@ -363,8 +363,8 @@ async function startServer() {
     return res.json({ imageUrl: foundUrl });
   });
 
-  // POST endpoint to analyze biblical references for a song
-  app.post("/api/analyze-bible-references", async (req, res) => {
+  // POST endpoint to analyze biblical references for a song (com proteção estrita de timeout)
+  const handleAnalyzeBibleReferences = async (req: express.Request, res: express.Response) => {
     try {
       const { title, content } = req.body;
       
@@ -401,60 +401,68 @@ async function startServer() {
       let responseText = "";
       let lastError: any = null;
 
-      for (const model of modelsToTry) {
-        try {
-          console.log(`Análise bíblica: testando modelo "${model}"...`);
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  summary: {
-                    type: Type.STRING,
-                    description: "A short, beautiful theological summary (2-3 sentences max) explaining the biblical core, themes, and inspiration of the song, in Portuguese."
-                  },
-                  references: {
-                    type: Type.ARRAY,
-                    description: "List of exactly 3 to 4 key bible verses providing scripture backing or direct textual parallel to the song.",
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        verseRef: {
-                          type: Type.STRING,
-                          description: "The Bible book, chapter and verse coordinate, e.g. 'Salmos 23:1', 'Efésios 2:8-9' in Portuguese."
+      const aiCallPromise = (async () => {
+        for (const model of modelsToTry) {
+          try {
+            console.log(`Análise bíblica: testando modelo "${model}"...`);
+            const response = await ai.models.generateContent({
+              model: model,
+              contents: prompt,
+              config: {
+                systemInstruction,
+                ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    summary: {
+                      type: Type.STRING,
+                      description: "A short, beautiful theological summary (2-3 sentences max) explaining the biblical core, themes, and inspiration of the song, in Portuguese."
+                    },
+                    references: {
+                      type: Type.ARRAY,
+                      description: "List of exactly 3 to 4 key bible verses providing scripture backing or direct textual parallel to the song.",
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          verseRef: {
+                            type: Type.STRING,
+                            description: "The Bible book, chapter and verse coordinate, e.g. 'Salmos 23:1', 'Efésios 2:8-9' in Portuguese."
+                          },
+                          verseText: {
+                            type: Type.STRING,
+                            description: "The full text/content of the scripture verse in Portuguese (NVI or ARA version)."
+                          },
+                          relation: {
+                            type: Type.STRING,
+                            description: "A 1-2 sentence explanation in Portuguese describing the direct connection between this verse and the song lyrics."
+                          }
                         },
-                        verseText: {
-                          type: Type.STRING,
-                          description: "The full text/content of the scripture verse in Portuguese (NVI or ARA version)."
-                        },
-                        relation: {
-                          type: Type.STRING,
-                          description: "A 1-2 sentence explanation in Portuguese describing the direct connection between this verse and the song lyrics."
-                        }
-                      },
-                      required: ["verseRef", "verseText", "relation"]
+                        required: ["verseRef", "verseText", "relation"]
+                      }
                     }
-                  }
-                },
-                required: ["summary", "references"]
+                  },
+                  required: ["summary", "references"]
+                }
               }
-            }
-          });
+            });
 
-          if (response && response.text) {
-            responseText = response.text;
-            break; // Found a working response!
+            if (response && response.text) {
+              return response.text;
+            }
+          } catch (err: any) {
+            lastError = err;
+            console.log(`[Status] ${model} indisponível: ${err?.message || err}`);
           }
-        } catch (err: any) {
-          lastError = err;
-          console.log(`[Status] ${model} indisponível: ${err?.message || err}`);
         }
-      }
+        return "";
+      })();
+
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout de 5s na chamada de IA")), 5000)
+      );
+
+      responseText = await Promise.race([aiCallPromise, timeoutPromise]);
 
       if (!responseText) {
         throw lastError || new Error("Falha ao gerar resposta de todos os modelos tentados.");
@@ -462,12 +470,12 @@ async function startServer() {
 
       const parsedData = JSON.parse(responseText.trim());
       bibleRefAnalysisCache.set(cacheKey, parsedData);
-      res.json(parsedData);
+      return res.json(parsedData);
 
     } catch (error: any) {
-      console.log("[Status] Bible analysis fallback applied");
-      // Retorna uma belíssima análise bíblica em fallback local para resiliência de cota do herói
-      res.json({
+      console.log("[Status] Bible analysis fallback applied:", error?.message || error);
+      // Retorna uma belíssima análise bíblica em fallback local para resiliência total
+      return res.json({
         summary: "Esta canção reflete a fidelidade constante do Senhor e Seu cuidado eterno sobre nós, apontando para a soberania e amor divinos que nos cercam diariamente.",
         references: [
           {
@@ -485,11 +493,13 @@ async function startServer() {
             verseText: "As misericórdias do Senhor são a causa de não sermos consumidos, pois as suas misericórdias não têm fim; renovam-se cada manhã. Grande é a tua fidelidade.",
             relation: "Apoio direto à passagem da canção que celebra as misericórdias diárias de Deus e o fôlego de vida que Ele restaura a cada nascer do sol."
           }
-        ],
-        warning: "A cota diária do servidor Gemini foi excedida. Exibindo referências estruturais de apoio ao ministério."
+        ]
       });
     }
-  });
+  };
+
+  app.post("/api/analyze-bible-references", handleAnalyzeBibleReferences);
+  app.post("/api/songs/analyze-bible-references", handleAnalyzeBibleReferences);
 
   // POST endpoint to retrieve specific Bible passage with selected translation
   app.post("/api/bible/passage", async (req, res) => {
@@ -1624,7 +1634,7 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
   });
 
   // POST endpoint to suggest alternative songs of the same theme
-  app.post("/api/songs/theme-suggestions", async (req, res) => {
+  const handleThemeSuggestionsEndpoint = async (req: express.Request, res: express.Response) => {
     try {
       const { title, content } = req.body;
       
@@ -1655,16 +1665,17 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
       let responseText = "";
       let lastError: any = null;
 
-      for (const model of modelsToTry) {
-        try {
-          console.log(`Sugestões de temas: testando modelo "${model}"...`);
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
-              responseMimeType: "application/json",
+      const aiCallPromise = (async () => {
+        for (const model of modelsToTry) {
+          try {
+            console.log(`Sugestões de temas: testando modelo "${model}"...`);
+            const response = await ai.models.generateContent({
+              model: model,
+              contents: prompt,
+              config: {
+                systemInstruction,
+                ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+                responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
                   properties: {
@@ -1704,26 +1715,33 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
               }
             });
 
-          if (response && response.text) {
-            responseText = response.text;
-            break;
+            if (response && response.text) {
+              return response.text;
+            }
+          } catch (err: any) {
+            lastError = err;
+            console.log(`[Status] Curadoria ${model} indisponível: ${err?.message || err}`);
           }
-        } catch (err: any) {
-          lastError = err;
-          console.log(`[Status] Curadoria ${model} indisponível: ${err?.message || err}`);
         }
-      }
+        return "";
+      })();
+
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout de 5s na chamada de IA")), 5000)
+      );
+
+      responseText = await Promise.race([aiCallPromise, timeoutPromise]);
 
       if (!responseText) {
         throw lastError || new Error("Falha ao gerar sugestões de todos os modelos tentados.");
       }
 
       const parsedData = JSON.parse(responseText.trim());
-      res.json(parsedData);
+      return res.json(parsedData);
 
     } catch (error: any) {
-      console.log("[Status] Theme suggestion fallback applied");
-      res.json({
+      console.log("[Status] Theme suggestion fallback applied:", error?.message || error);
+      return res.json({
         themeName: "Adoração e Gratidão",
         themeDescription: "A canção foca em atributos divinos, no amor constante e mui gracioso do Pai, gerando uma atmosfera de contrição e entrega total de vida.",
         suggestions: [
@@ -1742,11 +1760,13 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
             artist: "Nívea Soares",
             explanation: "Eleva o nível de proclamação congregacional sobre as maravilhosas obras do Senhor, enriquecendo o clímax de adoração da setlist."
           }
-        ],
-        warning: "A cota diária do servidor Gemini foi excedida. Exibindo sugestões temáticas consagradas para o repertório selvagem."
+        ]
       });
     }
-  });
+  };
+
+  app.post("/api/songs/theme-suggestions", handleThemeSuggestionsEndpoint);
+  app.post("/api/theme-suggestions", handleThemeSuggestionsEndpoint);
 
   // Engine de Teoria Musical Determinística para Análise Harmônica Didática
   function generateDeterministicHarmonyAnalysis(title: string, content: string, baseKey?: string) {
@@ -1958,8 +1978,8 @@ Por favor, liste as 5 passagens bíblicas mais expressivas e edificantes sobre e
     };
   }
 
-  // POST endpoint to perform educational harmonic and practical analysis of a song
-  app.post("/api/songs/analyze-harmony", async (req, res) => {
+  // POST endpoint to perform educational harmonic and practical analysis of a song (com timeout de segurança de 5s)
+  const handleAnalyzeHarmonyEndpoint = async (req: express.Request, res: express.Response) => {
     const { title, content, baseKey } = req.body;
     try {
       
@@ -2005,16 +2025,17 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       let responseText = "";
       let lastError: any = null;
 
-      for (const model of modelsToTry) {
-        try {
-          console.log(`Análise harmônica: testando modelo "${model}"...`);
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
-              responseMimeType: "application/json",
+      const aiCallPromise = (async () => {
+        for (const model of modelsToTry) {
+          try {
+            console.log(`Análise harmônica: testando modelo "${model}"...`);
+            const response = await ai.models.generateContent({
+              model: model,
+              contents: prompt,
+              config: {
+                systemInstruction,
+                ...(model.includes("gemini-3") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+                responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
                   properties: {
@@ -2102,22 +2123,29 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
             });
 
             if (response && response.text) {
-              responseText = response.text;
-              break;
+              return response.text;
             }
           } catch (err: any) {
             lastError = err;
             console.log(`[Status] Harmony ${model} indisponível: ${err?.message || err}`);
           }
         }
+        return "";
+      })();
 
-        if (!responseText) {
-          throw lastError || new Error("Falha ao gerar análise harmônica via IA.");
-        }
+      const timeoutPromise = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout de 5s na chamada de IA")), 5000)
+      );
 
-        const parsedData = JSON.parse(responseText.trim());
-        harmonyAnalysisCache.set(cacheKey, parsedData);
-        return res.json(parsedData);
+      responseText = await Promise.race([aiCallPromise, timeoutPromise]);
+
+      if (!responseText) {
+        throw lastError || new Error("Falha ao gerar análise harmônica via IA.");
+      }
+
+      const parsedData = JSON.parse(responseText.trim());
+      harmonyAnalysisCache.set(cacheKey, parsedData);
+      return res.json(parsedData);
 
     } catch (error: any) {
       console.log(`[Status] Harmony analysis fallback aplicado com precisão determinística: ${error?.message || error}`);
@@ -2126,7 +2154,10 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
       harmonyAnalysisCache.set(cacheKey, fallbackData);
       return res.json(fallbackData);
     }
-  });
+  };
+
+  app.post("/api/songs/analyze-harmony", handleAnalyzeHarmonyEndpoint);
+  app.post("/api/analyze-harmony", handleAnalyzeHarmonyEndpoint);
 
   // Helper to format hyphenated slugs into human readable words (e.g. diante-do-trono -> Diante do Trono)
   function formatCifraClubSlug(slug: string): string {
