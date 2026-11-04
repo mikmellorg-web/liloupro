@@ -916,10 +916,23 @@ export function cleanCifraHtml(text: string): string {
     }
 
     let l = line;
-    // Fused before bracket: e.g. "G/D D[Primeira Parte]" -> "G/D D\n[Primeira Parte]"
-    l = l.replace(/([^\s\[\(\{])\s*(\[[^\]]+\])/g, '$1\n$2');
-    // Fused after bracket: e.g. "[Intro]G/D D" -> "[Intro]\nG/D D"
-    l = l.replace(/(\[[^\]]+\])\s*([^\s\]\)\}])/g, '$1\n$2');
+    // Only isolate bracketed tags that are genuine SECTION HEADERS (e.g. [Intro], [Refrão], [Verso 1])
+    // Musical dynamics like [PAUSA], [SUAVE], [FORTE], [N1..N7], [STOP] must NEVER be split from the chord or lyric line!
+    l = l.replace(/([^\s\[\(\{])\s*(\[[^\]]+\])/g, (fullMatch, before, bracketTag) => {
+      const inner = bracketTag.slice(1, -1).trim().toLowerCase();
+      if (isSectionHeaderContent(inner)) {
+        return `${before}\n${bracketTag}`;
+      }
+      return fullMatch;
+    });
+
+    l = l.replace(/(\[[^\]]+\])\s*([^\s\]\)\}])/g, (fullMatch, bracketTag, after) => {
+      const inner = bracketTag.slice(1, -1).trim().toLowerCase();
+      if (isSectionHeaderContent(inner)) {
+        return `${bracketTag}\n${after}`;
+      }
+      return fullMatch;
+    });
     resultLinesStep6.push(l);
   }
   str = resultLinesStep6.join('\n');
@@ -1061,8 +1074,16 @@ export function isChordLine(line: string): boolean {
     return false;
   }
   
+  // Strip bracketed/parenthesized tags that are dynamic tags or annotations (e.g. [PAUSA 🛑], [suave], [N4 MODERADO], (2x))
+  // so they do not disqualify the chord line when placed next to chords
+  const lineWithoutAnnotationTags = cleanLine.replace(/\[[^\]]+\]|\([^)]+\)/g, (tag) => {
+    const inner = tag.slice(1, -1).trim();
+    if (isChordWord(inner)) return tag;
+    return ' ';
+  });
+
   // Extract all words/tokens
-  const words = trimmed.split(/\s+/);
+  const words = lineWithoutAnnotationTags.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return false;
 
   // Filter out headers/annotations so they don't disqualify the chord line
@@ -1109,6 +1130,37 @@ export function isChordLine(line: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Detects if a line contains inline dynamic tags (like [PAUSA], [SUAVE], [STOP]) placed as an annotation line
+ * above syllables or lyrics, without being a structural section header (like [Intro] or [Refrão]).
+ */
+export function isInlineAnnotationLine(line: string): boolean {
+  if (!line || !line.trim()) return false;
+  if (isSectionHeaderLine(line)) return false;
+  
+  const cleanLine = line.includes('<') ? cleanCifraHtml(line) : line.replace(/<\/?[biu]>/g, '');
+  const trimmed = cleanLine.trim();
+  
+  // Check if line contains bracketed or parenthesized tags
+  const hasBrackets = /\[[^\]]+\]|\([^)]+\)/.test(trimmed);
+  if (!hasBrackets) return false;
+
+  // Must not be a section header content
+  const bracketMatches = trimmed.match(/\[([^\]]+)\]/g);
+  if (bracketMatches) {
+    for (const b of bracketMatches) {
+      const inner = b.slice(1, -1).trim().toLowerCase();
+      if (isSectionHeaderContent(inner)) {
+        return false;
+      }
+    }
+  }
+
+  // Check if it matches dynamic tags or repetition markers
+  const isDynamicOrRepeat = /n[1-7]\b|pausa|pause|stop|corta|parada|suave|forte|clímax|climax|crescendo|decrescendo|acapella|bateria|violão|violao|modulação|modulacao|sobe|sutil|🛑|⏱️|⏸️|🎤|🥁|🎸|📈|↗|↘|2x|3x|4x|bis/i.test(trimmed);
+  return isDynamicOrRepeat;
 }
 
 /**

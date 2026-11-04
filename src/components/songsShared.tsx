@@ -38,7 +38,7 @@ import {
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
   extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText, standardizeSectionName,
-  isDedilhadoOrTabPartLine
+  isDedilhadoOrTabPartLine, isInlineAnnotationLine
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -592,7 +592,7 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
   const boundariesSet = new Set<number>();
   boundariesSet.add(0);
 
-  // Identify bracketed or parenthesized tag ranges in chordLine e.g. [só guita], [N1], (2x)
+  // Identify bracketed or parenthesized tag ranges in chordLine e.g. [só guita], [N1], [PAUSA 🛑], (2x)
   const tagRanges: { start: number; end: number }[] = [];
   const tagRegex = /(\([^)]+\)|\[[^\]]+\])/g;
   let match;
@@ -604,10 +604,19 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
     return tagRanges.some(r => idx > r.start && idx < r.end);
   };
 
+  // Explicitly ensure tag start and end positions are always marked as boundaries
+  for (const r of tagRanges) {
+    if (r.start >= 0 && r.start < maxLen) boundariesSet.add(r.start);
+    if (r.end >= 0 && r.end < maxLen) boundariesSet.add(r.end);
+  }
+
+  const isBracketOrParen = (c: string) => c === '[' || c === ']' || c === '(' || c === ')';
+
   for (let j = 1; j < maxLen; j++) {
     // Prevent splitting a single chord word OR inside a bracket/paren tag
     const isInsideChord = j < chordStyles.length && j - 1 >= 0 && 
-                          chordStyles[j].char !== ' ' && chordStyles[j - 1].char !== ' ';
+                          chordStyles[j].char !== ' ' && chordStyles[j - 1].char !== ' ' &&
+                          !isBracketOrParen(chordStyles[j].char) && !isBracketOrParen(chordStyles[j - 1].char);
 
     if (!isInsideChord && !isInsideTag(j)) {
       if (j < chordStyles.length) {
@@ -656,23 +665,31 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
           }
         }
 
+        // Count leading spaces in this chord segment
+        let leadingSpacesCount = 0;
+        while (leadingSpacesCount < segmentChordChars.length && segmentChordChars[leadingSpacesCount].char === ' ') {
+          leadingSpacesCount++;
+        }
+
         // Isolate chord word or dynamic tag
         let rawWord = '';
         const rawCharsList: StyledChar[] = [];
-        const firstChar = segmentChordChars[0]?.char;
+        const firstChar = segmentChordChars[leadingSpacesCount]?.char;
 
         if (firstChar === '[' || firstChar === '(') {
           const closingChar = firstChar === '[' ? ']' : ')';
-          for (const cObj of segmentChordChars) {
+          for (let idx = leadingSpacesCount; idx < segmentChordChars.length; idx++) {
+            const cObj = segmentChordChars[idx];
             rawWord += cObj.char;
             rawCharsList.push(cObj);
             if (cObj.char === closingChar && rawWord.length > 1) {
               break;
             }
           }
-        } else {
-          for (const cObj of segmentChordChars) {
-            if (cObj.char !== ' ') {
+        } else if (firstChar) {
+          for (let idx = leadingSpacesCount; idx < segmentChordChars.length; idx++) {
+            const cObj = segmentChordChars[idx];
+            if (cObj.char !== ' ' && cObj.char !== '[' && cObj.char !== '(') {
               rawWord += cObj.char;
               rawCharsList.push(cObj);
             } else {
@@ -681,7 +698,9 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
           }
         }
 
-        const spacesCount = Math.max(0, widthCh - rawWord.length);
+        const spacesCount = Math.max(0, widthCh - leadingSpacesCount - rawWord.length);
+        const leadingSpaces = leadingSpacesCount > 0 ? ' '.repeat(leadingSpacesCount) : '';
+        const trailingSpaces = spacesCount > 0 ? ' '.repeat(spacesCount) : '';
 
         const isBracketedTag = (rawWord.startsWith('[') && rawWord.endsWith(']')) || (rawWord.startsWith('(') && rawWord.endsWith(')'));
         const cleanWord = isBracketedTag ? getCleanChordName(rawWord) : rawWord;
@@ -707,6 +726,7 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
             >
               {rawWord ? (
                 <>
+                  {leadingSpaces}
                   {isBracketedTag && !isActualChord ? (
                     <RenderTextWithInlineBadges text={rawWord} />
                   ) : (
@@ -718,7 +738,7 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
                       setActiveChordInDict={setActiveChordInDict}
                     />
                   )}
-                  {spacesCount > 0 ? ' '.repeat(spacesCount) : ''}
+                  {trailingSpaces}
                 </>
               ) : (
                 ' '.repeat(widthCh)
@@ -1445,7 +1465,7 @@ export function RenderTextWithInlineBadges({ text, baseClasses = '' }: { text: s
                 title="Clique para ver a explicação"
               >
                 <Pause size={10} className="fill-white text-white shrink-0" />
-                <span>{content.includes('🛑') || content.includes('Pausa') ? content : `Pausa 🛑`}</span>
+                <span>{content.includes('🛑') || /pausa/i.test(content) ? content : `${content} 🛑`}</span>
               </button>
             );
           }
