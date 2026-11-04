@@ -1039,7 +1039,7 @@ export function SongDetailView({
     if (rawUrl) {
       const id = parseYoutubeVideoId(rawUrl);
       if (id) {
-        return `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+        return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
       }
     }
     return null;

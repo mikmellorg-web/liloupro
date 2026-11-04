@@ -2891,11 +2891,11 @@ function MainContent() {
     if (currentId) {
       // Importante: NÃO incluir &playlist= com IDs de outras músicas aqui.
       // A inclusão de &playlist= fazia o player do YouTube ignorar o currentId e tocar a primeira música da fila ou reiniciar em loop
-      return `https://www.youtube.com/embed/${currentId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+      return `https://www.youtube-nocookie.com/embed/${currentId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
     }
 
     if (servicePlaylistId) {
-      return `https://www.youtube.com/embed/videoseries?list=${servicePlaylistId}&autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+      return `https://www.youtube-nocookie.com/embed/videoseries?list=${servicePlaylistId}&autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
     }
 
     return '';
@@ -3019,8 +3019,8 @@ function MainContent() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                {/* Botão Ver Cifra apenas no Modo Pratique (música avulsa) */}
-                {isSingleSong && currentSong.id && (
+                {/* Botão Ver Cifra disponível para a música ativa (tanto no Modo Pratique quanto na Playlist) */}
+                {currentSong?.id && (
                   <button
                     onClick={() => handleOpenSongById(currentSong.id)}
                     className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
@@ -3030,6 +3030,17 @@ function MainContent() {
                     <span>Cifra</span>
                   </button>
                 )}
+                {/* Botão Abrir no YouTube App caso o embed do Google dê erro 403 no celular do membro */}
+                <a
+                  href={`https://www.youtube.com/watch?v=${parseYoutubeVideoId(currentSong.youtube || currentSong.youtubeUrl || currentSong.videoUrl || currentSong.link || '') || ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 rounded-lg transition-colors cursor-pointer"
+                  title="Abrir no aplicativo do YouTube"
+                >
+                  <Youtube size={11} className="fill-red-400" />
+                  <span className="hidden sm:inline">YouTube</span>
+                </a>
                 <button 
                   onClick={() => setIsPlaylistPlayerMinimized(true)}
                   className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
@@ -3059,6 +3070,7 @@ function MainContent() {
                   frameBorder="0"
                   allow="autoplay; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope"
                   allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
                   className="absolute inset-0 w-full h-full"
                 ></iframe>
               ) : currentSong.audio && currentSong.audio.length > 0 ? (
@@ -3204,10 +3216,11 @@ function MainContent() {
                         {song.id && (
                           <button
                             onClick={() => handleOpenSongById(song.id)}
-                            className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-amber-400 transition-colors"
-                            title="Ver cifra"
+                            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/25 transition-colors cursor-pointer"
+                            title="Ver cifra desta música"
                           >
-                            <FileText size={12} />
+                            <FileText size={10} />
+                            <span>Cifra</span>
                           </button>
                         )}
                         {isActive && (
