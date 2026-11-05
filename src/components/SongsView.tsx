@@ -1079,7 +1079,7 @@ export function SongsView({
       </div>
 
       {/* Linha de Botões de Ação Principais (Pills) */}
-      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 mb-6">
+      <div className="flex items-center justify-center gap-1 sm:gap-2 mb-6 w-full overflow-x-auto no-scrollbar px-1">
         {/* Toggle: MÚSICAS DO CULTO vs TODAS AS MÚSICAS */}
         {showOnlyLiturgy ? (
           <button
@@ -1088,9 +1088,9 @@ export function SongsView({
               setShowOnlyLiturgy(false);
               if (propSetShowLiturgySongs) propSetShowLiturgySongs(false);
             }}
-            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-md bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-500/25 active:scale-95 cursor-pointer whitespace-nowrap"
+            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs uppercase tracking-tight flex items-center gap-1 sm:gap-1.5 transition-all shadow-md bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-500/25 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
           >
-            <Zap size={13} className="fill-white" />
+            <Zap size={12} className="fill-white shrink-0" />
             <span>TODAS AS MÚSICAS</span>
           </button>
         ) : (
@@ -1100,9 +1100,9 @@ export function SongsView({
               setShowOnlyLiturgy(true);
               if (propSetShowLiturgySongs) propSetShowLiturgySongs(true);
             }}
-            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-sm bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 active:scale-95 cursor-pointer whitespace-nowrap"
+            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs uppercase tracking-tight flex items-center gap-1 sm:gap-1.5 transition-all shadow-sm bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
           >
-            <Zap size={13} className="fill-slate-900" />
+            <Zap size={12} className="fill-slate-900 shrink-0" />
             <span>MÚSICAS DO CULTO</span>
           </button>
         )}
@@ -1111,35 +1111,35 @@ export function SongsView({
         <button
           type="button"
           onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap ${
+          className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs uppercase tracking-tight flex items-center gap-1 sm:gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
             showOnlyFavorites 
               ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300 shadow-md shadow-amber-400/25' 
               : 'bg-white hover:bg-slate-100 text-slate-900 border border-slate-200'
           }`}
         >
-          <Star size={13} className={showOnlyFavorites ? 'fill-slate-950' : 'fill-transparent text-slate-900'} />
+          <Star size={12} className={`shrink-0 ${showOnlyFavorites ? 'fill-slate-950' : 'fill-transparent text-slate-900'}`} />
           <span>FAVORITAS</span>
         </button>
 
         {/* DRIVE + CONFIGURAR */}
-        <div className="inline-flex items-center rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden text-slate-900 font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide whitespace-nowrap">
+        <div className="inline-flex items-center rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden text-slate-900 font-bold text-[10px] sm:text-xs uppercase tracking-tight whitespace-nowrap shrink-0">
           <button
             type="button"
             onClick={handleOpenTeamDrive}
-            className="px-3 py-2 sm:px-3.5 sm:py-2.5 flex items-center gap-1.5 hover:bg-slate-100 transition active:scale-98 cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-1.5 hover:bg-slate-100 transition active:scale-98 cursor-pointer"
             title="Abrir pasta de arquivos e áudios no Google Drive"
           >
-            <GoogleDriveIcon size={15} />
+            <GoogleDriveIcon size={14} className="shrink-0" />
             <span>DRIVE</span>
           </button>
-          <div className="w-[1px] h-4 bg-slate-200" />
+          <div className="w-[1px] h-3.5 bg-slate-200" />
           <button
             type="button"
             onClick={() => setIsDriveModalOpen(true)}
-            className="px-2 py-2 sm:px-2.5 sm:py-2.5 hover:bg-slate-100 text-slate-600 hover:text-slate-950 transition active:scale-95 cursor-pointer"
+            className="px-1.5 sm:px-2 py-1.5 sm:py-2 hover:bg-slate-100 text-slate-600 hover:text-slate-950 transition active:scale-95 cursor-pointer"
             title="Configurar link do Google Drive"
           >
-            <Settings size={13} />
+            <Settings size={12} className="shrink-0" />
           </button>
         </div>
 
@@ -1148,9 +1148,9 @@ export function SongsView({
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
-            className="px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2 shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <Plus size={16} />
+            <Plus size={13} />
             <span>Cadastrar Música</span>
           </button>
         )}
