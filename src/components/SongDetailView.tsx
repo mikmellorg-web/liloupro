@@ -3567,8 +3567,8 @@ export function SongDetailView({
 
       <div className="grid lg:grid-cols-12 gap-8 items-start w-full max-w-full">
         <div className="lg:col-span-8 space-y-4 min-w-0 w-full overflow-hidden">
-          <div className="flex bg-card rounded-t-xl border border-border border-b-0 items-center">
-              <div className="flex overflow-x-auto no-scrollbar flex-1 scroll-smooth">
+          <div className="flex bg-card rounded-t-xl border border-border border-b-0 items-center justify-between overflow-hidden">
+              <div className="flex shrink-0">
                 <button 
                   onClick={() => setDetailTab('chords')} 
                   className={cn(
@@ -3593,195 +3593,102 @@ export function SongDetailView({
                 </button>
               </div>
               
-              <div className="relative flex items-center gap-1 sm:gap-1.5 mr-2 border-l border-border pl-2 sm:pl-4 ml-auto h-full py-2">
-                <button 
-                  onClick={() => {
-                    setIsAutoScrolling(!isAutoScrolling);
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 px-3 sm:px-4 py-3 rounded-full text-xs sm:text-sm font-black uppercase transition-all border shrink-0 shadow-lg",
-                    isAutoScrolling 
-                      ? "bg-green-500 border-green-400 text-white ring-2 ring-white/20" 
-                      : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border-black/10 dark:border-white/20 text-text-main"
-                    )}
-                  title="Rolagem Automática"
+              {/* Hub de Streaming de Música (Símbolos Oficiais: Spotify, YouTube Music, Apple Music, Deezer, Amazon Music) */}
+              <div className="flex-1 flex items-center justify-around sm:justify-end gap-2 sm:gap-3 px-2 sm:px-4 overflow-x-auto no-scrollbar py-1.5">
+                {/* Spotify */}
+                <a
+                  href={editedSong.spotifyUrl || editedSong.spotify || `https://open.spotify.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#1ED760]/60 bg-black/5 dark:bg-white/5 hover:bg-[#1ED760]/10 text-text-main hover:shadow-[0_0_14px_rgba(30,215,96,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no Spotify`}
                 >
-                  <ChevronsDown size={14} className={cn("sm:w-4 sm:h-4", isAutoScrolling && "animate-bounce")} strokeWidth={3} />
-                  <span className="hidden xs:inline">{isAutoScrolling ? 'Pausar' : 'AutoScroll'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSpeedSelector(!showSpeedSelector)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 sm:px-3 py-3 rounded-full text-[10px] font-black uppercase transition-all border shrink-0 shadow-lg h-9 sm:h-11",
-                    showSpeedSelector
-                      ? "bg-cyan-500 border-cyan-400 text-white ring-2 ring-white/10"
-                      : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border-black/10 dark:border-white/20 text-text-main"
-                  )}
-                  title="Ajustar Velocidade de Rolagem"
+                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="12" fill="#1ED760" />
+                    <path d="M17.4 17.1c-.2.3-.6.4-.9.2-2.5-1.5-5.7-1.9-9.5-1-.4.1-.7-.1-.8-.5-.1-.4.1-.7.5-.8 4.2-1 7.7-.5 10.5 1.2.3.2.4.6.2.9zm1.3-2.9c-.3.4-.8.5-1.2.3-2.9-1.8-7.3-2.3-10.7-1.3-.4.1-.9-.1-1-.6-.1-.4.1-.9.6-1 3.9-1.2 8.7-.6 12 1.4.4.2.5.8.3 1.2zm.1-3c-3.5-2.1-9.2-2.3-12.5-1.3-.5.2-1.1-.1-1.3-.7-.2-.5.1-1.1.7-1.3 3.9-1.2 10.2-.9 14.2 1.5.5.3.6.9.3 1.4-.2.5-.8.7-1.4.4z" fill="#000000" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Spotify</span>
+                </a>
+
+                {/* YouTube Music */}
+                <a
+                  href={editedSong.youtubeMusicUrl || (parseYoutubeVideoId(editedSong.youtube) ? `https://music.youtube.com/watch?v=${parseYoutubeVideoId(editedSong.youtube)}` : `https://music.youtube.com/search?q=${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FF0000]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FF0000]/10 text-text-main hover:shadow-[0_0_14px_rgba(255,0,0,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no YouTube Music`}
                 >
-                  <Settings size={12} className={cn("sm:w-3.5 sm:h-3.5", showSpeedSelector && "rotate-45")} />
-                  <span className="text-[9px] font-black tracking-tighter">
-                    {isSmartScroll ? 'AUTO' : `${scrollSpeed}x`}
-                  </span>
-                </button>
-                {showSpeedSelector && (
-                  <div className={cn(
-                    "absolute top-full right-0 mt-2 z-[999] flex flex-col border rounded-xl p-3 shadow-2xl min-w-[210px] gap-2.5 opacity-100 select-none",
-                    isStageMode 
-                      ? "bg-zinc-950 border-amber-500/50 text-white shadow-[0_10px_35px_rgba(0,0,0,0.95)]" 
-                      : "bg-surface dark:bg-zinc-900 border-border text-text-main"
-                  )}>
-                    <div className={cn(
-                      "flex items-center justify-between p-2 rounded-lg border select-none",
-                      isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/10 dark:bg-white/10 border-border/60"
-                    )}>
-                      <div className="flex flex-col text-left">
-                        <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                          ✨ Auto Inteligente
-                        </span>
-                        <span className="text-[8px] text-text-muted leading-none flex gap-1 mt-0.5">Ajusta pelo BPM do Louvor</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSmartScroll(!isSmartScroll);
-                        }}
-                        className={cn(
-                          "w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 cursor-pointer outline-none relative shrink-0",
-                          isSmartScroll ? "bg-cyan-500 justify-end" : "bg-border dark:bg-zinc-700 justify-start"
-                        )}
-                        title="Alternar Modo de Rolagem Inteligente"
-                      >
-                        <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md pointer-events-none" />
-                      </button>
-                    </div>
+                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="12" fill="#FF0000" />
+                    <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
+                    <polygon points="10,8.5 15.5,12 10,15.5" fill="#FFFFFF" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">YT Music</span>
+                </a>
 
-                    <div className="h-px bg-border/40 my-0.5" />
+                {/* Apple Music */}
+                <a
+                  href={editedSong.appleMusicUrl || `https://music.apple.com/us/search?term=${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FA233B]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FA233B]/10 text-text-main hover:shadow-[0_0_14px_rgba(250,35,59,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no Apple Music`}
+                >
+                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <defs>
+                      <linearGradient id="appleMusicIconGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#FB5C74" />
+                        <stop offset="100%" stopColor="#FA233B" />
+                      </linearGradient>
+                    </defs>
+                    <rect width="24" height="24" rx="6" fill="url(#appleMusicIconGrad)" />
+                    <path d="M16.5 6.3v7.8c0 1.5-1.1 2.5-2.5 2.5s-2.5-1-2.5-2.5 1.1-2.5 2.5-2.5c.4 0 .7.1 1 .2V8.9l-5.6 1.4v6c0 1.5-1.1 2.5-2.5 2.5s-2.5-1-2.5-2.5 1.1-2.5 2.5-2.5c.4 0 .7.1 1 .2V8.2c0-.7.5-1.3 1.2-1.4l7.2-1.8c.7-.2 1.6.3 1.6 1.3z" fill="#FFFFFF" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Apple Music</span>
+                </a>
 
-                    <div className="px-1 text-left">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-text-muted">Ajuste Manual</span>
-                    </div>
+                {/* Deezer */}
+                <a
+                  href={editedSong.deezerUrl || `https://www.deezer.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#A238FF]/60 bg-black/5 dark:bg-white/5 hover:bg-[#A238FF]/10 text-text-main hover:shadow-[0_0_14px_rgba(162,56,255,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no Deezer`}
+                >
+                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <rect width="24" height="24" rx="6" fill="#A238FF" />
+                    <rect x="4.5" y="14" width="2.4" height="5" rx="0.8" fill="#FFFFFF" />
+                    <rect x="8" y="10.5" width="2.4" height="8.5" rx="0.8" fill="#FFFFFF" />
+                    <rect x="11.5" y="7" width="2.4" height="12" rx="0.8" fill="#FFFFFF" />
+                    <rect x="15" y="5" width="2.4" height="14" rx="0.8" fill="#FFFFFF" />
+                    <rect x="18.5" y="9" width="2.4" height="10" rx="0.8" fill="#FFFFFF" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Deezer</span>
+                </a>
 
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[0.1, 0.2, 0.3, 0.5, 1, 1.5].map((speed) => {
-                        const isActive = !isSmartScroll && scrollSpeed === speed;
-                        return (
-                          <button
-                            type="button"
-                            key={speed}
-                            onClick={() => {
-                              setIsSmartScroll(false);
-                              setScrollSpeed(speed);
-                              setShowSpeedSelector(false);
-                            }}
-                            className={cn(
-                              "px-2 py-2 rounded-lg text-xs font-black transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer border",
-                              isActive 
-                                ? "bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-500/30 font-black" 
-                                : isStageMode
-                                  ? "bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 hover:text-white"
-                                  : "bg-black/5 dark:bg-white/10 border-border/60 text-text-main hover:bg-black/10 dark:hover:bg-white/20"
-                            )}
-                          >
-                            <span>{speed}x</span>
-                            {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {isSmartScroll && (
-                      <div className="text-center p-1.5 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 rounded-lg select-none">
-                        <p className="text-[8.5px] font-bold uppercase tracking-wider">
-                          Velocidade: {scrollSpeed}x
-                        </p>
-                        <p className="text-[7.5px] text-text-muted leading-none mt-0.5">Dinâmica ({editedSong.bpm || 80} BPM)</p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center px-1 pt-1.5 border-t border-border/40">
-                      <span className="text-[7.5px] text-text-muted italic leading-none select-none">Prefira Automático</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowSpeedSelector(false)}
-                        className="text-[9px] font-black uppercase tracking-wider text-cyan-500 hover:text-cyan-400 active:scale-95 leading-none"
-                      >
-                        Fechar
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Amazon Music */}
+                <a
+                  href={editedSong.amazonMusicUrl || `https://music.amazon.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#00A8E1]/60 bg-black/5 dark:bg-white/5 hover:bg-[#00A8E1]/10 text-text-main hover:shadow-[0_0_14px_rgba(0,168,225,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no Amazon Music`}
+                >
+                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <defs>
+                      <linearGradient id="amzMusicIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#00A8E1" />
+                        <stop offset="100%" stopColor="#007EB9" />
+                      </linearGradient>
+                    </defs>
+                    <rect width="24" height="24" rx="6" fill="url(#amzMusicIconGrad)" />
+                    <path d="M12.5 5.5v5.5c-.4-.3-.9-.4-1.5-.4-1.4 0-2.5.9-2.5 2s1.1 2 2.5 2 2.5-.9 2.5-2V8.2l3-.8v3.2c-.4-.3-.9-.4-1.5-.4-1.4 0-2.5.9-2.5 2s1.1 2 2.5 2 2.5-.9 2.5-2V5l-5 1.4z" fill="#FFFFFF" />
+                    <path d="M6 18c3 2 8 2 11 0 .3-.2.3-.5.1-.7-.2-.2-.5-.1-.7.1-2.6 1.7-6.9 1.7-9.5 0-.2-.1-.5-.1-.7.1-.2.2-.1.5.1.6z" fill="#FFFFFF" />
+                    <path d="M17.4 17.2c-.2-.2-.6-.2-.8 0l-.3.3c-.2.2-.1.5.1.7.3.2.7.2.9 0l.3-.3c.2-.2.2-.5-.2-.7z" fill="#FFFFFF" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Amazon</span>
+                </a>
               </div>
-
-
-
-             {(detailTab === 'chords' || detailTab === 'lyrics') && (
-               <div className="flex border-l border-border bg-black/5 dark:bg-white/10 items-center px-1.5 sm:px-3 gap-1.5 sm:gap-2 self-stretch">
-                 {/* Column Layout Selector */} <div style={{ display: 'none' }}>
-                 <button 
-                   onClick={handleToggleColumns}
-                   className={cn(
-                     "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all border border-black/10 dark:border-white/20 shadow-sm active:scale-90",
-                     numColumns === 2
-                       ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
-                       : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-muted"
-                   )}
-                   title={numColumns === 2 ? "Desativar Modo de 2 Colunas" : "Dividir cifra em 2 Colunas (Recomendado para Tablet e Notebook)"}
-                 >
-                   <Columns size={14} className={cn("sm:w-4 sm:h-4")} />
-                 </button>
-
-                 </div>
-
-                 <button 
-                   onClick={() => setSongFontSize(prev => Math.max(10, prev - 2))}
-                   className={cn(
-                     "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all border shadow-sm active:scale-90",
-                     isStageMode
-                       ? "bg-zinc-900 border-amber-500/30 text-white hover:bg-zinc-800"
-                       : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-main border-black/10 dark:border-white/20"
-                   )}
-                   title="Diminuir Fonte"
-                 >
-                   <Minus size={15} strokeWidth={3} />
-                 </button>
-                 {/* Modo Palco Toggle */}
-                 <button 
-                   type="button"
-                   onClick={toggleStageMode}
-                   className={cn(
-                     "h-7 sm:h-8 px-2 sm:px-2.5 flex items-center justify-center gap-1 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all border shadow-xs active:scale-90 cursor-pointer shrink-0",
-                     isStageMode
-                       ? "bg-amber-500 border-amber-400 text-black shadow-amber-500/20 font-black"
-                       : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-muted border-black/10 dark:border-white/20"
-                   )}
-                   title={isStageMode ? "Desativar Modo Palco (Alto Contraste OLED)" : "Ativar Modo Palco (Alto Contraste OLED)"}
-                 >
-                   <Sparkles size={12} className={isStageMode ? "text-black fill-black" : "text-amber-500"} />
-                   <span className="hidden sm:inline">Palco</span>
-                 </button>
-
-                 <div className="w-6 h-6 sm:w-8 sm:h-8 flex flex-col items-center justify-center select-none leading-none">
-                   <span className={cn("text-[7.5px] font-black tracking-tighter uppercase", isStageMode ? "text-amber-400/80" : "text-text-muted")}>ZOOM</span>
-                   <span className={cn("font-mono font-black text-[11px] sm:text-xs leading-none mt-0.5", isStageMode ? "text-amber-400" : "text-text-main")}>{songFontSize}</span>
-                 </div>
-                 <button 
-                   onClick={() => setSongFontSize(prev => Math.min(60, prev + 2))}
-                   className={cn(
-                     "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all border shadow-sm active:scale-90",
-                     isStageMode
-                       ? "bg-zinc-900 border-amber-500/30 text-white hover:bg-zinc-800"
-                       : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-text-main border-black/10 dark:border-white/20"
-                   )}
-                   title="Aumentar Fonte"
-                 >
-                   <Plus size={15} strokeWidth={3} />
-                 </button>
-               </div>
-             )}
-
-
           </div>
 
           <div 
