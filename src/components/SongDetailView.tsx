@@ -3572,7 +3572,7 @@ export function SongDetailView({
                 <button 
                   onClick={() => setDetailTab('chords')} 
                   className={cn(
-                    "px-4 sm:px-8 py-4 text-sm sm:text-base font-bold uppercase transition-all border-r border-border whitespace-nowrap", 
+                    "px-2.5 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-bold uppercase transition-all border-r border-border whitespace-nowrap", 
                     detailTab === 'chords' 
                       ? "bg-brand text-white" 
                       : "text-text-main hover:bg-black/5 dark:hover:bg-white/5"
@@ -3583,7 +3583,7 @@ export function SongDetailView({
                 <button 
                   onClick={() => setDetailTab('lyrics')} 
                   className={cn(
-                    "px-4 sm:px-8 py-4 text-sm sm:text-base font-bold uppercase transition-all border-r border-border whitespace-nowrap", 
+                    "px-2.5 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-bold uppercase transition-all border-r border-border whitespace-nowrap", 
                     detailTab === 'lyrics' 
                       ? "bg-brand text-white" 
                       : "text-text-main hover:bg-black/5 dark:hover:bg-white/5"
@@ -3594,16 +3594,23 @@ export function SongDetailView({
               </div>
               
               {/* Hub de Streaming de Música (Símbolos Oficiais: Spotify, YouTube Music, Apple Music, Deezer, Amazon Music) */}
-              <div className="flex-1 flex items-center justify-around sm:justify-end gap-2 sm:gap-3 px-2 sm:px-4 overflow-x-auto no-scrollbar py-1.5">
+              <div 
+                onWheel={(e) => {
+                  if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="flex-1 flex items-center justify-around sm:justify-start gap-1 sm:gap-2.5 px-1 sm:px-3 overflow-x-auto streaming-scroll-container py-1.5 scroll-smooth"
+              >
                 {/* Spotify */}
                 <a
                   href={editedSong.spotifyUrl || editedSong.spotify || `https://open.spotify.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#1ED760]/60 bg-black/5 dark:bg-white/5 hover:bg-[#1ED760]/10 text-text-main hover:shadow-[0_0_14px_rgba(30,215,96,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#1ED760]/60 bg-black/5 dark:bg-white/5 hover:bg-[#1ED760]/10 text-text-main hover:shadow-[0_0_14px_rgba(30,215,96,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
                   title={`Ouvir "${editedSong.title}" no Spotify`}
                 >
-                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="12" fill="#1ED760" />
                     <path d="M17.4 17.1c-.2.3-.6.4-.9.2-2.5-1.5-5.7-1.9-9.5-1-.4.1-.7-.1-.8-.5-.1-.4.1-.7.5-.8 4.2-1 7.7-.5 10.5 1.2.3.2.4.6.2.9zm1.3-2.9c-.3.4-.8.5-1.2.3-2.9-1.8-7.3-2.3-10.7-1.3-.4.1-.9-.1-1-.6-.1-.4.1-.9.6-1 3.9-1.2 8.7-.6 12 1.4.4.2.5.8.3 1.2zm.1-3c-3.5-2.1-9.2-2.3-12.5-1.3-.5.2-1.1-.1-1.3-.7-.2-.5.1-1.1.7-1.3 3.9-1.2 10.2-.9 14.2 1.5.5.3.6.9.3 1.4-.2.5-.8.7-1.4.4z" fill="#000000" />
                   </svg>
@@ -3615,10 +3622,10 @@ export function SongDetailView({
                   href={editedSong.youtubeMusicUrl || (parseYoutubeVideoId(editedSong.youtube) ? `https://music.youtube.com/watch?v=${parseYoutubeVideoId(editedSong.youtube)}` : `https://music.youtube.com/search?q=${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FF0000]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FF0000]/10 text-text-main hover:shadow-[0_0_14px_rgba(255,0,0,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FF0000]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FF0000]/10 text-text-main hover:shadow-[0_0_14px_rgba(255,0,0,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
                   title={`Ouvir "${editedSong.title}" no YouTube Music`}
                 >
-                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="12" fill="#FF0000" />
                     <circle cx="12" cy="12" r="7.5" fill="none" stroke="#FFFFFF" strokeWidth="1.8" />
                     <polygon points="10,8.5 15.5,12 10,15.5" fill="#FFFFFF" />
@@ -3631,10 +3638,10 @@ export function SongDetailView({
                   href={editedSong.appleMusicUrl || `https://music.apple.com/us/search?term=${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FA233B]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FA233B]/10 text-text-main hover:shadow-[0_0_14px_rgba(250,35,59,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#FA233B]/60 bg-black/5 dark:bg-white/5 hover:bg-[#FA233B]/10 text-text-main hover:shadow-[0_0_14px_rgba(250,35,59,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
                   title={`Ouvir "${editedSong.title}" no Apple Music`}
                 >
-                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
                     <defs>
                       <linearGradient id="appleMusicIconGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                         <stop offset="0%" stopColor="#FB5C74" />
@@ -3652,10 +3659,10 @@ export function SongDetailView({
                   href={editedSong.deezerUrl || `https://www.deezer.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#A238FF]/60 bg-black/5 dark:bg-white/5 hover:bg-[#A238FF]/10 text-text-main hover:shadow-[0_0_14px_rgba(162,56,255,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#A238FF]/60 bg-black/5 dark:bg-white/5 hover:bg-[#A238FF]/10 text-text-main hover:shadow-[0_0_14px_rgba(162,56,255,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
                   title={`Ouvir "${editedSong.title}" no Deezer`}
                 >
-                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
                     <rect width="24" height="24" rx="6" fill="#A238FF" />
                     <rect x="4.5" y="14" width="2.4" height="5" rx="0.8" fill="#FFFFFF" />
                     <rect x="8" y="10.5" width="2.4" height="8.5" rx="0.8" fill="#FFFFFF" />
@@ -3671,10 +3678,10 @@ export function SongDetailView({
                   href={editedSong.amazonMusicUrl || `https://music.amazon.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#00A8E1]/60 bg-black/5 dark:bg-white/5 hover:bg-[#00A8E1]/10 text-text-main hover:shadow-[0_0_14px_rgba(0,168,225,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#00A8E1]/60 bg-black/5 dark:bg-white/5 hover:bg-[#00A8E1]/10 text-text-main hover:shadow-[0_0_14px_rgba(0,168,225,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
                   title={`Ouvir "${editedSong.title}" no Amazon Music`}
                 >
-                  <svg className="w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
                     <defs>
                       <linearGradient id="amzMusicIconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stopColor="#00A8E1" />
