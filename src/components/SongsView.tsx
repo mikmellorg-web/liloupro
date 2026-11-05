@@ -1070,7 +1070,7 @@ export function SongsView({
               "Clique em 'PLAYLIST DO CULTO' para iniciar o playback contínuo com contagem e transição de acordes.",
               "Use 'CIFRAS DO CULTO' para gerar o caderno completo pronto para impressão ou Google Docs.",
               "Use os botões de seta para cima e para baixo ao lado de cada canção para ajustar o fluxo da liturgia.",
-              "Alterne para 'VER TODAS AS MÚSICAS' sempre que precisar buscar no acervo geral da igreja."
+              "Alterne para 'TODAS AS MÚSICAS' sempre que precisar buscar no acervo geral da igreja."
             ]}
             tip="As músicas do culto seguem o ritmo da liturgia: Criação/Adoração, Queda/Confissão, Redenção e Consumação!"
             theme={theme as any}
@@ -1079,8 +1079,8 @@ export function SongsView({
       </div>
 
       {/* Linha de Botões de Ação Principais (Pills) */}
-      <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mb-6">
-        {/* Toggle: MÚSICAS DO CULTO vs VER TODAS AS MÚSICAS */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 mb-6">
+        {/* Toggle: MÚSICAS DO CULTO vs TODAS AS MÚSICAS */}
         {showOnlyLiturgy ? (
           <button
             type="button"
@@ -1088,10 +1088,10 @@ export function SongsView({
               setShowOnlyLiturgy(false);
               if (propSetShowLiturgySongs) propSetShowLiturgySongs(false);
             }}
-            className="px-5 py-2 sm:py-2.5 rounded-full font-bold text-xs uppercase tracking-wide flex items-center gap-2 transition-all shadow-md bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-500/25 active:scale-95 cursor-pointer"
+            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-md bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 shadow-blue-500/25 active:scale-95 cursor-pointer whitespace-nowrap"
           >
-            <Zap size={14} className="fill-white" />
-            <span>VER TODAS AS MÚSICAS</span>
+            <Zap size={13} className="fill-white" />
+            <span>TODAS AS MÚSICAS</span>
           </button>
         ) : (
           <button
@@ -1100,46 +1100,46 @@ export function SongsView({
               setShowOnlyLiturgy(true);
               if (propSetShowLiturgySongs) propSetShowLiturgySongs(true);
             }}
-            className="px-5 py-2 sm:py-2.5 rounded-full font-bold text-xs uppercase tracking-wide flex items-center gap-2 transition-all shadow-sm bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 active:scale-95 cursor-pointer"
+            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-sm bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 active:scale-95 cursor-pointer whitespace-nowrap"
           >
-            <Zap size={14} className="fill-slate-900" />
+            <Zap size={13} className="fill-slate-900" />
             <span>MÚSICAS DO CULTO</span>
           </button>
         )}
 
-        {/* MINHAS FAVORITAS */}
+        {/* FAVORITAS */}
         <button
           type="button"
           onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-          className={`px-5 py-2 sm:py-2.5 rounded-full font-bold text-xs uppercase tracking-wide flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide flex items-center gap-1.5 sm:gap-2 transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap ${
             showOnlyFavorites 
               ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300 shadow-md shadow-amber-400/25' 
               : 'bg-white hover:bg-slate-100 text-slate-900 border border-slate-200'
           }`}
         >
-          <Star size={14} className={showOnlyFavorites ? 'fill-slate-950' : 'fill-transparent text-slate-900'} />
-          <span>MINHAS FAVORITAS</span>
+          <Star size={13} className={showOnlyFavorites ? 'fill-slate-950' : 'fill-transparent text-slate-900'} />
+          <span>FAVORITAS</span>
         </button>
 
-        {/* DRIVE DA EQUIPE + CONFIGURAR */}
-        <div className="inline-flex items-center rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden text-slate-900 font-bold text-xs uppercase tracking-wide">
+        {/* DRIVE + CONFIGURAR */}
+        <div className="inline-flex items-center rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden text-slate-900 font-bold text-[11px] sm:text-xs uppercase tracking-tight sm:tracking-wide whitespace-nowrap">
           <button
             type="button"
             onClick={handleOpenTeamDrive}
-            className="px-4 py-2 sm:py-2.5 flex items-center gap-2 hover:bg-slate-100 transition active:scale-98 cursor-pointer"
+            className="px-3 py-2 sm:px-3.5 sm:py-2.5 flex items-center gap-1.5 hover:bg-slate-100 transition active:scale-98 cursor-pointer"
             title="Abrir pasta de arquivos e áudios no Google Drive"
           >
-            <GoogleDriveIcon size={16} />
-            <span>DRIVE DA EQUIPE</span>
+            <GoogleDriveIcon size={15} />
+            <span>DRIVE</span>
           </button>
-          <div className="w-[1px] h-5 bg-slate-200" />
+          <div className="w-[1px] h-4 bg-slate-200" />
           <button
             type="button"
             onClick={() => setIsDriveModalOpen(true)}
-            className="px-2.5 py-2 sm:py-2.5 hover:bg-slate-100 text-slate-600 hover:text-slate-950 transition active:scale-95 cursor-pointer"
+            className="px-2 py-2 sm:px-2.5 sm:py-2.5 hover:bg-slate-100 text-slate-600 hover:text-slate-950 transition active:scale-95 cursor-pointer"
             title="Configurar link do Google Drive"
           >
-            <Settings size={14} />
+            <Settings size={13} />
           </button>
         </div>
 
@@ -1162,15 +1162,15 @@ export function SongsView({
       {showOnlyLiturgy ? (
         <div className="max-w-5xl mx-auto w-full space-y-4 flex-1 pb-16">
           {/* Card de Cabeçalho do Culto */}
-          <div className={`${isLight ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5' : 'bg-[#0b1633] border-blue-900/60 shadow-xl'} border rounded-3xl p-5 sm:p-7 relative overflow-hidden`}>
+          <div className={`${isLight ? 'bg-white border-blue-200 shadow-xl shadow-blue-500/5' : 'bg-[#0b1633] border-blue-900/60 shadow-xl'} border rounded-3xl p-4 sm:p-7 relative overflow-hidden`}>
             {/* Ícone de música estilizado no canto superior direito */}
-            <div className={`absolute top-5 right-5 sm:top-7 sm:right-7 w-12 h-12 rounded-full ${isLight ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-blue-950/80 border-blue-800/60 text-blue-400'} border flex items-center justify-center`}>
-              <Music size={22} />
+            <div className={`absolute top-4 right-4 sm:top-7 sm:right-7 w-10 h-10 sm:w-12 sm:h-12 rounded-full ${isLight ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-blue-950/80 border-blue-800/60 text-blue-400'} border flex items-center justify-center`}>
+              <Music size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
 
-            <div className="pr-14">
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <span className={`text-[11px] font-black uppercase tracking-widest ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
+            <div className="pr-12 sm:pr-14">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-widest ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
                   Próximo Culto
                 </span>
                 {orderedLiturgySongs.length === 0 ? (
@@ -1186,7 +1186,7 @@ export function SongsView({
                 )}
               </div>
 
-              <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              <h2 className={`text-xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
                 {currentService?.title || currentService?.name || 'Culto de Celebração'}
               </h2>
               <p className={`text-xs sm:text-sm font-semibold mt-1 flex items-center gap-2 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
@@ -1196,21 +1196,24 @@ export function SongsView({
             </div>
 
             {/* Barra de Ações do Culto: Playlist, Cifras, Vincular Playlist, Adicionar Música */}
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 mt-6">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 mt-4 sm:mt-6">
               {/* PLAYLIST DO CULTO (Vermelho com play) */}
               <button
                 type="button"
                 onClick={handleStartLiturgyPlaylist}
                 disabled={orderedLiturgySongs.length === 0}
-                className={`px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
+                className={`px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-1.5 sm:gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
                   orderedLiturgySongs.length > 0
                     ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
                     : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
                 }`}
                 title={orderedLiturgySongs.length === 0 ? "Aguardando definição das músicas para liberar a playlist" : "Tocar playlist do culto"}
               >
-                <Play size={14} className={orderedLiturgySongs.length > 0 ? "fill-white" : (isLight ? "fill-slate-400" : "fill-slate-500")} />
-                <span>PLAYLIST DO CULTO ({orderedLiturgySongs.length})</span>
+                <Play size={14} className={orderedLiturgySongs.length > 0 ? "fill-white shrink-0" : (isLight ? "fill-slate-400 shrink-0" : "fill-slate-500 shrink-0")} />
+                <span className="truncate">
+                  <span className="hidden sm:inline">PLAYLIST DO CULTO</span>
+                  <span className="sm:hidden">PLAYLIST</span> ({orderedLiturgySongs.length})
+                </span>
               </button>
 
               {/* CIFRAS DO CULTO (Azul com ícone de documento) */}
@@ -1218,15 +1221,15 @@ export function SongsView({
                 type="button"
                 onClick={() => setIsCadernoModalOpen(true)}
                 disabled={orderedLiturgySongs.length === 0}
-                className={`px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
+                className={`px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-1.5 sm:gap-2 shadow-md transition-all active:scale-95 cursor-pointer ${
                   orderedLiturgySongs.length > 0
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
                     : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
                 }`}
                 title={orderedLiturgySongs.length === 0 ? "Aguardando definição das músicas para gerar o caderno de cifras" : "Gerar caderno de cifras do culto"}
               >
-                <FileText size={14} />
-                <span>CIFRAS DO CULTO</span>
+                <FileText size={14} className="shrink-0" />
+                <span className="truncate">CIFRAS DO CULTO</span>
               </button>
 
               {/* VINCULAR PLAYLIST (YouTube) */}
@@ -1237,14 +1240,17 @@ export function SongsView({
                     setPlaylistUrlInput(currentService?.playlistUrl || currentService?.youtubePlaylistUrl || '');
                     setIsPlaylistModalOpen(true);
                   }}
-                  className={`px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide ${
+                  className={`px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide ${
                     isLight
                       ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
                       : 'bg-[#0d1a3a] hover:bg-[#122452] text-slate-200 border-slate-700/80'
-                  } border flex items-center gap-2 transition-all active:scale-95 cursor-pointer`}
+                  } border flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 cursor-pointer`}
                 >
-                  <Youtube size={15} className="text-red-500" />
-                  <span>+ VINCULAR PLAYLIST</span>
+                  <Youtube size={15} className="text-red-500 shrink-0" />
+                  <span className="truncate">
+                    <span className="hidden sm:inline">+ VINCULAR PLAYLIST</span>
+                    <span className="sm:hidden">+ VINCULAR</span>
+                  </span>
                 </button>
               )}
 
@@ -1252,10 +1258,15 @@ export function SongsView({
               <button
                 type="button"
                 onClick={() => setIsAddToServiceModalOpen(true)}
-                className="px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide bg-blue-500 hover:bg-blue-400 text-white flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 cursor-pointer"
+                className={`px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide bg-blue-500 hover:bg-blue-400 text-white flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 cursor-pointer ${
+                  orderedLiturgySongs.length === 0 ? 'col-span-2 sm:col-span-1' : ''
+                }`}
               >
-                <Plus size={15} />
-                <span>ADICIONAR MÚSICA</span>
+                <Plus size={15} className="shrink-0" />
+                <span className="truncate">
+                  <span className="hidden sm:inline">ADICIONAR MÚSICA</span>
+                  <span className="sm:hidden">+ MÚSICA</span>
+                </span>
               </button>
             </div>
           </div>
