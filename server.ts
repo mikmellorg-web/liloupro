@@ -5,11 +5,37 @@ import { fileURLToPath } from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { initializeApp as initClientApp, getApps as getClientApps } from "firebase/app";
-import { getFirestore as getClientFirestore, collection as clientCollection, getDocs as clientGetDocs } from "firebase/firestore";
+import { 
+  getFirestore as getClientFirestore, 
+  initializeFirestore as initClientFirestore,
+  collection as clientCollection, 
+  getDocs as clientGetDocs,
+  setLogLevel as setFirestoreLogLevel
+} from "firebase/firestore";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { findLocalPopularSong } from "./src/songsDatabase.js";
 import { getLocalBiblePassage } from "./src/localBibleDb.js";
 import { cleanCifraHtml, pairChordsAndLyricsIfSeparated, isDedilhadoOrTabPartLine } from "./src/services/chordService.js";
+
+// Suprime mensagens internas benignas de disconnect/timeout/reset do gRPC do Firestore no Node.js
+try {
+  setFirestoreLogLevel('silent');
+} catch {}
+
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || '');
+  if (
+    msg.includes('ECONNRESET') ||
+    msg.includes('GrpcConnection') ||
+    msg.includes('Disconnecting idle stream') ||
+    msg.includes('Timed out waiting for new targets') ||
+    (msg.includes('@firebase/firestore') && (msg.includes('CANCELLED') || msg.includes('UNAVAILABLE') || msg.includes('Listen')))
+  ) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
 
 // Compatibilidade universal para obter o diretório do servidor tanto em ESM (tsx) quanto em CommonJS compilado (esbuild)
 const serverDir: string = (() => {
@@ -205,11 +231,18 @@ async function startServer() {
   try {
     const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(cfgPath)) {
-      const { initializeApp: initializeServerApp } = await import('firebase/app');
-      const { getFirestore: getServerFirestore } = await import('firebase/firestore');
+      const { initializeApp: initializeServerApp, getApps: getServerApps } = await import('firebase/app');
+      const { initializeFirestore: initServerFirestore, getFirestore: getServerFirestore } = await import('firebase/firestore');
       const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-      const serverApp = initializeServerApp(firebaseConfig, 'server-app-kiwify');
-      serverDb = getServerFirestore(serverApp, firebaseConfig.firestoreDatabaseId);
+      const serverApp = getServerApps().find(a => a.name === 'server-app-kiwify') ||
+        initializeServerApp(firebaseConfig, 'server-app-kiwify');
+      try {
+        serverDb = initServerFirestore(serverApp, {
+          experimentalForceLongPolling: true,
+        }, firebaseConfig.firestoreDatabaseId);
+      } catch {
+        serverDb = getServerFirestore(serverApp, firebaseConfig.firestoreDatabaseId);
+      }
       console.log('[Server Firebase] serverDb inicializado com sucesso.');
     }
   } catch (fbErr) {
@@ -4275,7 +4308,14 @@ Complete a finalização da música`,
       const clientConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
       const clientApp = getClientApps().find(a => a.name === "server-scale-scheduler") ||
         initClientApp(clientConfig, "server-scale-scheduler");
-      const clientDb = getClientFirestore(clientApp, clientConfig.firestoreDatabaseId);
+      let clientDb: any;
+      try {
+        clientDb = initClientFirestore(clientApp, {
+          experimentalForceLongPolling: true,
+        }, clientConfig.firestoreDatabaseId);
+      } catch {
+        clientDb = getClientFirestore(clientApp, clientConfig.firestoreDatabaseId);
+      }
 
       const servicesSnap = await clientGetDocs(clientCollection(clientDb, "services"));
       if (servicesSnap.empty) {

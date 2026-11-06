@@ -23,21 +23,21 @@ try {
   setLogLevel('silent');
 } catch {}
 
-if (typeof window !== 'undefined') {
-  const originalConsoleError = console.error;
-  console.error = (...args: any[]) => {
-    const msg = typeof args[0] === 'string' ? args[0] : '';
-    // Benign Firestore connection housekeeping when no targets are active
-    if (
-      msg.includes('Disconnecting idle stream') ||
-      msg.includes('Timed out waiting for new targets') ||
-      (msg.includes('@firebase/firestore') && msg.includes('CANCELLED'))
-    ) {
-      return;
-    }
-    originalConsoleError.apply(console, args);
-  };
-}
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || '');
+  // Benign Firestore connection housekeeping when no targets are active or idle gRPC resets
+  if (
+    msg.includes('Disconnecting idle stream') ||
+    msg.includes('Timed out waiting for new targets') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('GrpcConnection') ||
+    (msg.includes('@firebase/firestore') && (msg.includes('CANCELLED') || msg.includes('UNAVAILABLE') || msg.includes('Listen')))
+  ) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
 
 const app = initializeApp(firebaseConfig);
 

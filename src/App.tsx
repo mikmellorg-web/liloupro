@@ -10,7 +10,7 @@ import {
   ChevronRight, ChevronLeft, ChevronUp, ChevronDown, LogOut, Check, X, Sparkles, CloudOff, Wifi, WifiOff, Database,
   Clock, Activity, Maximize2, Minimize2, ThumbsUp, Menu, MoreHorizontal,
   Play, Pause, BookOpen, Book, Quote, GripVertical, GripHorizontal, Timer, ChevronsDown, RefreshCcw,
-  Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy,
+  Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy, Repeat, SkipForward,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
   Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2
@@ -1990,7 +1990,57 @@ function MainContent() {
   const [isPlaylistPlayerOpen, setIsPlaylistPlayerOpen] = useState<boolean>(false);
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
   const [activeAudioGuideUrl, setActiveAudioGuideUrl] = useState<string | null>(null);
+  const [isPlaylistRepeatActive, setIsPlaylistRepeatActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('liloupro_playlist_repeat') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [playlistLoopKey, setPlaylistLoopKey] = useState<number>(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('liloupro_playlist_repeat', String(isPlaylistRepeatActive));
+    } catch {
+      // ignore
+    }
+  }, [isPlaylistRepeatActive]);
   const globalAudioGuideRef = useRef<HTMLAudioElement | null>(null);
+  const playerIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const isPlaylistRepeatActiveRef = useRef<boolean>(isPlaylistRepeatActive);
+  isPlaylistRepeatActiveRef.current = isPlaylistRepeatActive;
+  const activePlaylistSongsRef = useRef<any[] | null>(activePlaylistSongs);
+  activePlaylistSongsRef.current = activePlaylistSongs;
+  const currentPlaylistIndexRef = useRef<number>(currentPlaylistIndex);
+  currentPlaylistIndexRef.current = currentPlaylistIndex;
+  const lastAdvanceTimeRef = useRef<number>(0);
+
+  const handleAdvancePlaylist = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAdvanceTimeRef.current < 1200) return;
+    lastAdvanceTimeRef.current = now;
+
+    const songs = activePlaylistSongsRef.current;
+    if (!songs || songs.length === 0) return;
+
+    if (globalAudioGuideRef.current) {
+      globalAudioGuideRef.current.pause();
+    }
+    setActiveAudioGuideUrl(null);
+
+    const currIdx = currentPlaylistIndexRef.current;
+    const isRepeat = isPlaylistRepeatActiveRef.current;
+
+    if (currIdx < songs.length - 1) {
+      setCurrentPlaylistIndex(currIdx + 1);
+    } else if (isRepeat) {
+      // Chegou no final da lista e o loop está ativo: REPETE DO INÍCIO!
+      setPlaylistLoopKey(k => k + 1);
+      setCurrentPlaylistIndex(0);
+    }
+  }, []);
+
   const playerDragControls = useDragControls();
   const [isPlayerDragging, setIsPlayerDragging] = useState<boolean>(false);
   const [showInstallPromptModal, setShowInstallPromptModal] = useState<boolean>(false);
@@ -2838,22 +2888,29 @@ function MainContent() {
 
   // Avanço automático na playlist do culto quando o vídeo do YouTube termina
   useEffect(() => {
-    if (!isPlaylistPlayerOpen || !activePlaylistSongs || activePlaylistSongs.length <= 1) return;
+    if (!isPlaylistPlayerOpen || !activePlaylistSongs || activePlaylistSongs.length === 0) return;
 
     const handleYouTubeMessage = (event: MessageEvent) => {
       try {
         if (!event.data) return;
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        // O player do YouTube emite { event: 'onStateChange', info: 0 } quando o vídeo termina (0 = YT.PlayerState.ENDED)
-        if (data && (data.event === 'onStateChange' || typeof data.info !== 'undefined')) {
-          if (data.info === 0) {
-            setCurrentPlaylistIndex(prev => {
-              if (activePlaylistSongs && prev < activePlaylistSongs.length - 1) {
-                return prev + 1;
-              }
-              return prev;
-            });
-          }
+        if (!data || typeof data !== 'object') return;
+
+        // O player do YouTube emite diferentes formatos dependendo do navegador/embed:
+        // 1. { event: 'infoDelivery', info: { playerState: 0 } }  -> (0 = ENDED)
+        // 2. { event: 'onStateChange', info: 0 } ou { event: 'onStateChange', data: 0 }
+        // 3. { info: { playerState: 0 } }
+        // 4. { info: 0 } ou { playerState: 0 } ou { data: 0 }
+        const isEnded = 
+          (data.event === 'infoDelivery' && data.info && data.info.playerState === 0) ||
+          (data.event === 'onStateChange' && (data.info === 0 || data.data === 0)) ||
+          (data.info && typeof data.info === 'object' && data.info.playerState === 0) ||
+          data.info === 0 ||
+          data.playerState === 0 ||
+          data.data === 0;
+
+        if (isEnded) {
+          handleAdvancePlaylist();
         }
       } catch {
         // Ignora mensagens de outras fontes que não são JSON do YouTube
@@ -2861,8 +2918,49 @@ function MainContent() {
     };
 
     window.addEventListener('message', handleYouTubeMessage);
-    return () => window.removeEventListener('message', handleYouTubeMessage);
-  }, [isPlaylistPlayerOpen, activePlaylistSongs]);
+
+    // Registra listener no iframe do YouTube para garantir que envie os eventos de onStateChange
+    const pingIframe = () => {
+      try {
+        const iframe = playerIframeRef.current;
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }), '*');
+        }
+      } catch {}
+    };
+
+    pingIframe();
+    const interval = setInterval(pingIframe, 1500);
+
+    return () => {
+      window.removeEventListener('message', handleYouTubeMessage);
+      clearInterval(interval);
+    };
+  }, [isPlaylistPlayerOpen, activePlaylistSongs, handleAdvancePlaylist]);
+
+  // Auto-skip músicas sem vídeo no YouTube quando a reprodução contínua da playlist estiver ativa
+  useEffect(() => {
+    if (!isPlaylistPlayerOpen || !activePlaylistSongs || activePlaylistSongs.length <= 1) return;
+
+    const currentSong = activePlaylistSongs[currentPlaylistIndex];
+    if (!currentSong) return;
+
+    const embedUrl = getPlaylistEmbedUrl(activePlaylistSongs, currentPlaylistIndex);
+
+    // Se a música atual não tem vídeo do YouTube e não há áudio guia tocando
+    if (!embedUrl && !activeAudioGuideUrl) {
+      // Verifica se existe pelo menos uma outra música na playlist que tenha vídeo para evitar loop infinito
+      const hasAnyPlayable = activePlaylistSongs.some((_, i) => !!getPlaylistEmbedUrl(activePlaylistSongs, i));
+      if (!hasAnyPlayable) return;
+
+      const timer = setTimeout(() => {
+        handleAdvancePlaylist();
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isPlaylistPlayerOpen, activePlaylistSongs, currentPlaylistIndex, activeAudioGuideUrl, handleAdvancePlaylist]);
 
   const handleClosePlayer = () => {
     handleStopAudioGuide();
@@ -2891,11 +2989,13 @@ function MainContent() {
     if (currentId) {
       // Importante: NÃO incluir &playlist= com IDs de outras músicas aqui.
       // A inclusão de &playlist= fazia o player do YouTube ignorar o currentId e tocar a primeira música da fila ou reiniciar em loop
-      return `https://www.youtube-nocookie.com/embed/${currentId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+      const originParam = typeof window !== 'undefined' && window.location.origin ? `&origin=${encodeURIComponent(window.location.origin)}` : '';
+      return `https://www.youtube-nocookie.com/embed/${currentId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0${originParam}`;
     }
 
     if (servicePlaylistId) {
-      return `https://www.youtube-nocookie.com/embed/videoseries?list=${servicePlaylistId}&autoplay=1&playsinline=1&enablejsapi=1&rel=0`;
+      const originParam = typeof window !== 'undefined' && window.location.origin ? `&origin=${encodeURIComponent(window.location.origin)}` : '';
+      return `https://www.youtube-nocookie.com/embed/videoseries?list=${servicePlaylistId}&autoplay=1&playsinline=1&enablejsapi=1&rel=0${originParam}`;
     }
 
     return '';
@@ -3018,43 +3118,35 @@ function MainContent() {
                   <p className="text-[11px] font-bold text-zinc-300 truncate mt-0.5">LiLouPro Player</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                {/* Botão Ver Cifra disponível para a música ativa (tanto no Modo Pratique quanto na Playlist) */}
-                {currentSong?.id && (
-                  <button
-                    onClick={() => handleOpenSongById(currentSong.id)}
-                    className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg transition-colors cursor-pointer"
-                    title="Visualizar cifra desta música"
-                  >
-                    <FileText size={11} />
-                    <span>Cifra</span>
-                  </button>
-                )}
-                {/* Botão Abrir no YouTube App caso o embed do Google dê erro 403 no celular do membro */}
+              <div className="flex items-center gap-2 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+                {/* Botão Abrir no YouTube App caso o embed dê erro 403 no celular ou para tocar no app oficial */}
                 <a
                   href={`https://www.youtube.com/watch?v=${parseYoutubeVideoId(currentSong.youtube || currentSong.youtubeUrl || currentSong.videoUrl || currentSong.link || '') || ''}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 rounded-lg transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 rounded-lg transition-colors cursor-pointer mr-1"
                   title="Abrir no aplicativo do YouTube"
                 >
-                  <Youtube size={11} className="fill-red-400" />
-                  <span className="hidden sm:inline">YouTube</span>
+                  <Youtube size={12} className="fill-red-400" />
+                  <span>YouTube</span>
                 </a>
-                <button 
-                  onClick={() => setIsPlaylistPlayerMinimized(true)}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  title="Minimizar"
-                >
-                  <Minimize2 size={14} />
-                </button>
-                <button 
-                  onClick={handleClosePlayer}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
-                  title="Fechar"
-                >
-                  <X size={14} />
-                </button>
+
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => setIsPlaylistPlayerMinimized(true)}
+                    className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    title="Minimizar"
+                  >
+                    <Minimize2 size={15} />
+                  </button>
+                  <button 
+                    onClick={handleClosePlayer}
+                    className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                    title="Fechar"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3062,7 +3154,8 @@ function MainContent() {
             <div className="w-full aspect-video bg-black relative border-b border-white/5 shrink-0">
               {embedUrl ? (
                 <iframe
-                  key={currentSong?.id ? `${currentSong.id}-${currentPlaylistIndex}` : `embed-${currentPlaylistIndex}`}
+                  ref={playerIframeRef}
+                  key={currentSong?.id ? `${currentSong.id}-${currentPlaylistIndex}-${playlistLoopKey}` : `embed-${currentPlaylistIndex}-${playlistLoopKey}`}
                   width="100%"
                   height="100%"
                   src={embedUrl}
@@ -3072,6 +3165,15 @@ function MainContent() {
                   allowFullScreen
                   referrerPolicy="strict-origin-when-cross-origin"
                   className="absolute inset-0 w-full h-full"
+                  onLoad={() => {
+                    try {
+                      const iframe = playerIframeRef.current;
+                      if (iframe && iframe.contentWindow) {
+                        iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+                        iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }), '*');
+                      }
+                    } catch {}
+                  }}
                 ></iframe>
               ) : currentSong.audio && currentSong.audio.length > 0 ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2.5">
@@ -3092,16 +3194,38 @@ function MainContent() {
                   </button>
                 </div>
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2">
-                  <p className="text-xs text-zinc-400 italic">Vídeo do YouTube indisponível para este louvor.</p>
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent((currentSong.title || '') + ' ' + (currentSong.artist || ''))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-md"
-                  >
-                    <Play size={12} className="fill-white" /> Buscar no YouTube
-                  </a>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center space-y-2.5">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <AlertTriangle size={16} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-zinc-200">Vídeo indisponível no YouTube</p>
+                    {!isSingleSong && (
+                      <p className="text-[11px] text-amber-400 font-medium animate-pulse">
+                        Pulando automaticamente em 1.5s...
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    {!isSingleSong && (
+                      <button
+                        type="button"
+                        onClick={handleAdvancePlaylist}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all cursor-pointer border border-white/10 active:scale-95"
+                        title="Pular para a próxima música com vídeo"
+                      >
+                        <SkipForward size={12} /> Pular Agora
+                      </button>
+                    )}
+                    <a
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent((currentSong.title || '') + ' ' + (currentSong.artist || ''))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                    >
+                      <Play size={12} className="fill-white" /> Buscar no YouTube
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
@@ -3112,35 +3236,58 @@ function MainContent() {
                 <p className="text-xs font-black truncate text-zinc-100">{currentSong.title}</p>
                 <p className="text-[10px] text-zinc-400 truncate italic">{currentSong.artist || 'Artista Desconhecido'}</p>
               </div>
-              {!isSingleSong && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    disabled={currentPlaylistIndex === 0}
-                    onClick={() => {
-                      handleStopAudioGuide();
-                      setCurrentPlaylistIndex(prev => Math.max(0, prev - 1));
-                    }}
-                    className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
-                    title="Anterior"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <span className="text-[10px] font-black font-mono text-zinc-500 bg-black/30 px-1.5 py-0.5 rounded">
-                    {currentPlaylistIndex + 1}/{activePlaylistSongs.length}
-                  </span>
-                  <button
-                    disabled={currentPlaylistIndex === activePlaylistSongs.length - 1}
-                    onClick={() => {
-                      handleStopAudioGuide();
-                      setCurrentPlaylistIndex(prev => Math.min(activePlaylistSongs.length - 1, prev + 1));
-                    }}
-                    className="p-1 hover:bg-white/5 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-zinc-300 transition-colors"
-                    title="Próxima"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Botão de Repetir Playlist em Loop */}
+                <button
+                  type="button"
+                  onClick={() => setIsPlaylistRepeatActive(prev => !prev)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border select-none",
+                    isPlaylistRepeatActive
+                      ? "bg-red-600/25 text-red-400 border-red-500/50 shadow-sm shadow-red-500/20 hover:bg-red-600/35 ring-1 ring-red-500/40"
+                      : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10 hover:text-zinc-200"
+                  )}
+                  title={isPlaylistRepeatActive ? "Repetição em loop ATIVADA (repete toda a playlist continuamente)" : "Ativar repetição em loop da playlist"}
+                >
+                  <Repeat size={12} className={isPlaylistRepeatActive ? "text-red-400 animate-pulse" : "text-zinc-400"} />
+                  <span className="text-[10px] font-bold">Repetir</span>
+                </button>
+
+                {!isSingleSong && (
+                  <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-lg border border-white/5">
+                    <button
+                      disabled={!isPlaylistRepeatActive && currentPlaylistIndex === 0}
+                      onClick={() => {
+                        handleStopAudioGuide();
+                        const songs = activePlaylistSongsRef.current;
+                        if (!songs || songs.length === 0) return;
+                        const currIdx = currentPlaylistIndexRef.current;
+                        if (currIdx > 0) {
+                          setCurrentPlaylistIndex(currIdx - 1);
+                        } else if (isPlaylistRepeatActiveRef.current) {
+                          setPlaylistLoopKey(k => k + 1);
+                          setCurrentPlaylistIndex(songs.length - 1);
+                        }
+                      }}
+                      className="p-1 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent rounded-md text-zinc-300 transition-colors cursor-pointer"
+                      title="Música anterior"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-[10px] font-black font-mono text-zinc-400 px-1.5 py-0.5">
+                      {currentPlaylistIndex + 1}/{activePlaylistSongs.length}
+                    </span>
+                    <button
+                      disabled={!isPlaylistRepeatActive && currentPlaylistIndex === activePlaylistSongs.length - 1}
+                      onClick={handleAdvancePlaylist}
+                      className="p-1 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent rounded-md text-zinc-300 transition-colors cursor-pointer"
+                      title="Próxima música"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Audio Guides if present on current song */}
