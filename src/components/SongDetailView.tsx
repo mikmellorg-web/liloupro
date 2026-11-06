@@ -2953,6 +2953,47 @@ export function SongDetailView({
           </div>
         </div>
 
+        {/* Indicadores Laterais Translúcidos de Navegação entre Músicas (Modo Foco) */}
+        {hasPrevSong && prevSong && (
+          <button
+            type="button"
+            onClick={() => handleSongSwitch(prevSong)}
+            aria-label={`Música anterior: ${prevSong.title}`}
+            title={`Anterior: ${prevSong.title} (Deslize para a direita ou clique)`}
+            className={cn(
+              "fixed left-1 sm:left-2.5 top-1/2 -translate-y-1/2 z-[115]",
+              "w-8 sm:w-9 h-16 sm:h-20 rounded-full flex items-center justify-center",
+              "opacity-25 hover:opacity-80 active:opacity-100 active:scale-95 transition-all duration-200 cursor-pointer select-none",
+              "shadow-xs border backdrop-blur-xs",
+              isStageMode
+                ? "bg-zinc-900/60 border-amber-500/25 text-amber-300 hover:bg-zinc-800/80"
+                : "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/15 text-zinc-700 dark:text-zinc-200 hover:bg-black/15 dark:hover:bg-white/20"
+            )}
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} className="shrink-0 -ml-0.5" />
+          </button>
+        )}
+
+        {hasNextSong && nextSong && (
+          <button
+            type="button"
+            onClick={() => handleSongSwitch(nextSong)}
+            aria-label={`Próxima música: ${nextSong.title}`}
+            title={`Próxima: ${nextSong.title} (Deslize para a esquerda ou clique)`}
+            className={cn(
+              "fixed right-1 sm:right-2.5 top-1/2 -translate-y-1/2 z-[115]",
+              "w-8 sm:w-9 h-16 sm:h-20 rounded-full flex items-center justify-center",
+              "opacity-25 hover:opacity-80 active:opacity-100 active:scale-95 transition-all duration-200 cursor-pointer select-none",
+              "shadow-xs border backdrop-blur-xs",
+              isStageMode
+                ? "bg-zinc-900/60 border-amber-500/25 text-amber-300 hover:bg-zinc-800/80"
+                : "bg-black/5 dark:bg-white/10 border-black/10 dark:border-white/15 text-zinc-700 dark:text-zinc-200 hover:bg-black/15 dark:hover:bg-white/20"
+            )}
+          >
+            <ChevronRight size={20} strokeWidth={2.5} className="shrink-0 -mr-0.5" />
+          </button>
+        )}
+
         {renderPracticePlayer()}
 
         {/* Popover Flutuante de Diagrama Rápido de Acorde no Modo Foco */}

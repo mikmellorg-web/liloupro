@@ -4,7 +4,7 @@ import {
   Search, Plus, Music, Star, ChevronRight, Zap, Settings, Mic, X, 
   ExternalLink, Sparkles, FolderOpen, Save, Play, FileText, Youtube,
   ChevronUp, ChevronDown, Trash2, Calendar, Clock, ArrowUpDown,
-  Globe, Download, Check
+  Globe, Download, Check, Headphones
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -252,6 +252,60 @@ export function SongsView({
 
   // Modal de Adicionar Música Diretamente ao Culto Atual
   const [isAddToServiceModalOpen, setIsAddToServiceModalOpen] = useState(false);
+
+  // Minha Playlist (Personalizada pelo usuário para reprodução contínua)
+  const [isMyPlaylistModalOpen, setIsMyPlaylistModalOpen] = useState(false);
+  const [myPlaylistIds, setMyPlaylistIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('liloupro_my_playlist_ids');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleMyPlaylist = (songId: string) => {
+    setMyPlaylistIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(songId)) {
+        next.delete(songId);
+      } else {
+        next.add(songId);
+      }
+      try {
+        localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
+  const addAllToMyPlaylist = () => {
+    const allIds = songs.map(s => s.id);
+    const next = new Set(allIds);
+    setMyPlaylistIds(next);
+    try {
+      localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify(Array.from(next)));
+    } catch {}
+  };
+
+  const clearMyPlaylist = () => {
+    setMyPlaylistIds(new Set());
+    try {
+      localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify([]));
+    } catch {}
+  };
+
+  const myPlaylistSongs = useMemo(() => {
+    return songs.filter(song => myPlaylistIds.has(song.id));
+  }, [songs, myPlaylistIds]);
+
+  const handleStartMyPlaylist = () => {
+    if (myPlaylistSongs.length === 0) return;
+    if (onStartPlaylist) {
+      onStartPlaylist(myPlaylistSongs);
+      setIsMyPlaylistModalOpen(false);
+    }
+  };
 
   // Pergunta de confirmação para mudança de ordem nas Músicas do Culto
   const [reorderConfirm, setReorderConfirm] = useState<{
@@ -1479,6 +1533,76 @@ export function SongsView({
         /* MODO 2: VER TODAS AS MÚSICAS (BUSCA + FILTROS + CATÁLOGO GERAL) */
         /* ============================================================== */
         <>
+          {/* Card / Barra de Ação de Minha Playlist no Repertório Geral */}
+          <div className="max-w-5xl mx-auto w-full mb-5">
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isLight 
+                ? 'bg-gradient-to-r from-red-50/70 via-white to-slate-50 border-red-200/60 shadow-xs' 
+                : 'bg-gradient-to-r from-red-950/25 via-[#101a35] to-[#121b33] border-red-500/20 shadow-md'
+            }`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-xs ${
+                  isLight 
+                    ? 'bg-red-100/80 border-red-200 text-red-600' 
+                    : 'bg-red-500/15 border-red-500/30 text-red-400'
+                }`}>
+                  <Headphones size={20} className="shrink-0" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className={`text-sm sm:text-base font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                      🎧 Minha Playlist
+                    </h3>
+                    <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full border ${
+                      myPlaylistSongs.length > 0
+                        ? (isLight ? 'bg-red-100 border-red-200 text-red-700' : 'bg-red-500/20 border-red-500/40 text-red-300')
+                        : (isLight ? 'bg-slate-100 border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400')
+                    }`}>
+                      {myPlaylistSongs.length} {myPlaylistSongs.length === 1 ? 'música' : 'músicas'}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-0.5 truncate ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                    {myPlaylistSongs.length === 0 
+                      ? 'Monte sua playlist para ouvir enquanto trabalha ou estuda'
+                      : 'Pronta para reprodução contínua em loop no player'
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Botões de Ação do Card Minha Playlist */}
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleStartMyPlaylist}
+                  disabled={myPlaylistSongs.length === 0}
+                  className={`flex-1 sm:flex-initial px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer ${
+                    myPlaylistSongs.length > 0
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                      : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
+                  }`}
+                  title={myPlaylistSongs.length === 0 ? "Adicione músicas para tocar a playlist" : "Iniciar reprodução da Minha Playlist"}
+                >
+                  <Play size={13} className={myPlaylistSongs.length > 0 ? "fill-white shrink-0" : "fill-transparent shrink-0"} />
+                  <span>Tocar Playlist ({myPlaylistSongs.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMyPlaylistModalOpen(true)}
+                  className={`px-3 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide border transition-all active:scale-95 cursor-pointer shrink-0 ${
+                    isLight 
+                      ? 'bg-white hover:bg-slate-100 text-slate-800 border-slate-200 shadow-xs' 
+                      : 'bg-[#101a35] hover:bg-[#162244] text-slate-200 border-slate-700/80'
+                  }`}
+                  title="Abrir e gerenciar músicas da Minha Playlist"
+                >
+                  <span>Gerenciar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Barra de Busca e Filtros de Seleção */}
           <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row sm:flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-3 mb-6">
             {/* Campo de Busca por Título ou Artista com Microfone */}
@@ -1614,6 +1738,7 @@ export function SongsView({
             ) : (
               filteredAllSongs.map((song) => {
                 const isFav = favoriteIds.has(song.id);
+                const isInMyPlaylist = myPlaylistIds.has(song.id);
                 const categoryBadge = getSongCategory(song);
 
                 return (
@@ -1679,6 +1804,23 @@ export function SongsView({
                         </div>
                       </div>
                     </div>
+
+                    {/* Botão de Adicionar/Remover de Minha Playlist */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMyPlaylist(song.id);
+                      }}
+                      className={`p-2 rounded-xl transition-all mr-1 sm:mr-1.5 shrink-0 active:scale-90 cursor-pointer ${
+                        isInMyPlaylist
+                          ? (isLight ? 'bg-red-100 text-red-600 border border-red-200 shadow-2xs' : 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-xs')
+                          : (isLight ? 'text-slate-400 hover:text-red-600 hover:bg-red-50/60' : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10')
+                      }`}
+                      title={isInMyPlaylist ? 'Remover de Minha Playlist' : 'Adicionar a 🎧 Minha Playlist'}
+                    >
+                      <Headphones size={18} className={isInMyPlaylist ? 'stroke-[2.5]' : 'stroke-[1.8]'} />
+                    </button>
 
                     {/* Seta Direita */}
                     <div className={`shrink-0 flex items-center ${isLight ? 'text-slate-400 group-hover:text-slate-700' : 'text-slate-500 group-hover:text-slate-300'} group-hover:translate-x-0.5 transition-all`}>
@@ -2168,6 +2310,177 @@ export function SongsView({
               >
                 Sim
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: MINHA PLAYLIST PERSONALIZADA (REPRODUÇÃO CONTÍNUA)       */}
+      {/* ============================================================== */}
+      {isMyPlaylistModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className={`w-full max-w-xl ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-4 sm:p-6 max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-150`}>
+            {/* Top Header */}
+            <div className={`flex items-center justify-between pb-3 sm:pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${isLight ? 'bg-red-100 border-red-200 text-red-600' : 'bg-red-500/20 border-red-500/30 text-red-400'}`}>
+                  <Headphones size={19} />
+                </div>
+                <div>
+                  <h3 className={`font-black text-sm sm:text-base ${isLight ? 'text-slate-900' : 'text-white'} flex items-center gap-2`}>
+                    <span>Minha Playlist</span>
+                    <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full border ${
+                      myPlaylistSongs.length > 0
+                        ? (isLight ? 'bg-red-100 border-red-200 text-red-700' : 'bg-red-500/20 border-red-500/40 text-red-300')
+                        : (isLight ? 'bg-slate-100 border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400')
+                    }`}>
+                      {myPlaylistSongs.length} {myPlaylistSongs.length === 1 ? 'música' : 'músicas'}
+                    </span>
+                  </h3>
+                  <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Sua seleção personalizada para ouvir no trabalho, carro ou estudo
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMyPlaylistModalOpen(false)}
+                className={`p-1.5 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'} transition cursor-pointer`}
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Barra de Ações do Modal */}
+            <div className={`flex flex-wrap items-center justify-between gap-2 py-2.5 px-2 rounded-xl my-2 border ${isLight ? 'border-slate-200/80 bg-slate-50' : 'border-slate-800/80 bg-slate-900/40'}`}>
+              <button
+                type="button"
+                onClick={handleStartMyPlaylist}
+                disabled={myPlaylistSongs.length === 0}
+                className={`px-3 sm:px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer ${
+                  myPlaylistSongs.length > 0
+                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                    : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
+                }`}
+                title={myPlaylistSongs.length === 0 ? "Adicione músicas para tocar a playlist" : "Tocar playlist no player"}
+              >
+                <Play size={13} className={myPlaylistSongs.length > 0 ? "fill-white shrink-0" : "fill-transparent shrink-0"} />
+                <span>Tocar Playlist ({myPlaylistSongs.length})</span>
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={addAllToMyPlaylist}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition active:scale-95 cursor-pointer ${
+                    isLight 
+                      ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs' 
+                      : 'bg-[#121b33] hover:bg-[#162244] text-slate-300 border-slate-700'
+                  }`}
+                  title="Adicionar todas as músicas do catálogo nesta playlist"
+                >
+                  + Todas ({songs.length})
+                </button>
+
+                {myPlaylistSongs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearMyPlaylist}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95 cursor-pointer ${
+                      isLight 
+                        ? 'text-red-600 hover:bg-red-50' 
+                        : 'text-red-400 hover:bg-red-950/40'
+                    }`}
+                    title="Remover todas as músicas da sua playlist"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Lista de Músicas na Playlist */}
+            <div className="flex-1 overflow-y-auto py-2 space-y-2 pr-1 min-h-[180px] max-h-[50vh]">
+              {myPlaylistSongs.length === 0 ? (
+                <div className="py-12 text-center flex flex-col items-center justify-center px-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${isLight ? 'bg-slate-100 text-slate-400' : 'bg-slate-800 text-slate-500'}`}>
+                    <Headphones size={24} />
+                  </div>
+                  <h4 className={`text-sm font-bold ${isLight ? 'text-slate-800' : 'text-slate-200'} mb-1`}>
+                    Sua playlist ainda está vazia
+                  </h4>
+                  <p className={`text-xs max-w-sm ${isLight ? 'text-slate-500' : 'text-slate-400'} mb-4`}>
+                    Toque no ícone de fone 🎧 ao lado de qualquer música no repertório para montar sua seleção ou clique no botão abaixo para incluir tudo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addAllToMyPlaylist}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 transition active:scale-95 cursor-pointer"
+                  >
+                    Adicionar todas as músicas ({songs.length})
+                  </button>
+                </div>
+              ) : (
+                myPlaylistSongs.map((song, idx) => (
+                  <div
+                    key={song.id}
+                    className={`flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl border transition ${
+                      isLight ? 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70' : 'bg-slate-900/60 border-slate-800 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className={`text-[11px] font-mono font-bold w-5 text-center shrink-0 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {idx + 1}ª
+                      </span>
+                      <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700/60'} border flex items-center justify-center`}>
+                        <ArtistAvatar
+                          artist={song.artist}
+                          customImageUrl={song.artistImageUrl || song.customImageUrl || song.coverImage}
+                          size="sm"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs sm:text-sm font-bold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          {song.title}
+                        </p>
+                        <p className={`text-[11px] italic truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                          {song.artist || 'Artista Desconhecido'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMyPlaylistModalOpen(false);
+                          onSelectSong(song);
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition active:scale-95 cursor-pointer ${
+                          isLight 
+                            ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200' 
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                        }`}
+                        title="Ver cifra desta música"
+                      >
+                        Cifra
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleMyPlaylist(song.id)}
+                        className={`p-1.5 rounded-lg transition active:scale-90 cursor-pointer ${
+                          isLight ? 'text-slate-400 hover:text-red-600 hover:bg-red-50' : 'text-slate-500 hover:text-red-400 hover:bg-red-950/40'
+                        }`}
+                        title="Remover da Minha Playlist"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
