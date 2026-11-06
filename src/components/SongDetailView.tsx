@@ -4235,9 +4235,38 @@ export function SongDetailView({
                   {detailTab === 'chords' && availableChordsInSong.length > 0 && (
                     <div className="bg-card/40 backdrop-blur-md border border-border/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 shadow-sm notranslate" translate="no">
                       <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar py-1 max-w-full">
-                        <span className="text-[10px] font-black uppercase text-text-muted tracking-wider shrink-0 flex items-center gap-1">
-                          <Music2 size={12} className="text-brand" /> Acordes:
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHarmonicDisplayMode(prev => {
+                              if (prev === 'chords') return 'roman';
+                              if (prev === 'roman') return 'functions';
+                              return 'chords';
+                            });
+                          }}
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all cursor-pointer active:scale-95 select-none shadow-xs",
+                            harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/30 hover:bg-brand/25",
+                            harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-500 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
+                            harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-500 dark:text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
+                          )}
+                          title={`Visão Harmônica: ${harmonicDisplayMode === 'chords' ? 'Cifra Tradicional' : harmonicDisplayMode === 'roman' ? 'Graus do Campo Harmônico' : 'Funções Harmônicas'} • Toque para alternar (Cifra ➔ Graus ➔ Funções)`}
+                        >
+                          <span className={cn(
+                            "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
+                            harmonicDisplayMode === 'chords' && "bg-brand text-white",
+                            harmonicDisplayMode === 'roman' && "bg-amber-500 text-black",
+                            harmonicDisplayMode === 'functions' && "bg-cyan-500 text-white"
+                          )}>
+                            <Music2 size={10} className="fill-current" />
+                          </span>
+                          <span>
+                            {harmonicDisplayMode === 'chords' && "Acordes:"}
+                            {harmonicDisplayMode === 'roman' && "Graus:"}
+                            {harmonicDisplayMode === 'functions' && "Funções:"}
+                          </span>
+                          <RefreshCcw size={9} className="opacity-60 shrink-0 ml-0.5" />
+                        </button>
                         <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar py-0.5">
                           {availableChordsInSong.map(chord => {
                             const converted = convertSingleChordToHarmonicMode(chord, currentKey, harmonicDisplayMode);
