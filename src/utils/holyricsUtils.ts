@@ -33,43 +33,14 @@ function sanitizeFilename(name: string): string {
  * Converte uma música do LiLouPro no formato clássico de arquivo de texto (.txt) do Holyrics
  */
 export function formatSongForHolyrics(song: HolyricsSongExport): string {
-  const lines: string[] = [];
-
-  // Metadados compatíveis com Holyrics
-  if (song.title) {
-    lines.push(`[title] ${song.title.trim()}`);
-  }
-  if (song.artist) {
-    lines.push(`[artist] ${song.artist.trim()}`);
-  }
-  if (song.key) {
-    lines.push(`[key] ${song.key.trim()}`);
-  }
-  if (song.bpm) {
-    lines.push(`[bpm] ${song.bpm}`);
-  }
-  if (song.timeSignature) {
-    lines.push(`[time_signature] ${song.timeSignature}`);
-  }
-
-  // Linha em branco separando os metadados da letra
-  lines.push('');
-
-  // Letra limpa (sem cifras embutidas ou acordes soltos)
+  // Letra limpa organizada em slides equilibrados (2 a 4 linhas por slide)
   const rawText = song.lyrics || song.chords || '';
   const cleanedLyrics = cleanLyricsForProjection(rawText);
 
-  // O Holyrics espera quebras duplas entre estrofes/refrões
-  // Se a letra já tiver tags como [Verso], [Refrão], nós as preservamos ou organizamos
-  const formattedLyrics = cleanedLyrics
-    .split(/\n{2,}/)
-    .map(stanza => stanza.trim())
-    .filter(Boolean)
-    .join('\n\n');
-
-  lines.push(formattedLyrics);
-
-  return lines.join('\n');
+  // No Holyrics, arquivos de texto de músicas contêm diretamente as estrofes separadas por linha em branco.
+  // O título da música e artista são definidos pelo próprio nome do arquivo (.txt).
+  // Dessa forma, NÃO são gerados slides indesejados com tags de [title] ou [artist] na tela da congregação!
+  return cleanedLyrics;
 }
 
 /**
@@ -82,12 +53,12 @@ export async function generateHolyricsZipForService(service: any, songs: Holyric
   const folderName = `Holyrics_${sanitizeFilename(service.title || service.name || 'Culto')}`;
   const songsFolder = zip.folder(`${folderName}/Musicas`);
 
-  // 1. Arquivos individuais de cada música
+  // 1. Arquivos individuais de cada música com nomes limpos (ex: "Depois do Jardim.txt")
+  // para que o Holyrics importe o título exato e o script de 1 clique faça o match perfeito!
   songs.forEach((song, idx) => {
     const songTxt = formatSongForHolyrics(song);
-    const prefix = String(idx + 1).padStart(2, '0');
     const safeTitle = sanitizeFilename(song.title || `Musica_${idx + 1}`);
-    const fileName = `${prefix}_${safeTitle}.txt`;
+    const fileName = `${safeTitle}.txt`;
     if (songsFolder) {
       songsFolder.file(fileName, songTxt);
     }

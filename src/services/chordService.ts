@@ -1645,53 +1645,96 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
 
   // 2. Split into lines
   const lines = cleaned.split(/\r?\n/);
+  const resultLines: (string | null)[] = []; // null represents an intentional paragraph break
+  let lastWasBlank = true;
 
-  const processedLines = lines.map(line => {
-    let trimmed = line.trim();
-    if (!trimmed) return '';
+  for (const rawLine of lines) {
+    let trimmed = rawLine.trim();
 
-    // If the line is a chord line (e.g. "C   G   Am   F"), filter it out
+    // Intentional empty line in the original text (blank line between stanzas)
+    if (!trimmed) {
+      if (!lastWasBlank) {
+        resultLines.push(null);
+        lastWasBlank = true;
+      }
+      continue;
+    }
+
+    // Skip chord lines (do NOT insert an extra blank line between lyric lines!)
     if (isChordLine(trimmed)) {
-      return '';
+      continue;
+    }
+
+    // Skip tablatures
+    if (isTablatureLine(rawLine)) {
+      continue;
     }
 
     // Remove inline chord tags like [C], [G/B], [Am7], [F#m]
-    trimmed = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|[0-9])*(?:\/[A-G][b#]?)?\]/g, '');
+    trimmed = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][b#]?)?\]/g, '');
 
-    // Remove dynamic tags in parentheses or brackets:
-    // e.g., (N1 🌑 Sutil), (N1 🌑), (N1), (N2 🌘 Bem Suave), (N7 ⚡ Clímax), (Crescendo ↗), (Decrescendo ↘), (Pausa 🛑), (Acapella 🎤), (Só Bateria 🥁), (Sobe o Tom 📈)
-    // also (Sutil), (Quase Silêncio), (Bem Suave), (Suave), (Moderado), (Meio Forte), (Forte), (Clímax), (Pausa), (Parada), (Acapella), (Só Bateria), (Sobe o Tom)
-    // [N1 🌑 Sutil], [N1], [N7], etc.
-    trimmed = trimmed.replace(/[\(\[](?:N[1-7]|Sutil|Quase Silêncio|Quase Silencio|Bem Suave|Suave|Moderado|Meio Forte|Forte|Clímax|Climax|Crescendo|Decrescendo|Pausa|Parada|Acapella|Só Bateria|Apenas Bateria|Violão Marcando|Violao Marcando|Violão|Violao|Sobe o Tom|Sobe Tom|Modulação|Modulacao|Tutti|Solo|Intro|Instrumental|Refrão|Refrao|Ponte|Verso|Primeira Parte|Segunda Parte|Terceira Parte|1ª Parte|2ª Parte|3ª Parte|Parte 1|Parte 2|Parte 3|Dobra)(?:\s+[^)\]]*)?[\)\]]/gi, '');
-
-    // Remove unbracketed/inline dynamic patterns:
-    // e.g., N1 🌑 Sutil, N1 🌑, N2 🌘, N7 ⚡, Crescendo ↗, Decrescendo ↘, Pausa 🛑, Acapella 🎤, Só Bateria 🥁, Violão Marcando 🎸, Sobe o Tom 📈
-    trimmed = trimmed.replace(/\bN[1-7]\b\s*(?:🌑|🌘|🌗|🌖|🌕|🔥|⚡)?\s*(?:Sutil|Quase Silêncio|Quase Silencio|Bem Suave|Suave|Moderado|Meio Forte|Forte|Clímax|Climax)?/gi, '');
-    trimmed = trimmed.replace(/(?:Crescendo\s*↗?|Decrescendo\s*↘?|Pausa\s*🛑?|Acapella\s*🎤?|Só Bateria\s*🥁?|Violão Marcando\s*🎸?|Violao Marcando\s*🎸?|Sobe o Tom\s*📈?|Sobe Tom\s*📈?|Modulação\s*📈?)/gi, '');
+    // Remove dynamic tags in parentheses or brackets
+    trimmed = stripDynamicsFromText(trimmed);
 
     // Clean up standalone emojis associated with dynamics
     trimmed = trimmed.replace(/(?:🌑|🌘|🌗|🌖|🌕|🔥|⚡|🛑|↗|↘|🎤|🥁|🎸|📈)/g, '');
-
-    // Clean up extra double spaces created by removals
     trimmed = trimmed.replace(/\s{2,}/g, ' ').trim();
 
-    // Filter out brackets containing section titles or repetition counts like [Intro], [Refrão 4x], [Ponte (2x)], [Solo], [Verso 1], [1ª Parte]
-    if (/^\[[^\]]+\](\s*[\(\[]?([0-9]+x|bis)[\)\]]?)?$/i.test(trimmed)) {
-      return '';
+    // Filter out section headers like [Intro], [Refrão], [Solo], [Ponte]
+    if (/^[\s\[\(\{\-]*([0-9]+\.?)?\s*(intro|introdução|introducao|refrão|refrao|chorus|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed)) {
+      if (!lastWasBlank) {
+        resultLines.push(null);
+        lastWasBlank = true;
+      }
+      continue;
     }
 
-    // Filter out standalone section labels or dynamic labels (case-insensitive, optionally followed by numbers, repetition counts like 4x, (4x), 2x, etc.)
-    if (/^[\s\[\(\{\-]*([0-9]+\.?)?\s*(intro|introdução|introducao|refrão|refrao|ponte|bridge|solo|verso|coro|chorus|pre-refrão|pré-refrão|pre-refrao|ministração|ministracao|final|outro|instrumental|vocal|estribilho|dobra|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|1a parte|2a parte|3a parte|4a parte|parte 1|parte 2|parte 3|parte 4|n1|n2|n3|n4|n5|n6|n7|sutil|quase silêncio|quase silencio|bem suave|suave|moderado|meio forte|forte|clímax|climax|crescendo|decrescendo|pausa|parada|acapella|só bateria|so bateria|sobe o tom|sobe tom|modulação|modulacao)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed)) {
-      return '';
+    // Filter out metadata tags like [title] ..., [artist] ..., [bpm] ...
+    if (/^\[(title|artist|key|bpm|time_signature|composer|album|tempo)\]/i.test(trimmed)) {
+      continue;
     }
 
-    return trimmed;
-  });
+    // If valid lyric text (has at least 2 letters)
+    if (/[a-zA-ZÀ-ÿ]{2,}/.test(trimmed)) {
+      resultLines.push(trimmed);
+      lastWasBlank = false;
+    }
+  }
 
-  return processedLines
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  // 3. Group into stanzas
+  const stanzas: string[][] = [];
+  let currentStanza: string[] = [];
+
+  for (const item of resultLines) {
+    if (item === null) {
+      if (currentStanza.length > 0) {
+        stanzas.push(currentStanza);
+        currentStanza = [];
+      }
+    } else {
+      currentStanza.push(item);
+    }
+  }
+  if (currentStanza.length > 0) {
+    stanzas.push(currentStanza);
+  }
+
+  // 4. Ensure each stanza/slide has between 2 and 4 lines (golden standard for church projection)
+  const balancedSlides: string[] = [];
+
+  for (let sIdx = 0; sIdx < stanzas.length; sIdx++) {
+    const stanza = stanzas[sIdx];
+    if (stanza.length <= 4) {
+      balancedSlides.push(stanza.join('\n'));
+    } else {
+      // Chunk long stanzas into slides of 4 lines
+      for (let i = 0; i < stanza.length; i += 4) {
+        balancedSlides.push(stanza.slice(i, i + 4).join('\n'));
+      }
+    }
+  }
+
+  return balancedSlides.join('\n\n').trim();
 }
 
 export function getCapoSemitonesFromText(capoStr: string | undefined | null): number {
