@@ -12,7 +12,8 @@ import {
   downloadBlob, 
   parseHolyricsTextFile,
   ParsedHolyricsSong,
-  HOLYRICS_JAVASCRIPT_SCRIPT
+  HOLYRICS_JAVASCRIPT_SCRIPT,
+  formatServiceDateBR
 } from '../utils/holyricsUtils';
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -641,11 +642,14 @@ export function BroadcastIntegrationsModal({
                         onChange={(e) => setSelectedServiceId(e.target.value)}
                         className="flex-1 px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs focus:outline-none"
                       >
-                        {allServices.map((svc: any) => (
-                          <option key={svc.id} value={svc.id}>
-                            {svc.title || svc.name || 'Culto sem título'} {svc.date ? `(${svc.date})` : ''}
-                          </option>
-                        ))}
+                        {allServices.map((svc: any) => {
+                          const dateBR = formatServiceDateBR(svc.date, svc.time);
+                          return (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.title || svc.name || 'Culto sem título'} {dateBR ? `(${dateBR})` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
 
                       <button
@@ -803,11 +807,14 @@ export function BroadcastIntegrationsModal({
                         onChange={(e) => setSelectedServiceId(e.target.value)}
                         className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs focus:outline-none"
                       >
-                        {allServices.map((svc: any) => (
-                          <option key={svc.id} value={svc.id}>
-                            {svc.title || svc.name || 'Culto sem título'} {svc.date ? `(${svc.date})` : ''}
-                          </option>
-                        ))}
+                        {allServices.map((svc: any) => {
+                          const dateBR = formatServiceDateBR(svc.date, svc.time);
+                          return (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.title || svc.name || 'Culto sem título'} {dateBR ? `(${dateBR})` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
 
                       <button

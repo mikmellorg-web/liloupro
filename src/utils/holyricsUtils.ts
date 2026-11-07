@@ -21,6 +21,55 @@ export interface ParsedHolyricsSong {
 }
 
 /**
+ * Converte datas do formato ISO (AAAA-MM-DD ou AAAA-MM-DDTHH:mm)
+ * para o padrão brasileiro dia/mês/ano (DD/MM/AAAA)
+ */
+export function formatServiceDateBR(dateStr?: string | null, timeStr?: string | null): string {
+  if (!dateStr) return '';
+
+  let day = '';
+  let month = '';
+  let year = '';
+  let time = timeStr || '';
+
+  // Caso 1: String no formato ISO YYYY-MM-DD... (ex: "2026-07-26T10:30" ou "2026-07-26")
+  const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}:\d{2}))?/);
+  if (isoMatch) {
+    year = isoMatch[1];
+    month = isoMatch[2];
+    day = isoMatch[3];
+    if (!time && isoMatch[4]) {
+      time = isoMatch[4];
+    }
+  } else {
+    // Caso 2: Tenta parsear com objeto Date
+    try {
+      const d = (dateStr as any)?.toDate ? (dateStr as any).toDate() : new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        day = String(d.getDate()).padStart(2, '0');
+        month = String(d.getMonth() + 1).padStart(2, '0');
+        year = String(d.getFullYear());
+        if (!time && (d.getHours() !== 0 || d.getMinutes() !== 0)) {
+          time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+    } catch {
+      return String(dateStr);
+    }
+  }
+
+  if (day && month && year) {
+    const formattedDate = `${day}/${month}/${year}`;
+    if (time) {
+      return `${formattedDate} às ${time}`;
+    }
+    return formattedDate;
+  }
+
+  return String(dateStr);
+}
+
+/**
  * Sanitiza o nome de arquivo para ser seguro no sistema de arquivos do Windows/Mac
  */
 function sanitizeFilename(name: string): string {
@@ -95,8 +144,8 @@ export async function generateHolyricsZipForService(service: any, songs: Holyric
   const serviceLines: string[] = [
     `=== PROGRAMAÇÃO DO CULTO - LILOUPRO PARA HOLYRICS ===`,
     `Culto: ${service.title || service.name || 'Culto de Louvor'}`,
-    service.date ? `Data: ${service.date}` : '',
-    service.time ? `Horário: ${service.time}` : '',
+    service.date ? `Data: ${formatServiceDateBR(service.date, service.time)}` : '',
+    service.time && !service.date?.includes('T') ? `Horário: ${service.time}` : '',
     '',
     `--- REPERTÓRIO DE MÚSICAS (ORDEM OFICIAL DA LITURGIA) ---`,
     ...songs.map((song, idx) => {
