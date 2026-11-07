@@ -69,15 +69,25 @@ export async function generateHolyricsZipForService(service: any, songs: Holyric
 
   const folderName = `Holyrics_${sanitizeFilename(service.title || service.name || 'Culto')}`;
   const songsFolder = zip.folder(`${folderName}/Musicas`);
+  const cleanFolder = zip.folder(`${folderName}/Musicas_Sem_Numeracao`);
 
-  // 1. Arquivos individuais de cada música com nomes limpos (ex: "Depois do Jardim.txt")
-  // para que o Holyrics importe o título exato e o script de 1 clique faça o match perfeito!
+  // 1. Arquivos individuais de cada música numerados conforme a ordem oficial da Liturgia
+  // Ex: "01 - Teu Povo.txt", "02 - Depois do Jardim.txt", etc.
+  // Isso garante que no Holyrics e no Windows os arquivos fiquem ordenados EXATAMENTE na ordem do culto!
   songs.forEach((song, idx) => {
     const songTxt = formatSongForHolyrics(song);
     const safeTitle = sanitizeFilename(song.title || `Musica_${idx + 1}`);
-    const fileName = `${safeTitle}.txt`;
+    const numPrefix = String(idx + 1).padStart(2, '0');
+    
+    // Pasta principal: com prefixo para garantir a ordenação correta no Holyrics
+    const fileName = `${numPrefix} - ${safeTitle}.txt`;
     if (songsFolder) {
       songsFolder.file(fileName, songTxt);
+    }
+
+    // Pasta alternativa: sem numeração no nome do arquivo
+    if (cleanFolder) {
+      cleanFolder.file(`${safeTitle}.txt`, songTxt);
     }
   });
 
@@ -88,9 +98,9 @@ export async function generateHolyricsZipForService(service: any, songs: Holyric
     service.date ? `Data: ${service.date}` : '',
     service.time ? `Horário: ${service.time}` : '',
     '',
-    `--- REPERTÓRIO DE MÚSICAS ---`,
+    `--- REPERTÓRIO DE MÚSICAS (ORDEM OFICIAL DA LITURGIA) ---`,
     ...songs.map((song, idx) => {
-      const parts = [`${idx + 1}. ${song.title}`];
+      const parts = [`${String(idx + 1).padStart(2, '0')}. ${song.title}`];
       if (song.artist) parts.push(`(${song.artist})`);
       if (song.key) parts.push(`- Tom: ${song.key}`);
       if (song.bpm) parts.push(`- BPM: ${song.bpm}`);
@@ -98,12 +108,16 @@ export async function generateHolyricsZipForService(service: any, songs: Holyric
     }),
     '',
     `Instruções para o Holyrics:`,
-    `1. Copie os arquivos da pasta "Musicas" para a pasta de músicas do Holyrics.`,
-    `2. No Holyrics, clique em "Músicas" -> "Adicionar à Lista" para montar a ordem do culto.`,
+    `1. Na pasta "Musicas", os arquivos já estão numerados (01, 02, 03...) na ordem exata da liturgia.`,
+    `2. No Holyrics, ao importar a pasta ou os arquivos, eles ficam perfeitamente ordenados.`,
     `3. Sincronizado e exportado pelo LiLouPro.`
   ].filter(line => line !== null && line !== undefined);
 
   zip.file(`${folderName}/Programacao_do_Culto.txt`, serviceLines.join('\n'));
+
+  // 3. Arquivo de lista simples para cópia rápida
+  const simpleList = songs.map((s, idx) => `${String(idx + 1).padStart(2, '0')} - ${s.title}`).join('\n');
+  zip.file(`${folderName}/Ordem_do_Culto.txt`, simpleList);
 
   return await zip.generateAsync({ type: 'blob' });
 }
@@ -206,6 +220,14 @@ function scriptAction(obj) {
 
         // Pesquisa a música no acervo interno do Holyrics
         var result = h.hly('SearchSong', { 'text': songTitle });
+        if (!result || !result.data || result.data.length === 0) {
+            // Tenta buscar sem prefixos numéricos (ex: "01 - Teu Povo" -> "Teu Povo")
+            var cleanTitle = songTitle.replace(/^\d+[\s._-]+/, '').trim();
+            if (cleanTitle !== songTitle) {
+                result = h.hly('SearchSong', { 'text': cleanTitle });
+            }
+        }
+
         if (result && result.data && result.data.length > 0) {
             var song = result.data[0];
             // Adiciona a música diretamente na playlist de projeção

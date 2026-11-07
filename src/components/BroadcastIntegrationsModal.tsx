@@ -832,16 +832,24 @@ export function BroadcastIntegrationsModal({
                     </div>
 
                     <div className="pt-2 border-t border-zinc-800/80">
-                      <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                        Músicas neste Culto ({serviceSongs.length}):
-                      </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Ordem Oficial da Liturgia ({serviceSongs.length} músicas):
+                        </p>
+                        <span className="text-[11px] text-emerald-400 font-medium">
+                          Arquivos numerados (01, 02...) para ordenação automática
+                        </span>
+                      </div>
                       {serviceSongs.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {serviceSongs.map((s, idx) => (
-                            <div key={idx} className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 flex items-center gap-1.5">
-                              <Music size={11} className="text-emerald-400" />
+                            <div key={idx} className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 flex items-center gap-1.5 shadow-sm">
+                              <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                {idx + 1}º
+                              </span>
+                              <Music size={11} className="text-emerald-400 shrink-0" />
                               <span className="font-semibold">{s.title}</span>
-                              {s.key && <span className="text-[10px] text-zinc-500">[{s.key}]</span>}
+                              {s.key && <span className="text-[10px] text-zinc-500 font-mono">[{s.key}]</span>}
                             </div>
                           ))}
                         </div>
