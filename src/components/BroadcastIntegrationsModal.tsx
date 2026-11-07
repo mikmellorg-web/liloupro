@@ -113,8 +113,15 @@ export function BroadcastIntegrationsModal({
           return;
         }
       }
-      // Se já tiver dados embutidos
-      if (item.title) {
+      // Se for música avulsa com dados embutidos (ignora leituras bíblicas e orações litúrgicas)
+      const isReadingOrBible = 
+        item.type === 'reading' || 
+        item.type === 'bible' || 
+        item.type === 'text' || 
+        item.type === 'prayer' ||
+        (item.title && (item.title.includes('(BLIVRE)') || item.title.includes('(TB)') || item.title.includes('(NAA)')));
+
+      if (item.title && !isReadingOrBible) {
         songsList.push({
           title: item.title,
           artist: item.artist || '',

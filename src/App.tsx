@@ -3107,7 +3107,7 @@ function MainContent() {
               }}
               className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/90 cursor-grab active:cursor-grabbing select-none touch-none"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center text-white shrink-0 shadow-md">
                   <Youtube size={16} className="fill-white" />
                 </div>
@@ -3117,36 +3117,36 @@ function MainContent() {
                   </h4>
                   <p className="text-[11px] font-bold text-zinc-300 truncate mt-0.5">LiLouPro Player</p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                {/* Botão Abrir no YouTube App caso o embed dê erro 403 no celular ou para tocar no app oficial */}
+
+                {/* Botão Abrir no YouTube App reposicionado à esquerda para afastar dos botões de janela */}
                 <a
                   href={`https://www.youtube.com/watch?v=${parseYoutubeVideoId(currentSong.youtube || currentSong.youtubeUrl || currentSong.videoUrl || currentSong.link || '') || ''}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 rounded-lg transition-colors cursor-pointer mr-1"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1.5 text-[10px] font-bold px-2 sm:px-2.5 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30 rounded-lg transition-colors cursor-pointer shrink-0 ml-1.5 shadow-2xs"
                   title="Abrir no aplicativo do YouTube"
                 >
                   <Youtube size={12} className="fill-red-400" />
                   <span>YouTube</span>
                 </a>
+              </div>
 
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => setIsPlaylistPlayerMinimized(true)}
-                    className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                    title="Minimizar"
-                  >
-                    <Minimize2 size={15} />
-                  </button>
-                  <button 
-                    onClick={handleClosePlayer}
-                    className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
-                    title="Fechar"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
+              <div className="flex items-center gap-1 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+                <button 
+                  onClick={() => setIsPlaylistPlayerMinimized(true)}
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  title="Minimizar"
+                >
+                  <Minimize2 size={15} />
+                </button>
+                <button 
+                  onClick={handleClosePlayer}
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                  title="Fechar"
+                >
+                  <X size={15} />
+                </button>
               </div>
             </div>
 

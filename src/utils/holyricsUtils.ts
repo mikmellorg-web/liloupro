@@ -197,12 +197,7 @@ export function parseHolyricsTextFile(content: string, fallbackTitle: string): P
 export const HOLYRICS_JAVASCRIPT_SCRIPT = `// ========================================================
 // SCRIPT DE IMPORTAÇÃO AUTOMÁTICA - LILOUPRO PARA HOLYRICS
 // ========================================================
-// 1. No LiLouPro, selecione o culto e clique em:
-//    "Copiar Lista do Culto para o Holyrics"
-// 2. No Holyrics, clique para executar este Script
-// ========================================================
-
-function importarDoLiloupro() {
+function scriptAction(obj) {
     var clipboard = h.getClipboard();
     if (!clipboard || clipboard.trim() === '') {
         h.hly('ShowNotification', { 'text': 'Área de transferência vazia! Copie o culto no LiLouPro primeiro.' });
@@ -241,6 +236,4 @@ function importarDoLiloupro() {
     if (naoEncontradas.length > 0) {
         h.log('Músicas não encontradas (cadastre-as ou importe o .zip gerado no LiLouPro): ' + naoEncontradas.join(', '));
     }
-}
-
-importarDoLiloupro();`;
+}`;
