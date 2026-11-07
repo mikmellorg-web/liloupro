@@ -1069,16 +1069,21 @@ export function isChordLine(line: string): boolean {
   if (!trimmed) return false;
 
   // Reject section header lines like [Verso 1], [Refrão 4x], Ponte 2x, [Intro], Intro:, [Solo], etc.
-  const isHeaderLine = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed);
+  const isHeaderLine = /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|estrofe|refrão|refrao|chorus|coro|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed);
   if (isHeaderLine) {
     return false;
   }
   
   // Strip bracketed/parenthesized tags that are dynamic tags or annotations (e.g. [PAUSA 🛑], [suave], [N4 MODERADO], (2x))
-  // so they do not disqualify the chord line when placed next to chords
+  // If the tag contains chord words (e.g. "( Bm7 G D A4 )"), retain the chords so they are counted!
   const lineWithoutAnnotationTags = cleanLine.replace(/\[[^\]]+\]|\([^)]+\)/g, (tag) => {
     const inner = tag.slice(1, -1).trim();
     if (isChordWord(inner)) return tag;
+    const innerWords = inner.split(/\s+/).filter(Boolean);
+    const chordsInTag = innerWords.filter(w => isChordWord(w));
+    if (chordsInTag.length > 0 && chordsInTag.length >= innerWords.length * 0.5) {
+      return ' ' + inner + ' ';
+    }
     return ' ';
   });
 
@@ -1634,8 +1639,50 @@ export function cleanTablatures(text: string): string {
 }
 
 /**
+ * Detects whether a line contains chord progressions, interludes, or instrumental sections
+ * typically written in parentheses, brackets, or with repetition marks (e.g. "( Bm7 G D A4 ) 2x", "[C G Am F] 4x", "| D | A | Bm | G |")
+ */
+export function isChordProgressionOrInterlude(line: string): boolean {
+  if (!line) return false;
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Standalone repetition multiplier like "2x", "(2x)", "4x", "(4x)", "(bis)", "bis"
+  if (/^[\(\[]?\s*([0-9]+x|bis)\s*[\)\]]?$/i.test(trimmed)) {
+    return true;
+  }
+
+  // Strip outer punctuation and trailing repetition markers (2x, 4x, bis)
+  const stripped = trimmed
+    .replace(/^[\s\(\[\{\|]+|[\s\)\]\}\|]+$/g, '')
+    .replace(/\s*[\(\[]?\s*([0-9]+x|bis)\s*[\)\]]?$/i, '')
+    .trim();
+
+  if (!stripped) return true;
+
+  // Split into tokens by spaces, pipes, commas, dashes
+  const tokens = stripped.split(/[\s\|\,\-]+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  let chordCount = 0;
+  for (const token of tokens) {
+    if (isChordWord(token) || /^[A-G][#b]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][#b]?)?$/i.test(token)) {
+      chordCount++;
+    }
+  }
+
+  // If at least half the tokens are chords, or all tokens are chords
+  if (chordCount >= 1 && chordCount / tokens.length >= 0.5) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Strips out dynamic marking tags (N1..N7, Sutil, Crescendo, Pausa, etc.),
- * section headers ([Intro], [Refrão], etc.), and chord lines/brackets for projection displays.
+ * section headers ([Intro], [Refrão], [Verso 1], etc.), chord progressions in parentheses,
+ * and chord lines/brackets for projection displays.
  */
 export function cleanLyricsForProjection(rawLyrics: string): string {
   if (!rawLyrics) return '';
@@ -1660,8 +1707,36 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
       continue;
     }
 
+    // Filter out metadata tags like [title] ..., [artist] ..., [bpm] ...
+    if (/^\[(title|artist|key|tom|bpm|tempo|time_signature|composer|album)\]/i.test(trimmed)) {
+      continue;
+    }
+
+    // Filter out bracketed section headers or structural tags:
+    // Any line enclosed in brackets [...] or braces {...} (e.g. [Verso 1], [Verso 2], [Refrão], [Intro], [Solo], [Ponte], {Refrão})
+    // even with multipliers like [Verso 1] 2x or [Refrão] (2x)
+    if (/^\s*\[[^\]]+\](\s*[\(\[]?[0-9]+x|bis[\)\]]?)?\s*$/i.test(trimmed) ||
+        /^\s*\{[^\}]+\}(\s*[\(\[]?[0-9]+x|bis[\)\]]?)?\s*$/i.test(trimmed)) {
+      if (!lastWasBlank) {
+        resultLines.push(null);
+        lastWasBlank = true;
+      }
+      continue;
+    }
+
+    // Filter out standalone repetition multipliers: 2x, 4x, (2x), (4x), (bis), bis
+    if (/^[\(\[]?\s*([0-9]+x|bis)\s*[\)\]]?$/i.test(trimmed)) {
+      continue;
+    }
+
     // Skip chord lines (do NOT insert an extra blank line between lyric lines!)
     if (isChordLine(trimmed)) {
+      continue;
+    }
+
+    // Skip chord progressions / interludes / turnarounds in parentheses, brackets, or bars
+    // e.g. "( Bm7 G D A4 ) 2x", "( Bm7 D A4 G) 2x", "( C G Am F )", "| G | C9 | D/F# |"
+    if (isChordProgressionOrInterlude(trimmed)) {
       continue;
     }
 
@@ -1671,7 +1746,10 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
     }
 
     // Remove inline chord tags like [C], [G/B], [Am7], [F#m]
-    trimmed = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][b#]?)?\]/g, '');
+    trimmed = trimmed.replace(/\[[A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][#b]?)?\]/g, '');
+
+    // Remove parenthesized chords like (G), (C9), (D/F#) embedded within or around lyric words
+    trimmed = trimmed.replace(/\([A-G][#b]?(?:m|maj|min|dim|aug|sus|add|M|[0-9])*(?:\/[A-G][#b]?)?\)/g, '');
 
     // Remove dynamic tags in parentheses or brackets
     trimmed = stripDynamicsFromText(trimmed);
@@ -1680,8 +1758,8 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
     trimmed = trimmed.replace(/(?:🌑|🌘|🌗|🌖|🌕|🔥|⚡|🛑|↗|↘|🎤|🥁|🎸|📈)/g, '');
     trimmed = trimmed.replace(/\s{2,}/g, ' ').trim();
 
-    // Filter out section headers like [Intro], [Refrão], [Solo], [Ponte]
-    if (/^[\s\[\(\{\-]*([0-9]+\.?)?\s*(intro|introdução|introducao|refrão|refrao|chorus|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed)) {
+    // Filter out section headers WITHOUT brackets, e.g. "Verso 1", "Verso 2:", "1. Verso", "Refrão:", "Ponte:", "Intro:", "Solo:"
+    if (/^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|estrofe|refrão|refrao|chorus|coro|ponte|bridge|intro|introdução|introducao|solo|interlúdio|interludio|interlude|outro|final|fim|ministração|ministracao|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)[\s0-9a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ\:\.\-\]\)\}]*$/i.test(trimmed)) {
       if (!lastWasBlank) {
         resultLines.push(null);
         lastWasBlank = true;
@@ -1689,12 +1767,12 @@ export function cleanLyricsForProjection(rawLyrics: string): string {
       continue;
     }
 
-    // Filter out metadata tags like [title] ..., [artist] ..., [bpm] ...
-    if (/^\[(title|artist|key|bpm|time_signature|composer|album|tempo)\]/i.test(trimmed)) {
+    // Reject standalone chord, tab, punctuation, or multiplier remnants
+    if (/^[\|\-\:\s\.\,\/\[\]\(\)\{\}0-9x]+$/i.test(trimmed)) {
       continue;
     }
 
-    // If valid lyric text (has at least 2 letters)
+    // If valid lyric text (has at least 2 consecutive alphabetic letters that aren't just a chord or multiplier)
     if (/[a-zA-ZÀ-ÿ]{2,}/.test(trimmed)) {
       resultLines.push(trimmed);
       lastWasBlank = false;

@@ -37,10 +37,27 @@ export function formatSongForHolyrics(song: HolyricsSongExport): string {
   const rawText = song.lyrics || song.chords || '';
   const cleanedLyrics = cleanLyricsForProjection(rawText);
 
+  // Garantia extra: remove qualquer linha remanescente de cabeçalho [Verso...], acordes entre parênteses ou repetições soltas
+  const filteredLines = cleanedLyrics
+    .split(/\r?\n/)
+    .filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return true; // Mantém quebras de linha entre estrofes
+      if (/^\s*\[[^\]]+\]/i.test(trimmed)) return false; // Tags [Verso 1], [Refrão], etc.
+      if (/^\s*\{[^\}]+\}/i.test(trimmed)) return false;
+      if (/^[\(\[]?\s*([0-9]+x|bis)\s*[\)\]]?$/i.test(trimmed)) return false;
+      if (/^\s*\([^\)]*([A-G][#b]?)[^\)]*\)(\s*[0-9]+x)?\s*$/i.test(trimmed)) return false; // ( Bm7 G D A4 ) 2x
+      return true;
+    })
+    .join('\n')
+    // Remove múltiplos espaços ou quebras vazias consecutivas
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
   // No Holyrics, arquivos de texto de músicas contêm diretamente as estrofes separadas por linha em branco.
   // O título da música e artista são definidos pelo próprio nome do arquivo (.txt).
   // Dessa forma, NÃO são gerados slides indesejados com tags de [title] ou [artist] na tela da congregação!
-  return cleanedLyrics;
+  return filteredLines;
 }
 
 /**
