@@ -1175,7 +1175,8 @@ export function isInlineAnnotationLine(line: string): boolean {
  */
 export function standardizeSectionName(name: string): string {
   if (!name) return '';
-  const clean = name.trim().replace(/\s+/g, ' ');
+  const stripped = name.replace(/<[^>]+>/g, '').replace(/^[\s\[\(\{\-\:\.\–\—\|]+|[\s\]\)\}\-\:\.\–\—\|]+$/g, '').trim();
+  const clean = stripped.replace(/\s+/g, ' ');
   const lower = clean.toLowerCase();
 
   if (/^(?:primeir\s*a|1\s*ª|1\s*a)\s+parte$/i.test(lower)) return 'Verso 1';
@@ -1203,7 +1204,10 @@ export function standardizeSectionName(name: string): string {
   return clean;
 }
 
-export function isSectionHeaderContent(clean: string): boolean {
+export function isSectionHeaderContent(str: string): boolean {
+  if (!str) return false;
+  const stripped = str.replace(/<[^>]+>/g, '').replace(/^[\s\[\(\{\-\:\.\–\—\|]+|[\s\]\)\}\-\:\.\–\—\|]+$/g, '').trim();
+  const clean = stripped.toLowerCase().replace(/\s+/g, ' ');
   if (!clean) return false;
   if (isDedilhadoOrTabPartLine(clean) || /^dedilhado\b/i.test(clean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean)) {
     return false;

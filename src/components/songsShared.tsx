@@ -1216,7 +1216,9 @@ export function DynamicExplanationModal({
 
 export function isSectionHeaderContent(str: string): boolean {
   if (!str) return false;
-  const clean = str.trim().toLowerCase().replace(/\s+/g, ' ');
+  const stripped = str.replace(/<[^>]+>/g, '').replace(/^[\s\[\(\{\-\:\.\–\—\|]+|[\s\]\)\}\-\:\.\–\—\|]+$/g, '').trim();
+  const clean = stripped.toLowerCase().replace(/\s+/g, ' ');
+  if (!clean) return false;
   if (isDedilhadoOrTabPartLine(clean) || /^dedilhado\b/i.test(clean) || /^parte\s*\d+\s*(?:de|\/)\s*\d+$/i.test(clean)) {
     return false;
   }
@@ -1281,7 +1283,8 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
     return { isMatch: false, sections: [], dynamics: [], repeats: [], remainingText: '' };
   }
 
-  const normalized = normalizeSpacedTags(line);
+  const cleanHtmlLine = line.replace(/<[^>]+>/g, '');
+  const normalized = normalizeSpacedTags(cleanHtmlLine);
   const rawTrimmed = normalized.trim();
 
   // Handle lines WITHOUT brackets or parentheses
@@ -1406,6 +1409,14 @@ export function parseLineSectionAndDynamics(line: string): ParsedSectionAndDynam
     const repeatMatch = workStr.trim().match(leftoverRepeatRegex);
     if (repeatMatch && (sections.length > 0 || dynamics.length > 0)) {
       repeats.push(repeatMatch[1].toUpperCase());
+      workStr = '';
+    }
+  }
+
+  // Strip residual punctuation or colons left over from section tags (e.g. "[Verso 1]:", "[Refrão] -")
+  if (sections.length > 0 || dynamics.length > 0) {
+    const residualPunctuationClean = workStr.replace(/^[\s\:\-\–\—\.\,\;\|]+|[\s\:\-\–\—\.\,\;\|]+$/g, '').trim();
+    if (residualPunctuationClean === '') {
       workStr = '';
     }
   }
@@ -1705,7 +1716,7 @@ export const SingleLineRow = React.memo(function SingleLineRow({
 
   // Check if line contains section or dynamics tags
   const parsedDyn = parseLineSectionAndDynamics(line);
-  if (parsedDyn.isMatch) {
+  if (parsedDyn.isMatch || parsedDyn.sections.length > 0) {
     return <RenderSectionOrDynamicsLine parsed={parsedDyn} />;
   }
 

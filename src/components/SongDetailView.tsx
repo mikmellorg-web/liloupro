@@ -40,7 +40,7 @@ import {
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
   areChordsInCapoShape, getCapoSemitonesFromText, cleanLyricsForDisplay, 
   extractLyricsFromChords, getEffectiveLyrics, stripDynamicsFromText,
-  isDedilhadoOrTabPartLine, isInlineAnnotationLine
+  isDedilhadoOrTabPartLine, isInlineAnnotationLine, standardizeSectionName
 } from '../services/chordService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1298,9 +1298,10 @@ export function SongDetailView({
     const charAfter = end < text.length ? text[end] : '';
 
     const needsLeadingNewline = charBefore !== '' && charBefore !== '\n';
-    const needsTrailingSpaceOrNewline = charAfter !== '' && charAfter !== '\n' && charAfter !== ' ';
+    const needsTrailingNewline = charAfter !== '\n';
 
-    const insertion = `${needsLeadingNewline ? '\n' : ''}[${sectionTitle}]${needsTrailingSpaceOrNewline ? '\n' : ' '}`;
+    const cleanTitle = standardizeSectionName(sectionTitle);
+    const insertion = `${needsLeadingNewline ? '\n' : ''}[${cleanTitle}]${needsTrailingNewline ? '\n' : ''}`;
     const newText = text.substring(0, start) + insertion + text.substring(end);
 
     if (target === 'chords') {
@@ -1938,6 +1939,28 @@ export function SongDetailView({
           currentBlock = [];
         }
       } else {
+        // If line starts with a bracketed section header followed by chords or lyrics on the same line, isolate them
+        const bracketedSecMatch = trimmed.match(/^(\[[^\]]+\])\s*(.+)$/);
+        if (bracketedSecMatch && isSectionHeaderContent(bracketedSecMatch[1])) {
+          currentBlock.push(bracketedSecMatch[1]);
+          currentBlock.push(bracketedSecMatch[2]);
+          continue;
+        }
+
+        // If line is an unbracketed section header followed by chords (e.g. "VERSO 1: E B/D#" or "Intro E B/D#"), isolate them
+        const unbracketedMatch = trimmed.match(/^((?:verso|verse|estrofe|coro|refrão|refrao|chorus|ponte|bridge|solo|interlúdio|interludio|interlude|outro|fim|final|tag|hook|ministração|ministracao|pré-refrão|pre-refrão|pre-refrao|pre-chorus|pre refrão|pre refrao|coda|instrumental|primeira parte|segunda parte|1ª parte|2ª parte)\s*[\d\w]*)\s*[:\-]?\s+([A-G][#b]?.*)$/i);
+        if (unbracketedMatch && isSectionHeaderContent(unbracketedMatch[1])) {
+          currentBlock.push(`[${standardizeSectionName(unbracketedMatch[1])}]`);
+          currentBlock.push(unbracketedMatch[2]);
+          continue;
+        }
+
+        // If line is a standalone unbracketed section header (e.g. "VERSO 1", "VERSO 1:"), standardize it with brackets
+        if (isSectionHeaderContent(trimmed)) {
+          currentBlock.push(`[${standardizeSectionName(trimmed)}]`);
+          continue;
+        }
+
         currentBlock.push(line);
       }
     }
