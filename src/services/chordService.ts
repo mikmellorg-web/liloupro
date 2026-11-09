@@ -799,18 +799,18 @@ export function cleanCifraHtml(text: string): string {
   str = str.replace(/<\/p>/gi, '');
   str = str.replace(/<br\s*\/?>/gi, '\n');
 
-  // 2. Extract contents of <b> tags (e.g. <b data-chord-name="A"...>A  </b>)
-  // Replace <b ...>content</b> with content (preserving internal spaces)
-  str = str.replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, '$1');
+  // 2. Extract contents of scraped Cifra Club tags with attributes (e.g. <b data-chord-name="A"...>A  </b>)
+  str = str.replace(/<b\s+[^>]*data-chord[^>]*>([\s\S]*?)<\/b>/gi, '$1');
   str = str.replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, '$1');
-  str = str.replace(/<b\b[^>]*>/gi, ''); // remove any unclosed opening <b> tags with attributes
-
-  // 3. Replace closing tags
   str = str.replace(/<\/span>/gi, '');
-  str = str.replace(/<\/b>/gi, '');
 
-  // 4. Strip all remaining HTML tags
-  str = str.replace(/<[^>]+>/g, '');
+  // Normalize user formatting tags: preserve <b>, </b>, <i>, </i>, <u>, </u>
+  str = str.replace(/<b\b[^>]*>/gi, '<b>');
+  str = str.replace(/<i\b[^>]*>/gi, '<i>');
+  str = str.replace(/<u\b[^>]*>/gi, '<u>');
+
+  // 4. Strip all remaining HTML tags EXCEPT valid user format tags: <b>, </b>, <i>, </i>, <u>, </u>
+  str = str.replace(/<(?!(\/?(b|i|u)\b))[^>]+>/gi, '');
 
   // 5. Decode common HTML entities
   str = str
@@ -1064,7 +1064,7 @@ export function pairChordsAndLyricsIfSeparated(rawChords: string, rawLyrics: str
 }
 
 export function isChordLine(line: string): boolean {
-  const cleanLine = line.includes('<') ? cleanCifraHtml(line) : line.replace(/<\/?[biu]>/g, '');
+  const cleanLine = line.includes('<') ? line.replace(/<[^>]+>/g, '') : line;
   const trimmed = cleanLine.trim();
   if (!trimmed) return false;
 
@@ -1145,7 +1145,7 @@ export function isInlineAnnotationLine(line: string): boolean {
   if (!line || !line.trim()) return false;
   if (isSectionHeaderLine(line)) return false;
   
-  const cleanLine = line.includes('<') ? cleanCifraHtml(line) : line.replace(/<\/?[biu]>/g, '');
+  const cleanLine = line.includes('<') ? line.replace(/<[^>]+>/g, '') : line;
   const trimmed = cleanLine.trim();
   
   // Check if line contains bracketed or parenthesized tags

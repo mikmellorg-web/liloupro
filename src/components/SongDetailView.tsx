@@ -1210,63 +1210,121 @@ export function SongDetailView({
     }
   };
 
-  const handleInsertFormat = (type: 'bold' | 'italic' | 'underline' | 'brackets' | 'braces', target: 'chords' | 'lyrics' = 'chords') => {
+  const applyTextareaChangeWithScrollPreservation = (
+    target: 'chords' | 'lyrics',
+    updater: (textarea: HTMLTextAreaElement, currentText: string) => { newText: string; newCursorStart: number; newCursorEnd: number }
+  ) => {
     const textarea = target === 'chords' ? chordsTextareaRef.current : lyricsTextareaRef.current;
     if (!textarea) return;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = target === 'chords' ? (editedSong.chords || '') : (editedSong.lyrics || '');
-    const selectedText = text.substring(start, end);
+    const currentScrollTop = textarea.scrollTop;
+    const currentScrollLeft = textarea.scrollLeft;
+    const currentWindowScrollY = window.scrollY;
+    const scrollContainer = document.getElementById('song-scroll-container');
+    const containerScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
 
-    let prefix = '';
-    let suffix = '';
-
-    switch (type) {
-      case 'bold':
-        prefix = '<b>';
-        suffix = '</b>';
-        break;
-      case 'italic':
-        prefix = '<i>';
-        suffix = '</i>';
-        break;
-      case 'underline':
-        prefix = '<u>';
-        suffix = '</u>';
-        break;
-      case 'brackets':
-        prefix = '[';
-        suffix = ']';
-        break;
-      case 'braces':
-        prefix = '{';
-        suffix = '}';
-        break;
-      default:
-        break;
-    }
-
-    const replacement = prefix + selectedText + suffix;
-    const newText = text.substring(0, start) + replacement + text.substring(end);
+    const currentText = (target === 'chords' ? editedSong.chords : editedSong.lyrics) || '';
+    const { newText, newCursorStart, newCursorEnd } = updater(textarea, currentText);
 
     if (target === 'chords') {
-      setEditedSong({ ...editedSong, chords: newText });
+      setEditedSong(prev => ({ ...prev, chords: newText }));
     } else {
-      setEditedSong({ ...editedSong, lyrics: newText });
+      setEditedSong(prev => ({ ...prev, lyrics: newText }));
     }
 
-    // Focus back and restore select
-    setTimeout(() => {
+    const restoreScrollAndCursor = () => {
       if (textarea) {
-        textarea.focus();
-        if (selectedText.length > 0) {
-          textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
-        } else {
-          textarea.setSelectionRange(start + prefix.length, start + prefix.length);
-        }
+        textarea.focus({ preventScroll: true });
+        try {
+          textarea.setSelectionRange(newCursorStart, newCursorEnd);
+        } catch (e) {}
+        textarea.scrollTop = currentScrollTop;
+        textarea.scrollLeft = currentScrollLeft;
       }
-    }, 50);
+      if (scrollContainer && Math.abs(scrollContainer.scrollTop - containerScrollTop) > 1) {
+        scrollContainer.scrollTop = containerScrollTop;
+      }
+      if (Math.abs(window.scrollY - currentWindowScrollY) > 1) {
+        window.scrollTo({ top: currentWindowScrollY, behavior: 'instant' as ScrollBehavior });
+      }
+    };
+
+    requestAnimationFrame(restoreScrollAndCursor);
+    setTimeout(restoreScrollAndCursor, 30);
+    setTimeout(restoreScrollAndCursor, 80);
+  };
+
+  const handleInsertFormat = (type: 'bold' | 'italic' | 'underline' | 'brackets' | 'braces', target: 'chords' | 'lyrics' = 'chords') => {
+    applyTextareaChangeWithScrollPreservation(target, (textarea, text) => {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selectedText = text.substring(start, end);
+
+      let prefix = '';
+      let suffix = '';
+
+      switch (type) {
+        case 'bold':
+          prefix = '<b>';
+          suffix = '</b>';
+          break;
+        case 'italic':
+          prefix = '<i>';
+          suffix = '</i>';
+          break;
+        case 'underline':
+          prefix = '<u>';
+          suffix = '</u>';
+          break;
+        case 'brackets':
+          prefix = '[';
+          suffix = ']';
+          break;
+        case 'braces':
+          prefix = '{';
+          suffix = '}';
+          break;
+        default:
+          break;
+      }
+
+      // If selection is already wrapped with this format: toggle it off (unwrap)
+      if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix) && selectedText.length >= prefix.length + suffix.length) {
+        const unwrapped = selectedText.slice(prefix.length, selectedText.length - suffix.length);
+        const newText = text.substring(0, start) + unwrapped + text.substring(end);
+        return {
+          newText,
+          newCursorStart: start,
+          newCursorEnd: start + unwrapped.length
+        };
+      }
+
+      // If selection is surrounded directly by prefix and suffix in the text: toggle it off (unwrap)
+      if (
+        start >= prefix.length &&
+        end + suffix.length <= text.length &&
+        text.substring(start - prefix.length, start) === prefix &&
+        text.substring(end, end + suffix.length) === suffix
+      ) {
+        const newText = text.substring(0, start - prefix.length) + selectedText + text.substring(end + suffix.length);
+        return {
+          newText,
+          newCursorStart: start - prefix.length,
+          newCursorEnd: start - prefix.length + selectedText.length
+        };
+      }
+
+      const replacement = prefix + selectedText + suffix;
+      const newText = text.substring(0, start) + replacement + text.substring(end);
+      const newCursorStart = selectedText.length > 0 ? start + prefix.length : start + prefix.length;
+      const newCursorEnd = selectedText.length > 0 ? start + prefix.length + selectedText.length : start + prefix.length;
+
+      return {
+        newText,
+        newCursorStart,
+        newCursorEnd
+      };
+    });
   };
 
   const SECTIONS_FOR_QUICK_INSERT = [
@@ -1288,64 +1346,52 @@ export function SongDetailView({
   ];
 
   const handleInsertSectionTag = (sectionTitle: string, target: 'chords' | 'lyrics' = 'chords') => {
-    const textarea = target === 'chords' ? chordsTextareaRef.current : lyricsTextareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = (target === 'chords' ? editedSong.chords : editedSong.lyrics) || '';
-    
-    const charBefore = start > 0 ? text[start - 1] : '';
-    const charAfter = end < text.length ? text[end] : '';
+    applyTextareaChangeWithScrollPreservation(target, (textarea, text) => {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
 
-    const needsLeadingNewline = charBefore !== '' && charBefore !== '\n';
-    const needsTrailingNewline = charAfter !== '\n';
+      const charBefore = start > 0 ? text[start - 1] : '';
+      const charAfter = end < text.length ? text[end] : '';
 
-    const cleanTitle = standardizeSectionName(sectionTitle);
-    const insertion = `${needsLeadingNewline ? '\n' : ''}[${cleanTitle}]${needsTrailingNewline ? '\n' : ''}`;
-    const newText = text.substring(0, start) + insertion + text.substring(end);
+      const needsLeadingNewline = charBefore !== '' && charBefore !== '\n';
+      const needsTrailingNewline = charAfter !== '\n';
 
-    if (target === 'chords') {
-      setEditedSong(prev => ({ ...prev, chords: newText }));
-    } else {
-      setEditedSong(prev => ({ ...prev, lyrics: newText }));
-    }
+      const cleanTitle = standardizeSectionName(sectionTitle);
+      const insertion = `${needsLeadingNewline ? '\n' : ''}[${cleanTitle}]${needsTrailingNewline ? '\n' : ''}`;
+      const newText = text.substring(0, start) + insertion + text.substring(end);
+      const newCursorPos = start + insertion.length;
 
-    setTimeout(() => {
-      if (textarea) {
-        textarea.focus();
-        textarea.setSelectionRange(start + insertion.length, start + insertion.length);
-      }
-    }, 50);
+      return {
+        newText,
+        newCursorStart: newCursorPos,
+        newCursorEnd: newCursorPos
+      };
+    });
   };
 
   const handleInsertDynamicsTag = (tag: string, target: 'chords' | 'lyrics' = 'chords') => {
-    const textarea = target === 'chords' ? chordsTextareaRef.current : lyricsTextareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = (target === 'chords' ? editedSong.chords : editedSong.lyrics) || '';
-    
-    const charBefore = start > 0 ? text[start - 1] : '';
-    const charAfter = end < text.length ? text[end] : '';
+    applyTextareaChangeWithScrollPreservation(target, (textarea, text) => {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
 
-    const needsLeadingSpace = charBefore !== '' && charBefore !== ' ' && charBefore !== '\n';
-    const needsTrailingSpace = charAfter !== '' && charAfter !== ' ' && charAfter !== '\n';
+      const charBefore = start > 0 ? text[start - 1] : '';
+      const charAfter = end < text.length ? text[end] : '';
 
-    // Ensure tag is clean before wrapping in []
-    const cleanTag = tag.replace(/^[\(\[]+|[\)\]]+$/g, '').trim();
-    const insertion = `${needsLeadingSpace ? ' ' : ''}[${cleanTag}]${needsTrailingSpace ? ' ' : ''}`;
-    const newText = text.substring(0, start) + insertion + text.substring(end);
-    if (target === 'chords') {
-      setEditedSong(prev => ({ ...prev, chords: newText }));
-    } else {
-      setEditedSong(prev => ({ ...prev, lyrics: newText }));
-    }
-    setTimeout(() => {
-      if (textarea) {
-        textarea.focus();
-        textarea.setSelectionRange(start + insertion.length, start + insertion.length);
-      }
-    }, 50);
+      const needsLeadingSpace = charBefore !== '' && charBefore !== ' ' && charBefore !== '\n';
+      const needsTrailingSpace = charAfter !== '' && charAfter !== ' ' && charAfter !== '\n';
+
+      // Ensure tag is clean before wrapping in []
+      const cleanTag = tag.replace(/^[\(\[]+|[\)\]]+$/g, '').trim();
+      const insertion = `${needsLeadingSpace ? ' ' : ''}[${cleanTag}]${needsTrailingSpace ? ' ' : ''}`;
+      const newText = text.substring(0, start) + insertion + text.substring(end);
+      const newCursorPos = start + insertion.length;
+
+      return {
+        newText,
+        newCursorStart: newCursorPos,
+        newCursorEnd: newCursorPos
+      };
+    });
   };
 
   const handleInsertCustomDynamicsTag = (target: 'chords' | 'lyrics' = 'chords') => {
@@ -4038,8 +4084,9 @@ export function SongDetailView({
                     <div className="flex flex-wrap gap-2 pt-1 border-t border-border/40">
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('bold')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Negrito (<b>texto</b>)"
                       >
                         <Bold size={14} strokeWidth={2.5} />
@@ -4047,8 +4094,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('italic')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Itálico (<i>texto</i>)"
                       >
                         <Italic size={14} strokeWidth={2.5} />
@@ -4056,8 +4104,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('underline')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Sublinhado (<u>texto</u>)"
                       >
                         <Underline size={14} strokeWidth={2.5} />
@@ -4068,8 +4117,9 @@ export function SongDetailView({
                       
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('brackets')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer"
                         title="Colchetes [ texto ]"
                       >
                         <span className="text-brand">[ ]</span>
@@ -4077,8 +4127,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('braces')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer"
                         title="Chaves { texto }"
                       >
                         <span className="text-brand">{"{ }"}</span>
@@ -4087,6 +4138,7 @@ export function SongDetailView({
 
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           const cleaned = cleanCifraHtml(editedSong.chords || '');
                           setEditedSong({ ...editedSong, chords: cleaned });
@@ -4110,6 +4162,7 @@ export function SongDetailView({
                             <button
                               key={`chord-sec-${sec.tag}`}
                               type="button"
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleInsertSectionTag(sec.tag, 'chords')}
                               className="px-2 py-0.5 bg-gradient-to-r from-brand to-cyan-500 hover:from-brand-dark hover:to-cyan-600 text-white border border-brand/30 rounded-md transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1"
                               title={`Inserir [${sec.tag}]`}
@@ -4126,6 +4179,7 @@ export function SongDetailView({
                           </span>
                           <button
                             type="button"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => setShowDynamicsGuideModal(true)}
                             className="px-2.5 py-1 bg-gradient-to-r from-rose-500/25 via-orange-500/25 to-amber-500/25 hover:from-rose-500/35 hover:to-amber-500/35 text-rose-400 dark:text-rose-300 border border-rose-500/50 shadow-sm shadow-rose-500/20 ring-1 ring-rose-500/30 rounded-lg text-[10px] font-extrabold uppercase tracking-wider shrink-0 cursor-pointer flex items-center gap-1 transition-all mr-1.5"
                             title="Abrir Guia de Dinâmica e Expressão de Louvor"
@@ -4135,6 +4189,7 @@ export function SongDetailView({
                           </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N1 🌑 Sutil', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white border border-indigo-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N1 🌑 Sutil"
@@ -4143,6 +4198,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N2 🌘 Bem Suave', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N2 🌘 Bem Suave"
@@ -4151,6 +4207,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N3 🌗 Suave', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-teal-600 to-cyan-600 text-white border border-teal-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N3 🌗 Suave"
@@ -4159,6 +4216,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N4 🌖 Moderado', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-blue-600 text-white border border-sky-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N4 🌖 Moderado"
@@ -4167,6 +4225,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N5 🌕 Meio Forte', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white border border-amber-300/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N5 🌕 Meio Forte"
@@ -4175,6 +4234,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N6 🔥 Forte', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-orange-600 to-red-500 text-white border border-orange-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N6 🔥 Forte"
@@ -4183,6 +4243,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('N7 ⚡ Clímax', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 text-white border border-rose-300/50 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="N7 ⚡ Clímax"
@@ -4191,6 +4252,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Crescendo ↗', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-violet-600 to-purple-600 text-white border border-violet-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                         >
@@ -4198,6 +4260,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Decrescendo ↘', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-yellow-600 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                         >
@@ -4205,6 +4268,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Pausa 🛑', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-red-600 text-white border border-rose-400/50 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="Pausa / Interrupção (🛑)"
@@ -4213,6 +4277,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Acapella 🎤', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-teal-600 text-white border border-cyan-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                         >
@@ -4220,6 +4285,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Só Bateria 🥁', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-orange-600 to-amber-600 text-white border border-orange-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                         >
@@ -4227,6 +4293,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Violão Marcando 🎸', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-amber-700 via-yellow-600 to-amber-500 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                         >
@@ -4234,6 +4301,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('Sobe o Tom 📈', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-rose-500 text-white border border-fuchsia-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="Sobe o Tom / Modulação (📈)"
@@ -4242,6 +4310,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertDynamicsTag('só guita', 'chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 rounded-lg transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95"
                           title="Inserir tag [só guita]"
@@ -4250,6 +4319,7 @@ export function SongDetailView({
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertCustomDynamicsTag('chords')}
                           className="px-2.5 py-1 bg-gradient-to-r from-brand via-indigo-600 to-purple-600 text-white border border-brand/40 rounded-lg transition-all text-[10px] font-mono font-black shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1"
                           title="Inserir tag de dinâmica customizada em colchetes [...]"
@@ -4258,8 +4328,8 @@ export function SongDetailView({
                         </button>
                       </div>
                     </div>
-                    </div>
                   </div>
+                </div>
                   <textarea 
                     ref={chordsTextareaRef}
                     className="w-full h-[65vh] border-none focus:ring-0 resize-none bg-black/5 dark:bg-white/5 p-6 rounded-xl text-text-main font-mono leading-normal scrollbar-hide border border-border/50 notranslate"
@@ -4742,8 +4812,9 @@ export function SongDetailView({
                     <div className="flex flex-wrap gap-2 pt-1 border-t border-border/40">
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('bold', 'lyrics')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Negrito (<b>texto</b>)"
                       >
                         <Bold size={14} strokeWidth={2.5} />
@@ -4751,8 +4822,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('italic', 'lyrics')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Itálico (<i>texto</i>)"
                       >
                         <Italic size={14} strokeWidth={2.5} />
@@ -4760,8 +4832,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('underline', 'lyrics')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
                         title="Sublinhado (<u>texto</u>)"
                       >
                         <Underline size={14} strokeWidth={2.5} />
@@ -4772,8 +4845,9 @@ export function SongDetailView({
                       
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('brackets', 'lyrics')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer"
                         title="Colchetes [ texto ]"
                       >
                         <span className="text-brand">[ ]</span>
@@ -4781,8 +4855,9 @@ export function SongDetailView({
                       </button>
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleInsertFormat('braces', 'lyrics')}
-                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+                        className="p-2 bg-card hover:bg-black/5 dark:hover:bg-white/10 text-text-main hover:text-brand border border-border rounded-lg transition-all flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer"
                         title="Chaves { texto }"
                       >
                         <span className="text-brand">{"{ }"}</span>
@@ -4801,6 +4876,7 @@ export function SongDetailView({
                             <button
                               key={`lyrics-sec-${sec.tag}`}
                               type="button"
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleInsertSectionTag(sec.tag, 'lyrics')}
                               className="px-2 py-0.5 bg-gradient-to-r from-brand to-cyan-500 hover:from-brand-dark hover:to-cyan-600 text-white border border-brand/30 rounded-md transition-all text-[10px] font-mono font-bold shrink-0 cursor-pointer shadow-xs hover:brightness-110 active:scale-95 flex items-center gap-1"
                               title={`Inserir [${sec.tag}]`}
