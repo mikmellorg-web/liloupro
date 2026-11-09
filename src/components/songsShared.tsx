@@ -592,46 +592,47 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
   const boundariesSet = new Set<number>();
   boundariesSet.add(0);
 
-  // Identify bracketed or parenthesized tag ranges in chordLine e.g. [só guita], [N1], [PAUSA 🛑], (2x)
-  const tagRanges: { start: number; end: number }[] = [];
-  const tagRegex = /(\([^)]+\)|\[[^\]]+\])/g;
+  // Identify all chord tokens and bracket/paren tags in chordLine
+  // Tokenize chordLine into discrete atomic entities:
+  // - Bracketed tags: [Intro], [só guita], [N1]
+  // - Parenthesized tags that are not chord extensions: (2x), (suave)
+  // - Complete chord words (including extensions with parentheses e.g. F7M(9), C(add9), G7(13))
+  const chordTokens: { start: number; end: number; text: string }[] = [];
+  const tokenRegex = /\[[^\]]+\]|(?<![A-Za-z0-9#b\+])\([^)]+\)|\S+/g;
   let match;
-  while ((match = tagRegex.exec(chordLine)) !== null) {
-    tagRanges.push({ start: match.index, end: match.index + match[0].length });
+  while ((match = tokenRegex.exec(chordLine)) !== null) {
+    chordTokens.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      text: match[0]
+    });
   }
 
-  const isInsideTag = (idx: number) => {
-    return tagRanges.some(r => idx > r.start && idx < r.end);
+  for (const tok of chordTokens) {
+    if (tok.start >= 0 && tok.start < maxLen) boundariesSet.add(tok.start);
+    if (tok.end >= 0 && tok.end < maxLen) boundariesSet.add(tok.end);
+  }
+
+  const isInsideChordToken = (idx: number) => {
+    return chordTokens.some(tok => idx > tok.start && idx < tok.end);
   };
 
-  // Explicitly ensure tag start and end positions are always marked as boundaries
-  for (const r of tagRanges) {
-    if (r.start >= 0 && r.start < maxLen) boundariesSet.add(r.start);
-    if (r.end >= 0 && r.end < maxLen) boundariesSet.add(r.end);
-  }
-
-  const isBracketOrParen = (c: string) => c === '[' || c === ']' || c === '(' || c === ')';
-
   for (let j = 1; j < maxLen; j++) {
-    // Prevent splitting a single chord word OR inside a bracket/paren tag
-    const isInsideChord = j < chordStyles.length && j - 1 >= 0 && 
-                          chordStyles[j].char !== ' ' && chordStyles[j - 1].char !== ' ' &&
-                          !isBracketOrParen(chordStyles[j].char) && !isBracketOrParen(chordStyles[j - 1].char);
+    // Never split inside an atomic chord or bracketed tag
+    if (isInsideChordToken(j)) continue;
 
-    if (!isInsideChord && !isInsideTag(j)) {
-      if (j < chordStyles.length) {
-        const prevSpace = chordStyles[j - 1].char === ' ';
-        const currChar = chordStyles[j].char !== ' ';
-        if (prevSpace && currChar) {
-          boundariesSet.add(j);
-        }
+    if (j < chordStyles.length) {
+      const prevSpace = chordStyles[j - 1].char === ' ';
+      const currChar = chordStyles[j].char !== ' ';
+      if (prevSpace && currChar) {
+        boundariesSet.add(j);
       }
-      if (j < lyricStyles.length) {
-        const prevSpace = lyricStyles[j - 1].char === ' ';
-        const currChar = lyricStyles[j].char !== ' ';
-        if (prevSpace && currChar) {
-          boundariesSet.add(j);
-        }
+    }
+    if (j < lyricStyles.length) {
+      const prevSpace = lyricStyles[j - 1].char === ' ';
+      const currChar = lyricStyles[j].char !== ' ';
+      if (prevSpace && currChar) {
+        boundariesSet.add(j);
       }
     }
   }
@@ -689,7 +690,7 @@ export const PairedChordLyricsRow = React.memo(function PairedChordLyricsRow({
         } else if (firstChar) {
           for (let idx = leadingSpacesCount; idx < segmentChordChars.length; idx++) {
             const cObj = segmentChordChars[idx];
-            if (cObj.char !== ' ' && cObj.char !== '[' && cObj.char !== '(') {
+            if (cObj.char !== ' ' && cObj.char !== '[') {
               rawWord += cObj.char;
               rawCharsList.push(cObj);
             } else {

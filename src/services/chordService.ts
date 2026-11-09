@@ -500,11 +500,18 @@ export function isAnnotationOrHeaderWord(word: string): boolean {
   
   if (!clean) return true; // Empty after stripping is punctuation/separator
 
+  // Words like 'todos', 'vocal', 'tutti' are only vocal annotations if explicitly enclosed or followed by colon
+  if (clean === 'todos' || clean === 'vocal' || clean === 'tutti') {
+    const raw = word.trim();
+    const isEnclosedOrHeader = /^[\(\[\{].*[\)\]\}]$/.test(raw) || raw.endsWith(':');
+    if (!isEnclosedOrHeader) return false;
+  }
+
   const headers = [
     'intro', 'introdução', 'introducao', 'instr', 'instrumental', 
     'solo', 'bridge', 'ponte', 'interlúdio', 'interludio', 'interlude', 
     'outro', 'fim', 'final', 'coro', 'refrão', 'refrao', 'chorus',
-    'ministração', 'ministracao', 'vocal', 'todos', 'part', 'parte', 'estrofe', 
+    'ministração', 'ministracao', 'part', 'parte', 'estrofe', 
     'verso', 'verse', 'pre-chorus', 'pré-refrão', 'pre-refrao', 'coda',
     'poslúdio', 'posludio', 'postlude', 'riff', 'dedilhado', 'tom', 'bpm', 'capo',
     'tab', 'tablatura', 'tag', 'hook', 'strophe', 'bis', 'dobra',
@@ -519,7 +526,7 @@ export function isAnnotationOrHeaderWord(word: string): boolean {
     'forte', 'fortissimo', 'fortíssimo', 'explosivo', 'pressão', 'crescendo', 'decrescendo', 'diminuindo', 'diminuendo', 'subindo',
     'pausa', 'pause', 'stop', 'corta', '🛑', '⏱️', '⏸️',
     'mezzo-piano', 'meio-suave', 'meio suave', 'mezzo-forte', 'meio-forte', 'meio forte',
-    'acapella', 'tutti', 'só bateria', 'so bateria', 'só vozes', 'so vozes', 'groove', 'marcando',
+    'acapella', 'só bateria', 'so bateria', 'só vozes', 'so vozes', 'groove', 'marcando',
     'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'clímax', 'climax', 'moderado', 'sutil', 'quase silêncio', 'quase silencio', 'bem suave', 'bem', 'só', 'so', 'guita', 'guitar'
   ];
   if (headers.includes(clean)) return true;
@@ -539,6 +546,12 @@ export function isAnnotationOrHeaderWord(word: string): boolean {
 
 export function isChordWord(word: string): boolean {
   if (!word) return false;
+
+  // Standalone lowercase letters like 'a', 'e', 'o' in Portuguese are articles/conjunctions, NEVER chords!
+  const trimmed = word.trim();
+  if (trimmed === 'a' || trimmed === 'e' || trimmed === 'o') {
+    return false;
+  }
 
   if (isAnnotationOrHeaderWord(word)) {
     return false;
@@ -1073,10 +1086,16 @@ export function isChordLine(line: string): boolean {
   if (isHeaderLine) {
     return false;
   }
+
+  // If unbracketed words contain Portuguese accented characters (e.g. 'criação', 'céus', 'bênção'), it is a lyrics line
+  const unbracketedText = cleanLine.replace(/\[[^\]]+\]|\([^)]+\)/g, ' ');
+  if (/[áéíóúÁÉÍÓÚãõÃÕâêôÂÊÔçÇ]/.test(unbracketedText)) {
+    return false;
+  }
   
   // Strip bracketed/parenthesized tags that are dynamic tags or annotations (e.g. [PAUSA 🛑], [suave], [N4 MODERADO], (2x))
-  // If the tag contains chord words (e.g. "( Bm7 G D A4 )"), retain the chords so they are counted!
-  const lineWithoutAnnotationTags = cleanLine.replace(/\[[^\]]+\]|\([^)]+\)/g, (tag) => {
+  // Do NOT strip parentheses attached to chord root notes (e.g. F7M(9), C(add9))
+  const lineWithoutAnnotationTags = cleanLine.replace(/\[[^\]]+\]|(?<![A-Za-z0-9#b\+])\([^)]+\)/g, (tag) => {
     const inner = tag.slice(1, -1).trim();
     if (isChordWord(inner)) return tag;
     const innerWords = inner.split(/\s+/).filter(Boolean);
@@ -1120,6 +1139,10 @@ export function isChordLine(line: string): boolean {
 
   // Non-chord words of length >= 3
   const normalWords = nonAnnotationWords.filter(w => w.length >= 3 && !isChordWord(w));
+  // If there are 2 or more regular lyric words of length >= 3 (e.g. 'sustenta', 'palavra'), it's lyrics!
+  if (normalWords.length >= 2) {
+    return false;
+  }
 
   // If a line is enclosed in pipes or brackets with chords (e.g., "| G | C9 | D/F# |" or "[G  C9]"), it's a chord grid/line
   const isGridFormat = (trimmed.includes('|') && chordCount >= 1) || (trimmed.startsWith('[') && trimmed.endsWith(']') && chordCount >= 1);
@@ -1129,8 +1152,10 @@ export function isChordLine(line: string): boolean {
 
   const chordRatio = chordCount / nonAnnotationWords.length;
 
-  // Accept if chord ratio is high (>= 40%) OR if chordCount is greater than or equal to non-chord words count
-  if (chordRatio >= 0.4 || (chordCount >= 2 && normalWords.length <= chordCount)) {
+  if (normalWords.length === 0 && chordRatio >= 0.5) {
+    return true;
+  }
+  if (chordRatio >= 0.6 && normalWords.length <= 1) {
     return true;
   }
 

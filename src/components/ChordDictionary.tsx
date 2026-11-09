@@ -1481,7 +1481,7 @@ export function resolveChordSuffix(chordName: string): { root: string; suffix: s
   } else if (rawSuffix.includes('4+') || rawSuffix.includes('#4') || rawSuffix.includes('(#4)') || rawSuffix.includes('#11') || rawSuffix.includes('(#11)')) {
     suffix = '9(#11)';
   } else if (rawSuffix.includes('maj7') || rawSuffix.includes('7M') || rawSuffix.includes('M7') || rawSuffix.includes('7+') || rawSuffix.includes('+7') || rawSuffix.includes('Δ') || rawSuffix.includes('7maj')) {
-    suffix = '7M';
+    suffix = (rawSuffix.includes('9') || rawSuffix.includes('(9)')) ? '7M(9)' : '7M';
   } else if (rawSuffix.includes('m7b5') || rawSuffix.includes('m7(b5)')) {
     suffix = 'm7'; // Approximated
   } else if (rawSuffix.includes('alt')) {
@@ -1564,6 +1564,8 @@ export function getPianoKeys(chordName: string): number[] {
     relativeSemitones = [0, 3, 7, 10];
   } else if (suffix === '7M') {
     relativeSemitones = [0, 4, 7, 11];
+  } else if (suffix === '7M(9)') {
+    relativeSemitones = [0, 4, 7, 11, 14];
   } else if (suffix === 'add9') {
     relativeSemitones = [0, 4, 7, 14];
   } else if (suffix === 'sus4') {
@@ -1724,6 +1726,14 @@ export function getCagedShapesForChord(chordName: string): CagedShapeOption[] {
       { letter: 'G', shift: sG, frets: [3, 1, 0, 0, 3, 1], fingers: [4, 1, 0, 0, 3, 1] },
       { letter: 'E', shift: sE, frets: [0, 2, 0, 0, 0, 0], fingers: [1, 3, 1, 1, 1, 1], barre: [1, 6], bOffset: 0 },
       { letter: 'D', shift: sD, frets: [-1, -1, 0, 2, 1, 1], fingers: [0, 0, 1, 3, 2, 2], barre: [5, 6], bOffset: 1 }
+    ];
+  } else if (cleanSuffix === '7M(9)' || cleanSuffix === '7M9' || cleanSuffix === 'maj9') {
+    raw = [
+      { letter: 'C', shift: sC, frets: [-1, 3, 2, 4, 3, -1], fingers: [0, 2, 1, 4, 3, 0] },
+      { letter: 'A', shift: sA, frets: [-1, 0, 2, 4, 2, 0], fingers: [0, 1, 2, 4, 3, 1], barre: [2, 6], bOffset: 0 },
+      { letter: 'G', shift: sG, frets: [3, 2, 0, 0, 0, 2], fingers: [3, 2, 0, 0, 0, 1] },
+      { letter: 'E', shift: sE, frets: [0, -1, 1, 1, 0, 2], fingers: [1, 0, 2, 3, 1, 4], barre: [1, 5], bOffset: 0 },
+      { letter: 'D', shift: sD, frets: [-1, -1, 0, 2, 2, 0], fingers: [0, 0, 1, 2, 3, 0] }
     ];
   } else if (cleanSuffix === '7M' || cleanSuffix === 'maj7' || cleanSuffix === 'M7') {
     raw = [
