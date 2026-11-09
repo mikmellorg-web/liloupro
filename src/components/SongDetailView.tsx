@@ -2849,31 +2849,57 @@ export function SongDetailView({
                         );
                         lIdx += 2;
                       } else {
-                        // Check if currentLine is a section tag and nextLine is a dynamic tag on the consecutive line
                         const currentParsed = parseLineSectionAndDynamics(currentLine);
-                        const nextParsed = hasNext ? parseLineSectionAndDynamics(nextLine) : null;
-                        if (
-                          currentParsed.isMatch && 
-                          currentParsed.sections.length > 0 && 
-                          currentParsed.dynamics.length === 0 && 
-                          nextParsed && 
-                          nextParsed.isMatch && 
-                          nextParsed.sections.length === 0 && 
-                          nextParsed.dynamics.length > 0 &&
-                          !isInlineAnnotationLine(nextLine)
-                        ) {
-                          // Merge them into a single row side-by-side
+                        if (currentParsed.isMatch && (currentParsed.sections.length > 0 || currentParsed.dynamics.length > 0 || currentParsed.repeats.length > 0)) {
+                          // Collect all consecutive section and dynamic lines so they display side-by-side horizontally
+                          const mergedSections = [...currentParsed.sections];
+                          const mergedDynamics = [...currentParsed.dynamics];
+                          const mergedRepeats = [...currentParsed.repeats];
+                          let mergedRemaining = currentParsed.remainingText || '';
+                          let consumed = 1;
+
+                          while (lIdx + consumed < block.length) {
+                            const candidateLine = block[lIdx + consumed];
+                            if (isChordLine(candidateLine)) break;
+
+                            const candidateParsed = parseLineSectionAndDynamics(candidateLine);
+                            if (!candidateParsed.isMatch || (candidateParsed.sections.length === 0 && candidateParsed.dynamics.length === 0 && candidateParsed.repeats.length === 0)) {
+                              break;
+                            }
+
+                            const candidateHasNext = lIdx + consumed + 1 < block.length;
+                            const candidateNextLine = candidateHasNext ? block[lIdx + consumed + 1] : '';
+                            const candidateNextParsed = candidateHasNext ? parseLineSectionAndDynamics(candidateNextLine) : null;
+                            const candidateIsNextLyric = candidateHasNext && 
+                              !isChordLine(candidateNextLine) && 
+                              !isInlineAnnotationLine(candidateNextLine) && 
+                              (!candidateNextParsed || !candidateNextParsed.isMatch);
+
+                            if (isInlineAnnotationLine(candidateLine) && candidateIsNextLyric) {
+                              break;
+                            }
+
+                            mergedSections.push(...candidateParsed.sections);
+                            mergedDynamics.push(...candidateParsed.dynamics);
+                            mergedRepeats.push(...candidateParsed.repeats);
+                            if (candidateParsed.remainingText) {
+                              mergedRemaining = (mergedRemaining + ' ' + candidateParsed.remainingText).trim();
+                            }
+                            consumed++;
+                          }
+
                           const mergedParsed = {
                             isMatch: true,
-                            sections: currentParsed.sections,
-                            dynamics: nextParsed.dynamics,
-                            repeats: [...currentParsed.repeats, ...nextParsed.repeats],
-                            remainingText: (currentParsed.remainingText + ' ' + nextParsed.remainingText).trim()
+                            sections: mergedSections,
+                            dynamics: mergedDynamics,
+                            repeats: mergedRepeats,
+                            remainingText: mergedRemaining
                           };
+
                           rows.push(
                             <RenderSectionOrDynamicsLine key={`merged-sec-dyn-${lIdx}`} parsed={mergedParsed} />
                           );
-                          lIdx += 2;
+                          lIdx += consumed;
                         } else {
                           rows.push(
                             <SingleLineRow 
@@ -4685,31 +4711,57 @@ export function SongDetailView({
                               );
                               lIdx += 2;
                             } else {
-                              // Check if currentLine is a section tag and nextLine is a dynamic tag on consecutive lines
                               const currentParsed = parseLineSectionAndDynamics(currentLine);
-                              const nextParsed = hasNext ? parseLineSectionAndDynamics(nextLine) : null;
-                              if (
-                                currentParsed.isMatch && 
-                                currentParsed.sections.length > 0 && 
-                                currentParsed.dynamics.length === 0 && 
-                                nextParsed && 
-                                nextParsed.isMatch && 
-                                nextParsed.sections.length === 0 && 
-                                nextParsed.dynamics.length > 0 &&
-                                !isInlineAnnotationLine(nextLine)
-                              ) {
-                                // Merge them into a single row side-by-side
+                              if (currentParsed.isMatch && (currentParsed.sections.length > 0 || currentParsed.dynamics.length > 0 || currentParsed.repeats.length > 0)) {
+                                // Collect all consecutive section and dynamic lines so they display side-by-side horizontally
+                                const mergedSections = [...currentParsed.sections];
+                                const mergedDynamics = [...currentParsed.dynamics];
+                                const mergedRepeats = [...currentParsed.repeats];
+                                let mergedRemaining = currentParsed.remainingText || '';
+                                let consumed = 1;
+
+                                while (lIdx + consumed < block.length) {
+                                  const candidateLine = block[lIdx + consumed];
+                                  if (isChordLine(candidateLine)) break;
+
+                                  const candidateParsed = parseLineSectionAndDynamics(candidateLine);
+                                  if (!candidateParsed.isMatch || (candidateParsed.sections.length === 0 && candidateParsed.dynamics.length === 0 && candidateParsed.repeats.length === 0)) {
+                                    break;
+                                  }
+
+                                  const candidateHasNext = lIdx + consumed + 1 < block.length;
+                                  const candidateNextLine = candidateHasNext ? block[lIdx + consumed + 1] : '';
+                                  const candidateNextParsed = candidateHasNext ? parseLineSectionAndDynamics(candidateNextLine) : null;
+                                  const candidateIsNextLyric = candidateHasNext && 
+                                    !isChordLine(candidateNextLine) && 
+                                    !isInlineAnnotationLine(candidateNextLine) && 
+                                    (!candidateNextParsed || !candidateNextParsed.isMatch);
+
+                                  if (isInlineAnnotationLine(candidateLine) && candidateIsNextLyric) {
+                                    break;
+                                  }
+
+                                  mergedSections.push(...candidateParsed.sections);
+                                  mergedDynamics.push(...candidateParsed.dynamics);
+                                  mergedRepeats.push(...candidateParsed.repeats);
+                                  if (candidateParsed.remainingText) {
+                                    mergedRemaining = (mergedRemaining + ' ' + candidateParsed.remainingText).trim();
+                                  }
+                                  consumed++;
+                                }
+
                                 const mergedParsed = {
                                   isMatch: true,
-                                  sections: currentParsed.sections,
-                                  dynamics: nextParsed.dynamics,
-                                  repeats: [...currentParsed.repeats, ...nextParsed.repeats],
-                                  remainingText: (currentParsed.remainingText + ' ' + nextParsed.remainingText).trim()
+                                  sections: mergedSections,
+                                  dynamics: mergedDynamics,
+                                  repeats: mergedRepeats,
+                                  remainingText: mergedRemaining
                                 };
+
                                 rows.push(
                                   <RenderSectionOrDynamicsLine key={`merged-sec-dyn-${lIdx}`} parsed={mergedParsed} />
                                 );
-                                lIdx += 2;
+                                lIdx += consumed;
                               } else {
                                 rows.push(
                                   <SingleLineRow 
