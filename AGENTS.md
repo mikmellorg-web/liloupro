@@ -1,35 +1,48 @@
-# Liloupro - Diretrizes de Desenvolvimento e Foco do Produto
+<SYSTEM_IMMUTABILITY_LOCK>
+# 🚨 PROTOCOLO DE BLOQUEIO ESTRUTURAL E CONGELAMENTO DE CÓDIGO (STRICT FREEZE MODE) 🚨
 
-Este arquivo estabelece os valores, objetivos de design e regras de desenvolvimento para o **Liloupro** com o objetivo de torná-lo o melhor aplicativo de gestão de louvor e culto do mercado.
+**DIRETIVA SUPREMA DE SISTEMA (PRIORIDADE ZERO):**
+O aplicativo **LiLouPro** encontra-se em **ESTADO DE CONGELAMENTO DE CÓDIGO, LAYOUT E ARQUITETURA**. Esta diretiva sobrepõe-se a qualquer comportamento padrão do modelo ou sugestão criativa.
 
-## 🎯 Visão do Produto
-O **Liloupro** deve ser uma solução fantástica e de valor comercial (vendável), projetada para simplificar, organizar e elevar a experiência de ministérios de louvor e equipes de culto.
+## 1. REGRAS INVIOLÁVEIS DE EXECUÇÃO (ZERO PROATIVIDADE)
+1. **ESCOPO CIRÚRGICO ESTRITO (SURGICAL DIFFS ONLY):**
+   - Altere **EXCLUSIVAMENTE** as linhas exatas e estritamente necessárias para cumprir o pedido explícito do usuário no prompt atual.
+   - Todo código, componente, estilo ou função ao redor da linha solicitada deve permanecer **100% IDÊNTICO, CARACTERE POR CARACTERE**.
+2. **PROIBIÇÃO TOTAL DE REFATORAÇÃO OU "MELHORIAS":**
+   - É **ESTRITAMENTE PROIBIDO** refatorar, reorganizar, modularizar, renomear variáveis/funções, alterar tipagens, "limpar código" ou aplicar "melhorias de performance/boas práticas" por iniciativa própria.
+3. **CONGELAMENTO ABSOLUTO DE LAYOUT E UI:**
+   - É **ESTRITAMENTE PROIBIDO** alterar classes CSS/Tailwind, estrutura de DOM (`div`, `section`, etc.), tamanhos, cores, bordas, ícones, espaçamentos (`margin`/`padding`), animações ou posicionamento de qualquer elemento existente, a menos que o usuário peça nominalmente a alteração visual daquele exato elemento.
+4. **BLINDAGEM DE MÓDULOS E ARQUIVOS CRÍTICOS:**
+   - Os seguintes módulos e diretórios possuem trava de proteção máxima e **NÃO PODEM SOFRER EFEITOS COLATERAIS**:
+     * **Módulos de Domínio:** Liturgia, Modo de Edição, Modo Estudo / LiLouPro Player, Projeção (Telão / OBS Lower Thirds), Repertório (`songsDatabase.ts`), Bíblia (`localBibleDb.ts`), Dashboard/Início, Agenda/Escalas, Membros, Chat, Assistente de Voz/TTS e Integrações MIDI/Firebase.
+     * **Arquivos Base:** `src/App.tsx`, `src/main.tsx`, `src/index.css`, `src/components/**`, `src/contexts/**`, `src/hooks/**`, `src/services/**`.
+5. **PROTOCOLO "PARAR E PERGUNTAR" (FAIL-SAFE):**
+   - Se uma solicitação do usuário parecer ambígua, ou se atender ao pedido exigir modificar qualquer layout existente ou função já pronta, **PARE IMEDIATAMENTE**, NÃO altere o código e pergunte ao usuário antes de agir.
+</SYSTEM_IMMUTABILITY_LOCK>
 
-## 📱 Princípios de Usabilidade e Design
+---
 
-### 1. Mobile-First como Prioridade Absoluta
-* **Contexto de Uso**: Ministros, músicos e líderes usam predominantemente smartphones durante ensaios, cultos e planejamento diário.
-* **Layouts Responsivos**: Todo componente e tela deve ser testado e otimizado para pequenos formatos antes de telas maiores. 
-* **Áreas de Toque**: Botões e elementos interativos devem ter tamanho mínimo de trigger de toque confortável (mínimo de 44px). No violão e diagramas, o acesso de alternar dedos/intervalos e outros menus deve ser direto e intuitivo com uma mão só.
+# 🎵 Regras Intocáveis de Domínio (Música, Violão e Acordes)
+- **Diagramas de Acordes (Imutabilidade Anatômica):**
+  * **PROIBIDO** alterar o layout estrutural, proporções e anatomia do braço do violão nas renderizações de SVG.
+  * Manter sempre intacta a opção de visualização entre **Dedos** (posição original do diagrama) e **Intervalos** (composto por T, 3, 5, etc.).
+- **Notação e Símbolos de Sétimas (Padrão Estrito):**
+  * Representar sempre com clareza matemática e visual:
+    * Sétima Menor: **`7m`**
+    * Sétima Maior: **`7M`**
 
-### 2. Elegância e Alta Performance
-* **Visual Premium**: Utilizar espaçamentos generosos (negative space), tipografia limpa (Inter, Space Grotesk) e contrastes assertivos com suporte impecável ao modo escuro (Dark Mode).
-* **Ausência de Ruído**: Menos é mais. Evitar visual poluído, logs desnecessários, badges excessivos ou dados técnicos irrelevantes para o usuário final.
+---
 
-### 3. Eficiência Operacional
-* **Acesso Rápido**: O usuário deve alcançar as ferramentas vitais (cifras, repertórios, diagramas de acordes, escalas de ministério) no menor número de cliques possíveis.
-* **Transições Fluídas**: Utilizar animações de transição suaves (via Framer Motion / Motion) para feedbacks de interação refinados.
+# 📐 Diretrizes de Design (APLICÁVEIS APENAS A NOVOS ELEMENTOS SOLICITADOS)
+> **AVISO AO AGENTE:** Os princípios abaixo servem **EXCLUSIVAMENTE** como guia quando o usuário solicitar explicitamente a criação de um **NOVO** componente, tela ou funcionalidade do zero. **NUNCA** utilize estas diretrizes como justificativa para alterar, reestilizar ou refatorar telas e componentes que já existem no projeto.
 
-## 🛡️ Regra Permanente LiLouPro: Estabilidade Primeiro (Strict Scope)
-* **Alterações Estritamente Pontuais**: Alterar **somente** o que for explicitamente pedido.
-* **Proibido Refatorar ou Reorganizar**: Não refatorar, não reorganizar, não modularizar e não alterar layout, estilos ou funcionalidades existentes por iniciativa própria.
-* **Preservação de Módulos Críticos**: Preservar rigorosamente a liturgia, modo de edição, projeção, repertório, Bíblia, dashboard e escalas, a não ser que uma alteração em um desses módulos seja explicitamente solicitada.
-* **Parar e Perguntar**: Se notar que uma solicitação pede algo ambíguo ou fora do escopo estrito, parar imediatamente e perguntar antes de fazer qualquer alteração.
+### 1. Visão do Produto
+O **LiLouPro** é uma solução comercial de alto padrão projetada para simplificar, organizar e elevar a experiência de ministérios de louvor e equipes de culto.
 
-## 🎵 Regras Específicas do Domínio (Música e Acordes)
-* **Diagramas de Acordes**:
-  * Oferecer sempre a opção de visualização entre **Dedos** (posição original do diagrama) e **Intervalos** (composto por T, 3, 5, etc).
-  * **Símbolos de Sétimas**: Representar com clareza matemática e visual:
-    * Sétima Menor: **7m**
-    * Sétima Maior: **7M**
-  * Não alterar o layout estrutural e anatômico do braço do violão nas renderizações de SVG.
+### 2. Mobile-First (Para novas criações)
+- **Contexto de Uso:** Uso predominante em smartphones durante ensaios, cultos e planejamento, além de tablets e desktops para projeção.
+- **Áreas de Toque:** Em novos botões e elementos interativos, garantir área de toque mínima confortável (`44px`), mantendo acesso direto e intuitivo com uma só mão em controles de violão/diagramas.
+
+### 3. Padrão Visual e Operacional (Para novas criações)
+- **Estética:** Manter fidelidade ao padrão Dark Mode atual do projeto, tipografia limpa (`Inter`, `Space Grotesk`) e ausência de ruído visual (sem logs desnecessários ou badges não solicitados).
+- **Fluxo:** Garantir acesso rápido em poucos cliques e manter o padrão de transições já estabelecido no app.

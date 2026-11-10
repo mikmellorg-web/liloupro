@@ -1,3 +1,14 @@
+/**
+ * ============================================================================
+ * [AI-SYSTEM-LOCK: STRICT_IMMUTABILITY_MODE = TRUE]
+ * ATENÇÃO AGENTE IA: Este arquivo (App.tsx) está sob CONGELAMENTO ESTRUTURAL.
+ * 1. PROIBIDO refatorar, reorganizar, otimizar ou limpar código existente.
+ * 2. PROIBIDO alterar classes Tailwind/CSS, layout, DOM, cores ou tamanhos.
+ * 3. PROIBIDO modificar funções, estados (useState/useEffect) ou rotas atuais.
+ * -> Faça APENAS alterações cirúrgicas nas linhas exatas pedidas pelo usuário.
+ * -> Consulte obrigatoriamente as regras de bloqueio em /AGENTS.md.
+ * ============================================================================
+ */
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { toPng } from 'html-to-image';
 import { 
