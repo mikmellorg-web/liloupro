@@ -13,7 +13,7 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy, Repeat, SkipForward,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2
+  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2, KeyRound
 } from 'lucide-react';
 import { Music2 } from './components/MusicIcon';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -1361,7 +1361,7 @@ function AuthView({
         await signInWithEmailAndPassword(auth, email, password);
       } else if (mode === 'forgot') {
         await sendPasswordResetEmail(auth, email);
-        setSuccess('E-mail de recuperação enviado com sucesso!');
+        setSuccess('Link de recuperação enviado com sucesso! Verifique sua caixa de entrada e a pasta de spam.');
       }
     } catch (err: any) {
       console.error('Erro de autenticação:', err);
@@ -1474,6 +1474,18 @@ function AuthView({
           </div>
         )}
 
+        {mode === 'forgot' && (
+          <div className="bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border border-blue-500/20 dark:border-cyan-500/30 rounded-2xl p-4 text-left space-y-1.5 shadow-sm">
+            <div className="flex items-center gap-2 text-blue-700 dark:text-cyan-300 font-black text-xs uppercase tracking-wider">
+              <KeyRound size={15} className="shrink-0 text-brand dark:text-cyan-400" />
+              <span>Redefinição de Senha</span>
+            </div>
+            <p className="text-slate-600 dark:text-white/80 text-xs leading-relaxed font-medium">
+              Informe seu e-mail cadastrado. Enviaremos um link oficial e seguro para você redefinir sua senha com facilidade.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={handleAuth} className="space-y-4">
           {mode === 'signup' && signupIntent === 'church_trial' && (
             <div className="space-y-1">
@@ -1495,7 +1507,7 @@ function AuthView({
                 Código de Ingresso da Igreja *
               </label>
               <Input 
-                placeholder="Ex: SEMENTE123 ou IGREJA-123456" 
+                placeholder="Ex: LOUVOR2026 ou IGREJA-123456" 
                 value={memberInviteCode} 
                 onChange={e => setMemberInviteCode(e.target.value.toUpperCase())} 
                 className="font-mono uppercase"
@@ -1519,7 +1531,9 @@ function AuthView({
           )}
           
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">E-mail *</label>
+            <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">
+              {mode === 'forgot' ? 'Seu E-mail Cadastrado *' : 'E-mail *'}
+            </label>
             <Input 
               type="email"
               placeholder="seu@email.com" 
@@ -1531,7 +1545,21 @@ function AuthView({
 
           {mode !== 'forgot' && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">Senha *</label>
+              <div className="flex items-center justify-between pl-1">
+                <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest">Senha *</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setMode('forgot');
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 transition-colors cursor-pointer hover:underline"
+                >
+                  <KeyRound size={12} className="shrink-0" />
+                  <span>Esqueci minha senha</span>
+                </button>
+              </div>
               <Input 
                 type="password"
                 placeholder="******" 
@@ -1556,29 +1584,45 @@ function AuthView({
 
           <Button 
             disabled={loading}
-            className="w-full py-4 bg-brand hover:bg-brand/90 text-white shadow-xl shadow-brand/20 uppercase tracking-widest font-black text-xs h-14 rounded-xl cursor-pointer"
+            className="w-full py-4 bg-brand hover:bg-brand/90 text-white shadow-xl shadow-brand/20 uppercase tracking-widest font-black text-xs h-14 rounded-xl cursor-pointer flex items-center justify-center gap-2"
           >
-            {loading ? 'Processando...' : (
+            {loading ? (
+              <>
+                <RefreshCcw size={16} className="animate-spin" />
+                <span>Processando...</span>
+              </>
+            ) : (
               mode === 'login' 
                 ? 'Entrar' 
                 : mode === 'signup' 
                   ? (signupIntent === 'church_trial' ? 'Criar Igreja & Iniciar 30 Dias Grátis' : 'Cadastrar & Entrar na Igreja')
-                  : 'Enviar Link'
+                  : (
+                    <>
+                      <KeyRound size={16} />
+                      <span>Enviar Link de Recuperação</span>
+                    </>
+                  )
             )}
           </Button>
         </form>
 
         <div className="space-y-4">
           {mode === 'login' && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <button 
-                onClick={() => setMode('forgot')}
-                className="text-[11px] text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white transition-colors font-black uppercase tracking-widest text-center cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setSuccess(null);
+                  setMode('forgot');
+                }}
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100/90 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
-                Esqueceu sua senha?
+                <KeyRound size={14} className="text-brand dark:text-cyan-400 shrink-0" />
+                <span>Esqueci minha senha</span>
               </button>
               
-              <div className="relative">
+              <div className="relative my-1">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-white/10"></div></div>
                 <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-white/50"><span className="bg-white dark:bg-surface px-2">ou</span></div>
               </div>
@@ -1594,16 +1638,34 @@ function AuthView({
             </div>
           )}
 
+          {mode === 'forgot' && (
+            <div className="flex flex-col gap-3">
+              <button 
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setSuccess(null);
+                  setMode('login');
+                }}
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100/90 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                <ArrowLeft size={14} className="shrink-0" />
+                <span>Voltar ao Login</span>
+              </button>
+            </div>
+          )}
+
           <div className="text-center pt-2">
             <button 
+              type="button"
               onClick={() => {
                 setError(null);
                 setSuccess(null);
                 setMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup');
               }}
-              className="text-[11px] font-black text-brand hover:text-blue-700 dark:hover:text-cyan-300 uppercase tracking-widest underline decoration-2 underline-offset-4 cursor-pointer"
+              className="text-[11px] font-black text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 uppercase tracking-widest underline decoration-2 underline-offset-4 cursor-pointer"
             >
-              {mode === 'signup' ? 'Já tem uma conta? Faça Login' : mode === 'forgot' ? 'Voltar para o Login' : 'Não tem uma conta? Cadastre-se'}
+              {mode === 'signup' ? 'Já tem uma conta? Faça Login' : mode === 'forgot' ? 'Lembrou sua senha? Faça Login' : 'Não tem uma conta? Cadastre-se'}
             </button>
           </div>
         </div>
@@ -18893,7 +18955,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                       <Input 
                         value={churchCodeInput}
                         onChange={e => setChurchCodeInput(e.target.value.toUpperCase())}
-                        placeholder="CÓDIGO (ex: SEMENTE123)"
+                        placeholder="CÓDIGO (ex: LOUVOR2026)"
                         className="text-xs uppercase font-mono"
                       />
                       <Button 
