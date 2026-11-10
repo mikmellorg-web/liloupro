@@ -22,6 +22,7 @@ import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { ChromaticTunerModal } from './ChromaticTunerModal';
 import { StudyMetronomeModal } from './StudyMetronomeModal';
+import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { 
@@ -1249,6 +1250,24 @@ export function SongDetailView({
     window.addEventListener('resize', handleDeviceDetection);
     return () => window.removeEventListener('resize', handleDeviceDetection);
   }, [hasManuallyToggledColumns]);
+
+  const isLilouPlayerActive = Boolean((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer);
+
+  const handleToggleLilouPlayer = () => {
+    if (onStartSongPlayer) {
+      if (isGlobalPlayerOpen && globalPlayerCurrentSongId === editedSong.id) {
+        onToggleGlobalPlayer ? onToggleGlobalPlayer() : onStartSongPlayer(editedSong);
+      } else {
+        onStartSongPlayer(editedSong);
+      }
+    } else {
+      const nextVal = !showPracticePlayer;
+      setShowPracticePlayer(nextVal);
+      if (nextVal) {
+        setIsPracticePlayerMinimized(false);
+      }
+    }
+  };
 
   // Synchronize initialShowPlayer when requested
   useEffect(() => {
@@ -3928,22 +3947,32 @@ export function SongDetailView({
                 }}
                 className="flex-1 flex items-center justify-around sm:justify-start gap-1 sm:gap-2.5 px-1 sm:px-3 overflow-x-auto streaming-scroll-container py-1.5 scroll-smooth"
               >
-                {/* Spotify */}
-                <a
-                  href={editedSong.spotifyUrl || editedSong.spotify || `https://open.spotify.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#1ED760]/60 bg-black/5 dark:bg-white/5 hover:bg-[#1ED760]/10 text-text-main hover:shadow-[0_0_14px_rgba(30,215,96,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
-                  title={`Ouvir "${editedSong.title}" no Spotify`}
+                {/* 1. LiLouPro Player Oficial (Primeiro da esquerda para a direita) */}
+                <button
+                  type="button"
+                  onClick={handleToggleLilouPlayer}
+                  className={cn(
+                    "h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group",
+                    isLilouPlayerActive
+                      ? "border-amber-400 bg-amber-500/15 text-amber-500 dark:text-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.3)] ring-2 ring-amber-400/20"
+                      : "border-border/80 hover:border-amber-400/60 bg-black/5 dark:bg-white/5 hover:bg-amber-500/10 text-text-main hover:shadow-[0_0_14px_rgba(245,158,11,0.25)]"
+                  )}
+                  title={isLilouPlayerActive ? "Fechar LiLouPro Player" : "Abrir LiLouPro Player"}
                 >
-                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="12" fill="#1ED760" />
-                    <path d="M17.4 17.1c-.2.3-.6.4-.9.2-2.5-1.5-5.7-1.9-9.5-1-.4.1-.7-.1-.8-.5-.1-.4.1-.7.5-.8 4.2-1 7.7-.5 10.5 1.2.3.2.4.6.2.9zm1.3-2.9c-.3.4-.8.5-1.2.3-2.9-1.8-7.3-2.3-10.7-1.3-.4.1-.9-.1-1-.6-.1-.4.1-.9.6-1 3.9-1.2 8.7-.6 12 1.4.4.2.5.8.3 1.2zm.1-3c-3.5-2.1-9.2-2.3-12.5-1.3-.5.2-1.1-.1-1.3-.7-.2-.5.1-1.1.7-1.3 3.9-1.2 10.2-.9 14.2 1.5.5.3.6.9.3 1.4-.2.5-.8.7-1.4.4z" fill="#000000" />
-                  </svg>
-                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Spotify</span>
-                </a>
+                  <img 
+                    src={luxuryAppIcon} 
+                    alt="LiLouPro Player" 
+                    className={cn(
+                      "w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 rounded-lg object-cover shadow-xs transition-transform group-hover:scale-105 shrink-0",
+                      isLilouPlayerActive && "ring-1 ring-amber-400"
+                    )}
+                  />
+                  <span className="hidden lg:inline text-xs font-black tracking-tight text-text-main group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
+                    LiLouPro
+                  </span>
+                </button>
 
-                {/* YouTube Music */}
+                {/* 2. YouTube Music */}
                 <a
                   href={editedSong.youtubeMusicUrl || (parseYoutubeVideoId(editedSong.youtube) ? `https://music.youtube.com/watch?v=${parseYoutubeVideoId(editedSong.youtube)}` : `https://music.youtube.com/search?q=${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`)}
                   target="_blank"
@@ -3957,6 +3986,21 @@ export function SongDetailView({
                     <polygon points="10,8.5 15.5,12 10,15.5" fill="#FFFFFF" />
                   </svg>
                   <span className="hidden lg:inline text-xs font-bold tracking-tight">YT Music</span>
+                </a>
+
+                {/* 3. Spotify */}
+                <a
+                  href={editedSong.spotifyUrl || editedSong.spotify || `https://open.spotify.com/search/${encodeURIComponent(`${editedSong.title || ''} ${editedSong.artist || ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-10 w-10 sm:h-11 sm:w-auto sm:px-3 rounded-xl border border-border/80 hover:border-[#1ED760]/60 bg-black/5 dark:bg-white/5 hover:bg-[#1ED760]/10 text-text-main hover:shadow-[0_0_14px_rgba(30,215,96,0.25)] flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs group"
+                  title={`Ouvir "${editedSong.title}" no Spotify`}
+                >
+                  <svg className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="12" fill="#1ED760" />
+                    <path d="M17.4 17.1c-.2.3-.6.4-.9.2-2.5-1.5-5.7-1.9-9.5-1-.4.1-.7-.1-.8-.5-.1-.4.1-.7.5-.8 4.2-1 7.7-.5 10.5 1.2.3.2.4.6.2.9zm1.3-2.9c-.3.4-.8.5-1.2.3-2.9-1.8-7.3-2.3-10.7-1.3-.4.1-.9-.1-1-.6-.1-.4.1-.9.6-1 3.9-1.2 8.7-.6 12 1.4.4.2.5.8.3 1.2zm.1-3c-3.5-2.1-9.2-2.3-12.5-1.3-.5.2-1.1-.1-1.3-.7-.2-.5.1-1.1.7-1.3 3.9-1.2 10.2-.9 14.2 1.5.5.3.6.9.3 1.4-.2.5-.8.7-1.4.4z" fill="#000000" />
+                  </svg>
+                  <span className="hidden lg:inline text-xs font-bold tracking-tight">Spotify</span>
                 </a>
 
                 {/* Apple Music */}
@@ -5417,35 +5461,25 @@ export function SongDetailView({
                     Dê o play para ouvir a música enquanto visualiza a cifra.
                   </p>
                   <button 
-                    onClick={() => {
-                      if (onStartSongPlayer) {
-                        if (isGlobalPlayerOpen && globalPlayerCurrentSongId === editedSong.id) {
-                          onToggleGlobalPlayer ? onToggleGlobalPlayer() : onStartSongPlayer(editedSong);
-                        } else {
-                          onStartSongPlayer(editedSong);
-                        }
-                      } else {
-                        const nextVal = !showPracticePlayer;
-                        setShowPracticePlayer(nextVal);
-                        if (nextVal) {
-                          setIsPracticePlayerMinimized(false);
-                        }
-                      }
-                    }}
+                    onClick={handleToggleLilouPlayer}
                     className={cn(
-                      "w-full py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-95 font-black uppercase tracking-widest text-xs shadow-md cursor-pointer",
-                      (isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer 
+                      "w-full py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all active:scale-95 font-black uppercase tracking-widest text-xs shadow-md cursor-pointer group",
+                      isLilouPlayerActive 
                         ? "bg-brand text-brand-text shadow-brand/20 ring-4 ring-brand/10" 
                         : "bg-white text-primary border-2 border-brand hover:bg-brand hover:text-brand-text"
                     )}
                   >
-                    <Volume2 size={18} className={((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? "animate-pulse" : ""} />
-                    <span>{((isGlobalPlayerOpen && (globalPlayerCurrentSongId === editedSong.id || !globalPlayerCurrentSongId)) || showPracticePlayer) ? 'Ouvindo...' : 'Abrir Player'}</span>
-                    <span className="inline-flex items-center justify-center ml-1 shrink-0 transition-transform hover:scale-105" title="YouTube Player">
-                      <svg className="w-6 h-[17px] shrink-0 rounded-[4px] shadow-sm drop-shadow" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="28" height="20" rx="5" fill="#FF0000" />
-                        <path d="M11.5 5.5L19 10L11.5 14.5V5.5Z" fill="white" />
-                      </svg>
+                    <Volume2 size={18} className={isLilouPlayerActive ? "animate-pulse" : ""} />
+                    <span>{isLilouPlayerActive ? 'Ouvindo...' : 'Abrir Player'}</span>
+                    <span className="inline-flex items-center justify-center ml-1 shrink-0 transition-transform group-hover:scale-105" title="LiLouPro Player">
+                      <img 
+                        src={luxuryAppIcon} 
+                        alt="LiLouPro Player" 
+                        className={cn(
+                          "w-5.5 h-5.5 rounded-lg object-cover shadow-xs border border-amber-400/50 shrink-0 transition-transform group-hover:scale-105",
+                          isLilouPlayerActive && "ring-2 ring-amber-400"
+                        )} 
+                      />
                     </span>
                   </button>
                 </div>
