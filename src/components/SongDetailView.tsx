@@ -188,19 +188,147 @@ export function SongDetailView({
     }
   }, [onSelectSong]);
 
-  // Gestos de Deslize (Swipe) para avançar/voltar cifras no Modo Foco
+  // Modo Foco, fonte e zoom por pinça (Pinch-to-Zoom)
+  const [isFocusMode, setIsFocusMode] = useState(initialFocusMode);
+  const [songFontSize, setSongFontSize] = useState<number>(initialFocusMode ? 18 : 14);
+  const [isPinching, setIsPinching] = useState(false);
+  const [pinchCenter, setPinchCenter] = useState<{ x: number; y: number } | null>(null);
+  const [pinchDisplaySize, setPinchDisplaySize] = useState<number>(18);
+  const [showPinchHud, setShowPinchHud] = useState(false);
+  const pinchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pinchDataRef = useRef<{
+    initialDistance: number;
+    initialFontSize: number;
+    lastMidX: number;
+    lastMidY: number;
+  } | null>(null);
+  const focusContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // R3: Garantir que ao abrir o Modo Foco ou trocar de música, o tamanho sempre retorne ao padrão 18
+  useEffect(() => {
+    if (isFocusMode) {
+      setSongFontSize(18);
+      setPinchDisplaySize(18);
+    }
+  }, [song?.id, isFocusMode]);
+
+  // Previne zoom da página inteira pelo navegador e rolagem durante o gesto de pinça
+  useEffect(() => {
+    const el = focusContainerRef.current;
+    if (!el || !isFocusMode) return;
+
+    const onTouchMoveNative = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const preventGesture = (e: Event) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener('touchmove', onTouchMoveNative, { passive: false });
+    window.addEventListener('gesturestart', preventGesture, { passive: false });
+    window.addEventListener('gesturechange', preventGesture, { passive: false });
+
+    return () => {
+      el.removeEventListener('touchmove', onTouchMoveNative);
+      window.removeEventListener('gesturestart', preventGesture);
+      window.removeEventListener('gesturechange', preventGesture);
+    };
+  }, [isFocusMode]);
+
+  // Gestos de Deslize (Swipe) para avançar/voltar cifras e Pinça (Pinch-to-Zoom) no Modo Foco
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleFocusTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-      time: Date.now()
-    };
+    // 2 Dedos: Início do Gesto de Pinça (Pinch-to-Zoom)
+    if (e.touches.length === 2) {
+      touchStartRef.current = null; // Cancela qualquer deslize de troca de música
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      pinchDataRef.current = {
+        initialDistance: Math.max(dist, 25),
+        initialFontSize: songFontSize,
+        lastMidX: midX,
+        lastMidY: midY,
+      };
+
+      setIsPinching(true);
+      setPinchCenter({ x: midX, y: midY });
+      setPinchDisplaySize(songFontSize);
+      setShowPinchHud(true);
+      if (pinchTimeoutRef.current) {
+        clearTimeout(pinchTimeoutRef.current);
+        pinchTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // 1 Dedo: Preparar para swipe horizontal de troca de música
+    if (e.touches.length === 1 && !pinchDataRef.current) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now()
+      };
+    }
+  };
+
+  const handleFocusTouchMove = (e: React.TouchEvent) => {
+    // Movimento com 2 dedos: Redimensionamento suave e gradual, idêntico aos botões - e +
+    if (e.touches.length === 2 && pinchDataRef.current) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      const { initialDistance, initialFontSize } = pinchDataRef.current;
+      // Variação linear e controlada: cada ~24px de afastamento dos dedos altera 1 ponto na fonte
+      const deltaDist = dist - initialDistance;
+      const step = Math.round(deltaDist / 24);
+      const calculated = initialFontSize + step;
+      // Limites seguros de leitura: 12px a 34px (padrão é 18px)
+      const clamped = Math.max(12, Math.min(34, calculated));
+
+      setSongFontSize(clamped);
+      setPinchDisplaySize(clamped);
+      setPinchCenter({ x: midX, y: midY });
+      setShowPinchHud(true);
+
+      if (pinchTimeoutRef.current) {
+        clearTimeout(pinchTimeoutRef.current);
+        pinchTimeoutRef.current = null;
+      }
+    }
   };
 
   const handleFocusTouchEnd = (e: React.TouchEvent) => {
+    // Finalização do gesto de pinça
+    if (pinchDataRef.current) {
+      if (e.touches.length < 2) {
+        pinchDataRef.current = null;
+        setIsPinching(false);
+        // Mantém o HUD visível por 850ms após soltar os dedos para conferência do valor final
+        if (pinchTimeoutRef.current) clearTimeout(pinchTimeoutRef.current);
+        pinchTimeoutRef.current = setTimeout(() => {
+          setShowPinchHud(false);
+          setPinchCenter(null);
+        }, 850);
+      }
+      return;
+    }
+
+    // Reconhecimento de deslize horizontal (1 dedo):
     if (!touchStartRef.current) return;
     const touchEnd = e.changedTouches[0];
     const deltaX = touchEnd.clientX - touchStartRef.current.x;
@@ -208,18 +336,14 @@ export function SongDetailView({
     const deltaTime = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
 
-    // Reconhecer deslize horizontal nítido:
-    // - Deslocamento horizontal mínimo de 50px
-    // - Movimento predominantemente horizontal (deltaX > 1.4x deltaY para não conflitar com rolagem vertical)
-    // - Concluído em menos de 800ms
     if (Math.abs(deltaX) >= 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4 && deltaTime < 800) {
       if (deltaX < 0) {
-        // Deslizar para a Esquerda -> Avançar para a Próxima Música
+        // Deslizar para a Esquerda -> Próxima Música
         if (hasNextSong && nextSong) {
           handleSongSwitch(nextSong);
         }
       } else {
-        // Deslizar para a Direita -> Voltar para a Música Anterior
+        // Deslizar para a Direita -> Música Anterior
         if (hasPrevSong && prevSong) {
           handleSongSwitch(prevSong);
         }
@@ -302,7 +426,6 @@ export function SongDetailView({
   const [transpose, setTranspose] = useState(0);
   const [isCapoEnabled, setIsCapoEnabled] = useState(true);
   const [selectedCapoFret, setSelectedCapoFret] = useState<number | null>(null);
-  const [isFocusMode, setIsFocusMode] = useState(initialFocusMode);
 
   useEffect(() => {
     if (onFocusModeChange) {
@@ -1065,7 +1188,6 @@ export function SongDetailView({
   const [isAnalyzingAudioBpm, setIsAnalyzingAudioBpm] = useState(false);
   const [detectedBpmMsg, setDetectedBpmMsg] = useState<{ bpm: number; name: string } | null>(null);
   const [taps, setTaps] = useState<number[]>([]);
-  const [songFontSize, setSongFontSize] = useState<number>(initialFocusMode ? 18 : 14); 
   const [numColumns, setNumColumns] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('liloupro_chord_columns');
@@ -2387,18 +2509,78 @@ export function SongDetailView({
   if (isFocusMode) {
     return (
       <motion.div 
+        ref={focusContainerRef}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onTouchStart={handleFocusTouchStart}
+        onTouchMove={handleFocusTouchMove}
         onTouchEnd={handleFocusTouchEnd}
         className={cn(
-          "fixed inset-0 z-[200] overflow-hidden flex flex-col notranslate overscroll-y-none",
+          "fixed inset-0 z-[200] overflow-hidden flex flex-col notranslate overscroll-y-none select-none",
           isStageMode ? "bg-black text-white" : "bg-background"
         )}
         style={{ overscrollBehaviorY: 'none' }}
         translate="no"
       >
+        {/* HUD Pro de Zoom por Pinça (Exibido em tempo real exatamente entre os dedos) */}
+        <AnimatePresence>
+          {showPinchHud && pinchCenter && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.15 }}
+              className="fixed z-[350] pointer-events-none select-none -translate-x-1/2 -translate-y-1/2"
+              style={{
+                left: `${Math.min(Math.max(pinchCenter.x, 75), (typeof window !== 'undefined' ? window.innerWidth : 360) - 75)}px`,
+                top: `${Math.min(Math.max(pinchCenter.y, 65), (typeof window !== 'undefined' ? window.innerHeight : 640) - 65)}px`,
+              }}
+            >
+              <div className={cn(
+                "flex flex-col items-center justify-center gap-1 px-4 py-2.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-colors min-w-[130px]",
+                isStageMode 
+                  ? "bg-zinc-950/95 border-amber-500/50 text-white shadow-amber-500/10 ring-1 ring-amber-500/30" 
+                  : "bg-slate-900/95 dark:bg-black/95 border-white/25 text-white shadow-black/60 ring-1 ring-white/10"
+              )}>
+                {/* Indicador de Ação */}
+                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-white/70">
+                  <Sparkles size={11} className={isStageMode ? "text-amber-400" : "text-cyan-400"} />
+                  <span>Tamanho da Fonte</span>
+                </div>
+
+                {/* Número do tamanho da fonte em tempo real */}
+                <div className="flex items-baseline gap-1 my-0.5">
+                  <span className={cn(
+                    "font-mono font-black text-3xl tracking-tight leading-none",
+                    isStageMode ? "text-amber-400" : "text-cyan-300"
+                  )}>
+                    {pinchDisplaySize}
+                  </span>
+                  <span className="text-xs font-bold text-white/60">px</span>
+                </div>
+
+                {/* Status em relação ao padrão 18 */}
+                <div className="flex items-center gap-1 text-[10px] font-bold">
+                  {pinchDisplaySize === 18 ? (
+                    <span className="text-emerald-400 font-extrabold uppercase tracking-wider bg-emerald-500/20 px-1.5 py-0.5 rounded text-[9px]">
+                      Padrão 18
+                    </span>
+                  ) : pinchDisplaySize > 18 ? (
+                    <span className="text-amber-300 font-bold flex items-center gap-0.5">
+                      +{pinchDisplaySize - 18}px (maior)
+                    </span>
+                  ) : (
+                    <span className="text-sky-300 font-bold flex items-center gap-0.5">
+                      -{18 - pinchDisplaySize}px (menor)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header / Bar de Controles Unificada do Modo Foco */}
         <div className={cn(
           "flex items-center justify-between gap-2 px-3 sm:px-5 py-2 border-b select-none z-[110] shrink-0 min-h-[48px] relative opacity-100 shadow-md",
@@ -2597,11 +2779,15 @@ export function SongDetailView({
         <div 
           id="song-scroll-container"
           className={cn(
-            "flex-1 overflow-y-auto px-1 sm:px-2 py-6 custom-scrollbar transition-colors duration-300 overscroll-y-none",
-            !isAutoScrolling && "scroll-smooth",
+            "flex-1 px-1 sm:px-2 py-6 custom-scrollbar transition-colors duration-300 overscroll-y-none",
+            isPinching ? "overflow-y-hidden select-none" : "overflow-y-auto",
+            !isAutoScrolling && !isPinching && "scroll-smooth",
             isStageMode && "bg-black"
           )}
-          style={{ overscrollBehaviorY: 'none' }}
+          style={{ 
+            overscrollBehaviorY: 'none',
+            touchAction: isPinching ? 'none' : 'pan-y'
+          }}
         >
           <div className="w-full max-w-none mx-0 px-2 pb-12">
             {detailTab === 'chords' ? (
@@ -2609,7 +2795,8 @@ export function SongDetailView({
               <div 
                 id="song-viewer-container"
                 className={cn(
-                  "bg-transparent selection:bg-brand/20 transition-all duration-300",
+                  "bg-transparent selection:bg-brand/20",
+                  isPinching ? "transition-none" : "transition-all duration-300",
                   isStageMode ? "stage-mode text-white" : "text-text-main"
                 )}
                 style={{ 
@@ -2929,7 +3116,10 @@ export function SongDetailView({
             ) : (
               // Renderização da Letra
               <div 
-                className="font-sans text-text-main leading-loose text-left transition-all duration-300"
+                className={cn(
+                  "font-sans text-text-main leading-loose text-left",
+                  isPinching ? "transition-none" : "transition-all duration-300"
+                )}
                 style={{ 
                   fontSize: `${songFontSize}px`,
                   columnCount: numColumns,
