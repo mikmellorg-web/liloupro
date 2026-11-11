@@ -25,13 +25,15 @@ try {
 
 const originalConsoleError = console.error;
 console.error = (...args: any[]) => {
-  const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || '');
-  // Benign Firestore connection housekeeping when no targets are active or idle gRPC resets
+  const msg = args.map(a => (typeof a === 'string' ? a : (a?.message || ''))).join(' ');
+  // Benign Firestore connection housekeeping or free-tier daily quota exhaustion (app continues via persistentLocalCache)
   if (
     msg.includes('Disconnecting idle stream') ||
     msg.includes('Timed out waiting for new targets') ||
     msg.includes('ECONNRESET') ||
     msg.includes('GrpcConnection') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('resource-exhausted') ||
     (msg.includes('@firebase/firestore') && (msg.includes('CANCELLED') || msg.includes('UNAVAILABLE') || msg.includes('Listen')))
   ) {
     return;
@@ -112,8 +114,19 @@ interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code || '';
+  if (
+    message.includes('Quota limit exceeded') ||
+    message.includes('resource-exhausted') ||
+    code === 'resource-exhausted' ||
+    code === 'unavailable'
+  ) {
+    console.warn(`[LiLouPro Cache] Usando dados locais em cache para "${path}" (limite diário do Firestore atingido).`);
+    return;
+  }
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: message,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,

@@ -1674,12 +1674,16 @@ export default function DashboardView({
     };
   }, [user, userChurchId]);
 
-  // Limpeza automática do Mural (itens com mais de uma semana)
+  // Limpeza automática do Mural (itens com mais de uma semana, executada no máximo 1x por dia)
   useEffect(() => {
     if (!user || !isAdmin) return;
     
     const cleanupMural = async () => {
       try {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const lastCleanup = localStorage.getItem('liloupro_mural_cleanup_date');
+        if (lastCleanup === todayKey) return;
+
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         
@@ -1689,12 +1693,13 @@ export default function DashboardView({
         );
         
         const snap = await getDocs(q);
+        localStorage.setItem('liloupro_mural_cleanup_date', todayKey);
         if (!snap.empty) {
           const deletions = snap.docs.map(d => deleteDoc(d.ref));
           await Promise.all(deletions);
         }
       } catch (error) {
-        console.error("Mural cleanup error:", error);
+        // Silencia erros de limite de cota (Quota limit exceeded) ou modo offline na limpeza em background
       }
     };
 

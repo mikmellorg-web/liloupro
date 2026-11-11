@@ -1209,15 +1209,68 @@ export function SongDetailView({
     }
   });
 
-  const handleToggleColumns = () => {
+  const [columnLayoutToast, setColumnLayoutToast] = useState<string | null>(null);
+  const columnToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCifraTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const lastTouchToggleTimeRef = useRef<number>(0);
+
+  const handleToggleColumns = (showToast?: boolean | React.MouseEvent) => {
+    const shouldShowToast = showToast === true;
     setNumColumns(prev => {
       const next = prev === 1 ? 2 : 1;
       try {
         localStorage.setItem('liloupro_chord_columns', String(next));
       } catch (e) {}
+      if (shouldShowToast) {
+        if (columnToastTimeoutRef.current) clearTimeout(columnToastTimeoutRef.current);
+        setColumnLayoutToast(next === 2 ? '2 Colunas' : '1 Coluna');
+        columnToastTimeoutRef.current = setTimeout(() => {
+          setColumnLayoutToast(null);
+        }, 1000);
+      }
       return next;
     });
     setHasManuallyToggledColumns(true);
+  };
+
+  const isInteractiveCifraTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false;
+    return Boolean(
+      target.closest('button, a, input, select, textarea, .chord-btn, .dyn-btn, .sec-badge, [role="button"]')
+    );
+  };
+
+  const handleCifraAreaTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length > 0 || e.changedTouches.length !== 1 || isPinching || pinchDataRef.current) {
+      lastCifraTapRef.current = null;
+      return;
+    }
+    if (isInteractiveCifraTarget(e.target)) {
+      lastCifraTapRef.current = null;
+      return;
+    }
+    const touch = e.changedTouches[0];
+    const now = Date.now();
+    const prev = lastCifraTapRef.current;
+
+    if (
+      prev &&
+      now - prev.time <= 320 &&
+      now - prev.time >= 40 &&
+      Math.hypot(touch.clientX - prev.x, touch.clientY - prev.y) <= 36
+    ) {
+      lastCifraTapRef.current = null;
+      lastTouchToggleTimeRef.current = now;
+      handleToggleColumns(true);
+    } else {
+      lastCifraTapRef.current = { time: now, x: touch.clientX, y: touch.clientY };
+    }
+  };
+
+  const handleCifraAreaDoubleClick = (e: React.MouseEvent) => {
+    if (Date.now() - lastTouchToggleTimeRef.current < 500) return;
+    if (isInteractiveCifraTarget(e.target)) return;
+    handleToggleColumns(true);
   };
   const [isStageMode, setIsStageMode] = useState<boolean>(() => {
     try {
@@ -2813,6 +2866,8 @@ export function SongDetailView({
               // Renderização elegante da Cifra
               <div 
                 id="song-viewer-container"
+                onTouchEnd={handleCifraAreaTouchEnd}
+                onDoubleClick={handleCifraAreaDoubleClick}
                 className={cn(
                   "bg-transparent selection:bg-brand/20",
                   isPinching ? "transition-none" : "transition-all duration-300",
@@ -2825,7 +2880,8 @@ export function SongDetailView({
                   lineHeight: '1.4',
                   columnCount: numColumns,
                   columnGap: numColumns > 1 ? '3rem' : '0px',
-                  columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none'
+                  columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none',
+                  touchAction: isPinching ? 'none' : 'manipulation'
                 }}
               >
                 <style>
@@ -3135,6 +3191,8 @@ export function SongDetailView({
             ) : (
               // Renderização da Letra
               <div 
+                onTouchEnd={handleCifraAreaTouchEnd}
+                onDoubleClick={handleCifraAreaDoubleClick}
                 className={cn(
                   "font-sans text-text-main leading-loose text-left",
                   isPinching ? "transition-none" : "transition-all duration-300"
@@ -3143,7 +3201,8 @@ export function SongDetailView({
                   fontSize: `${songFontSize}px`,
                   columnCount: numColumns,
                   columnGap: numColumns > 1 ? '3rem' : '0px',
-                  columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none'
+                  columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none',
+                  touchAction: isPinching ? 'none' : 'manipulation'
                 }}
               >
                 {effectiveLyrics ? (
@@ -3364,6 +3423,22 @@ export function SongDetailView({
             >
               <BossPedalIcon size={18} className="text-emerald-400 animate-pulse shrink-0" />
               <span className="text-xs font-black tracking-wide">{footswitchToast}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Aviso Discreto de Alternância de Colunas (Double-Tap) */}
+        <AnimatePresence>
+          {columnLayoutToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.92 }}
+              transition={{ duration: 0.16 }}
+              className="fixed top-16 left-1/2 -translate-x-1/2 z-[310] bg-zinc-950/90 text-white border border-cyan-500/40 px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-2 backdrop-blur-md pointer-events-none"
+            >
+              <Columns size={14} className="text-cyan-400 shrink-0" />
+              <span className="text-xs font-black tracking-wide uppercase">{columnLayoutToast}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -4696,11 +4771,14 @@ export function SongDetailView({
 
                   <div 
                     id="song-viewer-container"
+                    onTouchEnd={handleCifraAreaTouchEnd}
+                    onDoubleClick={handleCifraAreaDoubleClick}
                     className={cn(
                       "bg-card/20 backdrop-blur-md overflow-x-auto custom-scrollbar relative notranslate rounded-2xl border border-border/60 transition-all duration-300",
                       isStageMode && "stage-mode bg-black text-white border-amber-500/30 shadow-[0_0_35px_rgba(245,158,11,0.15)]",
                       isFullscreen ? "min-h-full p-8" : "min-h-[60vh] p-6"
                     )}
+                    style={{ touchAction: 'manipulation' }}
                     translate="no"
                   >
                   <style>
@@ -5232,11 +5310,14 @@ export function SongDetailView({
                 </div>
               ) : (
                 <div 
+                  onTouchEnd={handleCifraAreaTouchEnd}
+                  onDoubleClick={handleCifraAreaDoubleClick}
                   className={cn(
                     "p-6 relative rounded-b-xl notranslate transition-all duration-300",
                     isStageMode ? "bg-black text-white border border-amber-500/30 shadow-[0_0_35px_rgba(245,158,11,0.12)]" : "bg-card/20 backdrop-blur-md text-text-main",
                     isFullscreen && "p-8"
                   )}
+                  style={{ touchAction: 'manipulation' }}
                   translate="no"
                 >
                   {effectiveLyrics ? (
@@ -7540,6 +7621,22 @@ export function SongDetailView({
           >
             <BossPedalIcon size={18} className="text-emerald-400 animate-bounce shrink-0" />
             <span className="text-xs sm:text-sm font-black tracking-wide">{footswitchToast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Aviso Discreto de Alternância de Colunas (Double-Tap) */}
+      <AnimatePresence>
+        {columnLayoutToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.92 }}
+            transition={{ duration: 0.16 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[310] bg-zinc-950/90 text-white border border-cyan-500/40 px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-2 backdrop-blur-md pointer-events-none"
+          >
+            <Columns size={14} className="text-cyan-400 shrink-0" />
+            <span className="text-xs font-black tracking-wide uppercase">{columnLayoutToast}</span>
           </motion.div>
         )}
       </AnimatePresence>
