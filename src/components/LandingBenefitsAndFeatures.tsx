@@ -53,7 +53,10 @@ const defaultModuleImages: Record<string, string> = {
   cifras: '/assets/aistudio/image_ed96a73b.png',
   caged: '/assets/aistudio/image_1fbeb889.png',
   repertorio: '/assets/aistudio/image_ed670cb5.png',
-  exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png'
+  exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
+  liturgia: '/assets/aistudio/image_43623333.png',
+  projecao: '/assets/aistudio/image_33eb4975.png',
+  comunicacao: '/assets/aistudio/Interface_de_Chat_Canal_Geral_clean.png'
 };
 
 const defaultModuleVideos: Record<string, string> = {
@@ -86,8 +89,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const [cifraCardSubTab, setCifraCardSubTab] = useState<'ambos' | 'transposicao' | 'capo' | 'cifra'>('ambos');
   // Estado para alternar entre Player sem Anúncios, Repertório/Playlist e Tuner/Metrônomo no card de Player & Estudo
   const [playerCardSubTab, setPlayerCardSubTab] = useState<'player' | 'playlist' | 'estudo'>('player');
-  // Estado para alternar entre Pedal Bluetooth (Vídeo) e Escala do Culto (Foto) no cenário 0 do simulador
-  const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala'>('pedal');
+  // Estado para alternar entre Pedal Bluetooth, Escala, Liturgia, Projeção e Chat no cenário 0 do simulador
+  const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala' | 'liturgia' | 'projecao' | 'comunicacao'>('pedal');
   // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Estudo e Playlist no cenário 2 do simulador
   const [exclusiveSimSubTab, setExclusiveSimSubTab] = useState<'player' | 'exclusivo' | 'estudo' | 'playlist'>('player');
 
@@ -112,11 +115,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     (async () => {
       // 1. Carrega do cache local em IndexedDB (alta definição)
       try {
-        const localModules = await getLocalAsset<Record<string, string>>('feature_module_images_v3');
+        const localModules = await getLocalAsset<Record<string, string>>('feature_module_images_v4');
         if (localModules && isMounted) {
           setModuleImages({ ...defaultModuleImages, ...localModules });
         } else {
-          const saved = localStorage.getItem('liloupro_feature_module_images_v3');
+          const saved = localStorage.getItem('liloupro_feature_module_images_v4');
           if (saved && isMounted) {
             setModuleImages({ ...defaultModuleImages, ...JSON.parse(saved) });
           }
@@ -126,11 +129,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       }
 
       try {
-        const localSim = await getLocalAsset<Record<number, SimulatorCustomMedia>>('simulator_custom_media_v3');
+        const localSim = await getLocalAsset<Record<number, SimulatorCustomMedia>>('simulator_custom_media_v4');
         if (localSim && isMounted) {
           setSimulatorMedia({ ...defaultSimulatorMedia, ...localSim });
         } else {
-          const savedSim = localStorage.getItem('liloupro_simulator_custom_media_v3');
+          const savedSim = localStorage.getItem('liloupro_simulator_custom_media_v4');
           if (savedSim && isMounted) {
             const parsed = JSON.parse(savedSim);
             const cleaned: Record<number, SimulatorCustomMedia> = { ...defaultSimulatorMedia };
@@ -158,14 +161,14 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
           if (remote.moduleImages && Object.keys(remote.moduleImages).length > 0) {
             setModuleImages(prev => {
               const merged = { ...defaultModuleImages, ...prev, ...remote.moduleImages };
-              setLocalAsset('feature_module_images_v3', merged);
+              setLocalAsset('feature_module_images_v4', merged);
               return merged;
             });
           }
           if (remote.simulatorMedia && Object.keys(remote.simulatorMedia).length > 0) {
             setSimulatorMedia(prev => {
               const merged = { ...defaultSimulatorMedia, ...prev, ...remote.simulatorMedia };
-              setLocalAsset('simulator_custom_media_v3', merged);
+              setLocalAsset('simulator_custom_media_v4', merged);
               return merged;
             });
           }
@@ -394,27 +397,27 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const demos = [
     {
       id: 0,
-      title: "Rolagem por Pedal Bluetooth & Escala do Culto",
-      badge: "Palco, Pedal Bluetooth & Escala",
-      duration: "Vídeo + Foto Real",
-      subtitle: "Controle a rolagem da cifra com o pé via Pedal Bluetooth no altar e gerencie a confirmação de disponibilidade e escala musical em tempo real.",
+      title: "Pedal Bluetooth, Escala, Liturgia, Projeção & Chat",
+      badge: "Palco, Escala, Liturgia, Mídia & Chat",
+      duration: "Vídeo + Fotos Reais",
+      subtitle: "Controle a rolagem da cifra com Pedal Bluetooth e acompanhe a Escala, o Cronograma Litúrgico, o Painel do Operador de Mídia e o Chat da equipe.",
       steps: [
-        { label: "1. Rolagem por Pedal Bluetooth", desc: "Mãos livres no instrumento com velocidade calibrada" },
-        { label: "2. Confirmação de Disponibilidade", desc: "Botões 'Estou Disponível' / 'Não Posso' para voluntários" },
-        { label: "3. Auto-Escala & Exportação", desc: "PDF, WhatsApp, Google Agenda e Caderno no Google Docs" }
+        { label: "1. Pedal Bluetooth & Escala do Culto", desc: "Rolagem mãos-livres no palco e confirmação em 1 toque" },
+        { label: "2. Liturgia & Cronograma Interativo", desc: "Tocar Setlist, Cifras do Culto, Leituras Bíblicas e Ministro" },
+        { label: "3. Projeção em Tempo Real & Chat", desc: "Avisos rápidos, cronômetro, alertas no telão e Canal Geral" }
       ],
       mockupType: "escala"
     },
     {
       id: 1,
-      title: "5 Shapes do CAGED, Transposição 1 Clique & Capotraste",
-      badge: "Violão, Teclado, Tom & Capo",
+      title: "5 Shapes do CAGED (Violão/Guitarra), Tom 1 Clique & Capo",
+      badge: "Violão/Guitarra, Tom, Capo & Teclado",
       duration: "Prints Reais",
-      subtitle: "Explore os 5 shapes do CAGED como variação do mesmo acorde, mude o tom em 1 clique e calcule automaticamente a casa ideal do capotraste.",
+      subtitle: "No violão e guitarra, explore os 5 shapes do CAGED como variação do mesmo acorde. Para tecladistas, alterne para o Teclado Didático Centrado.",
       steps: [
-        { label: "1. 5 Shapes do CAGED (1/5 a 5/5)", desc: "Variações do mesmo acorde em 5 regiões do braço" },
-        { label: "2. Transposição de Tom em 1 Clique", desc: "Mude entre os 12 tons ou ±1/2 tom instantaneamente" },
-        { label: "3. Cálculo Inteligente do Capotraste", desc: "Indica as casas com Shape Aberto mantendo o tom real" }
+        { label: "1. 5 Shapes do CAGED (Violão/Guitarra)", desc: "Variações do mesmo acorde em 5 regiões do braço" },
+        { label: "2. Transposição 1 Clique & Capotraste", desc: "Mude entre os 12 tons e veja as casas com Shape Aberto" },
+        { label: "3. Modo Teclado Didático Centrado", desc: "Visualização própria para teclas com Baixo (B) e Notas (N)" }
       ],
       mockupType: "cifra"
     },
@@ -458,16 +461,16 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const consequenceModules = [
     {
       id: "caged",
-      title: "5 Shapes do CAGED como variação do mesmo acorde no Violão, Guitarra e Teclado",
-      featureLabel: "Módulo • 5 Shapes CAGED & Acordes",
+      title: "Violão & Guitarra: 5 Shapes do CAGED como variação do mesmo acorde",
+      featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
       icon: Sliders,
       isExclusive: true,
-      exclusiveBadge: "5 SHAPES DO CAGED",
-      description: "Não fique preso a uma única posição: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço do violão ou guitarra, além do Teclado Didático Centrado.",
+      exclusiveBadge: "5 SHAPES CAGED (VIOLÃO/GUITARRA)",
+      description: "Recurso exclusivo para violão e guitarra: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço. Para tecladistas, o app oferece um modo independente de Teclado Didático Centrado.",
       benefits: [
-        "5 Shapes do CAGED (Shape 1/5 a 5/5) para o mesmo acorde",
-        "Alternância entre Dedos e Intervalos + Grau e Função Harmônica",
-        "Teclado Didático Centrado com separação de Baixo (B) e Notas (N)"
+        "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
+        "Análise em tempo real de Grau e Função Harmônica do acorde",
+        "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
       ]
     },
     {
@@ -542,41 +545,44 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "liturgia",
-      title: "O pastor e a banda na mesma página antes do ensaio",
-      featureLabel: "Módulo • Ordem Litúrgica",
+      title: "Liturgia e Cronograma do Culto: Pastor, Banda e Mídia na mesma página",
+      featureLabel: "Módulo • Liturgia & Cronograma do Culto",
       icon: Layers,
       isExclusive: false,
-      description: "Organize a ordem do culto, pregação e momentos de louvor para que o pastor, ministro e mídia saibam o tempo exato de cada etapa.",
+      exclusiveBadge: "LITURGIA & SETLIST DO CULTO",
+      description: "Organize a ordem completa do culto com leituras bíblicas integradas (BLIVRE), músicas na sequência com indicação de Tom e ministro responsável, além de botões para Tocar Setlist, Cifras do Culto e Google Docs.",
       benefits: [
-        "Cronograma interativo do início ao fim do culto",
-        "Alinhamento prévio com a mensagem pastoral",
-        "Tranquilidade para quem dirige o culto"
+        "Cronograma numerado com passagens bíblicas e músicas do culto",
+        "Indicação clara de Tom e ministro(a) em cada canção",
+        "Acesso direto a 'Tocar Setlist', 'Cifras do Culto' e 'Google Docs'"
       ]
     },
     {
       id: "projecao",
-      title: "O operador de mídia transmite as letras sem retrabalho",
-      featureLabel: "Módulo • Projeção & Telão",
+      title: "Tela de Projeção e Painel de Controle em Tempo Real para o Operador de Mídia",
+      featureLabel: "Módulo • Projeção & Controle de Mídia",
       icon: Tv,
       isExclusive: false,
-      description: "Projete letras e fundos diretamente no telão da igreja usando qualquer navegador. Sem pen drive corrompido ou slides reescritos às pressas.",
+      exclusiveBadge: "CONTROLE DE PROJEÇÃO AO VIVO",
+      description: "Sincronize o telão com a liturgia do culto em 1 clique. O operador de mídia conta com atalhos de avisos rápidos, cronômetro regressivo no telão e letreiro de alertas (Chamar Berçário, Placa do Carro, Reunião).",
       benefits: [
-        "Projeção limpa em tela cheia via navegador",
-        "Sincronizada em tempo real com a ordem do culto",
-        "Leve e funcional em qualquer computador da mídia"
+        "Roteiro da liturgia sincronizado + busca rápida de Músicas e Bíblia",
+        "Atalhos instantâneos (Boas-vindas, Celular Silencioso, Dízimos, Infantil)",
+        "Cronômetro no telão (+1m a +15m) e Letreiro de Alertas (Marquee)"
       ]
     },
     {
       id: "comunicacao",
-      title: "Todos recebem a informação certa na hora certa",
-      featureLabel: "Módulo • Comunicação & Avisos",
+      title: "Chat da Equipe com Conversas sobre o Culto e Avisos Sincronizados",
+      featureLabel: "Módulo • Chat & Comunicação da Equipe",
       icon: MessageSquare,
       isExclusive: false,
-      description: "Envie comunicados sobre horários de ensaio, trajes e avisos litúrgicos diretamente pelo aplicativo sem mensagens perdidas em grupos.",
+      exclusiveBadge: "CHAT DO MINISTÉRIO AO VIVO",
+      description: "Converse com a equipe no Canal Geral diretamente dentro do LiLouPro. Veja quem está online, identifique os instrumentos de cada voluntário e alinhe repertório e ensaios sem mensagens perdidas.",
       benefits: [
-        "Notificações diretas para os escalados da semana",
-        "Confirmação individual com 1 toque",
-        "Zero mensagens paralelas ou figurinhas no grupo"
+        "Canal Geral sincronizado com identificação de instrumentos por membro",
+        "Barra de reações rápidas musicais e ministeriais em 1 toque",
+        "Conversas focadas no culto sem ruído ou distrações de redes sociais"
       ]
     }
   ];
@@ -649,7 +655,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-emerald-300 bg-emerald-500/15 border border-emerald-400/35'
                         }`}>
                           <Sparkles className={`w-2.5 h-2.5 ${item.isExclusive ? 'text-amber-400' : 'text-emerald-400'}`} />
-                          {item.exclusiveBadge}
+                          {item.id === 'caged' && chordInstrumentTab === 'teclado'
+                            ? 'TECLADO DIDÁTICO CENTRADO'
+                            : item.exclusiveBadge}
                         </span>
                       )}
                       {!item.exclusiveBadge && (cardImage || cardVideo) && (
@@ -858,10 +866,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
                             {chordInstrumentTab === 'teclado'
-                              ? '🎹 Baixo (B) + Notas (N) Centradas'
-                              : '🔄 Shape 1/5 a 5/5 • Variações CAGED'}
+                              ? '🎹 Teclado Didático: Baixo (B) + Notas (N)'
+                              : '🎸 Violão/Guitarra: Shape 1/5 a 5/5 (CAGED)'}
                           </span>
-                          <span className="text-slate-400">Dedos & Intervalos</span>
+                          <span className="text-slate-400">
+                            {chordInstrumentTab === 'teclado' ? 'Graus & Teclas' : 'Dedos & Intervalos'}
+                          </span>
                         </div>
                       )}
                       {item.id === 'escala' && (
@@ -906,15 +916,43 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           <span className="text-slate-400">Exclusivo LiLouPro</span>
                         </div>
                       )}
+                      {item.id === 'liturgia' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-sky-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-sky-400">
+                            📖 Tocar Setlist • Cifras do Culto • Leituras & Tons
+                          </span>
+                          <span className="text-slate-400">Cronograma Real</span>
+                        </div>
+                      )}
+                      {item.id === 'projecao' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-purple-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-purple-400">
+                            🖥️ Avisos Rápidos • Cronômetro • Alerta Berçário
+                          </span>
+                          <span className="text-slate-400">Painel de Mídia</span>
+                        </div>
+                      )}
+                      {item.id === 'comunicacao' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-emerald-400">
+                            💬 Canal Geral Sincronizado • Funções & Reações
+                          </span>
+                          <span className="text-slate-400">Chat da Equipe</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-brand transition-colors leading-snug">
-                    {item.title}
+                    {item.id === 'caged' && chordInstrumentTab === 'teclado'
+                      ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
+                      : item.title}
                   </h3>
 
                   <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-                    {item.description}
+                    {item.id === 'caged' && chordInstrumentTab === 'teclado'
+                      ? 'Visualização exclusiva para tecladistas com teclado didático centrado, separando claramente a nota do Baixo (B) e as Notas do acorde (N), além do grau e função harmônica.'
+                      : item.description}
                   </p>
                 </div>
 
@@ -1088,6 +1126,21 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       type: 'image',
                       url: '/assets/aistudio/Foto_Escala_do_Culto_373d59c4.png'
                     };
+                  } else if (stageSimSubTab === 'liturgia') {
+                    currentMedia = {
+                      type: 'image',
+                      url: '/assets/aistudio/image_43623333.png'
+                    };
+                  } else if (stageSimSubTab === 'projecao') {
+                    currentMedia = {
+                      type: 'image',
+                      url: '/assets/aistudio/image_33eb4975.png'
+                    };
+                  } else if (stageSimSubTab === 'comunicacao') {
+                    currentMedia = {
+                      type: 'image',
+                      url: '/assets/aistudio/Interface_de_Chat_Canal_Geral_clean.png'
+                    };
                   } else {
                     currentMedia = {
                       type: 'video',
@@ -1136,26 +1189,53 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </span>
                       </div>
 
-                      {/* Sub-abas do Cenário 0: Vídeo Pedal Bluetooth vs Foto Escala do Culto */}
+                      {/* Sub-abas do Cenário 0: Pedal Bluetooth, Escala, Liturgia, Projeção e Chat */}
                       {activeDemo === 0 && (
                         <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
                           <button
                             type="button"
                             onClick={() => setStageSimSubTab('pedal')}
-                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
                               stageSimSubTab === 'pedal' ? 'bg-emerald-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
                             }`}
                           >
-                            🦶 Vídeo: Pedal Bluetooth
+                            🦶 Pedal Bluetooth
                           </button>
                           <button
                             type="button"
                             onClick={() => setStageSimSubTab('escala')}
-                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
                               stageSimSubTab === 'escala' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
                             }`}
                           >
-                            📅 Escala & Confirmação
+                            📅 Escala
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStageSimSubTab('liturgia')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              stageSimSubTab === 'liturgia' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            📖 Liturgia
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStageSimSubTab('projecao')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              stageSimSubTab === 'projecao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🖥️ Projeção
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStageSimSubTab('comunicacao')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              stageSimSubTab === 'comunicacao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            💬 Chat
                           </button>
                         </div>
                       )}
@@ -1322,14 +1402,24 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           <span>
                             {stageSimSubTab === 'escala'
                               ? '📅 Escala do Culto: confirmação de disponibilidade em 1 toque, Auto-Escala e exportação completa'
-                              : '🦶 Pedal Bluetooth: acione a rolagem da cifra com o pé sem tirar as mãos do violão ou teclado'}
+                              : stageSimSubTab === 'liturgia'
+                                ? '📖 Liturgia do Culto: cronograma com leituras bíblicas, músicas com Tom, Ministro e Tocar Setlist'
+                                : stageSimSubTab === 'projecao'
+                                  ? '🖥️ Painel de Projeção: avisos rápidos, cronômetro regressivo e letreiro de alertas ao vivo no telão'
+                                  : stageSimSubTab === 'comunicacao'
+                                    ? '💬 Chat do Ministério: Canal Geral sincronizado com funções musicais e reações rápidas'
+                                    : '🦶 Pedal Bluetooth: acione a rolagem da cifra com o pé sem tirar as mãos do violão ou teclado'}
                           </span>
                         )}
                         {activeDemo === 1 && (
                           <span>
                             {chordInstrumentTab === 'transposicao_capo'
                               ? '⚡ Transposição em 1 Clique + Cálculo Inteligente do Capotraste com indicação de Shape Aberto'
-                              : '🎸 5 Shapes do CAGED: veja 5 variações do mesmo acorde em todo o braço + Teclado Didático'}
+                              : chordInstrumentTab === 'teclado'
+                                ? '🎹 Modo Teclado Didático Centrado: visualização dedicada para teclas com Baixo (B) e Notas (N)'
+                                : chordInstrumentTab === 'completa'
+                                  ? '🎼 Cifra Completa em 2 Colunas: Modo Foco, marcações de dinâmica e visão harmônica'
+                                  : '🎸 Exclusivo Violão e Guitarra: 5 Shapes do CAGED (1/5 a 5/5) para variar o mesmo acorde em todo o braço'}
                           </span>
                         )}
                         {activeDemo === 2 && (
@@ -1426,7 +1516,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           )}
                         </div>
                         <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight">
-                          {selected.title}
+                          {selected.id === 'caged' && chordInstrumentTab === 'teclado'
+                            ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
+                            : selected.title}
                         </h3>
                       </div>
                     </div>
