@@ -31,13 +31,14 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
-import defaultHeroDevicesImg from '../assets/images/liloupro_hero_capa_1787862990137.jpg';
 import { 
   getLocalAsset, 
   setLocalAsset, 
   fetchOfficialLandingImages, 
   saveOfficialLandingImages 
 } from '../utils/landingImageService';
+
+const defaultHeroDevicesImg = '/assets/aistudio/capa_da_landin_page.png_8d0c4e29_33bd5f3b.jpg';
 
 interface LandingHeroAndChallengesProps {
   onEnterApp: (mode: 'login' | 'signup') => void;
@@ -62,11 +63,11 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
     (async () => {
       // 1. Carrega do cache local de alta resolução (IndexedDB)
       try {
-        const localCached = await getLocalAsset<string>('hero_panel_custom_image');
+        const localCached = await getLocalAsset<string>('hero_panel_custom_image_v2');
         if (localCached && isMounted) {
           setCustomHeroImage(localCached);
         } else {
-          const savedImage = localStorage.getItem('liloupro_hero_panel_custom_image');
+          const savedImage = localStorage.getItem('liloupro_hero_panel_custom_image_v2');
           if (savedImage && isMounted) {
             setCustomHeroImage(savedImage);
           }
@@ -80,7 +81,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
         const remote = await fetchOfficialLandingImages();
         if (remote && remote.heroImage && isMounted) {
           setCustomHeroImage(remote.heroImage);
-          await setLocalAsset('hero_panel_custom_image', remote.heroImage);
+          await setLocalAsset('hero_panel_custom_image_v2', remote.heroImage);
         }
       } catch (e) {
         console.warn('Could not sync remote landing image', e);
@@ -95,9 +96,9 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
   const saveCustomImage = async (dataUrlOrPath: string) => {
     setCustomHeroImage(dataUrlOrPath);
     // Salva no IndexedDB sem limite de 5MB
-    await setLocalAsset('hero_panel_custom_image', dataUrlOrPath);
+    await setLocalAsset('hero_panel_custom_image_v2', dataUrlOrPath);
     try {
-      localStorage.setItem('liloupro_hero_panel_custom_image', dataUrlOrPath);
+      localStorage.setItem('liloupro_hero_panel_custom_image_v2', dataUrlOrPath);
     } catch (e) {
       // Normal quando o print é ultra HD / 4K e ultrapassa a cota do localStorage
     }
@@ -140,11 +141,11 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
 
   const handleRemoveCustomImage = async () => {
     try {
-      localStorage.removeItem('liloupro_hero_panel_custom_image');
+      localStorage.removeItem('liloupro_hero_panel_custom_image_v2');
     } catch (e) {
       console.warn(e);
     }
-    await setLocalAsset('hero_panel_custom_image', null);
+    await setLocalAsset('hero_panel_custom_image_v2', null);
     await saveOfficialLandingImages({ heroImage: null });
     setCustomHeroImage(null);
   };
@@ -289,65 +290,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
           {/* Lado Direito: Preview do Produto (Imagem Real Customizada do App ou Mockup Limpo) */}
           <div className="lg:col-span-7 lg:scale-[1.08] xl:scale-[1.10] lg:origin-center transition-transform transform-gpu will-change-transform">
             <div 
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
-              onDragLeave={() => setIsDraggingOver(false)}
-              onDrop={handleDropImage}
               className={`relative overflow-hidden transition-all duration-200 ${
-                customHeroImage 
-                  ? 'rounded-2xl sm:rounded-3xl shadow-2xl group' 
-                  : `bg-slate-900/90 border ${isDraggingOver ? 'border-brand ring-2 ring-brand/50 scale-[1.01]' : 'border-white/15'} rounded-3xl p-5 sm:p-6 shadow-2xl`
+                activeHeroImage 
+                  ? 'rounded-2xl sm:rounded-3xl shadow-2xl' 
+                  : 'bg-slate-900/90 border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl'
               }`}
             >
-              {/* Input Invisível para Upload de Arquivo */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileInputChange}
-                accept="image/*"
-                className="hidden"
-              />
-
-              {/* Overlay de Drag-and-Drop */}
-              {isDraggingOver && (
-                <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-30 flex flex-col items-center justify-center border-2 border-dashed border-brand rounded-2xl sm:rounded-3xl p-6 text-center pointer-events-none animate-in fade-in duration-200">
-                  <div className="w-14 h-14 rounded-2xl bg-brand/20 border border-brand/40 flex items-center justify-center text-brand mb-3 shadow-lg shadow-brand/20">
-                    <Upload className="w-7 h-7 animate-bounce" />
-                  </div>
-                  <p className="text-white font-extrabold text-lg">Solte a imagem real do app aqui</p>
-                  <p className="text-xs text-slate-300 mt-1 max-w-xs">
-                    Qualidade 100% preservada sem compressão
-                  </p>
-                </div>
-              )}
-
-              {/* Barra de inserção por URL (caso o usuário queira link) */}
-              {showUrlPrompt && (
-                <div className="absolute top-4 left-4 right-4 z-40 p-3 bg-slate-950/95 border border-brand/40 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-2 animate-in fade-in duration-150">
-                  <input
-                    type="url"
-                    placeholder="Cole o link (URL) ou caminho (/foto.png) da imagem real do app..."
-                    value={urlInputValue}
-                    onChange={(e) => setUrlInputValue(e.target.value)}
-                    className="w-full flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand"
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
-                    <button
-                      onClick={handleApplyUrl}
-                      className="px-3 py-1.5 rounded-xl bg-brand text-slate-950 text-xs font-bold hover:bg-brand/90 transition-all cursor-pointer"
-                    >
-                      Salvar
-                    </button>
-                    <button
-                      onClick={() => setShowUrlPrompt(false)}
-                      className="px-2.5 py-1.5 rounded-xl bg-white/5 text-slate-400 hover:text-white text-xs transition-all cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* SE TIVER IMAGEM REAL / PADRÃO: EXIBE A IMAGEM EM ALTA RESOLUÇÃO */}
               {activeHeroImage ? (
                 <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl transform-gpu">
@@ -359,34 +307,11 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                     decoding="async"
                     className="w-full h-auto object-contain block rounded-2xl sm:rounded-3xl landing-crisp-img"
                   />
-                  
-                  {/* Botões discretos ao passar o mouse ou no canto inferior */}
-                  <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/15 shadow-xl text-xs">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-white hover:text-brand flex items-center gap-1 font-semibold cursor-pointer"
-                      title="Trocar imagem"
-                    >
-                      <Upload size={12} /> Trocar foto
-                    </button>
-                    {customHeroImage && (
-                      <>
-                        <span className="text-white/20">|</span>
-                        <button
-                          onClick={handleRemoveCustomImage}
-                          className="text-slate-400 hover:text-rose-300 flex items-center gap-1 font-medium cursor-pointer"
-                          title="Voltar ao modelo padrão"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </>
-                    )}
-                  </div>
                 </div>
               ) : (
-                /* MOCKUP ORIGINAL INTERATIVO QUANDO NÃO HÁ IMAGEM SUBIDA */
+                /* MOCKUP ORIGINAL INTERATIVO */
                 <div>
-                  {/* Header do Mockup com Abas de Função e Botão de Upload */}
+                  {/* Header do Mockup com Abas de Função */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10 pb-4 mb-5 gap-3">
                     <div className="flex items-center justify-between w-full sm:w-auto">
                       <div className="flex items-center gap-2">
@@ -397,16 +322,6 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                           Culto de Domingo • IBN Sede
                         </span>
                       </div>
-
-                      {/* Botão de Upload destacado no topo em mobile */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="sm:hidden flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand/20 hover:bg-brand text-brand hover:text-slate-950 border border-brand/40 text-xs font-bold transition-all cursor-pointer"
-                        title="Subir imagem real do app"
-                      >
-                        <Upload size={11} />
-                        Subir Imagem
-                      </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -436,23 +351,6 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                           Cifra (Tom)
                         </button>
                       </div>
-
-                      {/* Botão de Upload em Telas Maiores */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand/15 hover:bg-brand text-brand hover:text-slate-950 border border-brand/30 hover:border-brand text-xs font-extrabold transition-all cursor-pointer shadow-sm"
-                        title="Clique ou arraste um print do app para este painel"
-                      >
-                        <Upload size={13} />
-                        Subir Imagem Real
-                      </button>
-                      <button
-                        onClick={() => setShowUrlPrompt(!showUrlPrompt)}
-                        className="hidden sm:flex p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-all cursor-pointer"
-                        title="Inserir via URL da imagem"
-                      >
-                        <LinkIcon size={13} />
-                      </button>
                     </div>
                   </div>
 

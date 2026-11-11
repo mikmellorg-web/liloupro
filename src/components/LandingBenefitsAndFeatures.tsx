@@ -48,12 +48,51 @@ interface SimulatorCustomMedia {
   isEmbed?: boolean;
 }
 
+const defaultModuleImages: Record<string, string> = {
+  escala: '/assets/aistudio/Foto_Escala_do_Culto_373d59c4.png',
+  cifras: '/assets/aistudio/image_ed96a73b.png',
+  caged: '/assets/aistudio/image_1fbeb889.png',
+  repertorio: '/assets/aistudio/image_ed670cb5.png',
+  exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png'
+};
+
+const defaultModuleVideos: Record<string, string> = {
+  pedal: '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4'
+};
+
+const defaultSimulatorMedia: Record<number, SimulatorCustomMedia> = {
+  0: {
+    type: 'video',
+    url: '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4',
+    isEmbed: false
+  },
+  1: {
+    type: 'image',
+    url: '/assets/aistudio/image_1fbeb889.png'
+  },
+  2: {
+    type: 'image',
+    url: '/assets/aistudio/image_ed670cb5.png'
+  }
+};
+
 export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefitsAndFeaturesProps) {
   // Estado para modal de detalhes dos módulos
   const [activeModuleModal, setActiveModuleModal] = useState<string | null>(null);
 
+  // Estado para alternar entre Violão (5 Shapes CAGED) e Teclado Didático no card/modal e no simulador
+  const [chordInstrumentTab, setChordInstrumentTab] = useState<'violao' | 'teclado' | 'transposicao_capo' | 'completa'>('violao');
+  // Estado para alternar entre Transposição + Capo (lado a lado), Transposição, Capo e Cifra Completa no card de Cifras
+  const [cifraCardSubTab, setCifraCardSubTab] = useState<'ambos' | 'transposicao' | 'capo' | 'cifra'>('ambos');
+  // Estado para alternar entre Player sem Anúncios, Repertório/Playlist e Tuner/Metrônomo no card de Player & Estudo
+  const [playerCardSubTab, setPlayerCardSubTab] = useState<'player' | 'playlist' | 'estudo'>('player');
+  // Estado para alternar entre Pedal Bluetooth (Vídeo) e Escala do Culto (Foto) no cenário 0 do simulador
+  const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala'>('pedal');
+  // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Estudo e Playlist no cenário 2 do simulador
+  const [exclusiveSimSubTab, setExclusiveSimSubTab] = useState<'player' | 'exclusivo' | 'estudo' | 'playlist'>('player');
+
   // Estado para imagens reais dos módulos (armazenadas em localStorage)
-  const [moduleImages, setModuleImages] = useState<Record<string, string>>({});
+  const [moduleImages, setModuleImages] = useState<Record<string, string>>(defaultModuleImages);
   const [isDraggingModal, setIsDraggingModal] = useState<boolean>(false);
   const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
   const [urlInputValue, setUrlInputValue] = useState<string>('');
@@ -61,7 +100,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estado para mídias customizadas do Telão do Simulador (prints reais ou vídeos curtos)
-  const [simulatorMedia, setSimulatorMedia] = useState<Record<number, SimulatorCustomMedia>>({});
+  const [simulatorMedia, setSimulatorMedia] = useState<Record<number, SimulatorCustomMedia>>(defaultSimulatorMedia);
   const [isCustomizingSimulator, setIsCustomizingSimulator] = useState<boolean>(false);
   const [simUrlInput, setSimUrlInput] = useState<string>('');
   const [isDraggingSimulator, setIsDraggingSimulator] = useState<boolean>(false);
@@ -73,13 +112,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     (async () => {
       // 1. Carrega do cache local em IndexedDB (alta definição)
       try {
-        const localModules = await getLocalAsset<Record<string, string>>('feature_module_images');
+        const localModules = await getLocalAsset<Record<string, string>>('feature_module_images_v3');
         if (localModules && isMounted) {
-          setModuleImages(localModules);
+          setModuleImages({ ...defaultModuleImages, ...localModules });
         } else {
-          const saved = localStorage.getItem('liloupro_feature_module_images');
+          const saved = localStorage.getItem('liloupro_feature_module_images_v3');
           if (saved && isMounted) {
-            setModuleImages(JSON.parse(saved));
+            setModuleImages({ ...defaultModuleImages, ...JSON.parse(saved) });
           }
         }
       } catch (e) {
@@ -87,14 +126,14 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       }
 
       try {
-        const localSim = await getLocalAsset<Record<number, SimulatorCustomMedia>>('simulator_custom_media');
+        const localSim = await getLocalAsset<Record<number, SimulatorCustomMedia>>('simulator_custom_media_v3');
         if (localSim && isMounted) {
-          setSimulatorMedia(localSim);
+          setSimulatorMedia({ ...defaultSimulatorMedia, ...localSim });
         } else {
-          const savedSim = localStorage.getItem('liloupro_simulator_custom_media');
+          const savedSim = localStorage.getItem('liloupro_simulator_custom_media_v3');
           if (savedSim && isMounted) {
             const parsed = JSON.parse(savedSim);
-            const cleaned: Record<number, SimulatorCustomMedia> = {};
+            const cleaned: Record<number, SimulatorCustomMedia> = { ...defaultSimulatorMedia };
             Object.entries(parsed).forEach(([key, val]) => {
               const item = val as any;
               if (item && item.url) {
@@ -118,15 +157,15 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         if (remote && isMounted) {
           if (remote.moduleImages && Object.keys(remote.moduleImages).length > 0) {
             setModuleImages(prev => {
-              const merged = { ...prev, ...remote.moduleImages };
-              setLocalAsset('feature_module_images', merged);
+              const merged = { ...defaultModuleImages, ...prev, ...remote.moduleImages };
+              setLocalAsset('feature_module_images_v3', merged);
               return merged;
             });
           }
           if (remote.simulatorMedia && Object.keys(remote.simulatorMedia).length > 0) {
             setSimulatorMedia(prev => {
-              const merged = { ...prev, ...remote.simulatorMedia };
-              setLocalAsset('simulator_custom_media', merged);
+              const merged = { ...defaultSimulatorMedia, ...prev, ...remote.simulatorMedia };
+              setLocalAsset('simulator_custom_media_v3', merged);
               return merged;
             });
           }
@@ -149,10 +188,10 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const saveModuleImage = async (moduleId: string, dataUrl: string) => {
     setModuleImages(prev => {
       const updated = { ...prev, [moduleId]: dataUrl };
-      setLocalAsset('feature_module_images', updated);
+      setLocalAsset('feature_module_images_v3', updated);
       saveOfficialLandingImages({ moduleImages: { [moduleId]: dataUrl } });
       try {
-        localStorage.setItem('liloupro_feature_module_images', JSON.stringify(updated));
+        localStorage.setItem('liloupro_feature_module_images_v3', JSON.stringify(updated));
       } catch (e) {
         // quota excedida é contornada com sucesso pelo IndexedDB
       }
@@ -164,17 +203,21 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const removeModuleImage = async (moduleId: string) => {
     setModuleImages(prev => {
       const updated = { ...prev };
-      delete updated[moduleId];
-      setLocalAsset('feature_module_images', updated);
-      saveOfficialLandingImages({ moduleImages: { [moduleId]: '' } });
+      if (defaultModuleImages[moduleId]) {
+        updated[moduleId] = defaultModuleImages[moduleId];
+      } else {
+        delete updated[moduleId];
+      }
+      setLocalAsset('feature_module_images_v3', updated);
+      saveOfficialLandingImages({ moduleImages: { [moduleId]: updated[moduleId] || '' } });
       try {
-        localStorage.setItem('liloupro_feature_module_images', JSON.stringify(updated));
+        localStorage.setItem('liloupro_feature_module_images_v3', JSON.stringify(updated));
       } catch (e) {
         console.warn(e);
       }
       return updated;
     });
-    showFeedbackToast('Print removido.');
+    showFeedbackToast('Print restaurado para a imagem oficial.');
   };
 
   const processImageFile = (file: File, moduleId: string) => {
@@ -204,10 +247,10 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const saveSimulatorMedia = async (demoId: number, media: SimulatorCustomMedia) => {
     setSimulatorMedia(prev => {
       const updated = { ...prev, [demoId]: media };
-      setLocalAsset('simulator_custom_media', updated);
+      setLocalAsset('simulator_custom_media_v3', updated);
       saveOfficialLandingImages({ simulatorMedia: { [demoId]: media } });
       try {
-        localStorage.setItem('liloupro_simulator_custom_media', JSON.stringify(updated));
+        localStorage.setItem('liloupro_simulator_custom_media_v3', JSON.stringify(updated));
       } catch (e) {
         // quota excedida é contornada com sucesso pelo IndexedDB
       }
@@ -219,17 +262,21 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const removeSimulatorMedia = async (demoId: number) => {
     setSimulatorMedia(prev => {
       const updated = { ...prev };
-      delete updated[demoId];
-      setLocalAsset('simulator_custom_media', updated);
-      saveOfficialLandingImages({ simulatorMedia: { [demoId]: null } });
+      if (defaultSimulatorMedia[demoId]) {
+        updated[demoId] = defaultSimulatorMedia[demoId];
+      } else {
+        delete updated[demoId];
+      }
+      setLocalAsset('simulator_custom_media_v3', updated);
+      saveOfficialLandingImages({ simulatorMedia: { [demoId]: updated[demoId] || null } });
       try {
-        localStorage.setItem('liloupro_simulator_custom_media', JSON.stringify(updated));
+        localStorage.setItem('liloupro_simulator_custom_media_v3', JSON.stringify(updated));
       } catch (e) {
         console.warn(e);
       }
       return updated;
     });
-    showFeedbackToast('Mídia removida. Simulação original restaurada.');
+    showFeedbackToast('Mídia oficial restaurada.');
   };
 
   const processSimulatorFile = (file: File, demoId: number) => {
@@ -339,54 +386,54 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     }
   };
 
-  // Estado para a Seção: Veja o LiLouPro Funcionando (Simulador interativo de 20s)
+  // Estado para a Seção: Veja o LiLouPro Funcionando (Simulador interativo)
   const [activeDemo, setActiveDemo] = useState<number>(0);
   const [demoProgress, setDemoProgress] = useState<number>(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(true);
+  const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(false);
 
   const demos = [
     {
       id: 0,
-      title: "Escalas sem retrabalho",
-      badge: "Escalas Inteligentes",
-      duration: "20 seg",
-      subtitle: "Monte a escala em minutos sabendo exatamente quem está disponível na sua equipe.",
+      title: "Rolagem por Pedal Bluetooth & Escala do Culto",
+      badge: "Palco, Pedal Bluetooth & Escala",
+      duration: "Vídeo + Foto Real",
+      subtitle: "Controle a rolagem da cifra com o pé via Pedal Bluetooth no altar e gerencie a confirmação de disponibilidade e escala musical em tempo real.",
       steps: [
-        { label: "1. Selecionar culto", desc: "Culto de Domingo • 19h00" },
-        { label: "2. Escalar músicos", desc: "Daniel (Violão) • Carla (Vocal)" },
-        { label: "3. Confirmação instantânea", desc: "A equipe responde pelo celular" }
+        { label: "1. Rolagem por Pedal Bluetooth", desc: "Mãos livres no instrumento com velocidade calibrada" },
+        { label: "2. Confirmação de Disponibilidade", desc: "Botões 'Estou Disponível' / 'Não Posso' para voluntários" },
+        { label: "3. Auto-Escala & Exportação", desc: "PDF, WhatsApp, Google Agenda e Caderno no Google Docs" }
       ],
       mockupType: "escala"
     },
     {
       id: 1,
-      title: "Cifra no tom exato",
-      badge: "Transposição Instantânea",
-      duration: "15 seg",
-      subtitle: "Altere a tonalidade em 1 clique durante o ensaio para que todos toquem com segurança no tom certo.",
+      title: "5 Shapes do CAGED, Transposição 1 Clique & Capotraste",
+      badge: "Violão, Teclado, Tom & Capo",
+      duration: "Prints Reais",
+      subtitle: "Explore os 5 shapes do CAGED como variação do mesmo acorde, mude o tom em 1 clique e calcule automaticamente a casa ideal do capotraste.",
       steps: [
-        { label: "1. Abrir cifra", desc: "Grande é o Senhor (Tom original G)" },
-        { label: "2. Ajustar tom para o vocal", desc: "Transpor para A (+2 semitons)" },
-        { label: "3. Sincronizar com a banda", desc: "Teclado e violão atualizados na hora" }
+        { label: "1. 5 Shapes do CAGED (1/5 a 5/5)", desc: "Variações do mesmo acorde em 5 regiões do braço" },
+        { label: "2. Transposição de Tom em 1 Clique", desc: "Mude entre os 12 tons ou ±1/2 tom instantaneamente" },
+        { label: "3. Cálculo Inteligente do Capotraste", desc: "Indica as casas com Shape Aberto mantendo o tom real" }
       ],
       mockupType: "cifra"
     },
     {
       id: 2,
-      title: "Projeção sem pen drive",
-      badge: "Telão Conectado",
-      duration: "20 seg",
-      subtitle: "O operador de mídia projeta as letras no telão direto pelo navegador com um clique.",
+      title: "LiLouPro Player sem Anúncios & Recursos Exclusivos",
+      badge: "Player sem Anúncios • Exclusivo PRO",
+      duration: "Prints Reais",
+      subtitle: "Ouça e repita a música no LiLouPro Player sem anúncios direto na cifra, com Fundamentação Bíblica, Sugestões do Mesmo Tema, Harmonia, Tuner e Metrônomo.",
       steps: [
-        { label: "1. Selecionar liturgia", desc: "Ordem das canções e leitura" },
-        { label: "2. Conectar telão", desc: "Projeção em tela cheia via web" },
-        { label: "3. Controle remoto", desc: "Avançar estrofes em sincronia" }
+        { label: "1. LiLouPro Player sem Anúncios", desc: "Modo Pratique flutuante na cifra com função Repetir" },
+        { label: "2. Fundamentação Bíblica & Harmonia", desc: "Base teológica, sugestões do mesmo tema e análise harmônica" },
+        { label: "3. Minha Playlist, Tuner & Metrônomo", desc: "Repertório organizado com afinador e metrônomo stompbox" }
       ],
       mockupType: "projecao"
     }
   ];
 
-  // Auto-play do simulador interativo
+  // Auto-play do simulador interativo (quando ativado)
   useEffect(() => {
     if (!isAutoPlaying) return;
     const interval = setInterval(() => {
@@ -407,54 +454,90 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     setDemoProgress(0);
   };
 
-  // MÓDULOS COM CONSEQUÊNCIAS (Melhoria 2: Como isso melhora a vida do líder?)
+  // MÓDULOS COM CONSEQUÊNCIAS E PRINTS REAIS EM DESTAQUE NA PÁGINA
   const consequenceModules = [
     {
-      id: "escala",
-      title: "Confirmações automáticas de escala antes do ensaio",
-      featureLabel: "Módulo • Escalas Inteligentes",
-      icon: Calendar,
-      description: "Monte escalas considerando a disponibilidade real de cada voluntário. Chega de perguntar de dez em dez no WhatsApp quem vai poder tocar no domingo.",
+      id: "caged",
+      title: "5 Shapes do CAGED como variação do mesmo acorde no Violão, Guitarra e Teclado",
+      featureLabel: "Módulo • 5 Shapes CAGED & Acordes",
+      icon: Sliders,
+      isExclusive: true,
+      exclusiveBadge: "5 SHAPES DO CAGED",
+      description: "Não fique preso a uma única posição: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço do violão ou guitarra, além do Teclado Didático Centrado.",
       benefits: [
-        "Placar de confirmação verde e vermelho na tela",
-        "Avisos automáticos de rodízio e descanso",
-        "Histórico transparente de participação"
+        "5 Shapes do CAGED (Shape 1/5 a 5/5) para o mesmo acorde",
+        "Alternância entre Dedos e Intervalos + Grau e Função Harmônica",
+        "Teclado Didático Centrado com separação de Baixo (B) e Notas (N)"
       ]
     },
     {
-      id: "repertorio",
-      title: "Todos ensaiam exatamente a mesma versão",
-      featureLabel: "Módulo • Repertório Centralizado",
-      icon: Music,
-      description: "Acabe com a confusão sobre qual arranjo ou introdução será tocada. O Liloupro possui um player sem anúncios na página da cifra para que todos possam ensaiar a mesma versão da música.",
+      id: "pedal",
+      title: "Rolagem de cifra automática com controle por Pedal Bluetooth no palco",
+      featureLabel: "Módulo • Pedal Bluetooth & Modo Palco",
+      icon: Zap,
+      isExclusive: true,
+      exclusiveBadge: "CONTROLE POR PEDAL BLUETOOTH",
+      description: "Toque no altar com as mãos 100% livres no instrumento. Acione, pause e controle a velocidade da rolagem automática da cifra diretamente pelo seu Pedal Bluetooth no Modo Culto.",
       benefits: [
-        "Catálogo completo de hinos e canções",
-        "Links de áudio de referência para estudo em casa",
-        "Filtro por andamento, tom e tema litúrgico"
+        "Controle de rolagem mãos-livres via Pedal Bluetooth",
+        "Modo Culto/Palco de alto contraste com tags de dinâmica",
+        "Ajuste fino de velocidade (0.2x a 2.0x) e tamanho de fonte"
+      ]
+    },
+    {
+      id: "escala",
+      title: "Confirmação de Disponibilidade e Escala do Culto sem confusão no WhatsApp",
+      featureLabel: "Módulo • Confirmação & Escala do Culto",
+      icon: Calendar,
+      isExclusive: false,
+      exclusiveBadge: "AUTO-ESCALA & CONFIRMAÇÃO",
+      description: "Cada voluntário confirma presença com 1 toque ('Estou Disponível' / 'Não Posso'). Monte a equipe com Auto-Escala e exporte em PDF, WhatsApp, Google Agenda ou Caderno no Google Docs.",
+      benefits: [
+        "Confirmação de disponibilidade em tempo real por voluntário",
+        "Composição visual da escala com funções e edição rápida",
+        "Integração com WhatsApp, PDF, Google Agenda e Google Docs"
       ]
     },
     {
       id: "cifras",
-      title: "Ninguém mais precisa procurar outra tonalidade",
-      featureLabel: "Módulo • Cifras & Tom Ideal",
-      icon: Sliders,
-      description: "Mude o tom da música em tempo real durante o ensaio e todos os músicos veem os acordes ajustados na hora em seus celulares.",
+      title: "Transposição de Tons em 1 Clique & Cálculo Inteligente do Capotraste",
+      featureLabel: "Módulo • Transposição 1 Clique & Capotraste",
+      icon: FileText,
+      isExclusive: true,
+      exclusiveBadge: "TOM EM 1 CLIQUE + CAPO",
+      description: "Mude a tonalidade da cifra em 1 clique (±1/2 tom ou grade com os 12 tons) e descubra em qual casa colocar o capotraste para tocar com shapes abertos mantendo o tom real da música.",
       benefits: [
-        "Transposição instantânea de acordes com 1 clique",
-        "Visualização clara para violão, teclado e baixo",
-        "Cálculo automático de capotraste"
+        "Transposição de tom em 1 clique com indicação do Shape base",
+        "Caixa de Posições do Capotraste com destaque de '🎸 Shape Aberto'",
+        "Cifra completa em 1 ou 2 colunas com Modo Foco e Dinâmicas"
       ]
     },
     {
-      id: "comunicacao",
-      title: "Todos recebem a informação certa na hora certa",
-      featureLabel: "Módulo • Comunicação & Avisos",
-      icon: MessageSquare,
-      description: "Envie comunicados sobre horários de ensaio, trajes e avisos litúrgicos diretamente pelo aplicativo sem mensagens perdidas em grupos.",
+      id: "repertorio",
+      title: "LiLouPro Player sem Anúncios direto na Cifra, Playlist e Estúdio de Ensaio",
+      featureLabel: "Módulo • Player sem Anúncios & Estúdio",
+      icon: Music,
+      isExclusive: true,
+      exclusiveBadge: "PLAYER SEM ANÚNCIOS",
+      description: "Estude a música com o LiLouPro Player flutuante sem interrupções de propagandas e com botão Repetir, monte sua Playlist de estudo e use o Afinador PRO e Metrônomo Stompbox.",
       benefits: [
-        "Notificações diretas para os escalados da semana",
-        "Confirmação individual com 1 toque",
-        "Zero mensagens paralelas ou figurinhas no grupo"
+        "LiLouPro Player (Modo Pratique) sem anúncios direto na tela da cifra",
+        "Repertório Musical organizado com Minha Playlist e integração Drive",
+        "LiLouPro Tuner PRO e Metrônomo Stompbox integrados"
+      ]
+    },
+    {
+      id: "exclusivo",
+      title: "Recursos Exclusivos LiLouPro: Fundamentação Bíblica, Temas e Harmonia",
+      featureLabel: "Exclusivo LiLouPro • Ferramentas Especiais",
+      icon: Sparkles,
+      isExclusive: true,
+      exclusiveBadge: "EXCLUSIVO LILOUPRO",
+      description: "Recursos avançados de inteligência teológica e análise musical criados para elevar a excelência espiritual e técnica do seu ministério de louvor.",
+      benefits: [
+        "Fundamentação Bíblica completa de cada canção do repertório",
+        "Sugestões automáticas de músicas do Mesmo Tema litúrgico",
+        "Aprenda com a Música: análise de harmonia aplicada passo a passo"
       ]
     },
     {
@@ -462,6 +545,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       title: "O pastor e a banda na mesma página antes do ensaio",
       featureLabel: "Módulo • Ordem Litúrgica",
       icon: Layers,
+      isExclusive: false,
       description: "Organize a ordem do culto, pregação e momentos de louvor para que o pastor, ministro e mídia saibam o tempo exato de cada etapa.",
       benefits: [
         "Cronograma interativo do início ao fim do culto",
@@ -474,6 +558,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       title: "O operador de mídia transmite as letras sem retrabalho",
       featureLabel: "Módulo • Projeção & Telão",
       icon: Tv,
+      isExclusive: false,
       description: "Projete letras e fundos diretamente no telão da igreja usando qualquer navegador. Sem pen drive corrompido ou slides reescritos às pressas.",
       benefits: [
         "Projeção limpa em tela cheia via navegador",
@@ -482,57 +567,34 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       ]
     },
     {
-      id: "membros",
-      title: "A liderança visualiza os voluntários ativos em paz",
-      featureLabel: "Módulo • Membros & Funções",
-      icon: Users,
-      description: "Cadastre músicos, vocais e técnicos com seus respectivos instrumentos e histórico de serviço para distribuir melhor as escalas do mês.",
+      id: "comunicacao",
+      title: "Todos recebem a informação certa na hora certa",
+      featureLabel: "Módulo • Comunicação & Avisos",
+      icon: MessageSquare,
+      isExclusive: false,
+      description: "Envie comunicados sobre horários de ensaio, trajes e avisos litúrgicos diretamente pelo aplicativo sem mensagens perdidas em grupos.",
       benefits: [
-        "Perfis com instrumentos principais e secundários",
-        "Registro claro para quem lidera o ministério",
-        "Controle simples de férias e indisponibilidade"
-      ]
-    },
-    {
-      id: "pwa",
-      title: "O músico abre a cifra no celular sem gastar dados",
-      featureLabel: "Módulo • PWA & Acesso Móvel",
-      icon: Smartphone,
-      description: "Funciona em qualquer smartphone Android ou iPhone. Abra no ensaio ou no púlpito com velocidade instantânea e leitura confortável no modo escuro.",
-      benefits: [
-        "Instalável na tela inicial sem ocupar memória",
-        "Filosofia Mobile-First com botões amplos",
-        "Modo escuro otimizado para o palco da igreja"
-      ]
-    },
-    {
-      id: "seguranca",
-      title: "O ministério preservado mesmo com troca de liderança",
-      featureLabel: "Módulo • Memória & Proteção",
-      icon: ShieldCheck,
-      description: "Todo o histórico de escalas, repertórios e cadernos da igreja fica guardado em segurança na nuvem, sem depender do celular particular de ninguém.",
-      benefits: [
-        "Backup automático na nuvem em tempo real",
-        "Histórico do ministério sempre preservado",
-        "Acesso contínuo para futuras gerações de líderes"
+        "Notificações diretas para os escalados da semana",
+        "Confirmação individual com 1 toque",
+        "Zero mensagens paralelas ou figurinhas no grupo"
       ]
     }
   ];
 
   return (
     <div className="space-y-12 sm:space-y-16">
-      {/* SEÇÃO 4 & 5: AS FUNCIONALIDADES COMO CONSEQUÊNCIAS (O que melhora na rotina) */}
+      {/* SEÇÃO 4 & 5: AS FUNCIONALIDADES COM FOTOS E VÍDEO REAIS EM DESTAQUE */}
       <section id="funcionalidades" className="max-w-7xl mx-auto px-6">
         <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
-            Alívio para a Liderança
+            Tecnologia & Recursos Exclusivos LiLouPro
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Como o LiLouPro melhora a rotina de cada voluntário
+            Veja as telas reais e os diferenciais exclusivos do LiLouPro
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Cada recurso foi pensado para eliminar atritos na comunicação da equipe e dar mais tempo para o que realmente importa.
+            Dos <strong className="text-slate-200">5 shapes do CAGED</strong>, <strong className="text-slate-200">transposição em 1 clique</strong> e <strong className="text-slate-200">cálculo do capotraste</strong> ao <strong className="text-slate-200">LiLouPro Player sem anúncios</strong>, <strong className="text-slate-200">Pedal Bluetooth</strong> e <strong className="text-slate-200">Escala Inteligente do Culto</strong>.
           </p>
         </div>
 
@@ -540,53 +602,336 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {consequenceModules.map((item) => {
             const IconComp = item.icon;
+            const rawCardImage = moduleImages[item.id] || defaultModuleImages[item.id];
+            const cardImage = item.id === 'caged'
+              ? (chordInstrumentTab === 'teclado'
+                  ? '/assets/aistudio/image_b8dba094.png'
+                  : (moduleImages.caged || '/assets/aistudio/image_1fbeb889.png'))
+              : item.id === 'cifras'
+                ? (cifraCardSubTab === 'capo'
+                    ? '/assets/aistudio/image_e6f41181.png'
+                    : cifraCardSubTab === 'cifra'
+                      ? '/assets/aistudio/image_bf73e394.png'
+                      : '/assets/aistudio/image_ed96a73b.png')
+                : item.id === 'repertorio'
+                  ? (playerCardSubTab === 'playlist'
+                      ? '/assets/aistudio/image_2266ed87_clean.png'
+                      : playerCardSubTab === 'estudo'
+                        ? '/assets/aistudio/image_b8efaf19.png'
+                        : '/assets/aistudio/image_ed670cb5.png')
+                  : rawCardImage;
+            const cardVideo = defaultModuleVideos[item.id];
+
             return (
               <div
                 key={item.id}
                 onClick={() => setActiveModuleModal(item.id)}
-                className="bg-slate-900/60 hover:bg-slate-900 border border-white/10 hover:border-brand/40 rounded-3xl p-6 sm:p-8 space-y-5 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-lg"
+                className={`bg-slate-900/60 hover:bg-slate-900 border ${
+                  item.isExclusive
+                    ? 'border-amber-500/35 hover:border-amber-400/70 shadow-amber-500/5'
+                    : 'border-white/10 hover:border-brand/40'
+                } rounded-3xl p-6 sm:p-7 space-y-5 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-lg relative overflow-hidden`}
               >
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-2xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand group-hover:scale-110 transition-transform">
-                      <IconComp className="w-6 h-6" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={`w-11 h-11 rounded-2xl ${
+                      item.isExclusive
+                        ? 'bg-amber-500/15 border border-amber-400/40 text-amber-400'
+                        : 'bg-brand/15 border border-brand/30 text-brand'
+                    } flex items-center justify-center group-hover:scale-110 transition-transform shrink-0`}>
+                      <IconComp className="w-5 h-5" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      {moduleImages[item.id] && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand bg-brand/10 border border-brand/25 px-2 py-0.5 rounded-full">
-                          <ImageIcon className="w-3 h-3" />
-                          Print real
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {item.exclusiveBadge && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-sm ${
+                          item.isExclusive
+                            ? 'text-amber-300 bg-amber-500/15 border border-amber-400/35'
+                            : 'text-emerald-300 bg-emerald-500/15 border border-emerald-400/35'
+                        }`}>
+                          <Sparkles className={`w-2.5 h-2.5 ${item.isExclusive ? 'text-amber-400' : 'text-emerald-400'}`} />
+                          {item.exclusiveBadge}
                         </span>
                       )}
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                        {item.featureLabel.split('•')[1]?.trim()}
-                      </span>
+                      {!item.exclusiveBadge && (cardImage || cardVideo) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand bg-brand/10 border border-brand/25 px-2 py-0.5 rounded-full">
+                          <ImageIcon className="w-3 h-3" />
+                          Tela Real
+                        </span>
+                      )}
+                      {!item.exclusiveBadge && !cardImage && !cardVideo && (
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                          {item.featureLabel.split('•')[1]?.trim()}
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  {/* Seletor rápido Violão (5 Shapes CAGED) vs Teclado Didático no card de Acordes */}
+                  {item.id === 'caged' && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center justify-between bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[11px] font-bold"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setChordInstrumentTab('violao')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          chordInstrumentTab !== 'teclado'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span>🎸 Violão / Guitarra (5 Shapes CAGED)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChordInstrumentTab('teclado')}
+                        className={`py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          chordInstrumentTab === 'teclado'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span>🎹 Teclado</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Seletor rápido Transposição 1 Clique + Cálculo do Capotraste + Cifra no card de Cifras */}
+                  {item.id === 'cifras' && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="grid grid-cols-4 gap-1 bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[10px] font-bold"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('ambos')}
+                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
+                          cifraCardSubTab === 'ambos'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🔀 Tom + Capo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('transposicao')}
+                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
+                          cifraCardSubTab === 'transposicao'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎵 1 Clique
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('capo')}
+                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
+                          cifraCardSubTab === 'capo'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎸 Capotraste
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('cifra')}
+                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
+                          cifraCardSubTab === 'cifra'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎼 Cifra 2 Col
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Seletor rápido Player sem Anúncios vs Playlist vs Tuner/Metrônomo no card de Repertório & Player */}
+                  {item.id === 'repertorio' && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="grid grid-cols-3 gap-1 bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[10px] font-bold"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('player')}
+                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
+                          playerCardSubTab === 'player'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ▶️ Player s/ Anúncios
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('playlist')}
+                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
+                          playerCardSubTab === 'playlist'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎵 Minha Playlist
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('estudo')}
+                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
+                          playerCardSubTab === 'estudo'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎧 Tuner & BPM
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Exibição de Vídeo Real direto no Card (ex: Rolagem por Pedal Bluetooth) */}
+                  {cardVideo && (
+                    <div className="relative w-full rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0b1120] shadow-xl">
+                      <div className="w-full h-56 sm:h-60 overflow-hidden flex items-center justify-center bg-[#0b1120]">
+                        <video
+                          src={cardVideo}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full h-full object-contain scale-[1.03] transform-gpu"
+                        />
+                      </div>
+                      <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
+                        <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          PEDAL BLUETOOTH + ROLAGEM ATIVA
+                        </span>
+                        <span className="text-slate-400 font-mono">Toque para ampliar</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exibição de Foto Real direto no Card */}
+                  {!cardVideo && cardImage && (
+                    <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-xl">
+                      {item.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
+                        <div className="w-full h-56 sm:h-60 grid grid-cols-2 gap-1.5 p-1.5 bg-[#0b1120] items-center">
+                          <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/70 rounded-xl p-1 border border-white/10 overflow-hidden">
+                            <img
+                              src="/assets/aistudio/image_ed96a73b.png"
+                              alt="Transposição de Tom em 1 Clique no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-44 sm:h-48 object-contain landing-crisp-img"
+                            />
+                            <span className="text-[9px] font-extrabold text-sky-400 uppercase tracking-wider mt-0.5">
+                              🎵 Tom em 1 Clique
+                            </span>
+                          </div>
+                          <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/70 rounded-xl p-1 border border-amber-500/25 overflow-hidden">
+                            <img
+                              src="/assets/aistudio/image_e6f41181.png"
+                              alt="Cálculo Automático da Posição do Capotraste no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-44 sm:h-48 object-contain landing-crisp-img"
+                            />
+                            <span className="text-[9px] font-extrabold text-amber-400 uppercase tracking-wider mt-0.5">
+                              🎸 Cálculo do Capo
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={cardImage}
+                          alt={`Print real do LiLouPro - ${item.title}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-56 sm:h-60 object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img"
+                        />
+                      )}
+                      {item.id === 'caged' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-emerald-400">
+                            {chordInstrumentTab === 'teclado'
+                              ? '🎹 Baixo (B) + Notas (N) Centradas'
+                              : '🔄 Shape 1/5 a 5/5 • Variações CAGED'}
+                          </span>
+                          <span className="text-slate-400">Dedos & Intervalos</span>
+                        </div>
+                      )}
+                      {item.id === 'escala' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-emerald-400">
+                            ✓ Estou Disponível • Auto-Escala • PDF & WhatsApp
+                          </span>
+                          <span className="text-slate-400">Escala Real</span>
+                        </div>
+                      )}
+                      {item.id === 'cifras' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-amber-400">
+                            {cifraCardSubTab === 'capo'
+                              ? '🎸 Caixa de Posições do Capo • Shape Aberto'
+                              : cifraCardSubTab === 'transposicao'
+                                ? '🎵 Transposição de Tom em 1 Clique (12 Tons)'
+                                : cifraCardSubTab === 'cifra'
+                                  ? '🎼 Cifra em 2 Colunas • Modo Foco & Dinâmicas'
+                                  : '⚡ Transposição em 1 Clique + Cálculo do Capo'}
+                          </span>
+                          <span className="text-slate-400">Toque para ampliar</span>
+                        </div>
+                      )}
+                      {item.id === 'repertorio' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-brand/25 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-emerald-400">
+                            {playerCardSubTab === 'player'
+                              ? '▶️ LiLouPro Player sem Anúncios • Modo Pratique'
+                              : playerCardSubTab === 'playlist'
+                                ? '🎵 Repertório Musical & Minha Playlist'
+                                : '🎧 Tuner Cromático PRO & Metrônomo Stompbox'}
+                          </span>
+                          <span className="text-slate-400">Zero Propagandas</span>
+                        </div>
+                      )}
+                      {item.id === 'exclusivo' && (
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-amber-400">
+                            ✨ Bíblia • Mesmo Tema • Harmonia
+                          </span>
+                          <span className="text-slate-400">Exclusivo LiLouPro</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-brand transition-colors leading-snug">
                     {item.title}
                   </h3>
 
-                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
                     {item.description}
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-white/5 space-y-2">
-                  {item.benefits.slice(0, 2).map((benefit, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-slate-300">
-                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <div className="pt-4 border-t border-white/10 space-y-2">
+                  {item.benefits.map((benefit, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-slate-300">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                       <span>{benefit}</span>
                     </div>
                   ))}
-                  <div className="pt-2 flex items-center justify-between text-xs font-bold text-brand group-hover:underline">
+                  <div className="pt-2.5 flex items-center justify-between text-xs font-bold text-brand group-hover:underline">
                     <span className="flex items-center gap-1.5">
-                      {moduleImages[item.id] ? 'Ver print real na prática' : 'Ver como funciona na prática'}
+                      {cardVideo ? 'Assistir demonstração em tela cheia' : cardImage ? 'Ampliar tela real em alta definição' : 'Ver como funciona na prática'}
                       <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                     <span className="text-[11px] font-medium text-slate-400 group-hover:text-slate-200">
-                      {moduleImages[item.id] ? 'Trocar print' : 'Subir print'}
+                      Ver detalhes
                     </span>
                   </div>
                 </div>
@@ -596,31 +941,91 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         </div>
       </section>
 
-      {/* RESPIRO VISUAL 3: MEMÓRIA DE MARCA */}
-      <section className="max-w-5xl mx-auto px-6">
-        <div className="py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-gradient-to-r from-slate-900 via-[#0a1829] to-slate-900 border border-white/10 text-center space-y-2 shadow-xl">
-          <p className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight italic">
-            "Toda equipe afinada. Toda igreja conectada."
-          </p>
-          <p className="text-xs font-bold uppercase tracking-widest text-brand">
-            Alinhamento entre ministros, músicos e equipe técnica
-          </p>
+      {/* BANNER DE DESTAQUE ESPECIAL: RECURSOS EXCLUSIVOS LILOUPRO */}
+      <section className="max-w-7xl mx-auto px-6">
+        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-[#0d1629] to-slate-950 border border-amber-500/35 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+            <div className="lg:col-span-6 space-y-5">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-widest shadow-sm">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Exclusivo LiLouPro • Ferramentas Especiais
+              </div>
+              <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
+                Player sem Anúncios, 5 Shapes do CAGED, Capotraste e Inteligência Teológica
+              </h3>
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                O LiLouPro vai muito além de um leitor de cifras comum. É a única plataforma com <strong className="text-white">LiLouPro Player sem anúncios</strong> integrado à cifra, <strong className="text-white">Transposição em 1 Clique</strong>, <strong className="text-white">Cálculo Automático do Capotraste</strong>, <strong className="text-white">5 Shapes do CAGED</strong> e <strong className="text-white">Fundamentação Bíblica</strong>.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-400">🎸 5 Shapes CAGED + Capotraste</p>
+                  <p className="text-xs text-slate-300">5 variações do mesmo acorde no braço todo e cálculo automático de casas do Capotraste com Shape Aberto.</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-emerald-400">▶️ Player sem Anúncios + Pedal</p>
+                  <p className="text-xs text-slate-300">Ouça e repita trechos na própria cifra sem propagandas e role a tela no palco com seu Pedal Bluetooth.</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-sky-400">📅 Confirmação e Escala do Culto</p>
+                  <p className="text-xs text-slate-300">Disponibilidade em 1 toque, Auto-Escala e exportação para WhatsApp, PDF, Google Agenda e Google Docs.</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-purple-400">📖 Bíblia, Harmonia & Estúdio</p>
+                  <p className="text-xs text-slate-300">Fundamentação Bíblica, sugestões do Mesmo Tema, análise harmônica, Tuner PRO e Metrônomo Stompbox.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div
+                onClick={() => setActiveModuleModal('repertorio')}
+                className="rounded-2xl overflow-hidden border border-emerald-400/35 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-emerald-400/70 transition-all"
+              >
+                <img
+                  src="/assets/aistudio/image_ed670cb5.png"
+                  alt="LiLouPro Player sem anúncios integrado diretamente na página da cifra"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-auto object-contain rounded-xl landing-crisp-img"
+                />
+                <p className="text-[11px] font-bold text-center text-emerald-300 py-1">
+                  ▶️ LiLouPro Player sem Anúncios na Cifra
+                </p>
+              </div>
+              <div
+                onClick={() => setActiveModuleModal('exclusivo')}
+                className="rounded-2xl overflow-hidden border border-amber-400/30 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-amber-400/70 transition-all"
+              >
+                <img
+                  src="/assets/aistudio/image_f1a7abe2_clean.png"
+                  alt="Exclusivo LiLouPro - Fundamentação Bíblica, Sugestões do Mesmo Tema e Aprenda Harmonia"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-auto object-contain rounded-xl landing-crisp-img"
+                />
+                <p className="text-[11px] font-bold text-center text-amber-300 py-1">
+                  ✨ Bíblia, Mesmo Tema & Harmonia Aplicada
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* SEÇÃO 6: VEJA FUNCIONANDO EM 20 SEGUNDOS (Simulador com pessoas reais) */}
+      {/* SEÇÃO 6: VEJA FUNCIONANDO NA PRÁTICA (Simulador com Vídeo Real do Pedal Bluetooth e Prints Reais) */}
       <section className="max-w-7xl mx-auto px-6">
         <div className="bg-slate-900/80 border border-white/15 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl">
           <div className="text-center max-w-3xl mx-auto space-y-3 mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
               <Play className="w-3.5 h-3.5" />
-              Simulador Interativo
+              Demonstração Real do App
             </div>
             <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
               Veja o sistema em funcionamento
             </h2>
             <p className="text-slate-400 text-sm sm:text-base">
-              Navegue pelos cenários abaixo e veja a fluidez do LiLouPro em ação.
+              Navegue pelos cenários abaixo para assistir à rolagem por Pedal Bluetooth, ver a confirmação da Escala do Culto, Transposição em 1 Clique, Cálculo do Capotraste e o LiLouPro Player sem anúncios.
             </p>
           </div>
 
@@ -643,7 +1048,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       <span className={`text-xs font-extrabold uppercase tracking-wider ${isActive ? 'text-brand' : 'text-slate-400'}`}>
                         {demo.badge}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                         {demo.duration}
                       </span>
                     </div>
@@ -651,16 +1056,16 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     <h3 className="text-base font-bold text-white">
                       {demo.title}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                       {demo.subtitle}
                     </p>
 
                     {isActive && (
                       <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
                         {demo.steps.map((step, sIdx) => (
-                          <div key={sIdx} className="flex items-center justify-between text-xs">
-                            <span className="text-slate-300 font-semibold">{step.label}</span>
-                            <span className="text-slate-400 font-mono text-[11px]">{step.desc}</span>
+                          <div key={sIdx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-0.5">
+                            <span className="text-brand font-bold">{step.label}</span>
+                            <span className="text-slate-300 text-[11px]">{step.desc}</span>
                           </div>
                         ))}
                       </div>
@@ -670,99 +1075,209 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               })}
             </div>
 
-            {/* Lado Direito: Visualização Real da Interface (Pessoas e Funções ou Mídia Customizada: Print/Vídeo) */}
+            {/* Lado Direito: Visualização Real da Interface (Vídeo Real do Pedal Bluetooth e Prints Reais) */}
             <div className="lg:col-span-7">
               {(() => {
-                const currentMedia = simulatorMedia[activeDemo];
+                const baseMedia = simulatorMedia[activeDemo] || defaultSimulatorMedia[activeDemo];
+                let currentMedia = baseMedia;
+
+                // Permite alternar sub-abas visuais nos cenários 0, 1 e 2
+                if (activeDemo === 0 && (!simulatorMedia[0] || simulatorMedia[0].url === defaultSimulatorMedia[0].url)) {
+                  if (stageSimSubTab === 'escala') {
+                    currentMedia = {
+                      type: 'image',
+                      url: '/assets/aistudio/Foto_Escala_do_Culto_373d59c4.png'
+                    };
+                  } else {
+                    currentMedia = {
+                      type: 'video',
+                      url: '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4',
+                      isEmbed: false
+                    };
+                  }
+                } else if (activeDemo === 1 && (!simulatorMedia[1] || simulatorMedia[1].url === defaultSimulatorMedia[1].url)) {
+                  const urlMap = {
+                    violao: '/assets/aistudio/image_1fbeb889.png',
+                    teclado: '/assets/aistudio/image_b8dba094.png',
+                    transposicao_capo: '/assets/aistudio/image_ed96a73b.png',
+                    completa: '/assets/aistudio/image_bf73e394.png'
+                  };
+                  currentMedia = {
+                    type: 'image',
+                    url: urlMap[chordInstrumentTab]
+                  };
+                } else if (activeDemo === 2 && (!simulatorMedia[2] || simulatorMedia[2].url === defaultSimulatorMedia[2].url)) {
+                  const sim2UrlMap = {
+                    player: '/assets/aistudio/image_ed670cb5.png',
+                    exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
+                    estudo: '/assets/aistudio/image_b8efaf19.png',
+                    playlist: '/assets/aistudio/image_2266ed87_clean.png'
+                  };
+                  currentMedia = {
+                    type: 'image',
+                    url: sim2UrlMap[exclusiveSimSubTab]
+                  };
+                }
 
                 return (
                   <div 
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDraggingSimulator(true);
-                    }}
-                    onDragLeave={() => setIsDraggingSimulator(false)}
-                    onDrop={handleSimulatorFileDrop}
                     className={`bg-slate-950 border ${
-                      isDraggingSimulator 
-                        ? 'border-brand ring-2 ring-brand/40 bg-slate-900/90' 
-                        : currentMedia 
-                          ? 'border-brand/40 shadow-brand/10' 
-                          : 'border-white/10'
-                    } rounded-3xl p-5 sm:p-6 shadow-2xl relative min-h-[360px] flex flex-col justify-between transition-all duration-300 overflow-hidden group`}
+                      currentMedia 
+                        ? 'border-brand/40 shadow-brand/10' 
+                        : 'border-white/10'
+                    } rounded-3xl p-5 sm:p-6 shadow-2xl relative min-h-[400px] flex flex-col justify-between transition-all duration-300 overflow-hidden group`}
                   >
-                    {/* Overlay de Drag and Drop para Imagem ou Vídeo */}
-                    {isDraggingSimulator && (
-                      <div className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-sm border-2 border-dashed border-brand rounded-3xl flex flex-col items-center justify-center p-6 text-center space-y-3 pointer-events-none">
-                        <div className="w-16 h-16 rounded-3xl bg-brand/20 border border-brand/40 flex items-center justify-center text-brand animate-bounce">
-                          <Upload className="w-8 h-8" />
-                        </div>
-                        <p className="text-base font-bold text-white">
-                          Solte o arquivo de imagem ou vídeo curto aqui
-                        </p>
-                        <p className="text-xs text-slate-300 max-w-sm">
-                          Será aplicado imediatamente ao telão do cenário: <span className="text-brand font-bold">{demos[activeDemo].title}</span>
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Cabeçalho do Telão com Ações de Customização */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-2.5 h-2.5 rounded-full ${currentMedia ? 'bg-brand animate-pulse' : 'bg-emerald-400'}`} />
+                    {/* Cabeçalho do Telão com Sub-seletores Interativos */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className={`w-2.5 h-2.5 rounded-full ${currentMedia ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-400'}`} />
                         <span className="text-xs font-bold text-white">
-                          {demos[activeDemo].badge} • IBN Sede
+                          {demos[activeDemo].badge}
                         </span>
-                        {currentMedia && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand bg-brand/10 border border-brand/30 px-2 py-0.5 rounded-full">
-                            {currentMedia.type === 'video' ? <Film className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
-                            {currentMedia.type === 'video' ? 'Vídeo Real' : 'Print Real'}
-                          </span>
-                        )}
                       </div>
 
-                      {/* Botões de Edição do Telão */}
-                      <div className="flex items-center gap-2">
-                        {currentMedia ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setIsCustomizingSimulator(true)}
-                              className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                              title="Trocar mídia deste cenário"
-                            >
-                              <Upload className="w-3.5 h-3.5 text-brand" />
-                              <span>Trocar</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => removeSimulatorMedia(activeDemo)}
-                              className="px-2 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                              title="Restaurar simulação original"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Restaurar</span>
-                            </button>
-                          </>
-                        ) : (
+                      {/* Sub-abas do Cenário 0: Vídeo Pedal Bluetooth vs Foto Escala do Culto */}
+                      {activeDemo === 0 && (
+                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
                           <button
                             type="button"
-                            onClick={() => setIsCustomizingSimulator(true)}
-                            className="px-3 py-1 rounded-xl bg-brand/15 hover:bg-brand/25 border border-brand/30 text-brand text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
+                            onClick={() => setStageSimSubTab('pedal')}
+                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                              stageSimSubTab === 'pedal' ? 'bg-emerald-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
                           >
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>Subir imagem ou vídeo</span>
+                            🦶 Vídeo: Pedal Bluetooth
                           </button>
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => setStageSimSubTab('escala')}
+                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                              stageSimSubTab === 'escala' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            📅 Escala & Confirmação
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sub-abas do Cenário 1: 5 Shapes CAGED, Teclado, Transposição + Capo e Cifra Completa */}
+                      {activeDemo === 1 && (
+                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setChordInstrumentTab('violao')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              chordInstrumentTab === 'violao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎸 5 Shapes CAGED
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChordInstrumentTab('transposicao_capo')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              chordInstrumentTab === 'transposicao_capo' ? 'bg-amber-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🔀 Tom 1 Clique & Capo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChordInstrumentTab('teclado')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              chordInstrumentTab === 'teclado' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎹 Teclado
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChordInstrumentTab('completa')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              chordInstrumentTab === 'completa' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎼 Cifra
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sub-abas do Cenário 2: Player sem Anúncios, Exclusivo LiLouPro, Estudo e Playlist */}
+                      {activeDemo === 2 && (
+                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setExclusiveSimSubTab('player')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              exclusiveSimSubTab === 'player' ? 'bg-emerald-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            ▶️ Player s/ Anúncios
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExclusiveSimSubTab('exclusivo')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              exclusiveSimSubTab === 'exclusivo' ? 'bg-amber-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            ✨ Exclusivo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExclusiveSimSubTab('playlist')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              exclusiveSimSubTab === 'playlist' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎵 Playlist
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExclusiveSimSubTab('estudo')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              exclusiveSimSubTab === 'estudo' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎧 Tuner & BPM
+                          </button>
+                        </div>
+                      )}
+
                     </div>
 
-                    {/* Corpo do Telão: Mídia Customizada OU Simulação Nativa */}
-                    <div className="py-4 my-auto flex flex-col justify-center">
-                      {currentMedia ? (
-                        <div className="w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden bg-slate-900/60 border border-white/10 p-2 sm:p-3 relative group/media">
-                          {currentMedia.type === 'video' ? (
+                    {/* Corpo do Telão: Mídia Real em Alta Definição */}
+                    <div className="py-3 my-auto flex flex-col justify-center">
+                      {currentMedia && (
+                        <div className="w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden bg-[#0b1120] border border-white/10 p-2 relative group/media">
+                          {activeDemo === 1 && chordInstrumentTab === 'transposicao_capo' ? (
+                            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 bg-[#0b1120] items-center">
+                              <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-white/10">
+                                <img
+                                  src="/assets/aistudio/image_ed96a73b.png"
+                                  alt="Transposição de Tom em 1 Clique"
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
+                                />
+                                <span className="text-[11px] font-bold text-sky-400 mt-1.5">
+                                  🎵 Transposição de Tom em 1 Clique
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-amber-500/30">
+                                <img
+                                  src="/assets/aistudio/image_e6f41181.png"
+                                  alt="Cálculo Automático da Posição do Capotraste"
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
+                                />
+                                <span className="text-[11px] font-bold text-amber-400 mt-1.5">
+                                  🎸 Cálculo do Capotraste (Shape Aberto)
+                                </span>
+                              </div>
+                            </div>
+                          ) : currentMedia.type === 'video' ? (
                             currentMedia.isEmbed ? (
                               <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black">
                                 <iframe
@@ -774,16 +1289,18 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                                 />
                               </div>
                             ) : (
-                              <video
-                                key={currentMedia.url}
-                                src={currentMedia.url}
-                                controls
-                                autoPlay
-                                loop
-                                muted
-                                playsInline
-                                className="w-full max-h-[380px] object-contain rounded-xl bg-black shadow-2xl"
-                              />
+                              <div className="w-full overflow-hidden rounded-xl bg-[#0b1120] shadow-2xl flex items-center justify-center">
+                                <video
+                                  key={currentMedia.url}
+                                  src={currentMedia.url}
+                                  controls
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  className="w-full max-h-[420px] object-contain scale-[1.02] transform-gpu bg-[#0b1120]"
+                                />
+                              </div>
                             )
                           ) : (
                             <img
@@ -791,67 +1308,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                               alt={demos[activeDemo].title}
                               loading="lazy"
                               decoding="async"
-                              className="w-full max-h-[380px] object-contain rounded-xl shadow-2xl landing-crisp-img"
+                              className="w-full max-h-[420px] object-contain rounded-xl shadow-2xl landing-crisp-img"
                             />
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {demos[activeDemo].mockupType === 'escala' && (
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-white/10">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-full bg-brand/20 text-brand font-bold flex items-center justify-center text-xs">DL</div>
-                                  <div>
-                                    <p className="text-sm font-bold text-white">Daniel Lemos • Violão & Guitarra</p>
-                                    <p className="text-xs text-slate-400">Escalado para Domingo 19h</p>
-                                  </div>
-                                </div>
-                                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                                  Confirmado
-                                </span>
-                              </div>
-
-                              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-white/10">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-full bg-sky-500/20 text-sky-300 font-bold flex items-center justify-center text-xs">CS</div>
-                                  <div>
-                                    <p className="text-sm font-bold text-white">Carla Santos • Ministra de Louvor</p>
-                                    <p className="text-xs text-slate-400">Escalada para Domingo 19h</p>
-                                  </div>
-                                </div>
-                                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                                  Confirmada
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {demos[activeDemo].mockupType === 'cifra' && (
-                            <div className="bg-slate-900 p-4 rounded-xl border border-white/10 font-mono text-xs space-y-3">
-                              <div className="flex items-center justify-between pb-2 border-b border-white/10 font-sans">
-                                <span className="font-bold text-white">Grande é o Senhor (Tom de Ensaio: A)</span>
-                                <span className="text-[11px] font-bold text-brand bg-brand/10 px-2 py-0.5 rounded">Transposto +2 semi</span>
-                              </div>
-                              <div className="space-y-1">
-                                <div className="text-brand font-bold">A                    E                    F#m                  D</div>
-                                <div className="text-slate-200 font-sans">Senhor tu és bom, a tua misericórdia dura para sempre...</div>
-                              </div>
-                            </div>
-                          )}
-
-                          {demos[activeDemo].mockupType === 'projecao' && (
-                            <div className="bg-slate-900 p-6 rounded-xl border border-white/10 text-center space-y-3">
-                              <span className="text-[10px] font-mono text-sky-300 uppercase tracking-widest bg-sky-500/10 px-2.5 py-1 rounded-full">
-                                Projeção Web • Telão Principal
-                              </span>
-                              <p className="text-lg sm:text-xl font-bold text-white">
-                                "SENHOR TU ÉS BOM, A TUA MISERICÓRDIA DURA PARA SEMPRE"
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                Operador: Gabriel Andrade • Sincronizado na hora
-                              </p>
-                            </div>
                           )}
                         </div>
                       )}
@@ -859,23 +1317,35 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                     {/* Barra de Rodapé do Telão */}
                     <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <span>{demos[activeDemo].title}</span>
-                        <span className="text-slate-600">•</span>
-                        <button
-                          type="button"
-                          onClick={() => setIsCustomizingSimulator(true)}
-                          className="text-slate-400 hover:text-brand underline decoration-dotted transition-colors cursor-pointer"
-                        >
-                          {currentMedia ? 'Personalizar mídia' : 'Subir imagem ou vídeo curto'}
-                        </button>
+                      <div className="flex items-center gap-2 text-slate-300 font-medium">
+                        {activeDemo === 0 && (
+                          <span>
+                            {stageSimSubTab === 'escala'
+                              ? '📅 Escala do Culto: confirmação de disponibilidade em 1 toque, Auto-Escala e exportação completa'
+                              : '🦶 Pedal Bluetooth: acione a rolagem da cifra com o pé sem tirar as mãos do violão ou teclado'}
+                          </span>
+                        )}
+                        {activeDemo === 1 && (
+                          <span>
+                            {chordInstrumentTab === 'transposicao_capo'
+                              ? '⚡ Transposição em 1 Clique + Cálculo Inteligente do Capotraste com indicação de Shape Aberto'
+                              : '🎸 5 Shapes do CAGED: veja 5 variações do mesmo acorde em todo o braço + Teclado Didático'}
+                          </span>
+                        )}
+                        {activeDemo === 2 && (
+                          <span>
+                            {exclusiveSimSubTab === 'player'
+                              ? '▶️ LiLouPro Player sem Anúncios: ouça e repita a música direto na tela da cifra sem propagandas'
+                              : '✨ Exclusivo LiLouPro: Fundamentação Bíblica, Mesmo Tema, Harmonia, Playlist, Tuner e Metrônomo'}
+                          </span>
+                        )}
                       </div>
 
                       <button
                         onClick={() => onEnterApp('signup')}
-                        className="text-xs font-bold text-brand hover:underline cursor-pointer ml-auto sm:ml-0"
+                        className="text-xs font-bold text-brand hover:underline cursor-pointer shrink-0 ml-auto sm:ml-0"
                       >
-                        Testar essa função na minha igreja →
+                        Testar na minha igreja →
                       </button>
                     </div>
 
@@ -899,159 +1369,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         </div>
       </section>
 
-      {/* INPUT OCULTO PARA SUBIR ARQUIVO DE IMAGEM REAL */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileInputChange} 
-        accept="image/*" 
-        className="hidden" 
-      />
-
-      {/* INPUT OCULTO PARA SUBIR ARQUIVOS DO SIMULADOR (IMAGENS OU VÍDEOS CURTOS) */}
-      <input 
-        type="file" 
-        ref={simulatorFileInputRef} 
-        onChange={handleSimulatorFileInputChange} 
-        accept="image/*,video/mp4,video/webm,video/quicktime,video/ogg" 
-        className="hidden" 
-      />
-
-      {/* TOAST DE FEEDBACK DE UPLOAD */}
-      {uploadToast && (
-        <div className="fixed bottom-6 right-6 z-[999] bg-brand text-slate-950 font-bold px-4 py-3 rounded-2xl shadow-2xl text-xs flex items-center gap-2 border border-brand/40 animate-in fade-in slide-in-from-bottom-3">
-          <CheckCircle2 size={16} className="text-slate-950 shrink-0" />
-          <span>{uploadToast}</span>
-        </div>
-      )}
-
-      {/* MODAL DE CUSTOMIZAÇÃO DO TELÃO DO SIMULADOR (PRINTS REAIS OU VÍDEOS CURTOS) */}
-      {isCustomizingSimulator && (
-        <div 
-          onClick={() => setIsCustomizingSimulator(false)}
-          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-white/15 rounded-3xl p-5 sm:p-8 max-w-xl w-full space-y-6 shadow-2xl relative"
-          >
-            {/* Cabeçalho do Modal */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand shrink-0">
-                  <Monitor className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-brand uppercase tracking-wider">
-                    Personalizar Telão • Cenário {activeDemo + 1}
-                  </span>
-                  <h3 className="text-xl font-bold text-white">
-                    {demos[activeDemo].title}
-                  </h3>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsCustomizingSimulator(false)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Suba uma captura de tela real do app ou um vídeo curto (MP4, WebM ou link do YouTube) para ser exibido no telão da direita deste cenário.
-            </p>
-
-            {/* Opção 1: Upload de Arquivo Direto */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-3">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <Upload className="w-4 h-4 text-brand" />
-                Subir arquivo do computador ou celular
-              </span>
-              
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={() => simulatorFileInputRef.current?.click()}
-                  className="flex-1 py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand/20 transition-all cursor-pointer"
-                >
-                  <Upload size={15} />
-                  Escolher Imagem ou Vídeo Curto
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Formatos: Imagens (PNG, JPG, WEBP) ou Vídeos (MP4, WebM até 8MB)
-              </p>
-            </div>
-
-            {/* Opção 2: Inserir por Link / URL */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-3">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                <LinkIcon className="w-4 h-4 text-sky-400" />
-                Ou colar link (Imagem, Vídeo MP4 ou YouTube)
-              </span>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input 
-                  type="url" 
-                  value={simUrlInput}
-                  onChange={(e) => setSimUrlInput(e.target.value)}
-                  placeholder="https://exemplo.com/print.png ou youtube.com/watch?v=..."
-                  className="flex-1 bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleApplySimulatorUrl(simUrlInput, activeDemo);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleApplySimulatorUrl(simUrlInput, activeDemo)}
-                  className="py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors cursor-pointer shrink-0"
-                >
-                  Aplicar URL
-                </button>
-              </div>
-            </div>
-
-            {/* Estado atual da mídia do cenário */}
-            {simulatorMedia[activeDemo] && (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                <div className="flex items-center gap-2 text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Mídia personalizada ativa neste cenário</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    removeSimulatorMedia(activeDemo);
-                    setIsCustomizingSimulator(false);
-                  }}
-                  className="text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
-                >
-                  Restaurar padrão
-                </button>
-              </div>
-            )}
-
-            {/* Botão Fechar */}
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsCustomizingSimulator(false)}
-                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                Concluir
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE DETALHES DE MÓDULO COM UPLOAD E VISUALIZADOR DE PRINT REAL DO APP */}
+      {/* MODAL DE DETALHES DE MÓDULO COM VISUALIZADOR DE PRINT/VÍDEO REAL DO APP */}
       {activeModuleModal && (
         <div 
           onClick={() => {
@@ -1068,11 +1386,29 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               const selected = consequenceModules.find(m => m.id === activeModuleModal);
               if (!selected) return null;
               const IconComp = selected.icon;
-              const currentImage = moduleImages[selected.id];
+              const rawCurrentImage = moduleImages[selected.id] || defaultModuleImages[selected.id];
+              const currentImage = selected.id === 'caged'
+                ? (chordInstrumentTab === 'teclado'
+                    ? '/assets/aistudio/image_b8dba094.png'
+                    : (moduleImages.caged || '/assets/aistudio/image_1fbeb889.png'))
+                : selected.id === 'cifras'
+                  ? (cifraCardSubTab === 'capo'
+                      ? '/assets/aistudio/image_e6f41181.png'
+                      : cifraCardSubTab === 'cifra'
+                        ? '/assets/aistudio/image_bf73e394.png'
+                        : '/assets/aistudio/image_ed96a73b.png')
+                  : selected.id === 'repertorio'
+                    ? (playerCardSubTab === 'playlist'
+                        ? '/assets/aistudio/image_2266ed87_clean.png'
+                        : playerCardSubTab === 'estudo'
+                          ? '/assets/aistudio/image_b8efaf19.png'
+                          : '/assets/aistudio/image_ed670cb5.png')
+                    : rawCurrentImage;
+              const currentVideo = defaultModuleVideos[selected.id];
 
               return (
                 <>
-                  {/* Cabeçalho do Modal com Ações */}
+                  {/* Cabeçalho do Modal */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-2xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand shrink-0">
@@ -1083,9 +1419,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           <span className="text-xs font-bold text-brand uppercase tracking-wider">
                             {selected.featureLabel}
                           </span>
-                          {currentImage && (
+                          {(currentImage || currentVideo) && (
                             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                              Print real configurado
+                              {currentVideo ? 'Vídeo real em ação' : 'Tela Real do LiLouPro'}
                             </span>
                           )}
                         </div>
@@ -1096,49 +1432,6 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
-                      {/* Controles de Edição de Imagem */}
-                      {currentImage ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all cursor-pointer"
-                            title="Trocar captura de tela"
-                          >
-                            <Upload size={13} />
-                            <span>Trocar print</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowUrlInput(!showUrlInput)}
-                            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all cursor-pointer"
-                            title="Inserir por URL"
-                          >
-                            <LinkIcon size={13} />
-                            <span>Link</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => removeModuleImage(selected.id)}
-                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold border border-rose-500/20 transition-all cursor-pointer"
-                            title="Remover print e voltar ao padrão"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowUrlInput(!showUrlInput)}
-                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all cursor-pointer"
-                        >
-                          <LinkIcon size={13} />
-                          <span>Inserir por link</span>
-                        </button>
-                      )}
-
                       <button
                         onClick={() => {
                           setActiveModuleModal(null);
@@ -1152,147 +1445,192 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   </div>
 
-                  {/* Barra de Inserção por URL (quando aberta) */}
-                  {showUrlInput && (
-                    <div className="p-3.5 rounded-2xl bg-slate-950 border border-brand/30 flex flex-col sm:flex-row items-center gap-2 shadow-lg animate-in fade-in slide-in-from-top-2">
-                      <input
-                        type="url"
-                        value={urlInputValue}
-                        onChange={(e) => setUrlInputValue(e.target.value)}
-                        placeholder="Cole aqui a URL direta da imagem (ex: https://.../print.png)"
-                        className="flex-1 bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand w-full"
-                      />
-                      <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (urlInputValue.trim()) {
-                              saveModuleImage(selected.id, urlInputValue.trim());
-                              setUrlInputValue('');
-                              setShowUrlInput(false);
-                            }
-                          }}
-                          className="flex-1 sm:flex-none px-4 py-2 bg-brand text-slate-950 font-bold text-xs rounded-xl hover:bg-brand/90 transition-all cursor-pointer"
-                        >
-                          Salvar Print
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowUrlInput(false)}
-                          className="px-3 py-2 bg-white/10 text-slate-300 font-semibold text-xs rounded-xl hover:bg-white/15 transition-all cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
+                  {/* Seletor rápido Violão (5 Shapes CAGED) vs Teclado no modal de Acordes */}
+                  {selected.id === 'caged' && (
+                    <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setChordInstrumentTab('violao')}
+                        className={`flex-1 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          chordInstrumentTab !== 'teclado'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎸 Violão / Guitarra (5 Shapes do CAGED • Dedos & Intervalos)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChordInstrumentTab('teclado')}
+                        className={`flex-1 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          chordInstrumentTab === 'teclado'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎹 Teclado Didático Centrado (Baixo & Notas)
+                      </button>
                     </div>
                   )}
 
-                  {/* ÁREA DA IMAGEM REAL / DROPZONE EDITÁVEL */}
-                  {currentImage ? (
-                    <div 
-                      onDragOver={(e) => { e.preventDefault(); setIsDraggingModal(true); }}
-                      onDragLeave={() => setIsDraggingModal(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDraggingModal(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) processImageFile(file, selected.id);
-                      }}
-                      className="relative group rounded-2xl overflow-hidden border border-white/15 bg-slate-950 shadow-2xl flex flex-col items-center justify-center transition-all"
-                    >
-                      <img 
-                        src={currentImage} 
-                        alt={`Print real do LiLouPro - ${selected.title}`}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full max-h-[460px] object-contain rounded-2xl block bg-slate-950 landing-crisp-img"
-                      />
+                  {/* Seletor rápido Transposição 1 Clique + Capotraste + Cifra no modal de Cifras */}
+                  {selected.id === 'cifras' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('ambos')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          cifraCardSubTab === 'ambos'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🔀 Tom 1 Clique + Capo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('transposicao')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          cifraCardSubTab === 'transposicao'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎵 Transposição 1 Clique
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('capo')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          cifraCardSubTab === 'capo'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎸 Cálculo do Capotraste
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('cifra')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          cifraCardSubTab === 'cifra'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎼 Cifra Completa (2 Col)
+                      </button>
+                    </div>
+                  )}
 
-                      {/* Overlay para arrastar e soltar substituição rápida */}
-                      {isDraggingModal && (
-                        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-brand rounded-2xl z-20">
-                          <Upload className="w-10 h-10 text-brand animate-bounce mb-3" />
-                          <p className="text-base font-bold text-white">Solte a imagem para atualizar este print</p>
-                          <p className="text-xs text-slate-400 mt-1">Substitui o print atual do módulo {selected.featureLabel.split('•')[1]?.trim()}</p>
+                  {/* Seletor rápido Player sem Anúncios + Playlist + Tuner/Metrônomo no modal de Repertório */}
+                  {selected.id === 'repertorio' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('player')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          playerCardSubTab === 'player'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        ▶️ LiLouPro Player sem Anúncios
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('playlist')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          playerCardSubTab === 'playlist'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎵 Repertório & Minha Playlist
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCardSubTab('estudo')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          playerCardSubTab === 'estudo'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎧 Tuner PRO & Metrônomo Stompbox
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ÁREA DO VÍDEO REAL OU IMAGEM REAL */}
+                  {currentVideo ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center">
+                      <div className="w-full overflow-hidden bg-[#0b1120] flex items-center justify-center">
+                        <video
+                          src={currentVideo}
+                          controls
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full max-h-[480px] object-contain scale-[1.02] transform-gpu bg-[#0b1120]"
+                        />
+                      </div>
+                      <div className="w-full py-2.5 px-4 bg-slate-950 border-t border-white/10 flex items-center justify-between text-xs text-slate-300">
+                        <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                          <CheckCircle2 size={14} className="text-emerald-400" />
+                          Demonstração real: Rolagem de cifra controlada por Pedal Bluetooth
+                        </span>
+                      </div>
+                    </div>
+                  ) : currentImage ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center transition-all">
+                      {selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
+                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-[#0b1120] items-center">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-white/10">
+                            <img
+                              src="/assets/aistudio/image_ed96a73b.png"
+                              alt="Transposição de Tom em 1 Clique no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full max-h-[400px] object-contain rounded-xl landing-crisp-img"
+                            />
+                            <span className="text-xs font-extrabold text-sky-400 mt-2">
+                              🎵 Transposição de Tom em 1 Clique (12 Tons + ±1/2 Tom)
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-amber-500/30">
+                            <img
+                              src="/assets/aistudio/image_e6f41181.png"
+                              alt="Cálculo Automático da Posição do Capotraste no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full max-h-[400px] object-contain rounded-xl landing-crisp-img"
+                            />
+                            <span className="text-xs font-extrabold text-amber-400 mt-2">
+                              🎸 Cálculo Automático do Capotraste (Destaque Shape Aberto)
+                            </span>
+                          </div>
                         </div>
+                      ) : (
+                        <img 
+                          src={currentImage} 
+                          alt={`Print real do LiLouPro - ${selected.title}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full max-h-[480px] object-contain rounded-2xl block bg-[#0b1120] p-2 landing-crisp-img"
+                        />
                       )}
 
-                      {/* Barra de Ação rápida no rodapé da imagem */}
+                      {/* Rodapé da imagem */}
                       <div className="w-full py-2 px-4 bg-slate-950/90 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
                         <span className="flex items-center gap-1.5 text-slate-300 font-medium">
                           <CheckCircle2 size={13} className="text-emerald-400" />
                           Print real da tela do LiLouPro
                         </span>
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="text-brand hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Upload size={12} /> Trocar arquivo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeModuleImage(selected.id)}
-                            className="text-slate-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
-                          >
-                            <Trash2 size={12} /> Remover
-                          </button>
-                        </div>
                       </div>
                     </div>
-                  ) : (
-                    /* DROPZONE DE UPLOAD QUANDO NÃO HÁ IMAGEM AINDA */
-                    <div 
-                      onDragOver={(e) => { e.preventDefault(); setIsDraggingModal(true); }}
-                      onDragLeave={() => setIsDraggingModal(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDraggingModal(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) processImageFile(file, selected.id);
-                      }}
-                      className={`rounded-2xl border-2 border-dashed ${
-                        isDraggingModal ? 'border-brand bg-brand/10 scale-[1.01]' : 'border-white/20 hover:border-brand/40 bg-slate-950/70'
-                      } p-8 sm:p-10 text-center transition-all duration-200 space-y-4`}
-                    >
-                      <div className="w-16 h-16 rounded-2xl bg-brand/10 border border-brand/25 flex items-center justify-center text-brand mx-auto shadow-lg shadow-brand/10">
-                        <ImageIcon className="w-8 h-8" />
-                      </div>
-                      
-                      <div className="space-y-1.5 max-w-lg mx-auto">
-                        <h4 className="text-base sm:text-lg font-bold text-white">
-                          Suba o print real do LiLouPro ({selected.featureLabel.split('•')[1]?.trim()})
-                        </h4>
-                        <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                          Arraste a captura de tela real do app para cá ou escolha uma imagem do seu computador para exibir aos visitantes exatamente como o recurso funciona.
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-5 py-3 rounded-xl bg-brand hover:bg-brand/90 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-brand/20 transition-all cursor-pointer"
-                        >
-                          <Upload size={14} />
-                          Subir print do computador
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowUrlInput(true)}
-                          className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 font-semibold text-xs flex items-center gap-2 border border-white/10 transition-all cursor-pointer"
-                        >
-                          <LinkIcon size={14} />
-                          Colar link da imagem
-                        </button>
-                      </div>
-
-                      <p className="text-[11px] text-slate-400">
-                        Formatos aceitos: PNG, JPG, WEBP • Otimização automática e salvo na nuvem/navegador
-                      </p>
-                    </div>
-                  )}
+                  ) : null}
 
                   {/* Informações detalhadas do módulo */}
                   <div className="bg-slate-950/60 border border-white/10 rounded-2xl p-5 space-y-3">
