@@ -89,10 +89,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const [cifraCardSubTab, setCifraCardSubTab] = useState<'ambos' | 'transposicao' | 'capo' | 'cifra'>('ambos');
   // Estado para alternar entre Player sem Anúncios, Repertório/Playlist e Tuner/Metrônomo no card de Player & Estudo
   const [playerCardSubTab, setPlayerCardSubTab] = useState<'player' | 'playlist' | 'estudo'>('player');
+  // Estado para alternar entre Bíblia/Harmonia e Seções/Dinâmica/Expressão no card Exclusivo LiLouPro
+  const [exclusivoCardSubTab, setExclusivoCardSubTab] = useState<'biblia' | 'dinamica'>('dinamica');
   // Estado para alternar entre Pedal Bluetooth, Escala, Liturgia, Projeção e Chat no cenário 0 do simulador
   const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala' | 'liturgia' | 'projecao' | 'comunicacao'>('pedal');
-  // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Estudo e Playlist no cenário 2 do simulador
-  const [exclusiveSimSubTab, setExclusiveSimSubTab] = useState<'player' | 'exclusivo' | 'estudo' | 'playlist'>('player');
+  // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Dinâmica/Expressão, Estudo e Playlist no cenário 2 do simulador
+  const [exclusiveSimSubTab, setExclusiveSimSubTab] = useState<'player' | 'exclusivo' | 'dinamica' | 'estudo' | 'playlist'>('player');
 
   // Estado para imagens reais dos módulos (armazenadas em localStorage)
   const [moduleImages, setModuleImages] = useState<Record<string, string>>(defaultModuleImages);
@@ -531,16 +533,16 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "exclusivo",
-      title: "Recursos Exclusivos LiLouPro: Fundamentação Bíblica, Temas e Harmonia",
+      title: "Recursos Exclusivos LiLouPro: Seções, Dinâmica, Expressão, Bíblia e Harmonia",
       featureLabel: "Exclusivo LiLouPro • Ferramentas Especiais",
       icon: Sparkles,
       isExclusive: true,
       exclusiveBadge: "EXCLUSIVO LILOUPRO",
-      description: "Recursos avançados de inteligência teológica e análise musical criados para elevar a excelência espiritual e técnica do seu ministério de louvor.",
+      description: "Estilização automática de Seções e Partes da Música, 7 Níveis de Dinâmica Musical (N1 Sutil a N7 Clímax), Indicadores de Intensidade & Expressão, Fundamentação Bíblica e Harmonia Aplicada.",
       benefits: [
-        "Fundamentação Bíblica completa de cada canção do repertório",
-        "Sugestões automáticas de músicas do Mesmo Tema litúrgico",
-        "Aprenda com a Música: análise de harmonia aplicada passo a passo"
+        "Seções e Partes da Música + 7 Níveis de Dinâmica Musical (N1 a N7)",
+        "Indicadores de Intensidade & Expressão (Crescendo, Pausa, Acapella, etc.)",
+        "Fundamentação Bíblica, Mesmo Tema e Harmonia Aplicada passo a passo"
       ]
     },
     {
@@ -625,7 +627,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       : playerCardSubTab === 'estudo'
                         ? '/assets/aistudio/image_b8efaf19.png'
                         : '/assets/aistudio/image_ed670cb5.png')
-                  : rawCardImage;
+                  : item.id === 'exclusivo'
+                    ? (exclusivoCardSubTab === 'dinamica'
+                        ? '/assets/aistudio/image_d6211dcb.png'
+                        : '/assets/aistudio/image_f1a7abe2_clean.png')
+                    : rawCardImage;
             const cardVideo = defaultModuleVideos[item.id];
 
             return (
@@ -800,6 +806,37 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   )}
 
+                  {/* Seletor rápido Seções/Dinâmica/Expressão vs Bíblia/Harmonia no card Exclusivo LiLouPro */}
+                  {item.id === 'exclusivo' && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="grid grid-cols-2 gap-1 bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[10px] font-bold"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExclusivoCardSubTab('dinamica')}
+                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
+                          exclusivoCardSubTab === 'dinamica'
+                            ? 'bg-amber-400 text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🎚️ Dinâmica & Expressão
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExclusivoCardSubTab('biblia')}
+                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
+                          exclusivoCardSubTab === 'biblia'
+                            ? 'bg-amber-400 text-slate-950 font-extrabold shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        📖 Bíblia & Harmonia
+                      </button>
+                    </div>
+                  )}
+
                   {/* Exibição de Vídeo Real direto no Card (ex: Rolagem por Pedal Bluetooth) */}
                   {cardVideo && (
                     <div className="relative w-full rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0b1120] shadow-xl">
@@ -911,7 +948,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       {item.id === 'exclusivo' && (
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
-                            ✨ Bíblia • Mesmo Tema • Harmonia
+                            {exclusivoCardSubTab === 'dinamica'
+                              ? '🎚️ Seções • 7 Níveis de Dinâmica • Expressão'
+                              : '✨ Bíblia • Mesmo Tema • Harmonia'}
                           </span>
                           <span className="text-slate-400">Exclusivo LiLouPro</span>
                         </div>
@@ -990,32 +1029,50 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                 Exclusivo LiLouPro • Ferramentas Especiais
               </div>
               <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
-                Player sem Anúncios, 5 Shapes do CAGED, Capotraste e Inteligência Teológica
+                Player sem Anúncios, Shapes do CAGED, Capotraste e Inteligência Teológica
               </h3>
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                O LiLouPro vai muito além de um leitor de cifras comum. É a única plataforma com <strong className="text-white">LiLouPro Player sem anúncios</strong> integrado à cifra, <strong className="text-white">Transposição em 1 Clique</strong>, <strong className="text-white">Cálculo Automático do Capotraste</strong>, <strong className="text-white">5 Shapes do CAGED</strong> e <strong className="text-white">Fundamentação Bíblica</strong>.
+                O LiLouPro vai muito além de um leitor de cifras comum. É a única plataforma com <strong className="text-white">LiLouPro Player sem anúncios</strong> integrado à cifra, <strong className="text-white">Transposição em 1 Clique</strong>, <strong className="text-white">Cálculo Automático do Capotraste</strong>, <strong className="text-white">Shapes do CAGED</strong>, <strong className="text-white">Fundamentação Bíblica</strong>, <strong className="text-white">Seções e Partes da Música</strong>, <strong className="text-white">Ferramentas de Dinâmica</strong>, <strong className="text-white">Indicadores de Expressão</strong> e muito mais...
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-amber-400">🎸 5 Shapes CAGED + Capotraste</p>
-                  <p className="text-xs text-slate-300">5 variações do mesmo acorde no braço todo e cálculo automático de casas do Capotraste com Shape Aberto.</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-400">🎸 Shapes do CAGED + Capotraste</p>
+                  <p className="text-xs text-slate-300">Variações do mesmo acorde no braço do violão/guitarra e cálculo automático de casas do Capotraste com Shape Aberto.</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
+                  <p className="text-xs font-black uppercase tracking-wider text-sky-400">🎚️ Seções, Dinâmica & Expressão</p>
+                  <p className="text-xs text-slate-300">Tags de seções da música, 7 níveis de dinâmica (Sutil ao Clímax) e indicadores de expressão (Crescendo, Pausa, Acapella).</p>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
                   <p className="text-xs font-black uppercase tracking-wider text-emerald-400">▶️ Player sem Anúncios + Pedal</p>
                   <p className="text-xs text-slate-300">Ouça e repita trechos na própria cifra sem propagandas e role a tela no palco com seu Pedal Bluetooth.</p>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-sky-400">📅 Confirmação e Escala do Culto</p>
-                  <p className="text-xs text-slate-300">Disponibilidade em 1 toque, Auto-Escala e exportação para WhatsApp, PDF, Google Agenda e Google Docs.</p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-purple-400">📖 Bíblia, Harmonia & Estúdio</p>
-                  <p className="text-xs text-slate-300">Fundamentação Bíblica, sugestões do Mesmo Tema, análise harmônica, Tuner PRO e Metrônomo Stompbox.</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-purple-400">📖 Bíblia, Harmonia & Escala</p>
+                  <p className="text-xs text-slate-300">Fundamentação Bíblica, sugestões do Mesmo Tema, análise harmônica, confirmação de Escala e muito mais...</p>
                 </div>
               </div>
             </div>
 
             <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div
+                onClick={() => {
+                  setExclusivoCardSubTab('dinamica');
+                  setActiveModuleModal('exclusivo');
+                }}
+                className="sm:col-span-2 rounded-2xl overflow-hidden border border-sky-400/35 bg-[#0b1120] shadow-2xl p-2 space-y-1.5 cursor-pointer hover:border-sky-400/70 transition-all"
+              >
+                <img
+                  src="/assets/aistudio/image_d6211dcb.png"
+                  alt="Guia Rápido: Seções, Dinâmicas e Expressão Musical no LiLouPro"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
+                />
+                <p className="text-[11px] font-bold text-center text-sky-300 py-0.5">
+                  🎚️ Seções e Partes da Música • 7 Níveis de Dinâmica • Indicadores de Expressão (Toque para ampliar)
+                </p>
+              </div>
               <div
                 onClick={() => setActiveModuleModal('repertorio')}
                 className="rounded-2xl overflow-hidden border border-emerald-400/35 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-emerald-400/70 transition-all"
@@ -1032,7 +1089,10 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                 </p>
               </div>
               <div
-                onClick={() => setActiveModuleModal('exclusivo')}
+                onClick={() => {
+                  setExclusivoCardSubTab('biblia');
+                  setActiveModuleModal('exclusivo');
+                }}
                 className="rounded-2xl overflow-hidden border border-amber-400/30 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-amber-400/70 transition-all"
               >
                 <img
@@ -1162,6 +1222,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                 } else if (activeDemo === 2 && (!simulatorMedia[2] || simulatorMedia[2].url === defaultSimulatorMedia[2].url)) {
                   const sim2UrlMap = {
                     player: '/assets/aistudio/image_ed670cb5.png',
+                    dinamica: '/assets/aistudio/image_d6211dcb.png',
                     exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
                     estudo: '/assets/aistudio/image_b8efaf19.png',
                     playlist: '/assets/aistudio/image_2266ed87_clean.png'
@@ -1282,7 +1343,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </div>
                       )}
 
-                      {/* Sub-abas do Cenário 2: Player sem Anúncios, Exclusivo LiLouPro, Estudo e Playlist */}
+                      {/* Sub-abas do Cenário 2: Player sem Anúncios, Dinâmica/Expressão, Exclusivo LiLouPro, Estudo e Playlist */}
                       {activeDemo === 2 && (
                         <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
                           <button
@@ -1296,12 +1357,21 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           </button>
                           <button
                             type="button"
+                            onClick={() => setExclusiveSimSubTab('dinamica')}
+                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                              exclusiveSimSubTab === 'dinamica' ? 'bg-sky-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            🎚️ Dinâmica & Expressão
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setExclusiveSimSubTab('exclusivo')}
                             className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
                               exclusiveSimSubTab === 'exclusivo' ? 'bg-amber-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
                             }`}
                           >
-                            ✨ Exclusivo
+                            ✨ Bíblia & Harmonia
                           </button>
                           <button
                             type="button"
@@ -1493,7 +1563,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         : playerCardSubTab === 'estudo'
                           ? '/assets/aistudio/image_b8efaf19.png'
                           : '/assets/aistudio/image_ed670cb5.png')
-                    : rawCurrentImage;
+                    : selected.id === 'exclusivo'
+                      ? (exclusivoCardSubTab === 'dinamica'
+                          ? '/assets/aistudio/image_d6211dcb.png'
+                          : '/assets/aistudio/image_f1a7abe2_clean.png')
+                      : rawCurrentImage;
               const currentVideo = defaultModuleVideos[selected.id];
 
               return (
@@ -1650,6 +1724,34 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         }`}
                       >
                         🎧 Tuner PRO & Metrônomo Stompbox
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Seletor rápido Seções/Dinâmica/Expressão vs Bíblia/Harmonia no modal Exclusivo LiLouPro */}
+                  {selected.id === 'exclusivo' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setExclusivoCardSubTab('dinamica')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          exclusivoCardSubTab === 'dinamica'
+                            ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎚️ Seções da Música, 7 Níveis de Dinâmica & Expressão
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExclusivoCardSubTab('biblia')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          exclusivoCardSubTab === 'biblia'
+                            ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        📖 Fundamentação Bíblica, Mesmo Tema & Harmonia
                       </button>
                     </div>
                   )}
