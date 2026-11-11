@@ -28,10 +28,57 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
     <link rel="shortcut icon" href="/favicon.png" />
-    <title>LiLouPro</title>
-    <meta name="description" content="Sistema completo de gestão para grupos de louvor: escalas, disponibilidade de membros e repertório digital com cifras transponíveis." />
-    <meta property="og:title" content="LiLouPro" />
-    <meta property="og:description" content="Sistema completo de gestão para grupos de louvor: escalas, disponibilidade de membros e repertório digital com cifras transponíveis." />
+    <title>LiLouPro — Gestão de Escalas, Liturgia, Cifras e Projeção para Igrejas</title>
+    <meta name="description" content="Menos tempo organizando. Mais tempo servindo. Sincronize escalas de ministério, cifras no tom ideal com rolagem por pedal Bluetooth, liturgia e projeção em uma plataforma simples e elegante." />
+    <meta name="keywords" content="escala de louvor, gestão de ministério, cifras para igreja, liturgia do culto, projeção igreja, aplicativo para ministério de louvor, LiLouPro" />
+    <link rel="canonical" href="https://www.liloupro.com.br/" />
+
+    <!-- Open Graph & WhatsApp Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LiLouPro" />
+    <meta property="og:url" content="https://www.liloupro.com.br/" />
+    <meta property="og:title" content="LiLouPro — Menos tempo organizando. Mais tempo servindo." />
+    <meta property="og:description" content="Sincronize escalas, cifras no tom ideal, liturgia e projeção para o ministério cristão. Teste grátis por 30 dias." />
+    <meta property="og:image" content="https://www.liloupro.com.br/og-cover.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LiLouPro — Igrejas Conectadas" />
+    <meta name="twitter:description" content="Plataforma completa para gestão de escalas, repertório, cifras e liturgia." />
+    <meta name="twitter:image" content="https://www.liloupro.com.br/og-cover.jpg" />
+
+    <!-- Dados Estruturados (JSON-LD) Schema.org -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LiLouPro",
+        "url": "https://www.liloupro.com.br/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "inLanguage": "pt-BR",
+        "description": "Plataforma completa para igrejas e ministérios de louvor: Gestão de Escalas com confirmação de disponibilidade, Cifras e Repertório com transposição em 1 clique, Shapes do CAGED, Capotraste, LiLouPro Player sem anúncios, Controle de rolagem por Pedal Bluetooth, Liturgia do Culto e Projeção ao vivo no telão.",
+        "featureList": [
+          "Gestão de Escalas e Confirmação de Disponibilidade",
+          "Cifras e Repertório com Transposição em 1 Clique, Shapes do CAGED e Cálculo do Capotraste",
+          "Controle de Rolagem de Cifra por Pedal Bluetooth",
+          "LiLouPro Player sem Anúncios, Afinador PRO e Metrônomo Stompbox",
+          "Liturgia e Cronograma do Culto Integrados",
+          "Projeção em Tempo Real e Painel de Controle de Mídia"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "name": "Teste Gratuito de 30 Dias",
+          "price": "0.00",
+          "priceCurrency": "BRL",
+          "description": "Experimente gratuitamente todos os módulos do LiLouPro por 30 dias na sua igreja, sem necessidade de cartão de crédito."
+        }
+      }
+    </script>
+
     <script>
       window.__deferredPwaPrompt = null;
       window.addEventListener('beforeinstallprompt', function(e) {
@@ -47,6 +94,24 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main>
+        <h1>LiLouPro - Menos tempo organizando. Mais tempo servindo.</h1>
+        <p>Plataforma elegante e intuitiva criada para o ministério cristão. Sincronize escalas, cifras no tom ideal, liturgia e projeção de forma simples. Teste grátis por 30 dias.</p>
+        <section>
+          <h2>Gestão de Escalas</h2>
+          <p>Confirmação de disponibilidade de voluntários em 1 toque, composição da equipe com Auto-Escala e exportação para WhatsApp, PDF, Google Agenda e Google Docs.</p>
+        </section>
+        <section>
+          <h2>Repertório e Cifras com Pedal Bluetooth</h2>
+          <p>Cifras transponíveis em 1 clique, cálculo automático do capotraste, Shapes do CAGED para violão e guitarra, teclado didático centrado, LiLouPro Player sem anúncios, marcações de seções, dinâmica e expressão musical, e controle de rolagem mãos-livres por Pedal Bluetooth.</p>
+        </section>
+        <section>
+          <h2>Liturgia e Projeção</h2>
+          <p>Cronograma completo do culto com leituras bíblicas integradas, músicas na sequência com indicação de tom e ministro, e painel de projeção em tempo real para o operador de mídia com avisos rápidos, cronômetro e alertas no telão.</p>
+        </section>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
