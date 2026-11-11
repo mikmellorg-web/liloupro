@@ -228,20 +228,20 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
   return (
     <div className="space-y-12 sm:space-y-16">
       {/* SEÇÃO 1: HERO INSTITUCIONAL */}
-      <section className="max-w-7xl mx-auto px-6 pt-4 sm:pt-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-10 items-center">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 overflow-x-hidden">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-10 items-center">
           
           {/* Lado Esquerdo: Conceito, Slogan e Conexão Humana */}
-          <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
+          <div className="w-full lg:col-span-6 space-y-5 sm:space-y-6 text-center lg:text-left">
             
-            {/* CONCEITO CENTRAL UNIFICADOR */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-brand/10 border border-brand/30 text-brand text-xs font-bold uppercase tracking-wider shadow-sm">
-              <Sparkles className="w-3.5 h-3.5" />
+            {/* CONCEITO CENTRAL UNIFICADOR (Com detalhe em âmbar/dourado para unidade visual) */}
+            <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-full bg-brand/10 border border-amber-400/25 text-brand text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>O culto começa muito antes do domingo</span>
             </div>
 
-            {/* SLOGAN MANTIDO INTACTO */}
-            <h1 className="text-4xl sm:text-5xl lg:text-5xl xl:text-6xl font-black text-white tracking-tight leading-[1.08]">
+            {/* SLOGAN MANTIDO INTACTO (Tipografia fluida Mobile-First) */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black text-white tracking-tight leading-tight">
               Menos tempo organizando. <br className="hidden sm:inline" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand via-amber-200 to-amber-400">
                 Mais tempo servindo.
@@ -249,64 +249,66 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             </h1>
 
             {/* SUBTÍTULO: Foco em pessoas (Líder, Músicos, Mídia, Pastor) */}
-            <p className="text-slate-300 text-base sm:text-lg leading-relaxed max-w-xl mx-auto lg:mx-0">
+            <p className="text-slate-300 text-sm sm:text-base lg:text-lg leading-relaxed max-w-xl mx-auto lg:mx-0">
               Uma plataforma elegante e intuitiva criada para o ministério cristão. 
               Sincronize <strong>escalas, cifras no tom ideal, liturgia e projeção</strong> de forma simples — trazendo tranquilidade e paz para quem lidera.
             </p>
 
-            {/* CTAs */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5">
+            {/* CTAs (Empilhados no Mobile 100% largura, texto sempre em linha única sem quebra) */}
+            <div className="pt-1 flex flex-col sm:flex-row items-center justify-center lg:justify-start w-full sm:w-auto gap-3">
               <button
                 onClick={() => onEnterApp('signup')}
-                className="w-full sm:w-auto px-8 py-4 lg:px-9 lg:py-4.5 rounded-2xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-sm uppercase tracking-wider shadow-xl shadow-brand/25 lg:shadow-2xl lg:shadow-brand/35 lg:ring-2 lg:ring-brand/40 lg:ring-offset-2 lg:ring-offset-slate-950 transition-all hover:scale-[1.02] active:scale-98 flex items-center justify-center gap-2.5 cursor-pointer"
+                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-sm sm:text-base uppercase tracking-wider whitespace-nowrap shadow-xl shadow-brand/25 lg:shadow-2xl lg:shadow-brand/35 lg:ring-2 lg:ring-brand/40 lg:ring-offset-2 lg:ring-offset-slate-950 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
               >
                 <span>Testar grátis 30 dias</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
 
               <a
                 href="#jornada-ministerio"
-                className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-semibold text-sm transition-all text-center flex items-center justify-center gap-2"
+                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-semibold text-sm sm:text-base whitespace-nowrap transition-all text-center"
               >
                 <span>Ver a jornada do ministério</span>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </a>
             </div>
 
             {/* Confiança de Adoção */}
-            <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-brand" /> Sem cartão de crédito
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs text-slate-400">
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Sem cartão de crédito
               </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-brand" /> Teste sem compromisso
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Teste sem compromisso
               </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-brand" /> Suporte humano em português
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Suporte humano em português
               </span>
             </div>
           </div>
 
-          {/* Lado Direito: Preview do Produto (Imagem Real Customizada do App ou Mockup Limpo) */}
-          <div className="lg:col-span-7 lg:scale-[1.08] xl:scale-[1.10] lg:origin-center transition-transform transform-gpu will-change-transform">
+          {/* Lado Direito: Preview do Produto (Imagem dos Dispositivos Alinhada e com Moldura Elegante) */}
+          <div className="w-full lg:col-span-6">
             <div 
-              className={`relative overflow-hidden transition-all duration-200 ${
+              className={`relative w-full transition-all duration-200 ${
                 activeHeroImage 
-                  ? 'rounded-2xl sm:rounded-3xl shadow-2xl' 
-                  : 'bg-slate-900/90 border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl'
+                  ? '' 
+                  : 'bg-slate-900/90 border border-white/15 rounded-2xl p-5 sm:p-6 shadow-2xl shadow-blue-950/50'
               }`}
             >
-              {/* SE TIVER IMAGEM REAL / PADRÃO: EXIBE A IMAGEM EM ALTA RESOLUÇÃO */}
+              {/* SE TIVER IMAGEM REAL / PADRÃO: EXIBE A IMAGEM EM ALTA RESOLUÇÃO COM MOLDURA TRANSLÚCIDA */}
               {activeHeroImage ? (
-                <div className="relative w-full overflow-hidden rounded-2xl sm:rounded-3xl transform-gpu">
+                <div className="relative w-full overflow-hidden border border-white/10 rounded-2xl shadow-2xl shadow-blue-950/50 bg-[#070b14] transform-gpu">
                   <img
                     src={activeHeroImage}
                     alt="Interface do LiLouPro no Celular, Notebook e Tablet"
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    className="w-full h-auto object-contain block rounded-2xl sm:rounded-3xl landing-crisp-img"
+                    className="w-full h-auto object-contain block rounded-2xl landing-crisp-img"
                   />
+                  {/* Sutil vinheta interna para fusão suave com o fundo escuro */}
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
                 </div>
               ) : (
                 /* MOCKUP ORIGINAL INTERATIVO */
@@ -496,13 +498,13 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                 </div>
               )}
 
-              {/* Rodapé de Sintonia */}
-              <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Sincronizado na Nuvem
+              {/* Rodapé de Sintonia (Espaçado e sem recorte nas bordas nem sobreposição com o botão flutuante) */}
+              <div className="flex flex-wrap items-center justify-center sm:justify-between gap-4 pt-4 px-2 text-xs text-slate-400">
+                <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span>Sincronizado na Nuvem</span>
                 </span>
-                <span className="font-semibold text-slate-300">
+                <span className="font-semibold text-slate-300 text-center sm:text-right">
                   Sem planilhas ou mensagens perdidas
                 </span>
               </div>
