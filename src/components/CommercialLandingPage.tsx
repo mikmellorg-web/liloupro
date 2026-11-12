@@ -1,5 +1,5 @@
 import React from 'react';
-import { Music2 } from './MusicIcon';
+import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 import LandingHeroAndChallenges from './LandingHeroAndChallenges';
 import LandingBenefitsAndFeatures from './LandingBenefitsAndFeatures';
 import LandingJourneyAndFAQ from './LandingJourneyAndFAQ';
@@ -54,10 +54,15 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
           {/* Logo */}
           <div 
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group shrink-0"
+            className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group shrink-0"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand group-hover:scale-105 transition-transform">
-              <Music2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="relative shrink-0">
+              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-tr from-amber-500/40 via-amber-300/25 to-amber-500/40 blur-[3px] opacity-80 group-hover:opacity-100 transition-opacity" />
+              <img
+                src={luxuryAppIcon}
+                alt="LiLouPro"
+                className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-amber-400/60 shadow-lg shadow-black/70 group-hover:scale-105 transition-transform brightness-105 contrast-105"
+              />
             </div>
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-black text-white tracking-tight leading-none">
