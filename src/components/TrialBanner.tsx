@@ -13,8 +13,8 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
   onOpenUpgradeModal,
   isAdmin = false
 }) => {
-  // Membros normais NUNCA devem ver contagem de dias grátis nem avisos de cobrança/upgrade
-  if (!isAdmin) {
+  // Durante os 30 dias de teste ativo, membros normais NUNCA veem contagem de dias grátis
+  if (!isAdmin && !effectivePlan.isExpiredTrial) {
     return null;
   }
 
@@ -26,7 +26,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
     return null;
   }
 
-  // Case 1: Trial Active (within 30 days)
+  // Case 1: Trial Active (within 30 days) - Exibido apenas para Admin
   if (effectivePlan.isTrial) {
     const days = effectivePlan.trialDaysLeft;
     return (
@@ -56,7 +56,28 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
     );
   }
 
-  // Case 2: Trial Expired (Migrated to Plano Semeadora - Gratuito)
+  // Case 2A: Trial Expired - Visão do Membro Voluntário (Opção 1: Bíblia e Estudo liberados, Ministério pausado)
+  if (!isAdmin) {
+    return (
+      <div className="bg-gradient-to-r from-amber-950/85 via-slate-900 to-amber-950/85 border-b border-amber-500/40 text-amber-100 py-2.5 px-4 text-xs font-medium">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+              <Clock size={14} />
+            </span>
+            <span>
+              O período de avaliação da sua igreja encerrou. <strong className="text-white font-bold">Peça ao seu líder para reativar a escala completa e demais recursos da equipe!</strong>
+              <span className="ml-1 text-emerald-300 text-[11px] font-bold">
+                (Bíblia Sagrada e Academia de Teoria Musical continuam liberadas para você)
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Case 2B: Trial Expired - Visão do Administrador (Migrated to Plano Semeadora - Gratuito)
   return (
     <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border-b border-amber-500/40 text-amber-100 py-2.5 px-4 text-xs font-medium">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
@@ -65,7 +86,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
             <Clock size={14} />
           </span>
           <span>
-            Seu período de avaliação gratuita foi concluído. Sua igreja está no <strong className="text-white font-bold">Plano Semeadora (Gratuito)</strong>.
+            Seu período de avaliação gratuita foi concluído. Sua igreja está no <strong className="text-white font-bold">Plano Semeadora (Gratuito • Limite 5 Membros e 15 Músicas)</strong>.
             <span className="ml-1 text-amber-300 text-[11px] font-bold">
               (Nenhum dado foi apagado!)
             </span>
@@ -76,7 +97,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           onClick={onOpenUpgradeModal}
           className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-[11px] uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm hover:scale-105 active:scale-95"
         >
-          Desbloquear Recursos Ilimitados (R$ 49/mês)
+          Desbloquear Equipe & Recursos (R$ 49/mês)
           <ArrowRight size={13} />
         </button>
       </div>

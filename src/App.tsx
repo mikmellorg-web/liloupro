@@ -79,7 +79,7 @@ import { CustomInstallBanner } from './components/CustomInstallBanner';
 import { LilouproAssistant } from './components/LilouproAssistant';
 import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { StudyMetronomeModal } from './components/StudyMetronomeModal';
-import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, ResourceCheckResult } from './services/planService';
+import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, isMemberPausedByFreeLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl, parseYoutubeVideoId, parseYoutubePlaylistId } from './utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
@@ -3565,8 +3565,8 @@ function MainContent() {
     >
       <DynamicThemeStyle churchData={churchData} />
 
-      {/* Trial / Subscription Status Banner - Exibido APENAS para administradores e NUNCA para igrejas com Acesso Vitalício (ex: Graça Soberana de Rio Grande) */}
-      {!isSongFocusMode && isAdmin && !isVitalicio && effectivePlan.planId !== 'vitalicio' && (
+      {/* Trial / Subscription Status Banner - Durante os 30 dias exibido apenas para Admin; após expirar, exibe também aviso para membros */}
+      {!isSongFocusMode && (isAdmin || effectivePlan.isExpiredTrial) && !isVitalicio && effectivePlan.planId !== 'vitalicio' && (
         <TrialBanner 
           effectivePlan={effectivePlan} 
           isAdmin={isAdmin}
@@ -15809,6 +15809,15 @@ function CalendarView({
 
   const setAvailability = async (serviceId: string, status: 'available' | 'unavailable' | 'maybe') => {
     if (!user) return;
+    const limitCheck = checkResourceLimit(churchData, 'services', services.length);
+    if (!limitCheck.allowed) {
+      if (isAdmin) {
+        onOpenUpgradeModal?.(limitCheck);
+      } else {
+        alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
+      }
+      return;
+    }
     const servicePath = `services/${serviceId}`;
     try {
       const serviceRef = doc(db, 'services', serviceId);
@@ -17647,6 +17656,14 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   };
 
   const startEdit = (member: any) => {
+    if (isMemberPausedByFreeLimit(member, members, churchData)) {
+      if (isAdmin) {
+        onOpenUpgradeModal?.(checkResourceLimit(churchData, 'members', members.length));
+      } else {
+        alert("O período de avaliação da sua igreja encerrou e o Plano Gratuito comporta até 5 membros ativos. Peça ao seu líder para reativar a escala completa e demais recursos da equipe!");
+      }
+      return;
+    }
     setEditingMember(member);
     setNewMember({
       name: member.name || '',
@@ -17660,6 +17677,14 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   };
 
   const toggleRole = async (member: any, role: string) => {
+    if (isMemberPausedByFreeLimit(member, members, churchData)) {
+      if (isAdmin) {
+        onOpenUpgradeModal?.(checkResourceLimit(churchData, 'members', members.length));
+      } else {
+        alert("O período de avaliação da sua igreja encerrou e o Plano Gratuito comporta até 5 membros ativos. Peça ao seu líder para reativar a escala completa e demais recursos da equipe!");
+      }
+      return;
+    }
     const memberPath = `members/${member.id}`;
     try {
       const roles = member.roles || [];
@@ -17704,6 +17729,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
               (user.email && member.email && member.email.toLowerCase().trim() === user.email.toLowerCase().trim())
             )
           );
+          const isPausedByFreeLimit = isMemberPausedByFreeLimit(member, members, churchData);
           const canEditRoles = isAdmin || isCurrentMemberSelf;
 
           return (
@@ -17730,7 +17756,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                        <Settings size={10} className="animate-spin-slow" />
                      </div>
                    )}
-                   {upcomingSchedule && (
+                   {upcomingSchedule && !isPausedByFreeLimit && (
                      <div 
                        className="absolute -bottom-0.5 -right-0.5 bg-emerald-500 text-white p-1 sm:p-1.5 rounded-full border-2 border-surface shadow-md z-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110" 
                        title={`Escalado para ${upcomingSchedule.service.name || 'Culto'} (${upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })})`}
@@ -17745,7 +17771,12 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                      {member.isAdmin && (
                        <span className="bg-brand/20 text-brand text-[9px] font-black px-1.5 py-0.5 rounded border border-brand/20 uppercase tracking-widest">Adm</span>
                      )}
-                     {upcomingSchedule && (
+                     {isPausedByFreeLimit && (
+                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/40 shadow-sm">
+                         🔒 Pausado (Limite 5 Membros)
+                       </span>
+                     )}
+                     {upcomingSchedule && !isPausedByFreeLimit && (
                        <span 
                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-sm group-hover:border-emerald-500/40 transition-colors"
                          title={`Próxima escala: ${upcomingSchedule.service.name || 'Culto'} em ${upcomingSchedule.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • ${upcomingSchedule.roles.join(', ')}`}

@@ -33,6 +33,28 @@ O aplicativo **LiLouPro** encontra-se em **ESTADO DE CONGELAMENTO DE CÓDIGO, LA
 
 ---
 
+# 🔒 Regras Intocáveis de Planos, Trial de 30 Dias e Plano Semeadora (Gratuito)
+> **BLOQUEIO DE REGRA COMERCIAL:** As diretrizes abaixo são **INVIOLÁVEIS** e **NÃO PODEM SER ALTERADAS** sob nenhuma hipótese, a menos que o usuário peça explicitamente:
+1. **Período de Avaliação (30 Dias Grátis):**
+   - Toda nova igreja tem **30 dias de acesso completo e ilimitado** sem cartão de crédito.
+   - A igreja pioneira (**Graça Soberana / Semente**) e igrejas com **Plano Vitalício** têm acesso perpétuo e NUNCA expiram nem exibem avisos de trial.
+2. **Transição Pós-30 Dias para o Plano Semeadora (Gratuito) — Zero Perda de Dados:**
+   - Caso os 30 dias terminem sem assinatura ativa (`Plano Completo`, `Plano Premium` ou `Plano Vitalício`), **NENHUM DADO É APAGADO** (músicas, membros, escalas e histórico permanecem 100% salvos na nuvem).
+   - Fica **bloqueado o cadastro de novas músicas, novos membros** (tanto manual quanto via Código de Ingresso) e **novos cultos/escalas** até a ativação de um plano pago.
+3. **Limite de 15 Músicas no Plano Semeadora (Gratuito):**
+   - Após os 30 dias sem assinatura, apenas as **15 primeiras músicas** do repertório permanecem abertas para leitura/uso.
+   - As músicas a partir da **16ª** permanecem listadas com o selo **`🔒 Bloqueada (Limite 15 Músicas)`** e, ao serem clicadas, abrem o modal de upgrade.
+4. **Limite Visual e Funcional de 5 Membros Ativos (Admin + 4 Primeiros Cadastrados):**
+   - No Plano Semeadora (Gratuito) pós-30 dias, apenas **5 membros permanecem ativos**:
+     * **Vaga 1:** Administrador / Líder criador da igreja.
+     * **Vagas 2 a 5:** Os **4 primeiros membros cadastrados** por ordem de antiguidade.
+   - Do **6º membro em diante**, os perfis permanecem visíveis na lista com o selo **`🔒 Pausado (Limite 5 Membros)`**, bloqueando edição de perfil/funções até a ativação de um plano.
+5. **Experiência do Músico Voluntário Pós-30 Dias (Opção 1 — Acesso Pessoal Liberado, Ministério Pausado):**
+   - Quando um voluntário entra no app após o fim dos 30 dias da igreja, ele visualiza o aviso no topo: *"O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe!"*
+   - Ele **não consegue** marcar disponibilidade nem acessar recursos além do limite gratuito, mas **continua com acesso 100% liberado à Bíblia Sagrada Integrada e à Academia de Teoria Musical**, evitando a desinstalação do app e incentivando a equipe a pedir a assinatura ao líder.
+
+---
+
 # 📐 Diretrizes de Design (APLICÁVEIS APENAS A NOVOS ELEMENTOS SOLICITADOS)
 > **AVISO AO AGENTE:** Os princípios abaixo servem **EXCLUSIVAMENTE** como guia quando o usuário solicitar explicitamente a criação de um **NOVO** componente, tela ou funcionalidade do zero. **NUNCA** utilize estas diretrizes como justificativa para alterar, reestilizar ou refatorar telas e componentes que já existem no projeto.
 

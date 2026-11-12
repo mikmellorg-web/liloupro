@@ -91,9 +91,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                   <Crown size={16} className="text-amber-400" /> Os 30 dias de avaliação gratuita terminaram
                 </div>
                 <p className="text-xs leading-relaxed text-amber-100/95">
-                  Esperamos que o LiLouPro tenha abençoado a rotina da sua equipe! Sua igreja foi migrada para o <strong>Plano Semeadora (Gratuito)</strong>.
-                  <strong className="text-white font-bold ml-1">Nenhum dado foi perdido!</strong> Suas cifras, escalas e membros continuam protegidos na nuvem.
-                  Para continuar utilizando sem limites, faça o upgrade abaixo:
+                  Esperamos que o LiLouPro tenha abençoado a rotina da sua equipe! Sua igreja foi migrada para o <strong>Plano Semeadora (Gratuito)</strong>, com acesso limitado a <strong>15 músicas</strong> e até <strong>5 membros</strong>.
+                  <strong className="text-white font-bold ml-1">Nenhum dado foi perdido!</strong> Todas as suas demais cifras, escalas e membros continuam protegidos na nuvem.
+                  Para desbloquear todas as suas músicas e cadastrar sem limites, faça o upgrade abaixo:
                 </p>
               </div>
             ) : isSemeadoraLimit ? (

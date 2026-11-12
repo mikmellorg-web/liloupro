@@ -177,9 +177,10 @@ export function SongsView({
   allServices: propAllServices,
   onOpenUpgradeModal
 }: SongsViewProps) {
-  const { churchData, isAdmin, user } = useAuth();
+  const { churchData, isAdmin, user, effectivePlan } = useAuth();
   const churchId = churchData?.id || localStorage.getItem('lilo_active_church_id') || 'semente';
   const isLight = theme === 'light' || (typeof document !== 'undefined' && document.documentElement.classList.contains('light'));
+  const isExpiredFreePlan = Boolean(effectivePlan?.isExpiredTrial && !effectivePlan?.isPaidActive && !effectivePlan?.isVitalicio);
 
   // Lista de músicas principal
   const [songs, setSongs] = useState<any[]>(() => {
@@ -1769,11 +1770,28 @@ export function SongsView({
                 const isFav = favoriteIds.has(song.id);
                 const isInMyPlaylist = myPlaylistIds.has(song.id);
                 const categoryBadge = getSongCategory(song);
+                const songIndexInRepertoire = songs.findIndex((s) => s.id === song.id);
+                const isLockedByFreeLimit = isExpiredFreePlan && songIndexInRepertoire >= 15;
 
                 return (
                   <div
                     key={song.id}
-                    onClick={() => onSelectSong(song)}
+                    onClick={() => {
+                      if (isLockedByFreeLimit) {
+                        onOpenUpgradeModal?.({
+                          allowed: false,
+                          resourceType: 'songs',
+                          currentCount: songs.length,
+                          maxAllowed: 15,
+                          limit: 15,
+                          resourceNameLabel: 'músicas',
+                          message: 'No Plano Semeadora (Gratuito), após os 30 dias de teste, o acesso fica limitado a 15 músicas. Todas as suas demais músicas continuam 100% salvas na nuvem! Faça upgrade para liberar o acesso completo.',
+                          effectivePlan: effectivePlan || undefined,
+                        });
+                        return;
+                      }
+                      onSelectSong(song);
+                    }}
                     className={`${
                       isLight 
                         ? 'bg-white hover:bg-blue-50/40 border-slate-200 hover:border-blue-300 shadow-sm shadow-slate-200/50' 
@@ -1828,6 +1846,11 @@ export function SongsView({
                               isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0e162b] border-slate-700/80 text-slate-200'
                             }`}>
                               {categoryBadge}
+                            </span>
+                          )}
+                          {isLockedByFreeLimit && (
+                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shrink-0 border bg-amber-500/15 border-amber-500/40 text-amber-400">
+                              🔒 Bloqueada (Limite 15 Músicas)
                             </span>
                           )}
                         </div>

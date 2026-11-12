@@ -114,10 +114,10 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
     priceAnnual: 0,
     description: 'Plano inicial para pequenas congregações.',
     maxMembers: 5,
-    maxSongs: 20,
+    maxSongs: 15,
     features: [
       'Até 5 membros na equipe',
-      'Até 20 músicas no repertório',
+      'Até 15 músicas no repertório',
       'Projeção básica'
     ]
   }
@@ -158,7 +158,7 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
       isVitalicio: false,
       isPaidActive: false,
       maxMembers: 5,
-      maxSongs: 20,
+      maxSongs: 15,
       features: {
         projection: true,
         unlimitedSongs: false,
@@ -231,11 +231,11 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
     isExpiredTrial: isExpired,
     isVitalicio: false,
     isPaidActive,
-    maxMembers: isPaidActive ? 9999 : 50,
-    maxSongs: isPaidActive ? 9999 : 9999,
+    maxMembers: isPaidActive ? 9999 : (isExpired ? 5 : 50),
+    maxSongs: isPaidActive ? 9999 : (isExpired ? 15 : 9999),
     features: {
       projection: true,
-      unlimitedSongs: true,
+      unlimitedSongs: !isExpired,
       aiAssistant: true,
       fcmPush: true,
       googleDocsCaderno: true,
@@ -271,14 +271,81 @@ export function checkResourceLimit(
           ? 'cultos'
           : resourceType;
 
+  const freeCap = resourceType === 'songs' ? 15 : resourceType === 'members' ? 5 : 0;
+
   return {
     allowed: false,
     resourceType,
     currentCount,
-    maxAllowed: 0,
-    limit: 0,
+    maxAllowed: freeCap,
+    limit: freeCap,
     resourceNameLabel,
-    message: `O período de teste gratuito de 30 dias encerrou e sua igreja está no Plano Semeadora (Gratuito). Seus dados já cadastrados permanecem salvos. Faça upgrade para cadastrar novos ${resourceNameLabel}.`,
+    message: `O período de teste gratuito de 30 dias encerrou e sua igreja está no Plano Semeadora (Gratuito, com acesso limitado a 15 músicas e 5 membros ativos). Seus dados já cadastrados permanecem salvos. Faça upgrade para cadastrar novos ${resourceNameLabel} e liberar toda a equipe e repertório.`,
     effectivePlan: plan
   };
 }
+
+function parseMemberTimestamp(member: any, fallbackIndex: number): number {
+  const raw = member?.createdAt;
+  if (!raw) return 9000000000000 + fallbackIndex;
+  if (typeof raw?.toDate === 'function') return raw.toDate().getTime();
+  if (typeof raw?.seconds === 'number') return raw.seconds * 1000;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const parsed = new Date(raw).getTime();
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 9000000000000 + fallbackIndex;
+}
+
+/**
+ * Retorna os IDs dos 5 membros ativos permitidos no Plano Semeadora (Gratuito)
+ * após o encerramento dos 30 dias de teste:
+ * - Vaga 1: Administrador / Líder criador da igreja
+ * - Vagas 2 a 5: Os 4 primeiros membros cadastrados por ordem de antiguidade
+ */
+export function getActiveFreeMemberIds(members: any[], churchData?: any): Set<string> {
+  const activeIds = new Set<string>();
+  if (!Array.isArray(members) || members.length === 0) return activeIds;
+
+  const creatorUid = churchData?.createdBy || '';
+  const indexed = members.map((m, idx) => ({ member: m, idx }));
+
+  indexed.sort((a, b) => {
+    const aIsCreator = Boolean(creatorUid && (a.member.id === creatorUid || a.member.uid === creatorUid));
+    const bIsCreator = Boolean(creatorUid && (b.member.id === creatorUid || b.member.uid === creatorUid));
+    if (aIsCreator !== bIsCreator) return aIsCreator ? -1 : 1;
+
+    const aIsAdmin = Boolean(a.member.isAdmin);
+    const bIsAdmin = Boolean(b.member.isAdmin);
+    if (aIsAdmin !== bIsAdmin) return aIsAdmin ? -1 : 1;
+
+    const timeA = parseMemberTimestamp(a.member, a.idx);
+    const timeB = parseMemberTimestamp(b.member, b.idx);
+    if (timeA !== timeB) return timeA - timeB;
+    return a.idx - b.idx;
+  });
+
+  indexed.slice(0, 5).forEach(({ member }) => {
+    if (member?.id) activeIds.add(String(member.id));
+    if (member?.uid) activeIds.add(String(member.uid));
+  });
+
+  return activeIds;
+}
+
+export function isMemberPausedByFreeLimit(member: any, members: any[], churchData?: any): boolean {
+  if (!member) return false;
+  const plan = getChurchEffectivePlan(churchData);
+  if (plan.isVitalicio || plan.isPaidActive || plan.isTrial || !plan.isExpiredTrial) {
+    return false;
+  }
+  const activeIds = getActiveFreeMemberIds(members, churchData);
+  const memberId = member.id ? String(member.id) : '';
+  const memberUid = member.uid ? String(member.uid) : '';
+  if ((memberId && activeIds.has(memberId)) || (memberUid && activeIds.has(memberUid))) {
+    return false;
+  }
+  return true;
+}
+

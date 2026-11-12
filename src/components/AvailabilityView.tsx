@@ -79,7 +79,8 @@ import {
 } from './songsShared';
 
 export function AvailabilityView({ createNotifications, theme }: { createNotifications?: any, theme?: 'light' | 'dark' }) {
-  const { user, isAdmin, memberData } = useAuth();
+  const { user, isAdmin, memberData, effectivePlan } = useAuth();
+  const isExpiredFreePlan = Boolean(effectivePlan?.isExpiredTrial && !effectivePlan?.isPaidActive && !effectivePlan?.isVitalicio);
   const userChurchId = memberData?.churchId || 'semente';
   const [currentDate, setCurrentDate] = useState(new Date());
   const lastUnlockedTargetRef = useRef<string | null>(null);
@@ -751,6 +752,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
   const setDayAvailability = async (date: Date, status: 'available' | 'unavailable') => {
     if (!user) return;
+    if (isExpiredFreePlan) {
+      alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
+      return;
+    }
     if (isLocked) {
       alert("A marcação de disponibilidade para este mês está bloqueada no momento.");
       return;
@@ -812,6 +817,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
   const toggleServiceAvailability = async (serviceId: string, status: 'available' | 'unavailable') => {
     if (!user) return;
+    if (isExpiredFreePlan) {
+      alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
+      return;
+    }
     const targetService = services.find(s => s.id === serviceId);
     if (!targetService) return;
     const currentAvail = targetService.availability || {};
@@ -1183,6 +1192,18 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
             <h1 className="text-3xl font-black text-text-main tracking-tight">Minha Disponibilidade</h1>
             <p className="text-text-main text-lg font-bold">Marque todos os seus dias livres para facilitar a criação da escala.</p>
           </div>
+
+          {isExpiredFreePlan && (
+            <div className="w-full max-w-2xl p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs sm:text-sm font-medium text-left space-y-1.5 shadow-lg">
+              <div className="font-black text-amber-300 flex items-center gap-2 uppercase tracking-wider text-xs">
+                <Lock size={15} className="shrink-0" />
+                <span>Marcação de Disponibilidade Pausada no Plano Gratuito</span>
+              </div>
+              <p className="leading-relaxed">
+                O período de avaliação da sua igreja encerrou. <strong>Peça ao seu líder para reativar a escala completa e demais recursos da equipe!</strong> Enquanto isso, a <strong>Bíblia Sagrada</strong> e a <strong>Academia de Teoria Musical</strong> continuam 100% liberadas para você.
+              </p>
+            </div>
+          )}
           
           <div className="w-full max-w-xl text-left">
             <ContextualHelp 
