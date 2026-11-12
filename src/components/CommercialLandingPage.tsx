@@ -69,7 +69,7 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
                 LiLouPro
               </span>
               <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 tracking-wider whitespace-nowrap">
-                IGREJAS CONECTADAS
+                Liturgia - Louvor - Projeção
               </span>
             </div>
           </div>

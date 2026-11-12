@@ -82,6 +82,7 @@ const defaultSimulatorMedia: Record<number, SimulatorCustomMedia> = {
 export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefitsAndFeaturesProps) {
   // Estado para modal de detalhes dos módulos
   const [activeModuleModal, setActiveModuleModal] = useState<string | null>(null);
+  const [specialBannerModal, setSpecialBannerModal] = useState<'disponibilidade' | 'academia' | 'biblia' | null>(null);
 
   // Estado para alternar entre Violão (5 Shapes CAGED) e Teclado Didático no card/modal e no simulador
   const [chordInstrumentTab, setChordInstrumentTab] = useState<'violao' | 'teclado' | 'transposicao_capo' | 'completa'>('violao');
@@ -462,17 +463,17 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   // MÓDULOS COM CONSEQUÊNCIAS E PRINTS REAIS EM DESTAQUE NA PÁGINA
   const consequenceModules = [
     {
-      id: "caged",
-      title: "Violão & Guitarra: 5 Shapes do CAGED como variação do mesmo acorde",
-      featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
-      icon: Sliders,
+      id: "repertorio",
+      title: "LiLouPro Player sem Anúncios direto na Cifra, Playlist e Estúdio de Ensaio",
+      featureLabel: "Módulo • Player sem Anúncios & Estúdio",
+      icon: Music,
       isExclusive: true,
-      exclusiveBadge: "5 SHAPES CAGED (VIOLÃO/GUITARRA)",
-      description: "Recurso exclusivo para violão e guitarra: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço. Para tecladistas, o app oferece um modo independente de Teclado Didático Centrado.",
+      exclusiveBadge: "PLAYER SEM ANÚNCIOS",
+      description: "Estude a música com o LiLouPro Player flutuante sem interrupções de propagandas e com botão Repetir, monte sua Playlist de estudo e use o Afinador PRO e Metrônomo Stompbox.",
       benefits: [
-        "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
-        "Análise em tempo real de Grau e Função Harmônica do acorde",
-        "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
+        "LiLouPro Player (Modo Pratique) sem anúncios direto na tela da cifra",
+        "Repertório Musical organizado com Minha Playlist e integração Drive",
+        "LiLouPro Tuner PRO e Metrônomo Stompbox integrados"
       ]
     },
     {
@@ -518,17 +519,17 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       ]
     },
     {
-      id: "repertorio",
-      title: "LiLouPro Player sem Anúncios direto na Cifra, Playlist e Estúdio de Ensaio",
-      featureLabel: "Módulo • Player sem Anúncios & Estúdio",
-      icon: Music,
+      id: "caged",
+      title: "Violão & Guitarra: 5 Shapes do CAGED como variação do mesmo acorde",
+      featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
+      icon: Sliders,
       isExclusive: true,
-      exclusiveBadge: "PLAYER SEM ANÚNCIOS",
-      description: "Estude a música com o LiLouPro Player flutuante sem interrupções de propagandas e com botão Repetir, monte sua Playlist de estudo e use o Afinador PRO e Metrônomo Stompbox.",
+      exclusiveBadge: "5 SHAPES CAGED (VIOLÃO/GUITARRA)",
+      description: "Recurso exclusivo para violão e guitarra: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço. Para tecladistas, o app oferece um modo independente de Teclado Didático Centrado.",
       benefits: [
-        "LiLouPro Player (Modo Pratique) sem anúncios direto na tela da cifra",
-        "Repertório Musical organizado com Minha Playlist e integração Drive",
-        "LiLouPro Tuner PRO e Metrônomo Stompbox integrados"
+        "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
+        "Análise em tempo real de Grau e Função Harmônica do acorde",
+        "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
       ]
     },
     {
@@ -602,7 +603,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
             Veja as telas reais e os diferenciais exclusivos do LiLouPro
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Dos <strong className="text-slate-200">5 shapes do CAGED</strong>, <strong className="text-slate-200">transposição em 1 clique</strong> e <strong className="text-slate-200">cálculo do capotraste</strong> ao <strong className="text-slate-200">LiLouPro Player sem anúncios</strong>, <strong className="text-slate-200">Pedal Bluetooth</strong> e <strong className="text-slate-200">Escala Inteligente do Culto</strong>.
+            Do <strong className="text-slate-200">LiLouPro Player sem anúncios</strong>, <strong className="text-slate-200">Controle de cifra por Pedal Bluetooth</strong> e <strong className="text-slate-200">Escala Inteligente do Culto</strong> até <strong className="text-slate-200">Transposição em 1 clique</strong>, <strong className="text-slate-200">Cálculo do Capotraste</strong>, e <strong className="text-slate-200">Shapes do CAGED</strong>.
           </p>
         </div>
 
@@ -1018,92 +1019,116 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         </div>
       </section>
 
-      {/* BANNER DE DESTAQUE ESPECIAL: RECURSOS EXCLUSIVOS LILOUPRO */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-[#0d1629] to-slate-950 border border-amber-500/35 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+      {/* BANNER DE DESTAQUE ESPECIAL: MINHA DISPONIBILIDADE, ACADEMIA DE TEORIA MUSICAL E BÍBLIA INTEGRADA */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-[#0d1629] to-slate-950 border border-amber-500/35 p-4 sm:p-8 lg:p-10 shadow-2xl relative overflow-hidden space-y-6 sm:space-y-8">
           <div className="absolute -top-24 -right-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-            <div className="lg:col-span-6 space-y-5">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-widest shadow-sm">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Exclusivo LiLouPro • Ferramentas Especiais
-              </div>
-              <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
-                Player sem Anúncios, Shapes do CAGED, Capotraste e Inteligência Teológica
-              </h3>
-              <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                O LiLouPro vai muito além de um leitor de cifras comum. É a única plataforma com <strong className="text-white">LiLouPro Player sem anúncios</strong> integrado à cifra, <strong className="text-white">Transposição em 1 Clique</strong>, <strong className="text-white">Cálculo Automático do Capotraste</strong>, <strong className="text-white">Shapes do CAGED</strong>, <strong className="text-white">Fundamentação Bíblica</strong>, <strong className="text-white">Seções e Partes da Música</strong>, <strong className="text-white">Ferramentas de Dinâmica</strong>, <strong className="text-white">Indicadores de Expressão</strong> e muito mais...
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-amber-400">🎸 Shapes do CAGED + Capotraste</p>
-                  <p className="text-xs text-slate-300">Variações do mesmo acorde no braço do violão/guitarra e cálculo automático de casas do Capotraste com Shape Aberto.</p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-sky-400">🎚️ Seções, Dinâmica & Expressão</p>
-                  <p className="text-xs text-slate-300">Tags de seções da música, 7 níveis de dinâmica (Sutil ao Clímax) e indicadores de expressão (Crescendo, Pausa, Acapella).</p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-emerald-400">▶️ Player sem Anúncios + Pedal</p>
-                  <p className="text-xs text-slate-300">Ouça e repita trechos na própria cifra sem propagandas e role a tela no palco com seu Pedal Bluetooth.</p>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-purple-400">📖 Bíblia, Harmonia & Escala</p>
-                  <p className="text-xs text-slate-300">Fundamentação Bíblica, sugestões do Mesmo Tema, análise harmônica, confirmação de Escala e muito mais...</p>
-                </div>
-              </div>
-            </div>
 
-            <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-              <div
-                onClick={() => {
-                  setExclusivoCardSubTab('dinamica');
-                  setActiveModuleModal('exclusivo');
-                }}
-                className="sm:col-span-2 rounded-2xl overflow-hidden border border-sky-400/35 bg-[#0b1120] shadow-2xl p-2 space-y-1.5 cursor-pointer hover:border-sky-400/70 transition-all"
-              >
+          {/* Cabeçalho e Texto Principal da Seção */}
+          <div className="max-w-4xl mx-auto text-left sm:text-center space-y-4 relative z-10 px-1">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-widest shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              Exclusivo LiLouPro • Rotina, Ensino & Palavra
+            </div>
+            <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
+              Minha Disponibilidade em 3 Passos, Academia de Teoria Musical e Bíblia Integrada
+            </h3>
+            <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+              O LiLouPro cuida de toda a jornada do músico voluntário: em <strong className="text-white">3 passos simples</strong> o músico marca os dias de culto em que pode participar na <strong className="text-white">Minha Disponibilidade</strong>, evolui musicalmente na <strong className="text-white">Academia de Teoria Musical</strong> — um verdadeiro curso dentro do app — e acompanha a <strong className="text-white">Bíblia Sagrada Integrada</strong> em casa ou no culto, com ferramentas de anotações, compartilhar versículos e muito mais!
+            </p>
+          </div>
+
+          {/* 3 Blocos Mobile-First: Texto + Foto Grande em Largura Total logo abaixo no Celular e Lado a Lado Amplo no Desktop */}
+          <div className="space-y-6 relative z-10">
+            {/* 1. Minha Disponibilidade em 3 Passos Simples */}
+            <div
+              onClick={() => setSpecialBannerModal('disponibilidade')}
+              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-emerald-500/30 hover:border-emerald-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
+            >
+              <div className="lg:col-span-5 space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/assets/aistudio/image_66130167.png"
+                    alt="Card Minha Disponibilidade"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-28 sm:w-32 h-auto rounded-xl border border-white/10 shrink-0 object-contain landing-crisp-img"
+                  />
+                  <p className="text-sm sm:text-base font-black uppercase tracking-wider text-emerald-400 group-hover:underline leading-snug">
+                    👍 Minha Disponibilidade em 3 Passos Simples
+                  </p>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Sem confusão no WhatsApp: <strong className="text-white">Passo 1:</strong> Marque no calendário os dias que você pode • <strong className="text-white">Passo 2:</strong> Confirme em "Conte Comigo" ou "Não Posso" • <strong className="text-white">Passo 3:</strong> Finalize e notifique a liderança.
+                </p>
+              </div>
+
+              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-emerald-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
                 <img
-                  src="/assets/aistudio/image_d6211dcb.png"
-                  alt="Guia Rápido: Seções, Dinâmicas e Expressão Musical no LiLouPro"
+                  src="/assets/aistudio/image_85ebf322.png"
+                  alt="Minha Disponibilidade em 3 Passos Simples no LiLouPro"
                   loading="lazy"
                   decoding="async"
                   className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
                 />
-                <p className="text-[11px] font-bold text-center text-sky-300 py-0.5">
-                  🎚️ Seções e Partes da Música • 7 Níveis de Dinâmica • Indicadores de Expressão (Toque para ampliar)
+                <p className="text-[11px] font-bold text-center text-emerald-300 py-0.5">
+                  👍 Minha Disponibilidade: Em 3 passos simples o músico marca os dias de culto (Toque para ampliar)
                 </p>
               </div>
-              <div
-                onClick={() => setActiveModuleModal('repertorio')}
-                className="rounded-2xl overflow-hidden border border-emerald-400/35 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-emerald-400/70 transition-all"
-              >
-                <img
-                  src="/assets/aistudio/image_ed670cb5.png"
-                  alt="LiLouPro Player sem anúncios integrado diretamente na página da cifra"
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-auto object-contain rounded-xl landing-crisp-img"
-                />
-                <p className="text-[11px] font-bold text-center text-emerald-300 py-1">
-                  ▶️ LiLouPro Player sem Anúncios na Cifra
+            </div>
+
+            {/* 2. Academia de Teoria Musical */}
+            <div
+              onClick={() => setSpecialBannerModal('academia')}
+              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-indigo-500/30 hover:border-indigo-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
+            >
+              <div className="lg:col-span-5 space-y-2.5">
+                <p className="text-sm sm:text-base font-black uppercase tracking-wider text-indigo-400 group-hover:underline leading-snug">
+                  🎓 Academia de Teoria Musical (Curso Completo no App)
+                </p>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Um verdadeiro curso dentro do LiLouPro para dominar harmonia, entender arranjos e tocar com excelência: <strong className="text-white">Intervalos, Campo Harmônico, Inversões de Acordes, Funções Modernas, Cadências Harmônicas, Empréstimo Modal, Dominantes & SubV</strong> e <strong className="text-white">Auto-Desafio</strong>.
                 </p>
               </div>
-              <div
-                onClick={() => {
-                  setExclusivoCardSubTab('biblia');
-                  setActiveModuleModal('exclusivo');
-                }}
-                className="rounded-2xl overflow-hidden border border-amber-400/30 bg-[#0b1120] shadow-2xl p-2 space-y-2 cursor-pointer hover:border-amber-400/70 transition-all"
-              >
+
+              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-indigo-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
                 <img
-                  src="/assets/aistudio/image_f1a7abe2_clean.png"
-                  alt="Exclusivo LiLouPro - Fundamentação Bíblica, Sugestões do Mesmo Tema e Aprenda Harmonia"
+                  src="/assets/aistudio/image_6c194acd.png"
+                  alt="Academia de Teoria Musical - Curso completo dentro do LiLouPro"
                   loading="lazy"
                   decoding="async"
-                  className="w-full h-auto object-contain rounded-xl landing-crisp-img"
+                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
                 />
-                <p className="text-[11px] font-bold text-center text-amber-300 py-1">
-                  ✨ Bíblia, Mesmo Tema & Harmonia Aplicada
+                <p className="text-[11px] font-bold text-center text-indigo-300 py-0.5">
+                  🎓 Academia de Teoria Musical • Curso Completo dentro do App (Toque para ampliar)
+                </p>
+              </div>
+            </div>
+
+            {/* 3. Bíblia Integrada no App */}
+            <div
+              onClick={() => setSpecialBannerModal('biblia')}
+              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-amber-500/30 hover:border-amber-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
+            >
+              <div className="lg:col-span-5 space-y-2.5">
+                <p className="text-sm sm:text-base font-black uppercase tracking-wider text-amber-400 group-hover:underline leading-snug">
+                  📖 Bíblia Integrada para Ler em Casa ou no Culto
+                </p>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  O músico voluntário acompanha a leitura bíblica no culto ou estuda em casa diretamente pelo LiLouPro, com recursos de <strong className="text-white">Marcar versículos, Anotar, Favoritar, Compartilhar, Copiar</strong>, ajuste de fonte e rolagem automática.
+                </p>
+              </div>
+
+              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-amber-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
+                <img
+                  src="/assets/aistudio/image_47dfdafb.png"
+                  alt="Bíblia Integrada no LiLouPro com anotações, destaques e compartilhamento"
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
+                />
+                <p className="text-[11px] font-bold text-center text-amber-300 py-0.5">
+                  📖 Bíblia Integrada • Anotações, Destaques e Compartilhar (Toque para ampliar)
                 </p>
               </div>
             </div>
@@ -1867,6 +1892,145 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     >
                       Fechar
                     </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA AMPLIAR AS 3 TELAS DA SEÇÃO DE DISPONIBILIDADE, ACADEMIA E BÍBLIA */}
+      {specialBannerModal && (
+        <div
+          onClick={() => setSpecialBannerModal(null)}
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-white/15 rounded-3xl p-5 sm:p-8 max-w-3xl lg:max-w-4xl w-full max-h-[92vh] overflow-y-auto space-y-5 shadow-2xl relative"
+          >
+            {(() => {
+              const modalData = {
+                disponibilidade: {
+                  badge: 'Módulo • Minha Disponibilidade (3 Passos Simples)',
+                  title: 'Minha Disponibilidade: Marque os dias de culto em 3 passos simples',
+                  image: '/assets/aistudio/image_85ebf322.png',
+                  description: 'No LiLouPro, cada músico voluntário informa sua agenda para o mês em apenas 3 passos intuitivos: Passo 1 (Marque no calendário os dias que você pode), Passo 2 (Confirme em "Conte Comigo" ou "Não Posso") e Passo 3 (Finalize e notifique a liderança).',
+                  benefits: [
+                    'Passo 1: Calendário visual com indicação dos cultos agendados',
+                    'Passo 2: Botões rápidos "Conte Comigo" e "Não Posso"',
+                    'Passo 3: Envio em 1 clique para atualizar a liderança em tempo real'
+                  ]
+                },
+                academia: {
+                  badge: 'Exclusivo LiLouPro • Curso Completo dentro do App',
+                  title: 'Academia de Teoria Musical: Domine Harmonia e Arranjos',
+                  image: '/assets/aistudio/image_6c194acd.png',
+                  description: 'Um verdadeiro curso de teoria musical e harmonia dentro do aplicativo para capacitar toda a sua equipe de louvor a tocar com excelência, propósito e alto conhecimento teórico.',
+                  benefits: [
+                    'Módulos de Intervalos, Campo Harmônico e Inversões de Acordes',
+                    'Funções Modernas, Cadências Harmônicas e Empréstimo Modal (E.M.)',
+                    'Dominantes & SubV e modo prático de Auto-Desafio'
+                  ]
+                },
+                biblia: {
+                  badge: 'Módulo • Bíblia Sagrada Integrada no LiLouPro',
+                  title: 'Bíblia Integrada: Acompanhe em Casa ou no Culto pelo LiLouPro',
+                  image: '/assets/aistudio/image_47dfdafb.png',
+                  description: 'O músico voluntário pode ler a Bíblia em casa ou acompanhar a Palavra durante o culto diretamente dentro do LiLouPro, sem precisar alternar entre aplicativos.',
+                  benefits: [
+                    'Ferramentas completas: Marcar versículos com cores, Anotar e Favoritar',
+                    'Compartilhar e copiar versículos com 1 toque',
+                    'Controle de tamanho de letra (A- / A+) e rolagem automática'
+                  ]
+                }
+              }[specialBannerModal];
+
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                    <div>
+                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
+                        {modalData.badge}
+                      </span>
+                      <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight mt-0.5">
+                        {modalData.title}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setSpecialBannerModal(null)}
+                      className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-base font-bold flex items-center justify-center transition-all cursor-pointer shrink-0"
+                      aria-label="Fechar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setSpecialBannerModal('disponibilidade')}
+                      className={`py-2 px-2 rounded-xl transition-all cursor-pointer truncate ${
+                        specialBannerModal === 'disponibilidade'
+                          ? 'bg-emerald-400 text-slate-950 font-extrabold shadow-md'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      👍 Minha Disponibilidade
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSpecialBannerModal('academia')}
+                      className={`py-2 px-2 rounded-xl transition-all cursor-pointer truncate ${
+                        specialBannerModal === 'academia'
+                          ? 'bg-indigo-400 text-slate-950 font-extrabold shadow-md'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      🎓 Academia Musical
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSpecialBannerModal('biblia')}
+                      className={`py-2 px-2 rounded-xl transition-all cursor-pointer truncate ${
+                        specialBannerModal === 'biblia'
+                          ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      📖 Bíblia Integrada
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center">
+                    <img
+                      src={modalData.image}
+                      alt={modalData.title}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full max-h-[480px] object-contain rounded-2xl block bg-[#0b1120] p-2 landing-crisp-img"
+                    />
+                    <div className="w-full py-2 px-4 bg-slate-950/90 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5 text-slate-300 font-medium">
+                        <CheckCircle2 size={13} className="text-emerald-400" />
+                        Print real da tela do LiLouPro
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/60 border border-white/10 rounded-2xl p-5 space-y-3">
+                    <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
+                      {modalData.description}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-white/5">
+                      {modalData.benefits.map((b, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-300">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{b}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </>
               );
