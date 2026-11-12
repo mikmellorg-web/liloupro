@@ -1348,6 +1348,10 @@ function AuthView({
           }
           const churchDoc = snap.docs[0];
           const targetChurchId = churchDoc.id;
+          const joinLimitCheck = checkResourceLimit({ id: churchDoc.id, ...churchDoc.data() }, 'members', 999);
+          if (!joinLimitCheck.allowed) {
+            throw new Error('O período de teste gratuito de 30 dias desta igreja encerrou. Peça ao líder do ministério para ativar a assinatura do LiLouPro para liberar o cadastro de novos membros.');
+          }
 
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           await updateProfile(userCredential.user, { displayName: name.trim() });
@@ -3999,6 +4003,7 @@ function MainContent() {
               liturgySongs={activeLiturgySongs}
               activeLiturgyService={activeLiturgyService}
               allServices={allServices}
+              onOpenUpgradeModal={(check) => setUpgradeModalResult(check)}
             />
           )}
           {activeTab === 'songs' && selectedSong && (
@@ -4036,6 +4041,7 @@ function MainContent() {
               onOpenSong={handleOpenSongById} 
               createNotifications={createNotifications}
               theme={theme}
+              onOpenUpgradeModal={(check) => setUpgradeModalResult(check)}
             />
           )}
           {activeTab === 'availability' && <AvailabilityView key="availability" createNotifications={createNotifications} theme={theme} />}
@@ -4049,7 +4055,7 @@ function MainContent() {
               theme={theme}
             />
           )}
-          {activeTab === 'members' && <MembersView key="members" />}
+          {activeTab === 'members' && <MembersView key="members" onOpenUpgradeModal={(check) => setUpgradeModalResult(check)} />}
           {activeTab === 'chat' && <ChatView key="chat" />}
           {activeTab === 'admin' && isAdmin && <AdminDashboardView key="admin" />}
           {activeTab === 'settings' && (
@@ -15496,11 +15502,13 @@ function NavIcon({
 function CalendarView({ 
   onOpenSong,
   createNotifications,
-  theme
+  theme,
+  onOpenUpgradeModal
 }: { 
   onOpenSong?: (songId: string) => void,
   createNotifications: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>,
-  theme?: 'light' | 'dark'
+  theme?: 'light' | 'dark',
+  onOpenUpgradeModal?: (check: ResourceCheckResult) => void
 }) {
   const { user, isAdmin, memberData, churchData } = useAuth();
   const userChurchId = memberData?.churchId || 'semente';
@@ -15766,6 +15774,12 @@ function CalendarView({
 
   const handleAddService = async () => {
     if(!newService.title || !newService.date) return;
+    const limitCheck = checkResourceLimit(churchData, 'services', services.length);
+    if (!limitCheck.allowed) {
+      setIsAdding(false);
+      onOpenUpgradeModal?.(limitCheck);
+      return;
+    }
     const servicePath = 'services';
     try {
       await addDoc(collection(db, servicePath), { 
@@ -16478,7 +16492,14 @@ function CalendarView({
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           {isAdmin && (
-            <Button onClick={() => setIsAdding(true)} className="px-6 py-2.5">
+            <Button onClick={() => {
+              const limitCheck = checkResourceLimit(churchData, 'services', services.length);
+              if (!limitCheck.allowed) {
+                onOpenUpgradeModal?.(limitCheck);
+                return;
+              }
+              setIsAdding(true);
+            }} className="px-6 py-2.5">
               <Plus size={18}/> Novo Agendamento
             </Button>
           )}
@@ -17459,8 +17480,8 @@ function CalendarView({
   );
 }
 
-function MembersView() {
-  const { user, isAdmin, memberData } = useAuth();
+function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: ResourceCheckResult) => void }) {
+  const { user, isAdmin, memberData, churchData } = useAuth();
   const [members, setMembers] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -17601,6 +17622,12 @@ function MembersView() {
         handleFirestoreError(error, OperationType.UPDATE, memberPath);
       }
     } else {
+      const limitCheck = checkResourceLimit(churchData, 'members', members.length);
+      if (!limitCheck.allowed) {
+        setIsAdding(false);
+        onOpenUpgradeModal?.(limitCheck);
+        return;
+      }
       // Generate a pseudo-uid if it's manual
       const manualUid = `manual_${Date.now()}`;
       const memberPath = `members/${manualUid}`;
@@ -17651,7 +17678,16 @@ function MembersView() {
           <p className="text-text-main text-sm font-medium">Gerencie os integrantes e suas funções ministeriais.</p>
         </div>
         {isAdmin && (
-          <Button onClick={() => { setIsAdding(true); setEditingMember(null); setNewMember({ name: '', email: '', whatsapp: '', roles: [], photoUrl: '', birthDate: '' }); }} className="px-6">
+          <Button onClick={() => {
+            const limitCheck = checkResourceLimit(churchData, 'members', members.length);
+            if (!limitCheck.allowed) {
+              onOpenUpgradeModal?.(limitCheck);
+              return;
+            }
+            setIsAdding(true);
+            setEditingMember(null);
+            setNewMember({ name: '', email: '', whatsapp: '', roles: [], photoUrl: '', birthDate: '' });
+          }} className="px-6">
             <Plus size={18} /> Novo Membro
           </Button>
         )}

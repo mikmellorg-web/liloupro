@@ -18,6 +18,7 @@ import { GoogleDriveIcon } from './GoogleDriveIcon';
 import ContextualHelp from './ContextualHelp';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
 import { cleanCifraHtml } from '../services/chordService';
+import { checkResourceLimit, ResourceCheckResult } from '../services/planService';
 
 // Re-exports for critical modules referenced by App.tsx and LiturgyView
 export { SongDetailView } from './SongDetailView';
@@ -37,6 +38,7 @@ interface SongsViewProps {
   liturgySongs?: any[];
   activeLiturgyService?: any;
   allServices?: any[];
+  onOpenUpgradeModal?: (check: ResourceCheckResult) => void;
 }
 
 // Extrai ou classifica a categoria litúrgica / teológica da música
@@ -172,7 +174,8 @@ export function SongsView({
   allSongs: propAllSongs,
   liturgySongs: propLiturgySongs,
   activeLiturgyService: propActiveLiturgyService,
-  allServices: propAllServices
+  allServices: propAllServices,
+  onOpenUpgradeModal
 }: SongsViewProps) {
   const { churchData, isAdmin, user } = useAuth();
   const churchId = churchData?.id || localStorage.getItem('lilo_active_church_id') || 'semente';
@@ -488,6 +491,12 @@ export function SongsView({
   // Sincronizar prop inicial de add modal
   useEffect(() => {
     if (initialAdd) {
+      const limitCheck = checkResourceLimit(churchData, 'songs', songs.length);
+      if (!limitCheck.allowed) {
+        onAddModalClose?.();
+        onOpenUpgradeModal?.(limitCheck);
+        return;
+      }
       setIsAddModalOpen(true);
     }
   }, [initialAdd]);
@@ -651,6 +660,13 @@ export function SongsView({
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    const limitCheck = checkResourceLimit(churchData, 'songs', songs.length);
+    if (!limitCheck.allowed) {
+      setIsAddModalOpen(false);
+      onOpenUpgradeModal?.(limitCheck);
+      return;
+    }
+
     setSavingSong(true);
     try {
       const trimmedTitle = newTitle.trim();
@@ -754,6 +770,12 @@ export function SongsView({
 
   // Selecionar candidato de cifra e preencher tudo automaticamente
   const handleSelectCandidate = async (candidate: any) => {
+    const limitCheck = checkResourceLimit(churchData, 'songs', songs.length);
+    if (!limitCheck.allowed) {
+      setIsAddModalOpen(false);
+      onOpenUpgradeModal?.(limitCheck);
+      return;
+    }
     setImportingCandidateId(candidate.id);
     setSearchError(null);
     try {
@@ -1201,7 +1223,14 @@ export function SongsView({
         {!showOnlyLiturgy && (
           <button
             type="button"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              const limitCheck = checkResourceLimit(churchData, 'songs', songs.length);
+              if (!limitCheck.allowed) {
+                onOpenUpgradeModal?.(limitCheck);
+                return;
+              }
+              setIsAddModalOpen(true);
+            }}
             className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
           >
             <Plus size={13} />

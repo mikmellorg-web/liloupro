@@ -426,7 +426,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </ul>
             </div>
 
-            <div className="space-y-2.5 pt-2">
+            <div className="space-y-3.5 pt-2">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
@@ -434,16 +434,16 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               >
                 Testar grátis por 30 dias
               </button>
-              <div className="text-center">
-                <a
-                  href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xrEKt4N' : 'https://pay.kiwify.com.br/3qXHMCe'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors underline"
-                >
-                  ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})
-                </a>
-              </div>
+              <a
+                href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xrEKt4N' : 'https://pay.kiwify.com.br/3qXHMCe'}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 hover:border-sky-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})</span>
+                <ArrowRight className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              </a>
             </div>
           </div>
 
@@ -498,7 +498,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </ul>
             </div>
 
-            <div className="space-y-2.5 pt-2">
+            <div className="space-y-3.5 pt-2">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
@@ -506,16 +506,16 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               >
                 Testar grátis por 30 dias
               </button>
-              <div className="text-center">
-                <a
-                  href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xlsUZKY' : 'https://pay.kiwify.com.br/BlF0RJs'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors underline"
-                >
-                  ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})
-                </a>
-              </div>
+              <a
+                href={billingCycle === 'annual' ? 'https://pay.kiwify.com.br/xlsUZKY' : 'https://pay.kiwify.com.br/BlF0RJs'}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full py-3 px-4 rounded-xl bg-brand/10 hover:bg-brand/20 border border-brand/30 hover:border-brand/60 text-xs font-bold text-slate-100 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})</span>
+                <ArrowRight className="w-3.5 h-3.5 text-brand shrink-0" />
+              </a>
             </div>
           </div>
 

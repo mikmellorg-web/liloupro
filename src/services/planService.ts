@@ -59,8 +59,8 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
     badge: 'Mais Popular',
     priceMonthly: 49,
     priceAnnual: 470.40,
-    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
-    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/3qXHMCe',
+    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xrEKt4N',
     description: 'Gestão integral com repertório ilimitado, projeção em tempo real e escalas.',
     maxMembers: 50,
     maxSongs: 9999,
@@ -96,8 +96,8 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
     badge: 'Igrejas Grandes',
     priceMonthly: 99,
     priceAnnual: 950.40,
-    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
-    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/hzdGE1G',
+    kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/BlF0RJs',
+    kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xlsUZKY',
     description: 'Para ministérios com múltiplos polos e grande quantidade de integrantes.',
     maxMembers: 9999,
     maxSongs: 9999,
@@ -262,20 +262,23 @@ export function checkResourceLimit(
     };
   }
 
-  let max = 9999;
-  if (resourceType === 'members') {
-    max = 5;
-  } else if (resourceType === 'songs') {
-    max = 20;
-  }
+  const resourceNameLabel =
+    resourceType === 'members'
+      ? 'membros'
+      : resourceType === 'songs'
+        ? 'músicas'
+        : resourceType === 'services'
+          ? 'cultos'
+          : resourceType;
 
-  const allowed = currentCount < max;
   return {
-    allowed,
+    allowed: false,
     resourceType,
     currentCount,
-    maxAllowed: max,
-    message: allowed ? undefined : `Limite de ${max} ${resourceType} atingido no Plano Semeadora. Faça upgrade para desbloquear ilimitado.`,
+    maxAllowed: 0,
+    limit: 0,
+    resourceNameLabel,
+    message: `O período de teste gratuito de 30 dias encerrou e sua igreja está no Plano Semeadora (Gratuito). Seus dados já cadastrados permanecem salvos. Faça upgrade para cadastrar novos ${resourceNameLabel}.`,
     effectivePlan: plan
   };
 }
