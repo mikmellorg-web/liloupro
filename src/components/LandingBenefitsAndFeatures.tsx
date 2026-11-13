@@ -464,12 +464,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const consequenceModules = [
     {
       id: "repertorio",
-      title: "LiLouPro Player sem Anúncios direto na Cifra, Playlist e Estúdio de Ensaio",
+      title: "LiLouPro Player sem Anúncios, Playlist e Estúdio",
       featureLabel: "Módulo • Player sem Anúncios & Estúdio",
       icon: Music,
       isExclusive: true,
       exclusiveBadge: "PLAYER SEM ANÚNCIOS",
-      description: "Estude a música com o LiLouPro Player flutuante sem interrupções de propagandas e com botão Repetir, monte sua Playlist de estudo e use o Afinador PRO e Metrônomo Stompbox.",
+      description: "Ouça e repita a música direto na cifra sem propagandas, organize sua Playlist e use o Afinador e Metrônomo.",
       benefits: [
         "LiLouPro Player (Modo Pratique) sem anúncios direto na tela da cifra",
         "Repertório Musical organizado com Minha Playlist e integração Drive",
@@ -478,12 +478,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "pedal",
-      title: "Rolagem de cifra automática com controle por Pedal Bluetooth no palco",
+      title: "Rolagem Automática com Pedal Bluetooth no Palco",
       featureLabel: "Módulo • Pedal Bluetooth & Modo Palco",
       icon: Zap,
       isExclusive: true,
       exclusiveBadge: "CONTROLE POR PEDAL BLUETOOTH",
-      description: "Toque no altar com as mãos 100% livres no instrumento. Acione, pause e controle a velocidade da rolagem automática da cifra diretamente pelo seu Pedal Bluetooth no Modo Culto.",
+      description: "Toque com as mãos livres no instrumento acionando e controlando a rolagem da cifra pelo seu Pedal Bluetooth.",
       benefits: [
         "Controle de rolagem mãos-livres via Pedal Bluetooth",
         "Modo Culto/Palco de alto contraste com tags de dinâmica",
@@ -492,12 +492,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "escala",
-      title: "Confirmação de Disponibilidade e Escala do Culto sem confusão no WhatsApp",
+      title: "Auto-Escala e Confirmação sem Confusão no WhatsApp",
       featureLabel: "Módulo • Confirmação & Escala do Culto",
       icon: Calendar,
       isExclusive: false,
       exclusiveBadge: "AUTO-ESCALA & CONFIRMAÇÃO",
-      description: "Cada voluntário confirma presença com 1 toque ('Estou Disponível' / 'Não Posso'). Monte a equipe com Auto-Escala e exporte em PDF, WhatsApp, Google Agenda ou Caderno no Google Docs.",
+      description: "Voluntários confirmam presença em 1 toque. Monte a equipe com Auto-Escala e exporte em PDF, WhatsApp e Agenda.",
       benefits: [
         "Confirmação de disponibilidade em tempo real por voluntário",
         "Composição visual da escala com funções e edição rápida",
@@ -506,12 +506,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "cifras",
-      title: "Transposição de Tons em 1 Clique & Cálculo Inteligente do Capotraste",
+      title: "Transposição em 1 Clique & Cálculo do Capotraste",
       featureLabel: "Módulo • Transposição 1 Clique & Capotraste",
       icon: FileText,
       isExclusive: true,
       exclusiveBadge: "TOM EM 1 CLIQUE + CAPO",
-      description: "Mude a tonalidade da cifra em 1 clique (±1/2 tom ou grade com os 12 tons) e descubra em qual casa colocar o capotraste para tocar com shapes abertos mantendo o tom real da música.",
+      description: "Mude o tom em 1 clique entre os 12 tons e veja em qual casa usar o capotraste com shapes abertos.",
       benefits: [
         "Transposição de tom em 1 clique com indicação do Shape base",
         "Caixa de Posições do Capotraste com destaque de '🎸 Shape Aberto'",
@@ -520,12 +520,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "caged",
-      title: "Violão & Guitarra: 5 Shapes do CAGED como variação do mesmo acorde",
+      title: "Violão & Guitarra: 5 Shapes do CAGED no Braço",
       featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
       icon: Sliders,
       isExclusive: true,
       exclusiveBadge: "5 SHAPES CAGED (VIOLÃO/GUITARRA)",
-      description: "Recurso exclusivo para violão e guitarra: alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em qualquer região do braço. Para tecladistas, o app oferece um modo independente de Teclado Didático Centrado.",
+      description: "Alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em todo o braço ou use o Teclado Didático.",
       benefits: [
         "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
         "Análise em tempo real de Grau e Função Harmônica do acorde",
@@ -534,12 +534,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "exclusivo",
-      title: "Recursos Exclusivos LiLouPro: Seções, Dinâmica, Expressão, Bíblia e Harmonia",
+      title: "Seções Exclusivas, Dinâmica, Bíblia e Harmonia",
       featureLabel: "Exclusivo LiLouPro • Ferramentas Especiais",
       icon: Sparkles,
       isExclusive: true,
       exclusiveBadge: "EXCLUSIVO LILOUPRO",
-      description: "Estilização automática de Seções e Partes da Música, 7 Níveis de Dinâmica Musical (N1 Sutil a N7 Clímax), Indicadores de Intensidade & Expressão, Fundamentação Bíblica e Harmonia Aplicada.",
+      description: "Tags de seções, 7 níveis de dinâmica (Sutil ao Clímax), expressões, Fundamentação Bíblica e Harmonia Aplicada.",
       benefits: [
         "Seções e Partes da Música + 7 Níveis de Dinâmica Musical (N1 a N7)",
         "Indicadores de Intensidade & Expressão (Crescendo, Pausa, Acapella, etc.)",
@@ -591,9 +591,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   ];
 
   return (
-    <div className="space-y-12 sm:space-y-16">
+    <div className="space-y-10 sm:space-y-12 py-4 sm:py-6">
       {/* SEÇÃO 4 & 5: AS FUNCIONALIDADES COM FOTOS E VÍDEO REAIS EM DESTAQUE */}
-      <section id="funcionalidades" className="max-w-7xl mx-auto px-6">
+      <section id="funcionalidades" className="max-w-7xl mx-auto px-6 py-4 sm:py-6">
         <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
@@ -983,15 +983,15 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   )}
 
-                  <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-brand transition-colors leading-snug">
+                  <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-brand transition-colors leading-snug">
                     {item.id === 'caged' && chordInstrumentTab === 'teclado'
                       ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
                       : item.title}
                   </h3>
 
-                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                  <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-2">
                     {item.id === 'caged' && chordInstrumentTab === 'teclado'
-                      ? 'Visualização exclusiva para tecladistas com teclado didático centrado, separando claramente a nota do Baixo (B) e as Notas do acorde (N), além do grau e função harmônica.'
+                      ? 'Visualização dedicada para tecladistas com Baixo (B), Notas do acorde (N), grau e função harmônica.'
                       : item.description}
                   </p>
                 </div>
@@ -1016,123 +1016,6 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               </div>
             );
           })}
-        </div>
-      </section>
-
-      {/* BANNER DE DESTAQUE ESPECIAL: MINHA DISPONIBILIDADE, ACADEMIA DE TEORIA MUSICAL E BÍBLIA INTEGRADA */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-[#0d1629] to-slate-950 border border-amber-500/35 p-4 sm:p-8 lg:p-10 shadow-2xl relative overflow-hidden space-y-6 sm:space-y-8">
-          <div className="absolute -top-24 -right-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Cabeçalho e Texto Principal da Seção */}
-          <div className="max-w-4xl mx-auto text-left sm:text-center space-y-4 relative z-10 px-1">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-widest shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Exclusivo LiLouPro • Rotina, Ensino & Palavra
-            </div>
-            <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
-              Minha Disponibilidade em 3 Passos, Academia de Teoria Musical e Bíblia Integrada
-            </h3>
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-              O LiLouPro cuida de toda a jornada do músico voluntário: em <strong className="text-white">3 passos simples</strong> o músico marca os dias de culto em que pode participar na <strong className="text-white">Minha Disponibilidade</strong>, evolui musicalmente na <strong className="text-white">Academia de Teoria Musical</strong> — um verdadeiro curso dentro do app — e acompanha a <strong className="text-white">Bíblia Sagrada Integrada</strong> em casa ou no culto, com ferramentas de anotações, compartilhar versículos e muito mais!
-            </p>
-          </div>
-
-          {/* 3 Blocos Mobile-First: Texto + Foto Grande em Largura Total logo abaixo no Celular e Lado a Lado Amplo no Desktop */}
-          <div className="space-y-6 relative z-10">
-            {/* 1. Minha Disponibilidade em 3 Passos Simples */}
-            <div
-              onClick={() => setSpecialBannerModal('disponibilidade')}
-              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-emerald-500/30 hover:border-emerald-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
-            >
-              <div className="lg:col-span-5 space-y-3">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="/assets/aistudio/image_66130167.png"
-                    alt="Card Minha Disponibilidade"
-                    loading="lazy"
-                    decoding="async"
-                    className="w-28 sm:w-32 h-auto rounded-xl border border-white/10 shrink-0 object-contain landing-crisp-img"
-                  />
-                  <p className="text-sm sm:text-base font-black uppercase tracking-wider text-emerald-400 group-hover:underline leading-snug">
-                    👍 Minha Disponibilidade em 3 Passos Simples
-                  </p>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  Sem confusão no WhatsApp: <strong className="text-white">Passo 1:</strong> Marque no calendário os dias que você pode • <strong className="text-white">Passo 2:</strong> Confirme em "Conte Comigo" ou "Não Posso" • <strong className="text-white">Passo 3:</strong> Finalize e notifique a liderança.
-                </p>
-              </div>
-
-              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-emerald-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
-                <img
-                  src="/assets/aistudio/image_85ebf322.png"
-                  alt="Minha Disponibilidade em 3 Passos Simples no LiLouPro"
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
-                />
-                <p className="text-[11px] font-bold text-center text-emerald-300 py-0.5">
-                  👍 Minha Disponibilidade: Em 3 passos simples o músico marca os dias de culto (Toque para ampliar)
-                </p>
-              </div>
-            </div>
-
-            {/* 2. Academia de Teoria Musical */}
-            <div
-              onClick={() => setSpecialBannerModal('academia')}
-              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-indigo-500/30 hover:border-indigo-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
-            >
-              <div className="lg:col-span-5 space-y-2.5">
-                <p className="text-sm sm:text-base font-black uppercase tracking-wider text-indigo-400 group-hover:underline leading-snug">
-                  🎓 Academia de Teoria Musical (Curso Completo no App)
-                </p>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  Um verdadeiro curso dentro do LiLouPro para dominar harmonia, entender arranjos e tocar com excelência: <strong className="text-white">Intervalos, Campo Harmônico, Inversões de Acordes, Funções Modernas, Cadências Harmônicas, Empréstimo Modal, Dominantes & SubV</strong> e <strong className="text-white">Auto-Desafio</strong>.
-                </p>
-              </div>
-
-              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-indigo-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
-                <img
-                  src="/assets/aistudio/image_6c194acd.png"
-                  alt="Academia de Teoria Musical - Curso completo dentro do LiLouPro"
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
-                />
-                <p className="text-[11px] font-bold text-center text-indigo-300 py-0.5">
-                  🎓 Academia de Teoria Musical • Curso Completo dentro do App (Toque para ampliar)
-                </p>
-              </div>
-            </div>
-
-            {/* 3. Bíblia Integrada no App */}
-            <div
-              onClick={() => setSpecialBannerModal('biblia')}
-              className="p-4 sm:p-6 rounded-2xl bg-slate-950/90 border border-amber-500/30 hover:border-amber-400/70 transition-all cursor-pointer grid grid-cols-1 lg:grid-cols-12 gap-5 items-center group shadow-xl"
-            >
-              <div className="lg:col-span-5 space-y-2.5">
-                <p className="text-sm sm:text-base font-black uppercase tracking-wider text-amber-400 group-hover:underline leading-snug">
-                  📖 Bíblia Integrada para Ler em Casa ou no Culto
-                </p>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  O músico voluntário acompanha a leitura bíblica no culto ou estuda em casa diretamente pelo LiLouPro, com recursos de <strong className="text-white">Marcar versículos, Anotar, Favoritar, Compartilhar, Copiar</strong>, ajuste de fonte e rolagem automática.
-                </p>
-              </div>
-
-              <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-amber-400/35 bg-[#0b1120] shadow-2xl p-1.5 sm:p-2 space-y-1.5">
-                <img
-                  src="/assets/aistudio/image_47dfdafb.png"
-                  alt="Bíblia Integrada no LiLouPro com anotações, destaques e compartilhamento"
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-auto object-contain rounded-xl landing-crisp-img mx-auto"
-                />
-                <p className="text-[11px] font-bold text-center text-amber-300 py-0.5">
-                  📖 Bíblia Integrada • Anotações, Destaques e Compartilhar (Toque para ampliar)
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

@@ -109,14 +109,14 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
       </header>
 
       {/* Corpo Principal da Landing Page - As 12 Seções Reformuladas com Padrão Apple / Stripe / Linear */}
-      <main className="relative z-10 pt-2 sm:pt-4 pb-20 sm:pb-12 space-y-12 sm:space-y-16 overflow-x-hidden">
+      <main className="relative z-10 pt-2 sm:pt-4 pb-4 sm:pb-8 space-y-10 sm:space-y-12 overflow-x-hidden">
         {/* Seção 1 (Hero), Seção 2 (Desafios), Seção 3 (A Solução) */}
         <LandingHeroAndChallenges onEnterApp={onEnterApp} />
 
         {/* Seção 4 (Benefícios / Resultados), Seção 5 (9 Módulos), Seção 6 (Veja Funcionando 20s) */}
         <LandingBenefitsAndFeatures onEnterApp={onEnterApp} />
 
-        {/* Seção 7 (Como Funciona 3 Etapas), Seção 8 (Por que o LiLouPro), Seção 9 (Timeline 30 Dias), Seção 10 (Depoimentos), Preços (#planos), Seção 11 (FAQ), Seção 12 (Chamada Final) + Rodapé */}
+        {/* Seção 7 (Como Funciona 3 Etapas), Seção 8 (Por que o LiLouPro), Seção 10 (Depoimentos), Preços (#planos), Seção 11 (FAQ), Seção 12 (Chamada Final) + Rodapé */}
         <LandingJourneyAndFAQ onEnterApp={onEnterApp} />
       </main>
     </div>

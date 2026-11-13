@@ -121,9 +121,9 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
   ];
 
   return (
-    <div className="space-y-12 sm:space-y-16">
+    <div className="space-y-10 sm:space-y-12">
       {/* SEÇÃO 7: COMO COMEÇAR EM SUA IGREJA (Adoção em 3 etapas) */}
-      <section id="como-funciona" className="max-w-7xl mx-auto px-6">
+      <section id="como-funciona" className="max-w-7xl mx-auto px-6 py-4 sm:py-6">
         <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
@@ -211,52 +211,6 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </div>
             );
           })}
-        </div>
-      </section>
-
-      {/* SEÇÃO 9: O QUE ACONTECE NOS PRIMEIROS 30 DIAS (Timeline de Adoção) */}
-      <section className="max-w-5xl mx-auto px-6">
-        <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider">
-            <Clock className="w-3.5 h-3.5" />
-            Sem Pressão
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Resultado desde a primeira semana, tranquilidade por 30 dias
-          </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Você não precisa esperar o teste acabar pra sentir a diferença. O essencial já funciona nos primeiros dias — os 30 dias são só o tempo que você tem pra usar à vontade com toda a equipe, sem pressa e sem cartão de crédito.
-          </p>
-        </div>
-
-        <div className="relative border-l-2 border-brand/40 ml-4 sm:ml-8 pl-6 sm:pl-10 space-y-6 sm:space-y-8">
-          {timelineSteps.map((step, idx) => (
-            <div key={idx} className="relative group">
-              <div className="absolute -left-[31px] sm:-left-[47px] top-1 w-4 h-4 rounded-full bg-brand border-4 border-slate-950 group-hover:scale-125 transition-transform" />
-              
-              <div className="space-y-1">
-                <span className="text-xs font-black uppercase tracking-wider text-brand">
-                  {step.day}
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-white">
-                  {step.title}
-                </h3>
-                <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-2xl">
-                  {step.description}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Citação Inspiradora & Compromisso de Marca */}
-        <div className="mt-8 sm:mt-10 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-[#0e172a] to-slate-900 border border-white/15 text-center space-y-3 shadow-xl">
-          <p className="text-lg sm:text-xl md:text-2xl font-bold text-white leading-relaxed max-w-3xl mx-auto italic">
-            "Quando a organização deixa de ser uma preocupação, sobra mais tempo para aquilo que realmente importa: servir."
-          </p>
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            O compromisso LiLouPro com a sua igreja
-          </div>
         </div>
       </section>
 
@@ -396,7 +350,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </ul>
             </div>
 
-            <div className="space-y-3.5 pt-2">
+            <div className="space-y-2.5 pt-2 text-center">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
@@ -409,10 +363,9 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 hover:border-sky-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="inline-block text-xs font-medium text-slate-400 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
               >
-                <span>ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})</span>
-                <ArrowRight className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})
               </a>
             </div>
           </div>
@@ -468,7 +421,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </ul>
             </div>
 
-            <div className="space-y-3.5 pt-2">
+            <div className="space-y-2.5 pt-2 text-center">
               <button
                 type="button"
                 onClick={() => onEnterApp('signup')}
@@ -481,10 +434,9 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="w-full py-3 px-4 rounded-xl bg-brand/10 hover:bg-brand/20 border border-brand/30 hover:border-brand/60 text-xs font-bold text-slate-100 hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="inline-block text-xs font-medium text-slate-400 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
               >
-                <span>ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})</span>
-                <ArrowRight className="w-3.5 h-3.5 text-brand shrink-0" />
+                ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})
               </a>
             </div>
           </div>
@@ -599,7 +551,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
       </section>
 
       {/* FOOTER INSTITUCIONAL */}
-      <footer className="border-t border-white/10 pt-10 pb-8 text-xs text-slate-400">
+      <footer className="border-t border-white/10 pt-10 pb-24 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
