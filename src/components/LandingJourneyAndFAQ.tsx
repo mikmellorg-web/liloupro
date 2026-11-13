@@ -265,61 +265,31 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
             <Award className="w-3.5 h-3.5" />
-            Experiências na Prática
+            DE LÍDER PARA LÍDER • HISTÓRIA REAL
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Como a rotina das equipes mudou na prática
+            Como o LiLouPro nasceu na prática do nosso ministério
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Relatos reais de líderes que substituíram mensagens soltas e improvisos por um fluxo colaborativo e pontual.
+            Criado dentro da igreja local para substituir o improviso pela organização e excelência.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+        <div className="max-w-3xl mx-auto">
           <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "Antes nós gastávamos horas cobrando confirmação de escala no WhatsApp. Agora cada voluntário confirma com 1 toque no celular e sabemos com antecedência quem estará no culto de domingo."
+              "Quando cheguei na minha igreja, o ministério de louvor dependia de um PDF antigo: muitas cifras e letras estavam erradas, os tons não batiam com a extensão vocal dos cantores e não tínhamos referência de áudio para ouvir a versão certa da música. Somado às escalas feitas pelo WhatsApp, todo ensaio virava um retrabalho. Hoje, como líder do ministério de louvor, desenvolvi o LiLouPro na prática com a nossa própria equipe para resolver exatamente essa rotina. Agora, da escala à projeção ao vivo, nosso culto flui em um só lugar."
             </p>
             <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-sm flex items-center justify-center shrink-0">
-                EM
-              </div>
+              <img
+                src="/miqueias.png"
+                alt="Miquéias Mello"
+                className="w-14 h-14 rounded-full object-cover border border-blue-500/30 shrink-0"
+              />
               <div className="space-y-0.5">
-                <h4 className="font-bold text-white text-sm">Pr. Eduardo Martins</h4>
-                <p className="text-xs text-slate-400">Pastor Auxiliar & Líder de Louvor</p>
-                <p className="text-[11px] text-brand font-medium">Igreja Batista da Graça • São Paulo, SP</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "Para a nossa banda, a transposição instantânea de cifra foi transformadora. Mudamos o tom no ensaio de acordo com a voz de quem vai ministrar e todos os instrumentistas acompanham na hora."
-            </p>
-            <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-full bg-sky-500/20 border border-sky-500/30 text-sky-300 font-bold text-sm flex items-center justify-center shrink-0">
-                MS
-              </div>
-              <div className="space-y-0.5">
-                <h4 className="font-bold text-white text-sm">Mariana Souza</h4>
-                <p className="text-xs text-slate-400">Ministra de Louvor & Tecladista</p>
-                <p className="text-[11px] text-sky-300 font-medium">Comunidade Bíblica Ágape • Curitiba, PR</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
-              "A projeção pelo navegador simplificou todo o trabalho da equipe de mídia. Sem pen drive corrompido, sem arquivos pesados travando e sem retrabalho conferindo letras minutos antes de o culto começar."
-            </p>
-            <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold text-sm flex items-center justify-center shrink-0">
-                GA
-              </div>
-              <div className="space-y-0.5">
-                <h4 className="font-bold text-white text-sm">Gabriel Andrade</h4>
-                <p className="text-xs text-slate-400">Coordenador de Mídia & Projeção</p>
-                <p className="text-[11px] text-purple-300 font-medium">Primeira Igreja Presbiteriana • Campinas, SP</p>
+                <h4 className="font-bold text-white text-sm">Miquéias Mello</h4>
+                <p className="text-xs text-slate-400">Líder de Louvor &amp; Criador do LiLouPro</p>
+                <p className="text-[11px] text-sky-300 font-medium">Igreja Graça Soberana • Rio Grande, RS</p>
               </div>
             </div>
           </div>

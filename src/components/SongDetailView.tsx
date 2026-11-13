@@ -507,7 +507,7 @@ export function SongDetailView({
             },
             {
               verseRef: "Tiago 1:17",
-              verseText: "Toda boa dádiva e todo dom perfeito vêm do alto, descendo do Pai das luzes, que não muda como sombras inconstantes.",
+              verseText: "Toda boa dádiva e todo dom perfeito vêm do alto, descendo do Pai das luzes, em quem não há mudança nem sombra de variação.",
               relation: "Conecta-se com a gratidão profunda expressa na letra pelas bênçãos recebidas, reconhecendo a imutabilidade do caráter benevolente de Deus."
             },
             {

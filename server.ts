@@ -426,9 +426,9 @@ async function startServer() {
         }
       });
 
-      const systemInstruction = `Você é um renomado teólogo e analista litúrgico especializado em música cristã contemporânea e hinos. Tendo como base a letra fornecida, analise quais passagens, temas e respaldos bíblicos dão sustentação teológica à composição ou serviram de inspiração direta para a letra. Forneça uma análise impecável em português contemporâneo.`;
+      const systemInstruction = `Você é um renomado teólogo e analista litúrgico especializado em música cristã contemporânea e hinos. Tendo como base a letra fornecida, analise quais passagens, temas e respaldos bíblicos dão sustentação teológica à composição ou serviram de inspiração direta para a letra. Forneça uma análise impecável em português contemporâneo, utilizando para o texto bíblico exclusivamente a Bíblia Livre (BLIVRE) ou a Tradução Brasileira de 1917 (TB), jamais utilizando traduções da SBB (como NAA, ARA, ARC ou NTLH).`;
 
-      const prompt = `Analise a música intitulada "${title}". Aqui está o conteúdo (letra/cifra) da música:\n\n${content}\n\nRetorne o resultado de forma estruturada, incluindo um breve resumo teológico do sentido da canção e uma lista com 3 a 4 referências bíblicas chave com seu texto completo e a relação direta com a canção.`;
+      const prompt = `Analise a música intitulada "${title}". Aqui está o conteúdo (letra/cifra) da música:\n\n${content}\n\nRetorne o resultado de forma estruturada, incluindo um breve resumo teológico do sentido da canção e uma lista com 3 a 4 referências bíblicas chave com seu texto completo (exclusivamente na tradução Bíblia Livre - BLIVRE ou Tradução Brasileira de 1917 - TB) e a relação direta com a canção.`;
 
       const modelsToTry = GEMINI_FALLBACK_MODELS;
       let responseText = "";
@@ -464,7 +464,7 @@ async function startServer() {
                           },
                           verseText: {
                             type: Type.STRING,
-                            description: "The full text/content of the scripture verse in Portuguese (NVI or ARA version)."
+                            description: "The full text/content of the scripture verse in Portuguese using exclusively Bíblia Livre (BLIVRE) or Tradução Brasileira de 1917 (TB)."
                           },
                           relation: {
                             type: Type.STRING,
@@ -518,7 +518,7 @@ async function startServer() {
           },
           {
             verseRef: "Tiago 1:17",
-            verseText: "Toda boa dádiva e todo dom perfeito vêm do alto, descendo do Pai das luzes, que não muda como sombras inconstantes.",
+            verseText: "Toda boa dádiva e todo dom perfeito vêm do alto, descendo do Pai das luzes, em quem não há mudança nem sombra de variação.",
             relation: "Conecta-se com a gratidão profunda expressa na letra pelas bênçãos recebidas, reconhecendo a imutabilidade do caráter benevolente de Deus."
           },
           {
@@ -705,15 +705,10 @@ async function startServer() {
       if (bollsBookId > 0) {
         const BOLLS_TRANSLATIONS: Record<string, string> = {
           "BLIVRE": "BLIVRE",
-          "TB": "TB10",
-          "ARA": "ARA",
-          "ARC": "ARC09",
-          "NVI": "NVIPT",
-          "NTLH": "NTLH",
-          "ACF": "ACF11"
+          "TB": "TB10"
         };
 
-        const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
+        const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "BLIVRE";
         const url = `https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${chapter}/`;
 
         console.log(`[Bible Service] Primary structured retrieval for ${book} ${chapter} (${bollsTranslation})`);
@@ -932,15 +927,10 @@ Retorne os dados estritamente em formato JSON estruturado conforme o esquema req
 
         const BOLLS_TRANSLATIONS: Record<string, string> = {
           "BLIVRE": "BLIVRE",
-          "TB": "TB10",
-          "ARA": "ARA",
-          "ARC": "ARC09",
-          "NVI": "NVIPT",
-          "NTLH": "NTLH",
-          "ACF": "ACF11"
+          "TB": "TB10"
         };
 
-        const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "ARA";
+        const bollsTranslation = BOLLS_TRANSLATIONS[selectedVersion] || "BLIVRE";
         const fallbackUrl = `https://bolls.life/get-chapter/${bollsTranslation}/${bollsBookId}/${chapter}/`;
 
         console.log(`[Bible Service] Alternative delivery request target: ${book} ${chapter} (${bollsTranslation}) via bolls.life`);
@@ -991,81 +981,11 @@ Retorne os dados estritamente em formato JSON estruturado conforme o esquema req
           text: textRepresentation,
           verses: formattedVerses,
           isFallback: true,
-          warning: selectedVersion === 'BLIVRE'
-            ? "Exibindo tradução Almeida (ARA) como contingência para a Bíblia Livre."
-            : `Exibindo tradução ${selectedVersion} via servidor de contingência.`
+          warning: `Exibindo tradução ${selectedVersion} via servidor de contingência.`
         };
         biblePassageCache.set(cacheKey, fallbackResObj);
         return res.json(fallbackResObj);
       } catch (fallbackErr: any) {
-        console.log("[Bible Service] Initiating tertiary delivery route.");
-        
-        try {
-          const BIBLE_BOOKS_MAP: Record<string, string> = {
-            "Gênesis": "Genesis", "Êxodo": "Exodus", "Levítico": "Leviticus", "Números": "Numbers", "Deuteronômio": "Deuteronomy",
-            "Josué": "Joshua", "Juízes": "Judges", "Rute": "Ruth", "1 Samuel": "1 Samuel", "2 Samuel": "2 Samuel",
-            "1 Reis": "1 Kings", "2 Reis": "2 Kings", "1 Crônicas": "1 Chronicles", "2 Crônicas": "2 Chronicles",
-            "Esdras": "Ezra", "Neemias": "Nehemiah", "Ester": "Esther", "Jó": "Job", "Salmos": "Psalms",
-            "Provérbios": "Proverbs", "Eclesiastes": "Ecclesiastes", "Cânticos": "Song of Solomon", "Isaías": "Isaiah",
-            "Jeremias": "Jeremiah", "Lamentações": "Lamentations", "Ezequiel": "Ezekiel", "Daniel": "Daniel",
-            "Oseias": "Hosea", "Joel": "Joel", "Amós": "Amos", "Obadias": "Obadiah", "Jonas": "Jonah",
-            "Miqueias": "Micah", "Naum": "Nahum", "Habacuque": "Habakkuk", "Sofonias": "Zephaniah",
-            "Ageu": "Haggai", "Zacarias": "Zechariah", "Malaquias": "Malachi",
-            "Mateus": "Matthew", "Marcos": "Mark", "Lucas": "Luke", "João": "John", "Atos": "Acts",
-            "Romanos": "Romans", "1 Coríntios": "1 Corinthians", "2 Coríntios": "2 Corinthians", "Gálatas": "Galatians",
-            "Efésios": "Ephesians", "Filipenses": "Philippians", "Colossenses": "Colossians", "1 Tessalonicenses": "1 Thessalonians",
-            "2 Tessalonicenses": "2 Thessalonians", "1 Timóteo": "1 Timothy", "2 Timóteo": "2 Timothy", "Tito": "Titus",
-            "Filemon": "Philemon", "Hebreus": "Hebrews", "Tiago": "James", "1 Pedro": "1 Peter", "2 Pedro": "2 Peter",
-            "1 João": "1 John", "2 João": "2 John", "3 João": "3 John", "Judas": "Jude", "Apocalipse": "Revelation"
-          };
-
-          const getEnglishBookName = (bookName: string): string => {
-            const normalize = (str: string) => str.trim().toLowerCase()
-              .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-            const normTarget = normalize(bookName);
-            for (const [key, value] of Object.entries(BIBLE_BOOKS_MAP)) {
-              if (normalize(key) === normTarget) {
-                return value;
-              }
-            }
-            return bookName;
-          };
-
-          const apiId = getEnglishBookName(book);
-          const queryRef = verseRange ? `${apiId} ${chapter}:${verseRange}` : `${apiId} ${chapter}`;
-          const bibleApiUrl = `https://bible-api.com/${encodeURIComponent(queryRef)}?translation=almeida`;
-
-          console.log(`[Bible Service] bible-api.com request target: ${queryRef}`);
-          const bibleApiRes = await fetch(bibleApiUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-          });
-          if (bibleApiRes.ok) {
-            const fbData = await bibleApiRes.json();
-            if (fbData && fbData.verses) {
-              const formattedVerses = fbData.verses.map((v: any, idx: number) => ({
-                verse: Number(v.verse || idx + 1),
-                text: v.text.trim()
-              }));
-
-              const textRepresentation = formattedVerses.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
-              const bibleApiResObj = {
-                reference: `${book} ${chapter}${verseRange ? ':' + verseRange : ''} (${selectedVersion})`,
-                text: textRepresentation,
-                verses: formattedVerses,
-                isFallback: true,
-                warning: "Exibindo tradução Almeida via servidor de contingência super-resiliente."
-              };
-              biblePassageCache.set(cacheKey, bibleApiResObj);
-              return res.json(bibleApiResObj);
-            }
-          }
-        } catch (apiErr) {
-          console.log("[Bible Service] Tertiary route complete, attempting final delivery channel.");
-        }
-
         console.log("[Bible Service] Activating final delivery channel.");
 
         // If local full BLIVRE database is loaded, use it as guaranteed real text

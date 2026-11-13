@@ -45,7 +45,7 @@ import {
   Instagram,
   Camera
 } from 'lucide-react';
-import kiwifyBannerImg from '../assets/images/kiwify_banner_standard_1787495484627.jpg';
+const kiwifyBannerImg = '/assets/aistudio/Capa_Kiwify_Atual_b9705a43.jpg';
 import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -1352,7 +1352,7 @@ Conte conosco para servir seu ministério com excelência!`
                       src={kiwifyBannerImg}
                       alt="Banner LiLouPro Kiwify Padrão"
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <a

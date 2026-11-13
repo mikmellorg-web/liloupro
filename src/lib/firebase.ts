@@ -11,8 +11,8 @@ import {
 } from 'firebase/auth';
 import { 
   initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager,
+  getFirestore,
+  memoryLocalCache,
   setLogLevel
 } from 'firebase/firestore';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
@@ -62,16 +62,19 @@ export const getFirebaseMessaging = async (): Promise<Messaging | null> => {
   return messagingInstance;
 };
 
-export const db = initializeFirestore(
-  app,
-  {
-    experimentalForceLongPolling: true,
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  },
-  firebaseConfig.firestoreDatabaseId
-);
+export const db = (() => {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        localCache: memoryLocalCache()
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+})();
 
 export const googleProvider = new GoogleAuthProvider();
 

@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeMember: (() => void) | null = null;
     let unsubscribeChurch: (() => void) | null = null;
+    let activeChurchId: string | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -56,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubscribeChurch();
         unsubscribeChurch = null;
       }
+      activeChurchId = null;
 
       if (currentUser) {
         const memberRef = doc(db, 'members', currentUser.uid);
@@ -248,54 +250,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAdmin(isMaster || !!currentMember.isAdmin || hasLeaderRole);
           }
 
-          // Fetch the church config and listen to its changes
+          // Fetch the church config and listen to its changes (only re-subscribe if churchId changed)
           const churchId = currentMember.churchId || 'semente';
-          const churchRef = doc(db, 'churches', churchId);
 
-          if (unsubscribeChurch) {
-            unsubscribeChurch();
-          }
-
-          unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
-            if (!churchSnap.exists() && churchId === 'semente') {
-              // Ensure default semente church is created with lifetime seed protection
-              const defaultChurch = {
-                name: 'Graça Soberana',
-                inviteCode: 'SEMENTE123',
-                createdAt: '2024-01-01T00:00:00.000Z',
-                createdBy: 'system',
-                isSeedChurch: true,
-                isVitalicio: true,
-                planStatus: 'active',
-                planName: 'PRO (Vitalício)',
-                planExpiresAt: null,
-                masterNotes: 'Igreja Pioneira e Matriz (Graça Soberana) - Acesso Vitalício Permanente.'
-              };
-              try {
-                await setDoc(churchRef, defaultChurch);
-                setChurchData({ id: 'semente', ...defaultChurch });
-              } catch (err) {
-                console.error("Erro ao inicializar igreja de semente:", err);
-                setChurchData({ id: 'semente', ...defaultChurch });
-              }
-            } else if (churchSnap.exists()) {
-              const data = churchSnap.data();
-              const isSeed = churchId === 'semente' || data.isSeedChurch === true || (data.name && data.name.toLowerCase().includes('graça soberana'));
-              setChurchData({ 
-                id: churchSnap.id, 
-                ...data,
-                isSeedChurch: isSeed,
-                isVitalicio: isSeed ? true : data.isVitalicio
-              });
-            } else {
-              setChurchData(null);
+          if (activeChurchId !== churchId || !unsubscribeChurch) {
+            if (unsubscribeChurch) {
+              unsubscribeChurch();
+              unsubscribeChurch = null;
             }
-            setLoading(false);
-          }, (err) => {
-            console.error("Erro ao assinar canal da igreja:", err);
-            setLoading(false);
-            handleFirestoreError(err, OperationType.GET, 'churches/' + churchId);
-          });
+            activeChurchId = churchId;
+            const churchRef = doc(db, 'churches', churchId);
+
+            unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
+              if (!churchSnap.exists() && churchId === 'semente') {
+                // Ensure default semente church is created with lifetime seed protection
+                const defaultChurch = {
+                  name: 'Graça Soberana',
+                  inviteCode: 'SEMENTE123',
+                  createdAt: '2024-01-01T00:00:00.000Z',
+                  createdBy: 'system',
+                  isSeedChurch: true,
+                  isVitalicio: true,
+                  planStatus: 'active',
+                  planName: 'PRO (Vitalício)',
+                  planExpiresAt: null,
+                  masterNotes: 'Igreja Pioneira e Matriz (Graça Soberana) - Acesso Vitalício Permanente.'
+                };
+                try {
+                  await setDoc(churchRef, defaultChurch);
+                  setChurchData({ id: 'semente', ...defaultChurch });
+                } catch (err) {
+                  console.error("Erro ao inicializar igreja de semente:", err);
+                  setChurchData({ id: 'semente', ...defaultChurch });
+                }
+              } else if (churchSnap.exists()) {
+                const data = churchSnap.data();
+                const isSeed = churchId === 'semente' || data.isSeedChurch === true || (data.name && data.name.toLowerCase().includes('graça soberana'));
+                setChurchData({ 
+                  id: churchSnap.id, 
+                  ...data,
+                  isSeedChurch: isSeed,
+                  isVitalicio: isSeed ? true : data.isVitalicio
+                });
+              } else {
+                setChurchData(null);
+              }
+              setLoading(false);
+            }, (err) => {
+              console.error("Erro ao assinar canal da igreja:", err);
+              setLoading(false);
+              handleFirestoreError(err, OperationType.GET, 'churches/' + churchId);
+            });
+          }
 
         }, (err) => {
           console.error("Erro ao assinar dados do membro:", err);
