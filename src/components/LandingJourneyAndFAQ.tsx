@@ -176,7 +176,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         </div>
       </section>
 
-      {/* SEÇÃO 8: POR QUE MINISTÉRIOS ESCOLHEM O LILOUPRO */}
+      {/* SEÇÃO 8: Por que o LiLouPro é a solução ideal para sua igreja */}
       <section className="max-w-7xl mx-auto px-6">
         <div className="text-center max-w-3xl mx-auto space-y-3 mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs font-bold uppercase tracking-wider">
@@ -184,7 +184,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             Especializado no Reino
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Por que ministérios escolhem o LiLouPro
+            Por que o LiLouPro é a solução ideal para sua igreja?
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
             Feito especificamente para a realidade de igrejas e equipes cristãs, sem improvisos de ferramentas genéricas.
