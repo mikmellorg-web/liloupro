@@ -551,12 +551,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300">
               <MessageSquare className="w-5 h-5" />
             </div>
-            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">O Sábado à Noite do Líder</span>
+            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">ESCALA SEM ESTRESSE</span>
             <h3 className="text-lg font-bold text-white">
-              Cobrando presença no grupo do WhatsApp
+              Acabou a cobrança no WhatsApp na quinta à noite
             </h3>
             <p className="text-slate-400 text-sm leading-relaxed">
-              O grupo se enche de mensagens e figurinhas, mas ninguém confirma se vai tocar. O líder passa a véspera do culto sem saber se terá baixista ou baterista.
+              Os músicos informam a disponibilidade direto no app e a escala é gerada com confirmação automática, sem mensagens perdidas no grupo.
             </p>
           </div>
 
@@ -565,12 +565,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <div className="w-11 h-11 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-300">
               <Music className="w-5 h-5" />
             </div>
-            <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">A Surpresa no Ensaio</span>
+            <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">ENSAIO SEM RETRABALHO</span>
             <h3 className="text-lg font-bold text-white">
-              Cifras em tons diferentes e retrabalho
+              O tom certo para cada cantor, sem refazer cifras
             </h3>
             <p className="text-slate-400 text-sm leading-relaxed">
-              O violonista estudou em sol (G), mas o ministro decide cantar em lá (A). Sem transposição rápida, o ensaio perde tempo e gera insegurança antes do culto.
+              Transponha qualquer música em 1 clique direto na tela e deixe a referência de áudio pronta antes mesmo da equipe chegar para o ensaio.
             </p>
           </div>
 
@@ -579,12 +579,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <div className="w-11 h-11 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300">
               <Tv className="w-5 h-5" />
             </div>
-            <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">A Cabine de Projeção</span>
+            <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">PROJEÇÃO SINCRONIZADA</span>
             <h3 className="text-lg font-bold text-white">
-              Letras divergentes no telão da igreja
+              A mídia nunca mais pergunta qual é a próxima música
             </h3>
             <p className="text-slate-400 text-sm leading-relaxed">
-              O operador de mídia recebe arquivos em pen drive ou slides fora de ordem em cima da hora, correndo o risco de passar a letra errada durante o louvor.
+              O repertório do culto já vai pronto e ordenado para o telão, podendo ser controlado direto pelo celular, sem slides desatualizados.
             </p>
           </div>
 

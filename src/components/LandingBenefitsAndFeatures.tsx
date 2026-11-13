@@ -511,7 +511,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
       icon: FileText,
       isExclusive: true,
       exclusiveBadge: "TOM EM 1 CLIQUE + CAPO",
-      description: "Mude o tom em 1 clique entre os 12 tons e veja em qual casa usar o capotraste com shapes abertos.",
+      description: "Mude o tom em 1 clique entre os 12 tons e veja em qual casa usar o capotraste com posições no braço.",
       benefits: [
         "Transposição de tom em 1 clique com indicação do Shape base",
         "Caixa de Posições do Capotraste com destaque de '🎸 Shape Aberto'",
@@ -520,14 +520,14 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "caged",
-      title: "Violão & Guitarra: 5 Shapes do CAGED no Braço",
+      title: "5 Formas de Fazer o Mesmo Acorde",
       featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
       icon: Sliders,
       isExclusive: true,
-      exclusiveBadge: "5 SHAPES CAGED (VIOLÃO/GUITARRA)",
-      description: "Alterne entre os 5 shapes do CAGED para tocar o mesmo acorde em todo o braço ou use o Teclado Didático.",
+      exclusiveBadge: "DICIONÁRIO VISUAL DE ACORDES",
+      description: "Diagramas visuais no violão, guitarra e teclado para qualquer músico tocar com segurança, do iniciante ao avançado.",
       benefits: [
-        "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
+        "5 posições visuais no braço com indicação de dedos e notas",
         "Análise em tempo real de Grau e Função Harmônica do acorde",
         "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
       ]
@@ -696,7 +696,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <span>🎸 Violão / Guitarra (5 Shapes CAGED)</span>
+                        <span>🎸 Violão & Guitarra</span>
                       </button>
                       <button
                         type="button"
@@ -905,11 +905,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           <span className="font-bold text-emerald-400">
                             {chordInstrumentTab === 'teclado'
                               ? '🎹 Teclado Didático: Baixo (B) + Notas (N)'
-                              : '🎸 Violão/Guitarra: Shape 1/5 a 5/5 (CAGED)'}
+                              : '🎸 5 formas de montar o mesmo acorde no braço'}
                           </span>
-                          <span className="text-slate-400">
-                            {chordInstrumentTab === 'teclado' ? 'Graus & Teclas' : 'Dedos & Intervalos'}
-                          </span>
+                          {chordInstrumentTab === 'teclado' && (
+                            <span className="text-slate-400">
+                              Graus & Teclas
+                            </span>
+                          )}
                         </div>
                       )}
                       {item.id === 'escala' && (
@@ -1498,8 +1500,10 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           )}
                         </div>
                         <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight">
-                          {selected.id === 'caged' && chordInstrumentTab === 'teclado'
-                            ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
+                          {selected.id === 'caged'
+                            ? (chordInstrumentTab === 'teclado'
+                                ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
+                                : 'Violão & Guitarra: 5 Shapes do Sistema CAGED no Braço')
                             : selected.title}
                         </h3>
                       </div>
@@ -1737,7 +1741,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   {/* Informações detalhadas do módulo */}
                   <div className="bg-slate-950/60 border border-white/10 rounded-2xl p-5 space-y-3">
                     <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
-                      {selected.description}
+                      {selected.id === 'caged'
+                        ? 'Recurso técnico completo para violão e guitarra: alterne entre os 5 Shapes do Sistema CAGED (Shape 1/5 a 5/5) para tocar o mesmo acorde em qualquer região do braço, com visualização detalhada de Dedos e Intervalos (T, 3, 5, 7m, 7M). Para tecladistas, o app oferece o Teclado Didático Centrado.'
+                        : selected.description}
                     </p>
 
                     <div className="pt-2 border-t border-white/5 space-y-2">
@@ -1745,7 +1751,14 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         O que sua equipe aproveita nesta funcionalidade:
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                        {selected.benefits.map((b, i) => (
+                        {(selected.id === 'caged'
+                          ? [
+                              "Violão e Guitarra: 5 Shapes do CAGED (Shape 1/5 a 5/5) + Dedos e Intervalos",
+                              "Análise em tempo real de Grau e Função Harmônica do acorde",
+                              "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
+                            ]
+                          : selected.benefits
+                        ).map((b, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs sm:text-sm text-slate-300">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                             <span>{b}</span>
