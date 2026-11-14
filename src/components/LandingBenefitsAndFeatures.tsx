@@ -545,48 +545,6 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         "Indicadores de Intensidade & Expressão (Crescendo, Pausa, Acapella, etc.)",
         "Fundamentação Bíblica, Mesmo Tema e Harmonia Aplicada passo a passo"
       ]
-    },
-    {
-      id: "liturgia",
-      title: "Liturgia e Cronograma do Culto: Pastor, Banda e Mídia na mesma página",
-      featureLabel: "Módulo • Liturgia & Cronograma do Culto",
-      icon: Layers,
-      isExclusive: false,
-      exclusiveBadge: "LITURGIA & SETLIST DO CULTO",
-      description: "Organize a ordem completa do culto com leituras bíblicas integradas (BLIVRE), músicas na sequência com indicação de Tom e ministro responsável, além de botões para Tocar Setlist, Cifras do Culto e Google Docs.",
-      benefits: [
-        "Cronograma numerado com passagens bíblicas e músicas do culto",
-        "Indicação clara de Tom e ministro(a) em cada canção",
-        "Acesso direto a 'Tocar Setlist', 'Cifras do Culto' e 'Google Docs'"
-      ]
-    },
-    {
-      id: "projecao",
-      title: "Tela de Projeção e Painel de Controle em Tempo Real para o Operador de Mídia",
-      featureLabel: "Módulo • Projeção & Controle de Mídia",
-      icon: Tv,
-      isExclusive: false,
-      exclusiveBadge: "CONTROLE DE PROJEÇÃO AO VIVO",
-      description: "Sincronize o telão com a liturgia do culto em 1 clique. O operador de mídia conta com atalhos de avisos rápidos, cronômetro regressivo no telão e letreiro de alertas (Chamar Berçário, Placa do Carro, Reunião).",
-      benefits: [
-        "Roteiro da liturgia sincronizado + busca rápida de Músicas e Bíblia",
-        "Atalhos instantâneos (Boas-vindas, Celular Silencioso, Dízimos, Infantil)",
-        "Cronômetro no telão (+1m a +15m) e Letreiro de Alertas (Marquee)"
-      ]
-    },
-    {
-      id: "comunicacao",
-      title: "Chat da Equipe com Conversas sobre o Culto e Avisos Sincronizados",
-      featureLabel: "Módulo • Chat & Comunicação da Equipe",
-      icon: MessageSquare,
-      isExclusive: false,
-      exclusiveBadge: "CHAT DO MINISTÉRIO AO VIVO",
-      description: "Converse com a equipe no Canal Geral diretamente dentro do LiLouPro. Veja quem está online, identifique os instrumentos de cada voluntário e alinhe repertório e ensaios sem mensagens perdidas.",
-      benefits: [
-        "Canal Geral sincronizado com identificação de instrumentos por membro",
-        "Barra de reações rápidas musicais e ministeriais em 1 toque",
-        "Conversas focadas no culto sem ruído ou distrações de redes sociais"
-      ]
     }
   ];
 
