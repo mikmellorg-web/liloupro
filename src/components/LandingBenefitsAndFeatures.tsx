@@ -50,10 +50,10 @@ interface SimulatorCustomMedia {
 }
 
 const defaultModuleImages: Record<string, string> = {
-  escala: '/mockup-escalas.png',
-  cifras: '/mockup-cifra-player.png',
-  caged: '/mockup-harmonia.png',
-  repertorio: '/mockup-repertorio.png',
+  escala: '/tela-escalas.png',
+  cifras: '/tela-cifra.png',
+  caged: '/tela-harmonia.png',
+  repertorio: '/tela-repertorio.png',
   exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
   liturgia: '/assets/aistudio/image_43623333.png',
   projecao: '/assets/aistudio/image_33eb4975.png',
@@ -85,8 +85,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const [activeModuleModal, setActiveModuleModal] = useState<string | null>(null);
   const [specialBannerModal, setSpecialBannerModal] = useState<'disponibilidade' | 'academia' | 'biblia' | null>(null);
 
-  // Estado para alternar entre Violão (5 Shapes CAGED) e Teclado Didático no card/modal e no simulador
-  const [chordInstrumentTab, setChordInstrumentTab] = useState<'violao' | 'teclado' | 'transposicao_capo' | 'completa'>('violao');
+  // Estado para alternar entre Raio-X Harmônico, Violão (5 Shapes CAGED) e Teclado Didático no modal de Acordes
+  const [chordInstrumentTab, setChordInstrumentTab] = useState<'harmonia' | 'violao' | 'teclado' | 'transposicao_capo' | 'completa'>('harmonia');
   // Estado para alternar entre Visão Geral (Mockup), Transposição + Capo (lado a lado), Transposição, Capo e Cifra Completa no modal de Cifras
   const [cifraCardSubTab, setCifraCardSubTab] = useState<'geral' | 'ambos' | 'transposicao' | 'capo' | 'cifra'>('geral');
   // Estado para alternar entre Player sem Anúncios, Repertório/Playlist e Tuner/Metrônomo no card de Player & Estudo
@@ -514,13 +514,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
             const IconComp = item.icon;
             const rawCardImage = moduleImages[item.id] || defaultModuleImages[item.id];
             const cardImage = item.id === 'caged'
-              ? '/mockup-harmonia.png'
+              ? '/tela-harmonia.png'
               : item.id === 'cifras'
-                ? '/mockup-cifra-player.png'
+                ? '/tela-cifra.png'
                 : item.id === 'escala'
-                  ? '/mockup-escalas.png'
+                  ? '/tela-escalas.png'
                   : item.id === 'repertorio'
-                    ? '/mockup-repertorio.png'
+                    ? '/tela-repertorio.png'
                     : item.id === 'exclusivo'
                       ? (exclusivoCardSubTab === 'dinamica'
                           ? '/assets/aistudio/image_d6211dcb.png'
@@ -637,7 +637,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           decoding="async"
                           className={
                             item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
-                              ? 'w-full h-full object-cover object-center scale-[1.48] md:scale-100 md:object-cover md:object-center transition-transform duration-500 group-hover:md:scale-105'
+                              ? 'w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]'
                               : 'w-full h-full object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
                           }
                         />
@@ -1097,7 +1097,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               const currentImage = selected.id === 'caged'
                 ? (chordInstrumentTab === 'teclado'
                     ? '/assets/aistudio/image_b8dba094.png'
-                    : '/assets/aistudio/image_1fbeb889.png')
+                    : chordInstrumentTab === 'violao'
+                      ? '/assets/aistudio/image_1fbeb889.png'
+                      : '/tela-harmonia.png')
                 : selected.id === 'cifras'
                   ? (cifraCardSubTab === 'capo'
                       ? '/assets/aistudio/image_e6f41181.png'
@@ -1105,11 +1107,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         ? '/assets/aistudio/image_bf73e394.png'
                         : cifraCardSubTab === 'transposicao'
                           ? '/assets/aistudio/image_ed96a73b.png'
-                          : '/mockup-cifra-player.png')
+                          : '/tela-cifra.png')
                   : selected.id === 'escala'
-                    ? '/mockup-escalas.png'
+                    ? '/tela-escalas.png'
                     : selected.id === 'repertorio'
-                      ? '/mockup-repertorio.png'
+                      ? '/tela-repertorio.png'
                     : selected.id === 'exclusivo'
                       ? (exclusivoCardSubTab === 'dinamica'
                           ? '/assets/aistudio/image_d6211dcb.png'
@@ -1140,7 +1142,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           {selected.id === 'caged'
                             ? (chordInstrumentTab === 'teclado'
                                 ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
-                                : 'Violão & Guitarra: 5 Shapes do Sistema CAGED no Braço')
+                                : chordInstrumentTab === 'violao'
+                                  ? 'Violão & Guitarra: 5 Shapes do Sistema CAGED no Braço'
+                                  : selected.title)
                             : selected.title}
                         </h3>
                       </div>
@@ -1160,30 +1164,41 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   </div>
 
-                  {/* Seletor rápido Violão (5 Shapes CAGED) vs Teclado no modal de Acordes */}
+                  {/* Seletor rápido Raio-X Harmônico vs Violão (5 Shapes CAGED) vs Teclado no modal de Acordes */}
                   {selected.id === 'caged' && (
-                    <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
                       <button
                         type="button"
-                        onClick={() => setChordInstrumentTab('violao')}
-                        className={`flex-1 py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          chordInstrumentTab !== 'teclado'
+                        onClick={() => setChordInstrumentTab('harmonia')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          chordInstrumentTab === 'harmonia'
                             ? 'bg-brand text-slate-950 font-extrabold shadow-md'
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🎸 Violão / Guitarra (5 Shapes do CAGED • Dedos & Intervalos)
+                        ✨ Raio-X & Campo Harmônico
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChordInstrumentTab('violao')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          chordInstrumentTab === 'violao'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        🎸 5 Shapes do CAGED (Dedos & Intervalos)
                       </button>
                       <button
                         type="button"
                         onClick={() => setChordInstrumentTab('teclado')}
-                        className={`flex-1 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
                           chordInstrumentTab === 'teclado'
                             ? 'bg-brand text-slate-950 font-extrabold shadow-md'
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🎹 Teclado Didático Centrado (Baixo & Notas)
+                        🎹 Teclado Didático Centrado
                       </button>
                     </div>
                   )}
@@ -1300,46 +1315,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   ) : currentImage ? (
                     <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center transition-all">
-                      {selected.id === 'escala' ? (
-                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 sm:p-4 bg-[#0b1120] items-center">
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-emerald-500/25 w-full max-w-full overflow-auto">
-                            <img
-                              src="/mockup-escalas.png"
-                              alt="Escalas Confirmadas no Celular e WhatsApp no LiLouPro"
-                              loading="lazy"
-                              decoding="async"
-                              onLoad={(e) => {
-                                const p = e.currentTarget.parentElement;
-                                if (p && p.scrollWidth > p.clientWidth) {
-                                  p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
-                                }
-                              }}
-                              className="w-full min-w-[480px] md:min-w-0 max-h-[420px] object-contain md:object-cover rounded-xl"
-                            />
-                            <span className="text-xs font-extrabold text-emerald-400 mt-2">
-                              📅 Escalas & Confirmação no Celular
-                            </span>
-                          </div>
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-white/10 w-full max-w-full overflow-auto">
-                            <img
-                              src="/mockup-repertorio.png"
-                              alt="Repertório Completo do Culto no LiLouPro"
-                              loading="lazy"
-                              decoding="async"
-                              onLoad={(e) => {
-                                const p = e.currentTarget.parentElement;
-                                if (p && p.scrollWidth > p.clientWidth) {
-                                  p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
-                                }
-                              }}
-                              className="w-full min-w-[480px] md:min-w-0 max-h-[420px] object-contain md:object-cover rounded-xl"
-                            />
-                            <span className="text-xs font-extrabold text-sky-400 mt-2">
-                              🎼 Repertório do Culto Conectado
-                            </span>
-                          </div>
-                        </div>
-                      ) : selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
+                      {selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
                         <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 sm:p-4 bg-[#0b1120] items-center">
                           <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-white/10 w-full max-w-full overflow-auto">
                             <img
@@ -1373,13 +1349,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             alt={`Print real do LiLouPro - ${selected.title}`}
                             loading="lazy"
                             decoding="async"
-                            onLoad={(e) => {
-                              const p = e.currentTarget.parentElement;
-                              if (p && p.scrollWidth > p.clientWidth) {
-                                p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
-                              }
-                            }}
-                            className="w-full min-w-[540px] md:min-w-0 md:max-h-[480px] object-contain rounded-xl sm:rounded-2xl block bg-[#0b1120] p-0 sm:p-2 landing-crisp-img"
+                            className="w-full max-h-[80vh] sm:max-h-[520px] object-contain rounded-xl sm:rounded-2xl block bg-[#0b1120] p-0 sm:p-2 landing-crisp-img"
                           />
                         </div>
                       )}
