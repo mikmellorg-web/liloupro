@@ -28,7 +28,8 @@ import {
   Video,
   Film,
   X,
-  Monitor
+  Monitor,
+  ZoomIn
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
 import { 
@@ -628,17 +629,25 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   {/* Exibição de Foto Real direto no Card */}
                   {!cardVideo && cardImage && (
                     <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-xl">
-                      <img
-                        src={cardImage}
-                        alt={`Print real do LiLouPro - ${item.title}`}
-                        loading="lazy"
-                        decoding="async"
-                        className={
-                          item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
-                            ? 'w-full h-56 sm:h-60 object-cover rounded-xl block transition-transform duration-300 group-hover:scale-[1.02]'
-                            : 'w-full h-56 sm:h-60 object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
-                        }
-                      />
+                      <div className="relative overflow-hidden rounded-xl aspect-[16/10] sm:aspect-video cursor-pointer">
+                        <img
+                          src={cardImage}
+                          alt={`Print real do LiLouPro - ${item.title}`}
+                          loading="lazy"
+                          decoding="async"
+                          className={
+                            item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
+                              ? 'w-full h-full object-cover object-center scale-[1.28] sm:scale-100 transition-transform duration-500 group-hover:sm:scale-105'
+                              : 'w-full h-full object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
+                          }
+                        />
+                        {(item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala') && (
+                          <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none flex items-center gap-1.5 rounded-full bg-slate-950/80 backdrop-blur-md px-2.5 py-1 text-[11px] font-medium text-blue-300 border border-blue-400/30 shadow-lg">
+                            <ZoomIn className="w-3.5 h-3.5" />
+                            <span>Ampliar tela</span>
+                          </div>
+                        )}
+                      </div>
                       {item.id === 'caged' && (
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
@@ -1292,26 +1301,26 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   ) : currentImage ? (
                     <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center transition-all">
                       {selected.id === 'escala' ? (
-                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-[#0b1120] items-center">
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-emerald-500/25">
+                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 sm:p-4 bg-[#0b1120] items-center">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-emerald-500/25 w-full max-w-full overflow-auto">
                             <img
                               src="/mockup-escalas.png"
                               alt="Escalas Confirmadas no Celular e WhatsApp no LiLouPro"
                               loading="lazy"
                               decoding="async"
-                              className="w-full max-h-[400px] object-cover rounded-xl"
+                              className="w-full min-w-[440px] sm:min-w-0 max-h-[420px] object-contain sm:object-cover rounded-xl"
                             />
                             <span className="text-xs font-extrabold text-emerald-400 mt-2">
                               📅 Escalas & Confirmação no Celular
                             </span>
                           </div>
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-white/10">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-white/10 w-full max-w-full overflow-auto">
                             <img
                               src="/mockup-repertorio.png"
                               alt="Repertório Completo do Culto no LiLouPro"
                               loading="lazy"
                               decoding="async"
-                              className="w-full max-h-[400px] object-cover rounded-xl"
+                              className="w-full min-w-[440px] sm:min-w-0 max-h-[420px] object-contain sm:object-cover rounded-xl"
                             />
                             <span className="text-xs font-extrabold text-sky-400 mt-2">
                               🎼 Repertório do Culto Conectado
@@ -1319,8 +1328,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           </div>
                         </div>
                       ) : selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
-                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-[#0b1120] items-center">
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-white/10">
+                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 sm:p-4 bg-[#0b1120] items-center">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-white/10 w-full max-w-full overflow-auto">
                             <img
                               src="/assets/aistudio/image_ed96a73b.png"
                               alt="Transposição de Tom em 1 Clique no LiLouPro"
@@ -1332,7 +1341,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                               🎵 Transposição de Tom em 1 Clique (12 Tons + ±1/2 Tom)
                             </span>
                           </div>
-                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-amber-500/30">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-amber-500/30 w-full max-w-full overflow-auto">
                             <img
                               src="/assets/aistudio/image_e6f41181.png"
                               alt="Cálculo Automático da Posição do Capotraste no LiLouPro"
@@ -1346,13 +1355,15 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           </div>
                         </div>
                       ) : (
-                        <img 
-                          src={currentImage} 
-                          alt={`Print real do LiLouPro - ${selected.title}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full max-h-[480px] object-contain rounded-2xl block bg-[#0b1120] p-2 landing-crisp-img"
-                        />
+                        <div className="w-full max-w-full overflow-auto">
+                          <img 
+                            src={currentImage} 
+                            alt={`Print real do LiLouPro - ${selected.title}`}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full min-w-[480px] sm:min-w-0 sm:max-h-[480px] object-contain rounded-xl sm:rounded-2xl block bg-[#0b1120] p-0 sm:p-2 landing-crisp-img"
+                          />
+                        </div>
                       )}
 
                       {/* Rodapé da imagem */}
