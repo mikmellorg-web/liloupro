@@ -66,7 +66,7 @@ const defaultModuleVideos: Record<string, string> = {
 const defaultSimulatorMedia: Record<number, SimulatorCustomMedia> = {
   0: {
     type: 'video',
-    url: '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4',
+    url: '/demo-pedal.mp4',
     isEmbed: false
   },
   1: {
@@ -400,42 +400,16 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const demos = [
     {
       id: 0,
-      title: "Pedal Bluetooth, Escala, Liturgia, Projeção & Chat",
-      badge: "Palco, Escala, Liturgia, Mídia & Chat",
-      duration: "Vídeo + Fotos Reais",
-      subtitle: "Controle a rolagem da cifra com Pedal Bluetooth e acompanhe a Escala, o Cronograma Litúrgico, o Painel do Operador de Mídia e o Chat da equipe.",
+      title: "Rolagem Inteligente & Pedal Bluetooth",
+      badge: "MODO PALCO & MÃOS LIVRES",
+      duration: "Vídeo Real",
+      subtitle: "Controle a rolagem da cifra com o pé usando Pedal Bluetooth ou ajuste a velocidade automática para tocar do início ao fim sem tirar as mãos do instrumento.",
       steps: [
-        { label: "1. Pedal Bluetooth & Escala do Culto", desc: "Rolagem mãos-livres no palco e confirmação em 1 toque" },
-        { label: "2. Liturgia & Cronograma Interativo", desc: "Tocar Setlist, Cifras do Culto, Leituras Bíblicas e Ministro" },
-        { label: "3. Projeção em Tempo Real & Chat", desc: "Avisos rápidos, cronômetro, alertas no telão e Canal Geral" }
+        { label: "1. Acionamento com o Pé (Pedal Bluetooth)", desc: "Inicie, pause ou avance a cifra no palco sem tocar na tela" },
+        { label: "2. Velocidade de Rolagem Ajustável", desc: "Controle fino de velocidade e tamanho da fonte para leitura perfeita" },
+        { label: "3. Modo Palco de Alto Contraste", desc: "Visual limpo com acordes em destaque e marcações de dinâmica (Forte, Suave, Refrão)" }
       ],
       mockupType: "escala"
-    },
-    {
-      id: 1,
-      title: "5 Shapes do CAGED (Violão/Guitarra), Tom 1 Clique & Capo",
-      badge: "Violão/Guitarra, Tom, Capo & Teclado",
-      duration: "Prints Reais",
-      subtitle: "No violão e guitarra, explore os 5 shapes do CAGED como variação do mesmo acorde. Para tecladistas, alterne para o Teclado Didático Centrado.",
-      steps: [
-        { label: "1. 5 Shapes do CAGED (Violão/Guitarra)", desc: "Variações do mesmo acorde em 5 regiões do braço" },
-        { label: "2. Transposição 1 Clique & Capotraste", desc: "Mude entre os 12 tons e veja as casas com Shape Aberto" },
-        { label: "3. Modo Teclado Didático Centrado", desc: "Visualização própria para teclas com Baixo (B) e Notas (N)" }
-      ],
-      mockupType: "cifra"
-    },
-    {
-      id: 2,
-      title: "LiLouPro Player sem Anúncios & Recursos Exclusivos",
-      badge: "Player sem Anúncios • Exclusivo PRO",
-      duration: "Prints Reais",
-      subtitle: "Ouça e repita a música no LiLouPro Player sem anúncios direto na cifra, com Fundamentação Bíblica, Sugestões do Mesmo Tema, Harmonia, Tuner e Metrônomo.",
-      steps: [
-        { label: "1. LiLouPro Player sem Anúncios", desc: "Modo Pratique flutuante na cifra com função Repetir" },
-        { label: "2. Fundamentação Bíblica & Harmonia", desc: "Base teológica, sugestões do mesmo tema e análise harmônica" },
-        { label: "3. Minha Playlist, Tuner & Metrônomo", desc: "Repertório organizado com afinador e metrônomo stompbox" }
-      ],
-      mockupType: "projecao"
     }
   ];
 
@@ -991,11 +965,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               Veja o sistema em funcionamento
             </h2>
             <p className="text-slate-400 text-sm sm:text-base">
-              Navegue pelos cenários abaixo para assistir à rolagem por Pedal Bluetooth, ver a confirmação da Escala do Culto, Transposição em 1 Clique, Cálculo do Capotraste e o LiLouPro Player sem anúncios.
+              Assista à rolagem inteligente da cifra no Modo Palco com acionamento mãos-livres por Pedal Bluetooth.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Lado Esquerdo: Abas de Cenários */}
             <div className="lg:col-span-5 space-y-3">
               {demos.map((demo, idx) => {
@@ -1027,9 +1001,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </p>
 
                     {isActive && (
-                      <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
+                      <div className="mt-4 pt-3 border-t border-white/10 space-y-2.5">
                         {demo.steps.map((step, sIdx) => (
-                          <div key={sIdx} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-0.5">
+                          <div key={sIdx} className="flex flex-col text-xs gap-0.5">
                             <span className="text-brand font-bold">{step.label}</span>
                             <span className="text-slate-300 text-[11px]">{step.desc}</span>
                           </div>
@@ -1039,6 +1013,24 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   </div>
                 );
               })}
+
+              {/* Card visual do Pedal Bluetooth M-VAVE no palco */}
+              <div className="mt-4 rounded-2xl overflow-hidden border border-blue-500/20 bg-slate-900/60 shadow-xl relative group">
+                <img
+                  src="/pedal-bluetooth.png"
+                  alt="Controlador Pedal Bluetooth M-VAVE no palco"
+                  className="w-full h-56 sm:h-64 object-cover object-center"
+                  loading="lazy"
+                />
+                <div className="bg-slate-950/85 backdrop-blur-md px-4 py-3 border-t border-white/10 flex items-center justify-between gap-2">
+                  <span className="text-xs text-slate-200 font-medium">
+                    🦶 Compatível com M-VAVE Chocolate e pedais Bluetooth padrão
+                  </span>
+                  <span className="text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full shrink-0">
+                    Plug &amp; Play
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Lado Direito: Visualização Real da Interface (Vídeo Real do Pedal Bluetooth e Prints Reais) */}
@@ -1048,7 +1040,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                 let currentMedia = baseMedia;
 
                 // Permite alternar sub-abas visuais nos cenários 0, 1 e 2
-                if (activeDemo === 0 && (!simulatorMedia[0] || simulatorMedia[0].url === defaultSimulatorMedia[0].url)) {
+                if (activeDemo === 0 && (!simulatorMedia[0] || simulatorMedia[0].url === defaultSimulatorMedia[0].url || simulatorMedia[0].url === '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4')) {
                   if (stageSimSubTab === 'escala') {
                     currentMedia = {
                       type: 'image',
@@ -1072,7 +1064,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   } else {
                     currentMedia = {
                       type: 'video',
-                      url: '/assets/aistudio/Rolagem_de_cifra_bdfa1655.mp4',
+                      url: '/demo-pedal.mp4',
                       isEmbed: false
                     };
                   }
@@ -1109,227 +1101,118 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         : 'border-white/10'
                     } rounded-3xl p-5 sm:p-6 shadow-2xl relative min-h-[400px] flex flex-col justify-between transition-all duration-300 overflow-hidden group`}
                   >
-                    {/* Cabeçalho do Telão com Sub-seletores Interativos */}
+                    {/* Cabeçalho do Telão focado em Modo Palco & Pedal Bluetooth */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full ${currentMedia ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-400'}`} />
                         <span className="text-xs font-bold text-white">
-                          {demos[activeDemo].badge}
+                          Modo Palco &amp; Rolagem por Pedal Bluetooth
                         </span>
                       </div>
 
-                      {/* Sub-abas do Cenário 0: Pedal Bluetooth, Escala, Liturgia, Projeção e Chat */}
-                      {activeDemo === 0 && (
-                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setStageSimSubTab('pedal')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              stageSimSubTab === 'pedal' ? 'bg-emerald-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🦶 Pedal Bluetooth
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setStageSimSubTab('escala')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              stageSimSubTab === 'escala' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            📅 Escala
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setStageSimSubTab('liturgia')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              stageSimSubTab === 'liturgia' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            📖 Liturgia
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setStageSimSubTab('projecao')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              stageSimSubTab === 'projecao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🖥️ Projeção
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setStageSimSubTab('comunicacao')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              stageSimSubTab === 'comunicacao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            💬 Chat
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Sub-abas do Cenário 1: 5 Shapes CAGED, Teclado, Transposição + Capo e Cifra Completa */}
-                      {activeDemo === 1 && (
-                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setChordInstrumentTab('violao')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              chordInstrumentTab === 'violao' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎸 5 Shapes CAGED
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setChordInstrumentTab('transposicao_capo')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              chordInstrumentTab === 'transposicao_capo' ? 'bg-amber-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🔀 Tom 1 Clique & Capo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setChordInstrumentTab('teclado')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              chordInstrumentTab === 'teclado' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎹 Teclado
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setChordInstrumentTab('completa')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              chordInstrumentTab === 'completa' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎼 Cifra
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Sub-abas do Cenário 2: Player sem Anúncios, Dinâmica/Expressão, Exclusivo LiLouPro, Estudo e Playlist */}
-                      {activeDemo === 2 && (
-                        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setExclusiveSimSubTab('player')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              exclusiveSimSubTab === 'player' ? 'bg-emerald-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            ▶️ Player s/ Anúncios
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setExclusiveSimSubTab('dinamica')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              exclusiveSimSubTab === 'dinamica' ? 'bg-sky-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎚️ Dinâmica & Expressão
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setExclusiveSimSubTab('exclusivo')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              exclusiveSimSubTab === 'exclusivo' ? 'bg-amber-400 text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            ✨ Bíblia & Harmonia
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setExclusiveSimSubTab('playlist')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              exclusiveSimSubTab === 'playlist' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎵 Playlist
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setExclusiveSimSubTab('estudo')}
-                            className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                              exclusiveSimSubTab === 'estudo' ? 'bg-brand text-slate-950 font-extrabold' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            🎧 Tuner & BPM
-                          </button>
-                        </div>
-                      )}
-
+                      <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-white/10 text-[11px] font-bold">
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-slate-950 font-extrabold">
+                          🦶 Pedal Bluetooth
+                        </span>
+                      </div>
                     </div>
 
                     {/* Corpo do Telão: Mídia Real em Alta Definição */}
                     <div className="py-3 my-auto flex flex-col justify-center">
                       {currentMedia && (
-                        <div className="w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden bg-[#0b1120] border border-white/10 p-2 relative group/media">
-                          {activeDemo === 1 && chordInstrumentTab === 'transposicao_capo' ? (
-                            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 bg-[#0b1120] items-center">
-                              <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-white/10">
-                                <img
-                                  src="/assets/aistudio/image_ed96a73b.png"
-                                  alt="Transposição de Tom em 1 Clique"
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
-                                />
-                                <span className="text-[11px] font-bold text-sky-400 mt-1.5">
-                                  🎵 Transposição de Tom em 1 Clique
-                                </span>
+                        activeDemo === 0 && stageSimSubTab === 'pedal' && currentMedia.type === 'video' && !currentMedia.isEmbed ? (
+                          <div className="w-full flex items-center justify-center py-2">
+                            {/* Mockup de Tablet estilo iPad Pro flutuando diretamente no fundo escuro */}
+                            <div className="relative mx-auto w-full bg-zinc-900 border-[10px] border-zinc-800 rounded-[2.2rem] shadow-2xl ring-1 ring-white/15">
+                              {/* Botão superior (Power) sutil na moldura */}
+                              <div className="absolute -top-[12px] right-10 w-10 h-[2px] rounded-t-full bg-zinc-600/80 pointer-events-none" />
+                              {/* Botões laterais sutis de volume */}
+                              <div className="absolute -right-[12px] top-12 w-[2px] h-8 rounded-r-full bg-zinc-600/80 pointer-events-none" />
+                              <div className="absolute -right-[12px] top-24 w-[2px] h-8 rounded-r-full bg-zinc-600/80 pointer-events-none" />
+                              {/* Câmera frontal realista na borda superior */}
+                              <div className="absolute -top-[9px] left-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-10">
+                                <span className="w-2 h-2 rounded-full bg-zinc-700 ring-1 ring-zinc-600/60" />
                               </div>
-                              <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-amber-500/30">
-                                <img
-                                  src="/assets/aistudio/image_e6f41181.png"
-                                  alt="Cálculo Automático da Posição do Capotraste"
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
-                                />
-                                <span className="text-[11px] font-bold text-amber-400 mt-1.5">
-                                  🎸 Cálculo do Capotraste (Shape Aberto)
-                                </span>
-                              </div>
-                            </div>
-                          ) : currentMedia.type === 'video' ? (
-                            currentMedia.isEmbed ? (
-                              <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black">
-                                <iframe
-                                  src={currentMedia.url}
-                                  title={`Vídeo - ${demos[activeDemo].title}`}
-                                  className="w-full h-full border-0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                />
-                              </div>
-                            ) : (
-                              <div className="w-full overflow-hidden rounded-xl bg-[#0b1120] shadow-2xl flex items-center justify-center">
+
+                              {/* Tela interna do tablet preenchendo com nitidez original */}
+                              <div className="w-full overflow-hidden rounded-[1.6rem] bg-black">
                                 <video
                                   key={currentMedia.url}
                                   src={currentMedia.url}
-                                  controls
                                   autoPlay
                                   loop
                                   muted
                                   playsInline
-                                  className="w-full max-h-[420px] object-contain scale-[1.02] transform-gpu bg-[#0b1120]"
+                                  className="w-full h-auto block rounded-[1.6rem] object-contain"
                                 />
                               </div>
-                            )
-                          ) : (
-                            <img
-                              src={currentMedia.url}
-                              alt={demos[activeDemo].title}
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full max-h-[420px] object-contain rounded-xl shadow-2xl landing-crisp-img"
-                            />
-                          )}
-                        </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden bg-[#0b1120] border border-white/10 p-2 relative group/media">
+                            {activeDemo === 1 && chordInstrumentTab === 'transposicao_capo' ? (
+                              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 bg-[#0b1120] items-center">
+                                <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-white/10">
+                                  <img
+                                    src="/assets/aistudio/image_ed96a73b.png"
+                                    alt="Transposição de Tom em 1 Clique"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
+                                  />
+                                  <span className="text-[11px] font-bold text-sky-400 mt-1.5">
+                                    🎵 Transposição de Tom em 1 Clique
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-xl p-2 border border-amber-500/30">
+                                  <img
+                                    src="/assets/aistudio/image_e6f41181.png"
+                                    alt="Cálculo Automático da Posição do Capotraste"
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full max-h-[360px] object-contain rounded-lg landing-crisp-img"
+                                  />
+                                  <span className="text-[11px] font-bold text-amber-400 mt-1.5">
+                                    🎸 Cálculo do Capotraste (Shape Aberto)
+                                  </span>
+                                </div>
+                              </div>
+                            ) : currentMedia.type === 'video' ? (
+                              currentMedia.isEmbed ? (
+                                <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl bg-black">
+                                  <iframe
+                                    src={currentMedia.url}
+                                    title={`Vídeo - ${demos[activeDemo].title}`}
+                                    className="w-full h-full border-0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-full overflow-hidden rounded-xl bg-[#0b1120] shadow-2xl flex items-center justify-center">
+                                  <video
+                                    key={currentMedia.url}
+                                    src={currentMedia.url}
+                                    controls
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                    className="w-full max-h-[420px] object-contain scale-[1.02] transform-gpu bg-[#0b1120]"
+                                  />
+                                </div>
+                              )
+                            ) : (
+                              <img
+                                src={currentMedia.url}
+                                alt={demos[activeDemo].title}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full max-h-[420px] object-contain rounded-xl shadow-2xl landing-crisp-img"
+                              />
+                            )}
+                          </div>
+                        )
                       )}
                     </div>
 
