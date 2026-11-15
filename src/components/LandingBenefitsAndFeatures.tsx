@@ -629,7 +629,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   {/* Exibição de Foto Real direto no Card */}
                   {!cardVideo && cardImage && (
                     <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-xl">
-                      <div className="relative overflow-hidden rounded-xl aspect-[16/10] sm:aspect-video cursor-pointer">
+                      <div className="relative overflow-hidden rounded-xl aspect-[16/10] bg-[#060d1f] border border-white/10 cursor-pointer">
                         <img
                           src={cardImage}
                           alt={`Print real do LiLouPro - ${item.title}`}
@@ -637,7 +637,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           decoding="async"
                           className={
                             item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
-                              ? 'w-full h-full object-cover object-center scale-[1.28] sm:scale-100 transition-transform duration-500 group-hover:sm:scale-105'
+                              ? 'w-full h-full object-cover object-center scale-[1.48] md:scale-100 md:object-cover md:object-center transition-transform duration-500 group-hover:md:scale-105'
                               : 'w-full h-full object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
                           }
                         />
@@ -1308,7 +1308,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                               alt="Escalas Confirmadas no Celular e WhatsApp no LiLouPro"
                               loading="lazy"
                               decoding="async"
-                              className="w-full min-w-[440px] sm:min-w-0 max-h-[420px] object-contain sm:object-cover rounded-xl"
+                              onLoad={(e) => {
+                                const p = e.currentTarget.parentElement;
+                                if (p && p.scrollWidth > p.clientWidth) {
+                                  p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
+                                }
+                              }}
+                              className="w-full min-w-[480px] md:min-w-0 max-h-[420px] object-contain md:object-cover rounded-xl"
                             />
                             <span className="text-xs font-extrabold text-emerald-400 mt-2">
                               📅 Escalas & Confirmação no Celular
@@ -1320,7 +1326,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                               alt="Repertório Completo do Culto no LiLouPro"
                               loading="lazy"
                               decoding="async"
-                              className="w-full min-w-[440px] sm:min-w-0 max-h-[420px] object-contain sm:object-cover rounded-xl"
+                              onLoad={(e) => {
+                                const p = e.currentTarget.parentElement;
+                                if (p && p.scrollWidth > p.clientWidth) {
+                                  p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
+                                }
+                              }}
+                              className="w-full min-w-[480px] md:min-w-0 max-h-[420px] object-contain md:object-cover rounded-xl"
                             />
                             <span className="text-xs font-extrabold text-sky-400 mt-2">
                               🎼 Repertório do Culto Conectado
@@ -1361,7 +1373,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             alt={`Print real do LiLouPro - ${selected.title}`}
                             loading="lazy"
                             decoding="async"
-                            className="w-full min-w-[480px] sm:min-w-0 sm:max-h-[480px] object-contain rounded-xl sm:rounded-2xl block bg-[#0b1120] p-0 sm:p-2 landing-crisp-img"
+                            onLoad={(e) => {
+                              const p = e.currentTarget.parentElement;
+                              if (p && p.scrollWidth > p.clientWidth) {
+                                p.scrollLeft = (p.scrollWidth - p.clientWidth) / 2;
+                              }
+                            }}
+                            className="w-full min-w-[540px] md:min-w-0 md:max-h-[480px] object-contain rounded-xl sm:rounded-2xl block bg-[#0b1120] p-0 sm:p-2 landing-crisp-img"
                           />
                         </div>
                       )}
