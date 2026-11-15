@@ -628,28 +628,54 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                   {/* Exibição de Foto Real direto no Card */}
                   {!cardVideo && cardImage && (
-                    <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-xl">
-                      <div className="relative overflow-hidden rounded-xl aspect-[16/10] bg-[#060d1f] border border-white/10 cursor-pointer">
-                        <img
-                          src={cardImage}
-                          alt={`Print real do LiLouPro - ${item.title}`}
-                          loading="lazy"
-                          decoding="async"
-                          className={
-                            item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
-                              ? 'w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]'
-                              : 'w-full h-full object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
-                          }
-                        />
-                        {(item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala') && (
-                          <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none flex items-center gap-1.5 rounded-full bg-slate-950/80 backdrop-blur-md px-2.5 py-1 text-[11px] font-medium text-blue-300 border border-blue-400/30 shadow-lg">
-                            <ZoomIn className="w-3.5 h-3.5" />
-                            <span>Ampliar tela</span>
+                    <div className="relative w-full space-y-2.5 pt-1.5">
+                      {item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala' ? (
+                        <div className="relative z-0 mx-auto w-full cursor-pointer group before:absolute before:-inset-2 before:rounded-[2rem] before:bg-gradient-to-tr before:from-blue-600/20 before:via-cyan-500/5 before:to-amber-500/15 before:blur-xl before:-z-10">
+                          {/* Aro externo de titânio chanfrado */}
+                          <div className="relative rounded-[1.65rem] p-[2.5px] bg-gradient-to-b from-zinc-400/50 via-zinc-700/40 to-zinc-900 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85),0_0_20px_rgba(59,130,246,0.12)]">
+                            {/* Botões físicos discretos no topo direito da carcaça */}
+                            <div className="absolute -top-[4px] right-10 w-7 h-[3px] rounded-t bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
+                            <div className="absolute -top-[4px] right-20 w-5 h-[3px] rounded-t bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
+
+                            {/* Moldura preta de vidro (Bezel fino) */}
+                            <div className="relative rounded-[1.5rem] bg-[#090a0f] p-2 sm:p-2.5 shadow-[inset_0_0_6px_rgba(255,255,255,0.12)] border border-black">
+                              {/* Câmera frontal no centro superior do Bezel */}
+                              <div className="mx-auto mb-1.5 w-2 h-2 rounded-full bg-[#11131c] ring-1 ring-white/15 flex items-center justify-center pointer-events-none">
+                                <span className="w-0.5 h-0.5 rounded-full bg-blue-400/70" />
+                              </div>
+
+                              {/* Tela interna nítida + Reflexo de vidro + Barra Home do iPadOS */}
+                              <div className="relative rounded-[1.05rem] overflow-hidden border border-white/10 bg-[#060d1f] aspect-[16/10]">
+                                <img
+                                  src={cardImage}
+                                  alt={`Print real do LiLouPro - ${item.title}`}
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                                />
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.07] z-10" />
+                                <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full bg-white/25 z-10" />
+                                <div className="absolute bottom-2.5 right-2.5 z-20 pointer-events-none flex items-center gap-1.5 rounded-full bg-slate-950/80 backdrop-blur-md px-2.5 py-1 text-[11px] font-medium text-blue-300 border border-blue-400/30 shadow-lg">
+                                  <ZoomIn className="w-3.5 h-3.5" />
+                                  <span>Ampliar tela</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="relative overflow-hidden rounded-xl aspect-[16/10] bg-[#060d1f] border border-white/10 cursor-pointer">
+                          <img
+                            src={cardImage}
+                            alt={`Print real do LiLouPro - ${item.title}`}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img"
+                          />
+                        </div>
+                      )}
                       {item.id === 'caged' && (
-                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-white/10 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
                             🎸 5 formas de montar o mesmo acorde & campo harmônico
                           </span>
@@ -657,7 +683,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </div>
                       )}
                       {item.id === 'escala' && (
-                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-emerald-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
                             ✓ Confirmação em 1 Toque • WhatsApp • Docs & PDF
                           </span>
@@ -665,7 +691,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </div>
                       )}
                       {item.id === 'cifras' && (
-                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-amber-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
                             ⚡ Cifra Inteligente • Tom em 1 Clique • Player Integrado
                           </span>
@@ -673,7 +699,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </div>
                       )}
                       {item.id === 'repertorio' && (
-                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-amber-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
                             🎵 Repertório organizado por culto, artista e categoria
                           </span>
@@ -917,30 +943,43 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     <div className="py-3 my-auto flex flex-col justify-center">
                       {currentMedia && (
                         activeDemo === 0 && stageSimSubTab === 'pedal' && currentMedia.type === 'video' && !currentMedia.isEmbed ? (
-                          <div className="w-full flex items-center justify-center py-2">
-                            {/* Mockup de Tablet estilo iPad Pro flutuando diretamente no fundo escuro */}
-                            <div className="relative mx-auto w-full bg-zinc-900 border-[10px] border-zinc-800 rounded-[2.2rem] shadow-2xl ring-1 ring-white/15">
-                              {/* Botão superior (Power) sutil na moldura */}
-                              <div className="absolute -top-[12px] right-10 w-10 h-[2px] rounded-t-full bg-zinc-600/80 pointer-events-none" />
-                              {/* Botões laterais sutis de volume */}
-                              <div className="absolute -right-[12px] top-12 w-[2px] h-8 rounded-r-full bg-zinc-600/80 pointer-events-none" />
-                              <div className="absolute -right-[12px] top-24 w-[2px] h-8 rounded-r-full bg-zinc-600/80 pointer-events-none" />
-                              {/* Câmera frontal realista na borda superior */}
-                              <div className="absolute -top-[9px] left-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-10">
-                                <span className="w-2 h-2 rounded-full bg-zinc-700 ring-1 ring-zinc-600/60" />
-                              </div>
+                          <div className="w-full flex items-center justify-center py-3 px-1">
+                            {/* Mockup ultrarrealista de iPad Pro (Space Black / Titânio) com brilho de palco */}
+                            <div className="relative z-0 mx-auto w-full before:absolute before:-inset-3 before:rounded-[2.6rem] before:bg-gradient-to-tr before:from-blue-600/25 before:via-cyan-500/10 before:to-emerald-500/20 before:blur-2xl before:-z-10">
+                              {/* Aro externo de titânio/alumínio chanfrado */}
+                              <div className="relative rounded-[2.2rem] p-[3px] bg-gradient-to-b from-zinc-400/50 via-zinc-700/40 to-zinc-900 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9),0_0_25px_rgba(59,130,246,0.2)]">
+                                {/* Botões físicos salientes no topo direito da carcaça (Power + 2 Volume) */}
+                                <div className="absolute -top-[5px] right-14 w-9 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
+                                <div className="absolute -top-[5px] right-28 w-7 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
+                                <div className="absolute -top-[5px] right-36 w-7 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
 
-                              {/* Tela interna do tablet preenchendo com nitidez original */}
-                              <div className="w-full overflow-hidden rounded-[1.6rem] bg-black">
-                                <video
-                                  key={currentMedia.url}
-                                  src={currentMedia.url}
-                                  autoPlay
-                                  loop
-                                  muted
-                                  playsInline
-                                  className="w-full h-auto block rounded-[1.6rem] object-contain"
-                                />
+                                {/* Moldura preta de vidro (Bezel do iPad) */}
+                                <div className="relative rounded-[2.05rem] bg-[#090a0f] p-3 sm:p-4 shadow-[inset_0_0_8px_rgba(255,255,255,0.12)] border border-black">
+                                  {/* Câmera frontal e sensor realistas no bezel superior */}
+                                  <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none z-20">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-[#11131c] ring-1 ring-white/15 flex items-center justify-center">
+                                      <span className="w-1 h-1 rounded-full bg-blue-400/60" />
+                                    </span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-800/80" />
+                                  </div>
+
+                                  {/* Tela interna com reflexo de vidro e barra Home do iPadOS */}
+                                  <div className="relative rounded-[1.35rem] overflow-hidden border border-white/10 bg-[#060d1f] shadow-inner">
+                                    <video
+                                      key={currentMedia.url}
+                                      src={currentMedia.url}
+                                      autoPlay
+                                      loop
+                                      muted
+                                      playsInline
+                                      className="w-full h-auto block object-contain"
+                                    />
+                                    {/* Reflexo diagonal sutil de vidro */}
+                                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08] z-20" />
+                                    {/* Barra Home horizontal do iPadOS */}
+                                    <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 w-28 h-1 rounded-full bg-white/30 z-20" />
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
