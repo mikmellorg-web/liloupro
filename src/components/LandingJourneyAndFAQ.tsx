@@ -191,13 +191,13 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 -mx-4 px-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:mx-0 md:px-0 md:pb-0">
           {differentials.map((item, idx) => {
             const IconComp = item.icon;
             return (
               <div
                 key={idx}
-                className="bg-slate-900/60 hover:bg-slate-900/90 border border-white/10 hover:border-brand/40 rounded-3xl p-6 sm:p-8 space-y-4 transition-all duration-300 shadow-lg"
+                className="shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink bg-slate-900/60 hover:bg-slate-900/90 border border-white/10 hover:border-brand/40 rounded-3xl p-6 sm:p-8 space-y-4 transition-all duration-300 shadow-lg"
               >
                 <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/10 flex items-center justify-center text-brand">
                   <IconComp className="w-6 h-6" />
@@ -211,6 +211,10 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </div>
             );
           })}
+        </div>
+
+        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+          <span>← Deslize para ver todos os diferenciais →</span>
         </div>
       </section>
 

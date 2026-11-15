@@ -658,8 +658,8 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
           </p>
         </div>
 
-        {/* Grade do Ciclo: 6 Etapas Numeradas (3x2 com Conexão em Loop) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+        {/* Grade do Ciclo: 6 Etapas Numeradas (Carrossel no mobile, 3x2 no desktop) */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 -mx-4 px-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:mx-0 md:px-0 md:pb-0">
           {ministryCycle.map((item, idx) => {
             const IconComp = item.icon;
             const isLast = idx === 5;
@@ -667,7 +667,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             return (
               <div 
                 key={idx}
-                className={`relative bg-slate-900/75 hover:bg-slate-900 border ${
+                className={`shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink relative bg-slate-900/75 hover:bg-slate-900 border ${
                   isLast 
                     ? 'border-brand/40 bg-gradient-to-b from-slate-900 to-brand/5 shadow-brand/10' 
                     : 'border-white/10 hover:border-brand/30'
@@ -723,6 +723,10 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
               </div>
             );
           })}
+        </div>
+
+        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+          <span>← Deslize para ver as 6 etapas do ciclo →</span>
         </div>
 
         {/* Conector Visual em Loop (Seta do Card 06 de volta para o Card 01) */}

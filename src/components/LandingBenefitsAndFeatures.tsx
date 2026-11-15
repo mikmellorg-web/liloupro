@@ -49,10 +49,10 @@ interface SimulatorCustomMedia {
 }
 
 const defaultModuleImages: Record<string, string> = {
-  escala: '/assets/aistudio/Foto_Escala_do_Culto_373d59c4.png',
-  cifras: '/assets/aistudio/image_ed96a73b.png',
-  caged: '/assets/aistudio/image_1fbeb889.png',
-  repertorio: '/assets/aistudio/image_ed670cb5.png',
+  escala: '/mockup-escalas.png',
+  cifras: '/mockup-cifra-player.png',
+  caged: '/mockup-harmonia.png',
+  repertorio: '/mockup-repertorio.png',
   exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
   liturgia: '/assets/aistudio/image_43623333.png',
   projecao: '/assets/aistudio/image_33eb4975.png',
@@ -86,8 +86,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
   // Estado para alternar entre Violão (5 Shapes CAGED) e Teclado Didático no card/modal e no simulador
   const [chordInstrumentTab, setChordInstrumentTab] = useState<'violao' | 'teclado' | 'transposicao_capo' | 'completa'>('violao');
-  // Estado para alternar entre Transposição + Capo (lado a lado), Transposição, Capo e Cifra Completa no card de Cifras
-  const [cifraCardSubTab, setCifraCardSubTab] = useState<'ambos' | 'transposicao' | 'capo' | 'cifra'>('ambos');
+  // Estado para alternar entre Visão Geral (Mockup), Transposição + Capo (lado a lado), Transposição, Capo e Cifra Completa no modal de Cifras
+  const [cifraCardSubTab, setCifraCardSubTab] = useState<'geral' | 'ambos' | 'transposicao' | 'capo' | 'cifra'>('geral');
   // Estado para alternar entre Player sem Anúncios, Repertório/Playlist e Tuner/Metrônomo no card de Player & Estudo
   const [playerCardSubTab, setPlayerCardSubTab] = useState<'player' | 'playlist' | 'estudo'>('player');
   // Estado para alternar entre Bíblia/Harmonia e Seções/Dinâmica/Expressão no card Exclusivo LiLouPro
@@ -438,86 +438,54 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const consequenceModules = [
     {
       id: "repertorio",
-      title: "LiLouPro Player sem Anúncios, Playlist e Estúdio",
-      featureLabel: "Módulo • Player sem Anúncios & Estúdio",
+      title: "Repertório Musical Completo & Playlists do Ministério",
+      featureLabel: "Módulo • Repertório & Playlists",
       icon: Music,
       isExclusive: true,
-      exclusiveBadge: "PLAYER SEM ANÚNCIOS",
-      description: "Ouça e repita a música direto na cifra sem propagandas, organize sua Playlist e use o Afinador e Metrônomo.",
+      exclusiveBadge: "REPERTÓRIO & PLAYLISTS",
+      description: "Centralize todas as letras, cifras e áudios da igreja com busca instantânea, integração com Google Drive e playlists para ensaio.",
       benefits: [
-        "LiLouPro Player (Modo Pratique) sem anúncios direto na tela da cifra",
-        "Repertório Musical organizado com Minha Playlist e integração Drive",
-        "LiLouPro Tuner PRO e Metrônomo Stompbox integrados"
-      ]
-    },
-    {
-      id: "pedal",
-      title: "Rolagem Automática com Pedal Bluetooth no Palco",
-      featureLabel: "Módulo • Pedal Bluetooth & Modo Palco",
-      icon: Zap,
-      isExclusive: true,
-      exclusiveBadge: "CONTROLE POR PEDAL BLUETOOTH",
-      description: "Toque com as mãos livres no instrumento acionando e controlando a rolagem da cifra pelo seu Pedal Bluetooth.",
-      benefits: [
-        "Controle de rolagem mãos-livres via Pedal Bluetooth",
-        "Modo Culto/Palco de alto contraste com tags de dinâmica",
-        "Ajuste fino de velocidade (0.2x a 2.0x) e tamanho de fonte"
+        "Busca rápida por música, cantor, tema ou músicas do culto",
+        "Playlists personalizadas para a equipe ouvir e ensaiar durante a semana"
       ]
     },
     {
       id: "escala",
-      title: "Auto-Escala e Confirmação sem Confusão no WhatsApp",
-      featureLabel: "Módulo • Confirmação & Escala do Culto",
+      title: "Escalas Confirmadas no Celular & Disparo no WhatsApp",
+      featureLabel: "Módulo • Escalas & Repertório",
       icon: Calendar,
       isExclusive: false,
-      exclusiveBadge: "AUTO-ESCALA & CONFIRMAÇÃO",
-      description: "Voluntários confirmam presença em 1 toque. Monte a equipe com Auto-Escala e exporte em PDF, WhatsApp e Agenda.",
+      exclusiveBadge: "ESCALAS & REPERTÓRIO",
+      description: "Seus músicos marcam os dias livres e você monta a escala do mês sem cobrar ninguém no grupo.",
       benefits: [
-        "Confirmação de disponibilidade em tempo real por voluntário",
-        "Composição visual da escala com funções e edição rápida",
-        "Integração com WhatsApp, PDF, Google Agenda e Google Docs"
+        "Confirmação de presença em 1 toque e lembretes no WhatsApp",
+        "Repertório completo do culto conectado ao Google Docs e PDF"
       ]
     },
     {
       id: "cifras",
-      title: "Transposição em 1 Clique & Cálculo do Capotraste",
-      featureLabel: "Módulo • Transposição 1 Clique & Capotraste",
+      title: "Cifra Inteligente, Tom em 1 Clique & Player sem Anúncios",
+      featureLabel: "Módulo • Cifras, Tom & Player Integrado",
       icon: FileText,
       isExclusive: true,
-      exclusiveBadge: "TOM EM 1 CLIQUE + CAPO",
-      description: "Mude o tom em 1 clique entre os 12 tons e veja em qual casa usar o capotraste com posições no braço.",
+      exclusiveBadge: "CIFRAS, TOM & PLAYER INTEGRADO",
+      description: "Mude o tom na hora, calcule o capotraste e ouça a música de referência enquanto estuda a cifra.",
       benefits: [
-        "Transposição de tom em 1 clique com indicação do Shape base",
-        "Caixa de Posições do Capotraste com destaque de '🎸 Shape Aberto'",
-        "Cifra completa em 1 ou 2 colunas com Modo Foco e Dinâmicas"
+        "Transposição instantânea com ajuste automático de capotraste",
+        "Player integrado com YouTube, Spotify e marcações de dinâmica"
       ]
     },
     {
       id: "caged",
-      title: "5 Formas de Fazer o Mesmo Acorde",
-      featureLabel: "Módulo • Violão/Guitarra (CAGED) & Teclado",
+      title: "5 Formas de Fazer o Mesmo Acorde & Guia Harmônico",
+      featureLabel: "Módulo • Acordes & Campo Harmônico",
       icon: Sliders,
       isExclusive: true,
-      exclusiveBadge: "DICIONÁRIO VISUAL DE ACORDES",
-      description: "Diagramas visuais no violão, guitarra e teclado para qualquer músico tocar com segurança, do iniciante ao avançado.",
+      exclusiveBadge: "ACORDES & CAMPO HARMÔNICO",
+      description: "Diagramas visuais no violão, guitarra e teclado com função de cada acorde no tom da música.",
       benefits: [
-        "5 posições visuais no braço com indicação de dedos e notas",
-        "Análise em tempo real de Grau e Função Harmônica do acorde",
-        "Piano e Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)"
-      ]
-    },
-    {
-      id: "exclusivo",
-      title: "Seções Exclusivas, Dinâmica, Bíblia e Harmonia",
-      featureLabel: "Exclusivo LiLouPro • Ferramentas Especiais",
-      icon: Sparkles,
-      isExclusive: true,
-      exclusiveBadge: "EXCLUSIVO LILOUPRO",
-      description: "Tags de seções, 7 níveis de dinâmica (Sutil ao Clímax), expressões, Fundamentação Bíblica e Harmonia Aplicada.",
-      benefits: [
-        "Seções e Partes da Música + 7 Níveis de Dinâmica Musical (N1 a N7)",
-        "Indicadores de Intensidade & Expressão (Crescendo, Pausa, Acapella, etc.)",
-        "Fundamentação Bíblica, Mesmo Tema e Harmonia Aplicada passo a passo"
+        "5 posições no braço com indicação de dedos e notas",
+        "Campo harmônico visual para tocar com segurança sem decorar teoria"
       ]
     }
   ];
@@ -540,31 +508,23 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         </div>
 
         {/* Grid de Consequências e Módulos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {consequenceModules.map((item) => {
             const IconComp = item.icon;
             const rawCardImage = moduleImages[item.id] || defaultModuleImages[item.id];
             const cardImage = item.id === 'caged'
-              ? (chordInstrumentTab === 'teclado'
-                  ? '/assets/aistudio/image_b8dba094.png'
-                  : (moduleImages.caged || '/assets/aistudio/image_1fbeb889.png'))
+              ? '/mockup-harmonia.png'
               : item.id === 'cifras'
-                ? (cifraCardSubTab === 'capo'
-                    ? '/assets/aistudio/image_e6f41181.png'
-                    : cifraCardSubTab === 'cifra'
-                      ? '/assets/aistudio/image_bf73e394.png'
-                      : '/assets/aistudio/image_ed96a73b.png')
-                : item.id === 'repertorio'
-                  ? (playerCardSubTab === 'playlist'
-                      ? '/assets/aistudio/image_2266ed87_clean.png'
-                      : playerCardSubTab === 'estudo'
-                        ? '/assets/aistudio/image_b8efaf19.png'
-                        : '/assets/aistudio/image_ed670cb5.png')
-                  : item.id === 'exclusivo'
-                    ? (exclusivoCardSubTab === 'dinamica'
-                        ? '/assets/aistudio/image_d6211dcb.png'
-                        : '/assets/aistudio/image_f1a7abe2_clean.png')
-                    : rawCardImage;
+                ? '/mockup-cifra-player.png'
+                : item.id === 'escala'
+                  ? '/mockup-escalas.png'
+                  : item.id === 'repertorio'
+                    ? '/mockup-repertorio.png'
+                    : item.id === 'exclusivo'
+                      ? (exclusivoCardSubTab === 'dinamica'
+                          ? '/assets/aistudio/image_d6211dcb.png'
+                          : '/assets/aistudio/image_f1a7abe2_clean.png')
+                      : rawCardImage;
             const cardVideo = defaultModuleVideos[item.id];
 
             return (
@@ -575,9 +535,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   item.isExclusive
                     ? 'border-amber-500/35 hover:border-amber-400/70 shadow-amber-500/5'
                     : 'border-white/10 hover:border-brand/40'
-                } rounded-3xl p-6 sm:p-7 space-y-5 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-lg relative overflow-hidden`}
+                } rounded-3xl p-4 sm:p-6 space-y-4 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-lg relative overflow-hidden`}
               >
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div className="flex items-center justify-between gap-2">
                     <div className={`w-11 h-11 rounded-2xl ${
                       item.isExclusive
@@ -594,9 +554,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-emerald-300 bg-emerald-500/15 border border-emerald-400/35'
                         }`}>
                           <Sparkles className={`w-2.5 h-2.5 ${item.isExclusive ? 'text-amber-400' : 'text-emerald-400'}`} />
-                          {item.id === 'caged' && chordInstrumentTab === 'teclado'
-                            ? 'TECLADO DIDÁTICO CENTRADO'
-                            : item.exclusiveBadge}
+                          {item.exclusiveBadge}
                         </span>
                       )}
                       {!item.exclusiveBadge && (cardImage || cardVideo) && (
@@ -612,132 +570,6 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       )}
                     </div>
                   </div>
-
-                  {/* Seletor rápido Violão (5 Shapes CAGED) vs Teclado Didático no card de Acordes */}
-                  {item.id === 'caged' && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center justify-between bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[11px] font-bold"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setChordInstrumentTab('violao')}
-                        className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          chordInstrumentTab !== 'teclado'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <span>🎸 Violão & Guitarra</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setChordInstrumentTab('teclado')}
-                        className={`py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                          chordInstrumentTab === 'teclado'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <span>🎹 Teclado</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Seletor rápido Transposição 1 Clique + Cálculo do Capotraste + Cifra no card de Cifras */}
-                  {item.id === 'cifras' && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid grid-cols-4 gap-1 bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[10px] font-bold"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('ambos')}
-                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
-                          cifraCardSubTab === 'ambos'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🔀 Tom + Capo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('transposicao')}
-                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
-                          cifraCardSubTab === 'transposicao'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🎵 1 Clique
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('capo')}
-                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
-                          cifraCardSubTab === 'capo'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🎸 Capotraste
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('cifra')}
-                        className={`py-1.5 px-1.5 rounded-lg transition-all cursor-pointer truncate ${
-                          cifraCardSubTab === 'cifra'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🎼 Cifra 2 Col
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Seletor rápido Player sem Anúncios vs Playlist vs Tuner/Metrônomo no card de Repertório & Player */}
-                  {item.id === 'repertorio' && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid grid-cols-3 gap-1 bg-slate-950/90 p-1 rounded-xl border border-white/10 text-[10px] font-bold"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('player')}
-                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
-                          playerCardSubTab === 'player'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        ▶️ Player s/ Anúncios
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('playlist')}
-                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
-                          playerCardSubTab === 'playlist'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🎵 Minha Playlist
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('estudo')}
-                        className={`py-1.5 px-2 rounded-lg transition-all cursor-pointer truncate ${
-                          playerCardSubTab === 'estudo'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        🎧 Tuner & BPM
-                      </button>
-                    </div>
-                  )}
 
                   {/* Seletor rápido Seções/Dinâmica/Expressão vs Bíblia/Harmonia no card Exclusivo LiLouPro */}
                   {item.id === 'exclusivo' && (
@@ -796,60 +628,29 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   {/* Exibição de Foto Real direto no Card */}
                   {!cardVideo && cardImage && (
                     <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-xl">
-                      {item.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
-                        <div className="w-full h-56 sm:h-60 grid grid-cols-2 gap-1.5 p-1.5 bg-[#0b1120] items-center">
-                          <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/70 rounded-xl p-1 border border-white/10 overflow-hidden">
-                            <img
-                              src="/assets/aistudio/image_ed96a73b.png"
-                              alt="Transposição de Tom em 1 Clique no LiLouPro"
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-44 sm:h-48 object-contain landing-crisp-img"
-                            />
-                            <span className="text-[9px] font-extrabold text-sky-400 uppercase tracking-wider mt-0.5">
-                              🎵 Tom em 1 Clique
-                            </span>
-                          </div>
-                          <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/70 rounded-xl p-1 border border-amber-500/25 overflow-hidden">
-                            <img
-                              src="/assets/aistudio/image_e6f41181.png"
-                              alt="Cálculo Automático da Posição do Capotraste no LiLouPro"
-                              loading="lazy"
-                              decoding="async"
-                              className="w-full h-44 sm:h-48 object-contain landing-crisp-img"
-                            />
-                            <span className="text-[9px] font-extrabold text-amber-400 uppercase tracking-wider mt-0.5">
-                              🎸 Cálculo do Capo
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <img
-                          src={cardImage}
-                          alt={`Print real do LiLouPro - ${item.title}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-56 sm:h-60 object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img"
-                        />
-                      )}
+                      <img
+                        src={cardImage}
+                        alt={`Print real do LiLouPro - ${item.title}`}
+                        loading="lazy"
+                        decoding="async"
+                        className={
+                          item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala'
+                            ? 'w-full h-56 sm:h-60 object-cover rounded-xl block transition-transform duration-300 group-hover:scale-[1.02]'
+                            : 'w-full h-56 sm:h-60 object-contain block bg-[#0b1120] p-1 transition-transform duration-300 group-hover:scale-[1.02] landing-crisp-img'
+                        }
+                      />
                       {item.id === 'caged' && (
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-white/10 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
-                            {chordInstrumentTab === 'teclado'
-                              ? '🎹 Teclado Didático: Baixo (B) + Notas (N)'
-                              : '🎸 5 formas de montar o mesmo acorde no braço'}
+                            🎸 5 formas de montar o mesmo acorde & campo harmônico
                           </span>
-                          {chordInstrumentTab === 'teclado' && (
-                            <span className="text-slate-400">
-                              Graus & Teclas
-                            </span>
-                          )}
+                          <span className="text-slate-400">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'escala' && (
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
-                            ✓ Estou Disponível • Auto-Escala • PDF & WhatsApp
+                            ✓ Confirmação em 1 Toque • WhatsApp • Docs & PDF
                           </span>
                           <span className="text-slate-400">Escala Real</span>
                         </div>
@@ -857,27 +658,17 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                       {item.id === 'cifras' && (
                         <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
-                            {cifraCardSubTab === 'capo'
-                              ? '🎸 Caixa de Posições do Capo • Shape Aberto'
-                              : cifraCardSubTab === 'transposicao'
-                                ? '🎵 Transposição de Tom em 1 Clique (12 Tons)'
-                                : cifraCardSubTab === 'cifra'
-                                  ? '🎼 Cifra em 2 Colunas • Modo Foco & Dinâmicas'
-                                  : '⚡ Transposição em 1 Clique + Cálculo do Capo'}
+                            ⚡ Cifra Inteligente • Tom em 1 Clique • Player Integrado
                           </span>
                           <span className="text-slate-400">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'repertorio' && (
-                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-brand/25 flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-emerald-400">
-                            {playerCardSubTab === 'player'
-                              ? '▶️ LiLouPro Player sem Anúncios • Modo Pratique'
-                              : playerCardSubTab === 'playlist'
-                                ? '🎵 Repertório Musical & Minha Playlist'
-                                : '🎧 Tuner Cromático PRO & Metrônomo Stompbox'}
+                        <div className="px-3 py-1.5 bg-slate-950/95 border-t border-amber-500/20 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-amber-400">
+                            🎵 Repertório organizado por culto, artista e categoria
                           </span>
-                          <span className="text-slate-400">Zero Propagandas</span>
+                          <span className="text-slate-400">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'exclusivo' && (
@@ -918,15 +709,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   )}
 
                   <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-brand transition-colors leading-snug">
-                    {item.id === 'caged' && chordInstrumentTab === 'teclado'
-                      ? 'Piano & Teclado: Teclado Didático Centrado com Baixo (B) e Notas (N)'
-                      : item.title}
+                    {item.title}
                   </h3>
 
                   <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-2">
-                    {item.id === 'caged' && chordInstrumentTab === 'teclado'
-                      ? 'Visualização dedicada para tecladistas com Baixo (B), Notas do acorde (N), grau e função harmônica.'
-                      : item.description}
+                    {item.description}
                   </p>
                 </div>
 
@@ -1301,19 +1088,19 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               const currentImage = selected.id === 'caged'
                 ? (chordInstrumentTab === 'teclado'
                     ? '/assets/aistudio/image_b8dba094.png'
-                    : (moduleImages.caged || '/assets/aistudio/image_1fbeb889.png'))
+                    : '/assets/aistudio/image_1fbeb889.png')
                 : selected.id === 'cifras'
                   ? (cifraCardSubTab === 'capo'
                       ? '/assets/aistudio/image_e6f41181.png'
                       : cifraCardSubTab === 'cifra'
                         ? '/assets/aistudio/image_bf73e394.png'
-                        : '/assets/aistudio/image_ed96a73b.png')
-                  : selected.id === 'repertorio'
-                    ? (playerCardSubTab === 'playlist'
-                        ? '/assets/aistudio/image_2266ed87_clean.png'
-                        : playerCardSubTab === 'estudo'
-                          ? '/assets/aistudio/image_b8efaf19.png'
-                          : '/assets/aistudio/image_ed670cb5.png')
+                        : cifraCardSubTab === 'transposicao'
+                          ? '/assets/aistudio/image_ed96a73b.png'
+                          : '/mockup-cifra-player.png')
+                  : selected.id === 'escala'
+                    ? '/mockup-escalas.png'
+                    : selected.id === 'repertorio'
+                      ? '/mockup-repertorio.png'
                     : selected.id === 'exclusivo'
                       ? (exclusivoCardSubTab === 'dinamica'
                           ? '/assets/aistudio/image_d6211dcb.png'
@@ -1394,7 +1181,18 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                   {/* Seletor rápido Transposição 1 Clique + Capotraste + Cifra no modal de Cifras */}
                   {selected.id === 'cifras' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setCifraCardSubTab('geral')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          cifraCardSubTab === 'geral'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        ✨ Cifra + Player
+                      </button>
                       <button
                         type="button"
                         onClick={() => setCifraCardSubTab('ambos')}
@@ -1404,7 +1202,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🔀 Tom 1 Clique + Capo
+                        🔀 Tom + Capo
                       </button>
                       <button
                         type="button"
@@ -1415,7 +1213,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🎵 Transposição 1 Clique
+                        🎵 1 Clique
                       </button>
                       <button
                         type="button"
@@ -1426,7 +1224,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🎸 Cálculo do Capotraste
+                        🎸 Capotraste
                       </button>
                       <button
                         type="button"
@@ -1437,46 +1235,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        🎼 Cifra Completa (2 Col)
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Seletor rápido Player sem Anúncios + Playlist + Tuner/Metrônomo no modal de Repertório */}
-                  {selected.id === 'repertorio' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('player')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          playerCardSubTab === 'player'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        ▶️ LiLouPro Player sem Anúncios
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('playlist')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          playerCardSubTab === 'playlist'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎵 Repertório & Minha Playlist
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlayerCardSubTab('estudo')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          playerCardSubTab === 'estudo'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎧 Tuner PRO & Metrônomo Stompbox
+                        🎼 Cifra 2 Col
                       </button>
                     </div>
                   )}
@@ -1532,7 +1291,34 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   ) : currentImage ? (
                     <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center transition-all">
-                      {selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
+                      {selected.id === 'escala' ? (
+                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-[#0b1120] items-center">
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-emerald-500/25">
+                            <img
+                              src="/mockup-escalas.png"
+                              alt="Escalas Confirmadas no Celular e WhatsApp no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full max-h-[400px] object-cover rounded-xl"
+                            />
+                            <span className="text-xs font-extrabold text-emerald-400 mt-2">
+                              📅 Escalas & Confirmação no Celular
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-white/10">
+                            <img
+                              src="/mockup-repertorio.png"
+                              alt="Repertório Completo do Culto no LiLouPro"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full max-h-[400px] object-cover rounded-xl"
+                            />
+                            <span className="text-xs font-extrabold text-sky-400 mt-2">
+                              🎼 Repertório do Culto Conectado
+                            </span>
+                          </div>
+                        </div>
+                      ) : selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
                         <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-[#0b1120] items-center">
                           <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-3 border border-white/10">
                             <img
