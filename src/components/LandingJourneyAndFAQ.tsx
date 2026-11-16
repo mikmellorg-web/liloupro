@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Check, 
   ArrowRight, 
@@ -28,6 +28,37 @@ interface LandingJourneyAndFAQProps {
 export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFAQProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
+  const adoptionCarouselRef = useRef<HTMLDivElement>(null);
+  const [activeAdoptionStep, setActiveAdoptionStep] = useState<number>(0);
+
+  const handleAdoptionScroll = () => {
+    const el = adoptionCarouselRef.current;
+    if (!el) return;
+    const children = Array.from(el.children) as HTMLElement[];
+    if (children.length === 0) return;
+    const containerCenter = el.scrollLeft + el.clientWidth / 2;
+    let closestIdx = 0;
+    let minDist = Infinity;
+    children.forEach((child, idx) => {
+      const childCenter = child.offsetLeft + child.offsetWidth / 2;
+      const dist = Math.abs(childCenter - containerCenter);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = idx;
+      }
+    });
+    setActiveAdoptionStep(closestIdx);
+  };
+
+  const scrollToAdoptionStep = (idx: number) => {
+    setActiveAdoptionStep(idx);
+    const el = adoptionCarouselRef.current;
+    if (!el) return;
+    const target = el.children[idx] as HTMLElement | undefined;
+    if (!target) return;
+    const targetLeft = target.offsetLeft - (el.clientWidth - target.offsetWidth) / 2;
+    el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+  };
 
   const differentials = [
     {
@@ -137,8 +168,12 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+        <div
+          ref={adoptionCarouselRef}
+          onScroll={handleAdoptionScroll}
+          className="flex md:grid md:grid-cols-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory gap-4 md:gap-8 pb-2 md:pb-0 no-scrollbar"
+        >
+          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               1
             </div>
@@ -150,7 +185,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             </p>
           </div>
 
-          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               2
             </div>
@@ -162,7 +197,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             </p>
           </div>
 
-          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               3
             </div>
@@ -173,6 +208,22 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               Organize a escala do culto e o repertório. A equipe é notificada no celular e confirma presença em instantes.
             </p>
           </div>
+        </div>
+
+        <div className="flex md:hidden justify-center gap-2 mt-4">
+          {[0, 1, 2].map((idx) => (
+            <button
+              key={idx}
+              type="button"
+              aria-label={`Ir para passo ${idx + 1}`}
+              onClick={() => scrollToAdoptionStep(idx)}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                activeAdoptionStep === idx
+                  ? 'w-6 bg-[#3B82F6]'
+                  : 'w-2 bg-slate-600'
+              }`}
+            />
+          ))}
         </div>
       </section>
 

@@ -1364,6 +1364,13 @@ export default function LiturgyView({
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [isCadernoModalOpen, setIsCadernoModalOpen] = useState(false);
   const liturgyRef = useRef<HTMLDivElement>(null);
+  const servicesScrollRef = useRef<HTMLDivElement>(null);
+  const servicesDragStateRef = useRef<{ isDown: boolean; startX: number; scrollLeft: number; hasDragged: boolean }>({
+    isDown: false,
+    startX: 0,
+    scrollLeft: 0,
+    hasDragged: false
+  });
 
   const [members, setMembers] = useState<any[]>([]);
   const [isMobileOptimized, setIsMobileOptimized] = useState(false);
@@ -1950,43 +1957,81 @@ export default function LiturgyView({
               <span className="w-8 sm:w-16 h-[1px] bg-brand/30"></span>
             </div>
             
-            <div className="w-full flex overflow-x-auto pb-4 no-scrollbar snap-x gap-3 px-2 sm:justify-center">
-              {services.length > 0 ? (
-                services.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelectedServiceId(s.id)}
-                    className={cn(
-                      "min-w-[160px] sm:min-w-[180px] text-left p-4 rounded-2xl border transition-all duration-300 group relative snap-center",
-                      selectedServiceId === s.id
-                        ? "bg-brand border-brand text-white shadow-xl shadow-brand/20 scale-[1.05] z-10"
-                        : "bg-black/10 dark:bg-white/5 border-border text-text-main hover:bg-black/20 dark:hover:bg-white/10 hover:border-brand/40"
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={cn(
-                        "text-[8px] font-black uppercase tracking-widest",
-                        selectedServiceId === s.id ? "text-white/80" : "text-text-main/70"
+            <div
+              ref={servicesScrollRef}
+              onMouseDown={(e) => {
+                const el = servicesScrollRef.current;
+                if (!el || e.button !== 0) return;
+                servicesDragStateRef.current = {
+                  isDown: true,
+                  startX: e.pageX,
+                  scrollLeft: el.scrollLeft,
+                  hasDragged: false
+                };
+              }}
+              onMouseMove={(e) => {
+                const el = servicesScrollRef.current;
+                const drag = servicesDragStateRef.current;
+                if (!el || !drag.isDown) return;
+                const deltaX = e.pageX - drag.startX;
+                if (Math.abs(deltaX) > 5) {
+                  drag.hasDragged = true;
+                  el.scrollLeft = drag.scrollLeft - deltaX;
+                }
+              }}
+              onMouseUp={() => {
+                servicesDragStateRef.current.isDown = false;
+              }}
+              onMouseLeave={() => {
+                servicesDragStateRef.current.isDown = false;
+              }}
+              onClickCapture={(e) => {
+                if (servicesDragStateRef.current.hasDragged) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  servicesDragStateRef.current.hasDragged = false;
+                }
+              }}
+              className="w-full overflow-x-auto pb-3 header-buttons-scroll snap-x sm:snap-none touch-pan-x overscroll-x-contain select-none cursor-grab active:cursor-grabbing"
+            >
+              <div className="flex w-max mx-auto gap-3 px-3 py-1.5">
+                {services.length > 0 ? (
+                  services.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedServiceId(s.id)}
+                      className={cn(
+                        "min-w-[160px] sm:min-w-[180px] shrink-0 text-left p-4 rounded-2xl border transition-all duration-300 group relative snap-center",
+                        selectedServiceId === s.id
+                          ? "bg-brand border-brand text-white shadow-xl shadow-brand/20 scale-[1.05] z-10"
+                          : "bg-black/10 dark:bg-white/5 border-border text-text-main hover:bg-black/20 dark:hover:bg-white/10 hover:border-brand/40"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={cn(
+                          "text-[8px] font-black uppercase tracking-widest",
+                          selectedServiceId === s.id ? "text-white/80" : "text-text-main/70"
+                        )}>
+                          {formatDate(s.date, { weekday: 'short' })}.
+                        </span>
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          s.liturgy?.length > 0 ? "bg-green-400" : "bg-amber-400 opacity-50"
+                        )} />
+                      </div>
+                      <p className="font-black text-[12px] sm:text-sm leading-tight tracking-tight truncate uppercase">{s.title}</p>
+                      <p className={cn(
+                        "text-[9px] font-bold mt-1 opacity-70",
+                        selectedServiceId === s.id ? "text-white" : "text-text-main/70"
                       )}>
-                        {formatDate(s.date, { weekday: 'short' })}.
-                      </span>
-                      <div className={cn(
-                        "w-2 h-2 rounded-full",
-                        s.liturgy?.length > 0 ? "bg-green-400" : "bg-amber-400 opacity-50"
-                      )} />
-                    </div>
-                    <p className="font-black text-[12px] sm:text-sm leading-tight tracking-tight truncate uppercase">{s.title}</p>
-                    <p className={cn(
-                      "text-[9px] font-bold mt-1 opacity-70",
-                      selectedServiceId === s.id ? "text-white" : "text-text-main/70"
-                    )}>
-                      {formatDate(s.date, { day: '2-digit', month: 'short' })} • {formatTime(s.date)}
-                    </p>
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-text-main font-bold italic p-4">Nenhum culto encontrado.</p>
-              )}
+                        {formatDate(s.date, { day: '2-digit', month: 'short' })} • {formatTime(s.date)}
+                      </p>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-text-main font-bold italic p-4">Nenhum culto encontrado.</p>
+                )}
+              </div>
             </div>
           </div>
         </aside>

@@ -29,9 +29,16 @@ import {
   Film,
   X,
   Monitor,
-  ZoomIn
+  ZoomIn,
+  BookOpen
 } from 'lucide-react';
 import { Music2 } from './MusicIcon';
+import { LiturgyReadyPreview, LiturgyEditorPreview } from './LiturgyPreviewMockups';
+import {
+  ProjectionDashboardPreview,
+  ProjectionSlidesPreview,
+  ProjectionOperatorGuidePreview
+} from './ProjectionPreviewMockups';
 import { 
   getLocalAsset, 
   setLocalAsset, 
@@ -57,7 +64,8 @@ const defaultModuleImages: Record<string, string> = {
   exclusivo: '/assets/aistudio/image_f1a7abe2_clean.png',
   liturgia: '/assets/aistudio/image_43623333.png',
   projecao: '/assets/aistudio/image_33eb4975.png',
-  comunicacao: '/assets/aistudio/Interface_de_Chat_Canal_Geral_clean.png'
+  comunicacao: '/assets/aistudio/Interface_de_Chat_Canal_Geral_clean.png',
+  liturgia_culto: '/tela-liturgia-pronta.png'
 };
 
 const defaultModuleVideos: Record<string, string> = {
@@ -95,6 +103,10 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const [exclusivoCardSubTab, setExclusivoCardSubTab] = useState<'biblia' | 'dinamica'>('dinamica');
   // Estado para alternar entre Escala & Disparo WhatsApp e Disponibilidade em 3 Passos no modal de Escalas
   const [escalaCardSubTab, setEscalaCardSubTab] = useState<'escala' | 'disponibilidade'>('escala');
+  // Estado para alternar entre Liturgia Pronta (Modo Culto) e Edição Customizável no modal de Liturgia
+  const [liturgiaCardSubTab, setLiturgiaCardSubTab] = useState<'pronta' | 'edicao'>('pronta');
+  // Estado para alternar entre Painel do Projetor, Slides da Letra & Simulador e Guia do Operador no modal de Projeção
+  const [projecaoCardSubTab, setProjecaoCardSubTab] = useState<'painel' | 'slides' | 'guia'>('painel');
   // Estado para alternar entre Pedal Bluetooth, Escala, Liturgia, Projeção e Chat no cenário 0 do simulador
   const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala' | 'liturgia' | 'projecao' | 'comunicacao'>('pedal');
   // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Dinâmica/Expressão, Estudo e Playlist no cenário 2 do simulador
@@ -490,6 +502,32 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
         "5 posições no braço com indicação de dedos e notas",
         "Campo harmônico visual para tocar com segurança sem decorar teoria"
       ]
+    },
+    {
+      id: "liturgia_culto",
+      title: "Liturgia Completa & Ordem do Culto em Tempo Real",
+      featureLabel: "Módulo • Liturgia & Ordem do Culto",
+      icon: BookOpen,
+      isExclusive: false,
+      exclusiveBadge: "LITURGIA & ORDEM DO CULTO",
+      description: "Organize cada momento do culto com leituras bíblicas integradas, ministros, tons das músicas, playlist automática e exportação em 1 clique para o Google Docs.",
+      benefits: [
+        "Acesso rápido no celular com Tocar Setlist, Cifras do Culto e Google Docs",
+        "Leituras bíblicas integradas e tons definidos para toda a equipe"
+      ]
+    },
+    {
+      id: "projecao_datashow",
+      title: "Projeção Data Show, Letras Sincronizadas & Avisos ao Vivo",
+      featureLabel: "Módulo • Projeção & Data Show",
+      icon: Tv,
+      isExclusive: false,
+      exclusiveBadge: "PROJEÇÃO & DATA SHOW",
+      description: "Controle o telão, TVs ou OBS Studio com sincronização instantânea da liturgia, slides de letras, cronômetro, alertas rolantes e controle remoto pelo celular.",
+      benefits: [
+        "Sincronização automática com o roteiro do culto, OBS Studio e Holyrics",
+        "Atalhos de avisos rápidos, cronômetro e letreiro de alertas sem interromper o culto"
+      ]
     }
   ];
 
@@ -523,11 +561,15 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   ? '/tela-escalas.png'
                   : item.id === 'repertorio'
                     ? '/tela-repertorio.png'
-                    : item.id === 'exclusivo'
-                      ? (exclusivoCardSubTab === 'dinamica'
-                          ? '/assets/aistudio/image_d6211dcb.png'
-                          : '/assets/aistudio/image_f1a7abe2_clean.png')
-                      : rawCardImage;
+                    : item.id === 'liturgia_culto'
+                      ? '/tela-liturgia-pronta.png'
+                      : item.id === 'projecao_datashow'
+                        ? 'vector:projecao_datashow'
+                        : item.id === 'exclusivo'
+                        ? (exclusivoCardSubTab === 'dinamica'
+                            ? '/assets/aistudio/image_d6211dcb.png'
+                            : '/assets/aistudio/image_f1a7abe2_clean.png')
+                        : rawCardImage;
             const cardVideo = defaultModuleVideos[item.id];
 
             return (
@@ -631,7 +673,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                   {/* Exibição de Foto Real direto no Card */}
                   {!cardVideo && cardImage && (
                     <div className="relative w-full space-y-2.5 pt-1.5">
-                      {item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala' ? (
+                      {item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala' || item.id === 'liturgia_culto' || item.id === 'projecao_datashow' ? (
                         <div className="relative z-0 mx-auto w-full cursor-pointer group before:absolute before:-inset-2 before:rounded-[2rem] before:bg-gradient-to-tr before:from-blue-600/20 before:via-cyan-500/5 before:to-amber-500/15 before:blur-xl before:-z-10">
                           {/* Aro externo grafite/preto fosco */}
                           <div className="relative rounded-[1.65rem] p-[2.5px] bg-gradient-to-b from-zinc-500/40 via-zinc-800/60 to-zinc-950 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85),0_0_20px_rgba(59,130,246,0.12)]">
@@ -648,13 +690,23 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                               {/* Tela interna nítida preenchendo 100% sem sobras laterais */}
                               <div className="relative w-full rounded-[1.05rem] overflow-hidden border border-white/10 bg-[#060d1f] aspect-[4/3]">
-                                <img
-                                  src={cardImage}
-                                  alt={`Print real do LiLouPro - ${item.title}`}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-full h-full object-fill object-top transition-transform duration-500 group-hover:scale-[1.03]"
-                                />
+                                {item.id === 'liturgia_culto' ? (
+                                  <div className="w-full h-full transition-transform duration-500 group-hover:scale-[1.02]">
+                                    <LiturgyReadyPreview variant="compact" />
+                                  </div>
+                                ) : item.id === 'projecao_datashow' ? (
+                                  <div className="w-full h-full transition-transform duration-500 group-hover:scale-[1.02]">
+                                    <ProjectionDashboardPreview variant="compact" />
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={cardImage}
+                                    alt={`Print real do LiLouPro - ${item.title}`}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-fill object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                                  />
+                                )}
                                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.07] z-10" />
                                 <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full bg-white/25 z-10" />
                                 <div className="absolute bottom-2.5 right-2.5 z-20 pointer-events-none flex items-center gap-1.5 rounded-full bg-slate-950/80 backdrop-blur-md px-2.5 py-1 text-[11px] font-medium text-blue-300 border border-blue-400/30 shadow-lg">
@@ -706,6 +758,22 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                             🎵 Repertório organizado por culto, artista e categoria
                           </span>
                           <span className="text-slate-300">Toque para ampliar</span>
+                        </div>
+                      )}
+                      {item.id === 'liturgia_culto' && (
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-sky-500/25 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-sky-400">
+                            Ordem do culto, leituras bíblicas e cifras sincronizadas
+                          </span>
+                          <span className="text-slate-300">Tela Real</span>
+                        </div>
+                      )}
+                      {item.id === 'projecao_datashow' && (
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-purple-500/25 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-purple-400">
+                            Projeção sincronizada, avisos rápidos e cronômetro no telão
+                          </span>
+                          <span className="text-slate-300">Tela Real</span>
                         </div>
                       )}
                       {item.id === 'exclusivo' && (
@@ -1151,6 +1219,12 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         : '/tela-escalas.png')
                     : selected.id === 'repertorio'
                       ? '/tela-repertorio.png'
+                    : selected.id === 'liturgia_culto'
+                      ? (liturgiaCardSubTab === 'edicao'
+                          ? '/tela-liturgia-edicao.png'
+                          : '/tela-liturgia-pronta.png')
+                    : selected.id === 'projecao_datashow'
+                      ? 'vector:projecao_datashow'
                     : selected.id === 'exclusivo'
                       ? (exclusivoCardSubTab === 'dinamica'
                           ? '/assets/aistudio/image_d6211dcb.png'
@@ -1326,6 +1400,73 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   )}
 
+                  {/* Seletor rápido Liturgia Pronta (Modo Culto) vs Edição Customizável no modal de Liturgia */}
+                  {selected.id === 'liturgia_culto' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setLiturgiaCardSubTab('pronta')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          liturgiaCardSubTab === 'pronta'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Liturgia Pronta (Modo Culto)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLiturgiaCardSubTab('edicao')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          liturgiaCardSubTab === 'edicao'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Edição Customizável
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Seletor rápido 3 Abas no modal de Projeção Data Show */}
+                  {selected.id === 'projecao_datashow' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setProjecaoCardSubTab('painel')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          projecaoCardSubTab === 'painel'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Painel do Projetor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProjecaoCardSubTab('slides')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          projecaoCardSubTab === 'slides'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Slides da Letra &amp; Simulador
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProjecaoCardSubTab('guia')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          projecaoCardSubTab === 'guia'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Guia do Operador
+                      </button>
+                    </div>
+                  )}
+
                   {/* ÁREA DO VÍDEO REAL OU IMAGEM REAL */}
                   {currentVideo ? (
                     <div className="relative rounded-2xl overflow-hidden border border-emerald-500/30 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center">
@@ -1349,7 +1490,25 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     </div>
                   ) : currentImage ? (
                     <div className="relative rounded-2xl overflow-hidden border border-white/15 bg-[#0b1120] shadow-2xl flex flex-col items-center justify-center transition-all">
-                      {selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
+                      {selected.id === 'liturgia_culto' ? (
+                        <div className="w-full max-w-full max-h-[75vh] overflow-y-auto p-1 sm:p-2 bg-[#0b1120]">
+                          {liturgiaCardSubTab === 'edicao' ? (
+                            <LiturgyEditorPreview />
+                          ) : (
+                            <LiturgyReadyPreview variant="expanded" />
+                          )}
+                        </div>
+                      ) : selected.id === 'projecao_datashow' ? (
+                        <div className="w-full max-w-full max-h-[75vh] overflow-y-auto p-1 sm:p-2 bg-[#0b1120]">
+                          {projecaoCardSubTab === 'slides' ? (
+                            <ProjectionSlidesPreview />
+                          ) : projecaoCardSubTab === 'guia' ? (
+                            <ProjectionOperatorGuidePreview />
+                          ) : (
+                            <ProjectionDashboardPreview variant="expanded" />
+                          )}
+                        </div>
+                      ) : selected.id === 'cifras' && cifraCardSubTab === 'ambos' ? (
                         <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 sm:p-4 bg-[#0b1120] items-center">
                           <div className="flex flex-col items-center justify-center bg-slate-950/80 rounded-2xl p-2 sm:p-3 border border-white/10 w-full max-w-full overflow-auto">
                             <img
@@ -1405,7 +1564,17 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         ? 'Recurso técnico completo para violão e guitarra: alterne entre os 5 Shapes do Sistema CAGED (Shape 1/5 a 5/5) para tocar o mesmo acorde em qualquer região do braço, com visualização detalhada de Dedos e Intervalos (T, 3, 5, 7m, 7M). Para tecladistas, o app oferece o Teclado Didático Centrado.'
                         : selected.id === 'escala' && escalaCardSubTab === 'disponibilidade'
                           ? "Cada músico marca sua agenda pelo celular em 3 passos simples: (1) escolhe os dias no calendário, (2) confirma 'Conte Comigo' ou 'Não Posso' com trava automática de 24h antes do culto, e (3) finaliza notificando a liderança."
-                          : selected.description}
+                          : selected.id === 'liturgia_culto'
+                            ? (liturgiaCardSubTab === 'edicao'
+                                ? "Na Edição Customizável, o líder monta e personaliza cada momento do culto (Palavra Inicial, Louvor / Adoração, Leitura Bíblica com Assistente Bíblico integrado, duração em minutos e ordem dos blocos com setas de reordenação) de forma simples e flexível."
+                                : "No Modo Culto, toda a equipe acompanha em tempo real pelo celular ou tablet a sequência exata do culto, leituras bíblicas integradas, ministros responsáveis e tons definidos, além de acesso rápido a Tocar Setlist, Cifras do Culto e Google Docs.")
+                            : selected.id === 'projecao_datashow'
+                              ? (projecaoCardSubTab === 'slides'
+                                  ? "Na tela de Slides da Letra & Simulador, o operador visualiza todas as estrofes em grade, clica em qualquer slide para projetar ao vivo (com indicação 'NO TELÃO'), navega com as setas do teclado e digita textos livres instantaneamente."
+                                  : projecaoCardSubTab === 'guia'
+                                    ? "O Guia Prático do Operador orienta passo a passo qualquer voluntário da mídia sobre transmissão em segunda tela (F11 e Win + P), sincronização de letras, troca de fundo (inclusive ajustes para VGA) e controles de blackout e alertas."
+                                    : "No Painel do Projetor, a equipe de mídia sincroniza o roteiro ativo do culto e controla em tempo real a tela do projetor, avisos rápidos em 1 clique, cronômetro regressivo e letreiro de alertas rolantes sem interromper a adoração.")
+                              : selected.description}
                     </p>
 
                     <div className="pt-2 border-t border-white/5 space-y-2">
