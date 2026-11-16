@@ -132,44 +132,44 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Como começar em sua igreja
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Uma implantação simples para que todos os voluntários acompanhem com tranquilidade.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-8 space-y-4">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               1
             </div>
             <h3 className="text-xl font-bold text-white">
               Cadastre sua igreja
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Crie a conta em 2 minutos sem cartão de crédito. Insira o nome do ministério e defina seus horários de culto.
             </p>
           </div>
 
-          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-8 space-y-4">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               2
             </div>
             <h3 className="text-xl font-bold text-white">
               Convide os voluntários
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Compartilhe o link da equipe com músicos e técnicos. Cada membro entra com seu nome e escolhe seus instrumentos.
             </p>
           </div>
 
-          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-8 space-y-4">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               3
             </div>
             <h3 className="text-xl font-bold text-white">
               Monte sua primeira escala
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Organize a escala do culto e o repertório. A equipe é notificada no celular e confirma presença em instantes.
             </p>
           </div>
@@ -186,7 +186,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Por que o LiLouPro é a solução ideal para sua igreja?
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Feito especificamente para a realidade de igrejas e equipes cristãs, sem improvisos de ferramentas genéricas.
           </p>
         </div>
@@ -197,15 +197,15 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             return (
               <div
                 key={idx}
-                className="shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink bg-slate-900/60 hover:bg-slate-900/90 border border-white/10 hover:border-brand/40 rounded-3xl p-6 sm:p-8 space-y-4 transition-all duration-300 shadow-lg"
+                className="shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink bg-[#111827] hover:bg-[#161F33] border border-blue-400/20 hover:border-brand/40 rounded-3xl p-6 sm:p-8 space-y-4 transition-all duration-300 shadow-lg shadow-black/30"
               >
-                <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/10 flex items-center justify-center text-brand">
+                <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/15 flex items-center justify-center text-brand">
                   <IconComp className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-white">
                   {item.title}
                 </h3>
-                <p className="text-slate-400 text-sm leading-relaxed">
+                <p className="text-slate-300 text-sm leading-relaxed">
                   {item.description}
                 </p>
               </div>
@@ -213,7 +213,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           })}
         </div>
 
-        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-300">
           <span>← Deslize para ver todos os diferenciais →</span>
         </div>
       </section>
@@ -228,14 +228,14 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Como o LiLouPro nasceu na prática do nosso ministério
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Criado dentro da igreja local para substituir o improviso pela organização e excelência.
           </p>
         </div>
 
         <div className="max-w-3xl mx-auto">
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-lg hover:border-brand/30 transition-all">
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed italic">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 space-y-5 flex flex-col justify-between shadow-xl shadow-black/30 hover:border-brand/30 transition-all">
+            <p className="text-slate-200 text-sm sm:text-base leading-relaxed italic">
               "Quando cheguei na minha igreja, o ministério de louvor dependia de um PDF antigo: muitas cifras e letras estavam erradas, os tons não batiam com a extensão vocal dos cantores e não tínhamos referência de áudio para ouvir a versão certa da música. Somado às escalas feitas pelo WhatsApp, todo ensaio virava um retrabalho. Hoje, como líder do ministério de louvor, desenvolvi o LiLouPro na prática com a nossa própria equipe para resolver exatamente essa rotina. Agora, da escala à projeção ao vivo, nosso culto flui em um só lugar."
             </p>
             <div className="pt-4 border-t border-white/10 flex items-center gap-3.5">
@@ -246,7 +246,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               />
               <div className="space-y-0.5">
                 <h4 className="font-bold text-white text-sm">Miquéias Mello</h4>
-                <p className="text-xs text-slate-400">Líder de Louvor &amp; Criador do LiLouPro</p>
+                <p className="text-xs text-slate-300">Líder de Louvor &amp; Criador do LiLouPro</p>
                 <p className="text-[11px] text-sky-300 font-medium">Igreja Graça Soberana • Rio Grande, RS</p>
               </div>
             </div>
@@ -264,13 +264,13 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
             Escolha o plano ideal para a sua igreja
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Experimente gratuitamente por 30 dias sem precisar de cartão, ou assine para liberar o acesso contínuo da sua equipe.
           </p>
 
           {/* Seletor Mensal / Anual */}
           <div className="pt-2 flex items-center justify-center">
-            <div className="bg-slate-900/90 border border-white/10 p-1 rounded-2xl flex items-center gap-1 shadow-lg">
+            <div className="bg-[#111827] border border-blue-400/20 p-1 rounded-2xl flex items-center gap-1 shadow-lg">
               <button
                 type="button"
                 onClick={() => setBillingCycle('monthly')}
@@ -304,13 +304,13 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto gap-6 sm:gap-8 items-stretch mb-10">
           
           {/* 1. PLANO COMPLETO */}
-          <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl hover:border-white/20 transition-all">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl shadow-black/30 hover:border-blue-400/35 transition-all">
             <div className="space-y-4">
               <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
                 {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
               </span>
               <h3 className="text-2xl font-bold text-white">Plano Completo</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
+              <p className="text-slate-300 text-xs leading-relaxed">
                 Ideal para ministérios que buscam organização eficiente de escalas, cifras transpostas e cancioneiro da congregação.
               </p>
               
@@ -318,19 +318,19 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 {billingCycle === 'annual' ? (
                   <div>
                     <span className="text-3xl sm:text-4xl font-black text-white">R$ 470,40</span>
-                    <span className="text-xs text-slate-400"> / ano</span>
+                    <span className="text-xs text-slate-300"> / ano</span>
                     <div className="text-[11px] text-emerald-400 font-semibold mt-1">Equivale a R$ 39,20/mês cobrados anualmente</div>
                   </div>
                 ) : (
                   <div>
                     <span className="text-3xl sm:text-4xl font-black text-white">R$ 49,00</span>
-                    <span className="text-xs text-slate-400"> / mês</span>
-                    <div className="text-[11px] text-slate-400 mt-1">Sem fidelidade, cancele quando quiser</div>
+                    <span className="text-xs text-slate-300"> / mês</span>
+                    <div className="text-[11px] text-slate-300 mt-1">Sem fidelidade, cancele quando quiser</div>
                   </div>
                 )}
               </div>
 
-              <ul className="space-y-2.5 text-xs text-slate-300">
+              <ul className="space-y-2.5 text-xs text-slate-200">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
                   <span>Músicos, vocais e voluntários ilimitados</span>
@@ -367,7 +367,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-block text-xs font-medium text-slate-400 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
+                className="inline-block text-xs font-medium text-slate-300 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
               >
                 ou assinar agora ({billingCycle === 'annual' ? 'R$ 470,40/ano' : 'R$ 49,00/mês'})
               </a>
@@ -375,13 +375,13 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           </div>
 
           {/* 2. PLANO PREMIUM */}
-          <div className="bg-slate-900/90 border border-brand/40 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl hover:border-brand/60 transition-all">
+          <div className="bg-[#131C31] border border-brand/45 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl shadow-black/40 hover:border-brand/65 transition-all">
             <div className="space-y-4">
               <span className="text-xs font-bold text-brand uppercase tracking-wider">
                 {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
               </span>
               <h3 className="text-2xl font-bold text-white">Plano Premium</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
+              <p className="text-slate-300 text-xs leading-relaxed">
                 A solução completa com projeção sincronizada no telão, múltiplos ministérios, relatórios e suporte prioritário.
               </p>
               
@@ -389,14 +389,14 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 {billingCycle === 'annual' ? (
                   <div>
                     <span className="text-3xl sm:text-4xl font-black text-brand">R$ 950,40</span>
-                    <span className="text-xs text-slate-400"> / ano</span>
+                    <span className="text-xs text-slate-300"> / ano</span>
                     <div className="text-[11px] text-emerald-400 font-semibold mt-1">Equivale a R$ 79,20/mês cobrados anualmente</div>
                   </div>
                 ) : (
                   <div>
                     <span className="text-3xl sm:text-4xl font-black text-brand">R$ 99,00</span>
-                    <span className="text-xs text-slate-400"> / mês</span>
-                    <div className="text-[11px] text-slate-400 mt-1">Sem fidelidade, cancele quando quiser</div>
+                    <span className="text-xs text-slate-300"> / mês</span>
+                    <div className="text-[11px] text-slate-300 mt-1">Sem fidelidade, cancele quando quiser</div>
                   </div>
                 )}
               </div>
@@ -438,7 +438,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-block text-xs font-medium text-slate-400 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
+                className="inline-block text-xs font-medium text-slate-300 hover:text-white underline underline-offset-4 transition-colors cursor-pointer pt-1"
               >
                 ou assinar agora ({billingCycle === 'annual' ? 'R$ 950,40/ano' : 'R$ 99,00/mês'})
               </a>
@@ -448,7 +448,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         </div>
 
         {/* Rodapé da Seção de Preços com Selos de Confiança Sóbrios */}
-        <div className="max-w-4xl mx-auto p-6 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-wrap items-center justify-around gap-4 text-xs text-slate-400 text-center">
+        <div className="max-w-4xl mx-auto p-6 rounded-2xl bg-[#111827] border border-white/10 flex flex-wrap items-center justify-around gap-4 text-xs text-slate-300 text-center shadow-lg">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>30 dias gratuitos sem cartão de crédito</span>
@@ -467,14 +467,14 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
       {/* SEÇÃO 11: PERGUNTAS FREQUENTES (FAQ) */}
       <section id="faq" className="max-w-4xl mx-auto px-6">
         <div className="text-center space-y-3 mb-8 sm:mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/15 text-slate-200 text-xs font-bold uppercase tracking-wider">
             <HelpCircle className="w-3.5 h-3.5" />
             Dúvidas Frequentes
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Perguntas Frequentes
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Respostas claras sobre o funcionamento, testes e planos da plataforma.
           </p>
         </div>
@@ -485,7 +485,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             return (
               <div 
                 key={idx}
-                className="bg-slate-900/70 border border-white/10 rounded-2xl overflow-hidden transition-all"
+                className="bg-[#111827] border border-blue-400/20 rounded-2xl overflow-hidden transition-all shadow-md shadow-black/25"
               >
                 <button
                   onClick={() => setOpenFaq(isOpen ? null : idx)}
@@ -510,8 +510,8 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
       {/* SEÇÃO 12: CHAMADA FINAL */}
       <section className="max-w-7xl mx-auto px-6 pb-6">
-        <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-[#0a1829] to-slate-900 border border-white/15 p-8 sm:p-12 lg:p-14 text-center space-y-6 shadow-2xl overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-48 bg-brand/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative rounded-3xl bg-gradient-to-br from-[#111827] via-[#0F172A] to-[#111827] border border-blue-400/20 p-8 sm:p-12 lg:p-14 text-center space-y-6 shadow-2xl shadow-black/40 overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-48 bg-[#2563EB]/15 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 max-w-3xl mx-auto space-y-6">
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
@@ -526,28 +526,28 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={() => onEnterApp('signup')}
-                className="w-full sm:w-auto px-10 py-5 bg-brand hover:bg-brand/90 text-slate-950 font-black rounded-2xl text-lg shadow-2xl shadow-brand/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
+                className="w-full sm:w-auto px-10 py-5 bg-brand hover:bg-brand/90 text-slate-950 font-black rounded-2xl text-lg shadow-lg shadow-blue-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
               >
                 <span>Testar grátis por 30 dias</span>
                 <ArrowRight className="w-5 h-5" />
               </button>
               <button
                 onClick={() => onEnterApp('login')}
-                className="w-full sm:w-auto px-8 py-5 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-2xl text-base transition-all text-center"
+                className="w-full sm:w-auto px-8 py-5 bg-slate-800/80 hover:bg-slate-800 border border-slate-600/60 text-white font-semibold rounded-2xl text-base transition-all text-center cursor-pointer"
               >
                 Já tenho conta • Entrar
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-400 pt-4">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-200 pt-4">
               <span className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-brand" /> Sem cartão de crédito
+                <Check className="w-4 h-4 text-[#3B82F6]" /> Sem cartão de crédito
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-brand" /> 30 dias ilimitados
+                <Check className="w-4 h-4 text-[#3B82F6]" /> 30 dias ilimitados
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-brand" /> Suporte em português
+                <Check className="w-4 h-4 text-[#3B82F6]" /> Suporte em português
               </span>
             </div>
           </div>
@@ -555,7 +555,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
       </section>
 
       {/* FOOTER INSTITUCIONAL */}
-      <footer className="border-t border-white/10 pt-10 pb-24 text-xs text-slate-400">
+      <footer className="border-t border-white/10 pt-10 pb-24 text-xs text-slate-300">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
@@ -566,7 +566,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               />
               <span className="text-lg font-black text-white tracking-tight">LiLouPro</span>
             </div>
-            <p className="text-slate-400 leading-relaxed">
+            <p className="text-slate-300 leading-relaxed">
               O sistema de gestão de escalas, repertório, cifras e projeção para ministérios de louvor.
             </p>
           </div>
@@ -592,7 +592,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
 
           <div className="space-y-2.5">
             <h4 className="font-bold text-white text-sm">Suporte & Contato</h4>
-            <p className="text-slate-400">
+            <p className="text-slate-300">
               Dúvidas na configuração da sua igreja? Fale direto no WhatsApp com nossa equipe:
             </p>
             <a 

@@ -10,9 +10,9 @@ interface CommercialLandingPageProps {
 
 export default function CommercialLandingPage({ onEnterApp }: CommercialLandingPageProps) {
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 font-sans selection:bg-brand selection:text-slate-950 overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#0B1120] bg-gradient-to-b from-[#0B1120] via-[#0F172A] to-[#0B1120] text-slate-100 font-sans selection:bg-brand selection:text-slate-950 overflow-x-hidden relative">
       {/* Background Decorativo Superior */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-b from-brand/10 via-sky-500/5 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[520px] bg-gradient-to-b from-[#2563EB]/15 via-sky-500/10 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
 
       {/* Botão Flutuante de WhatsApp Oficial (Circular, com Ícone Oficial e Tooltip "Fale com nossa equipe") */}
       <div className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 flex items-center group">
@@ -49,7 +49,7 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
       </div>
 
       {/* Header Institucional Fixo */}
-      <header className="sticky top-0 z-40 bg-[#070b14]/85 backdrop-blur-md border-b border-white/10 transition-all">
+      <header className="sticky top-0 z-40 bg-[#0B1120]/90 backdrop-blur-md border-b border-white/10 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
           {/* Logo */}
           <div 
@@ -68,7 +68,7 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
               <span className="text-lg sm:text-xl font-black text-white tracking-tight leading-none">
                 LiLouPro
               </span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 tracking-wider whitespace-nowrap">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-300 tracking-wider whitespace-nowrap">
                 Liturgia - Louvor - Projeção
               </span>
             </div>

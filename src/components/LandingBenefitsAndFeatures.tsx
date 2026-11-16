@@ -503,13 +503,13 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Veja as telas reais e os diferenciais exclusivos do LiLouPro
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Do <strong className="text-slate-200">LiLouPro Player sem anúncios</strong>, <strong className="text-slate-200">Controle de cifra por Pedal Bluetooth</strong> e <strong className="text-slate-200">Escala Inteligente do Culto</strong> até <strong className="text-slate-200">Transposição em 1 clique</strong>, <strong className="text-slate-200">Cálculo do Capotraste</strong>, e <strong className="text-slate-200">Shapes do CAGED</strong>.
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
+            Do <strong className="text-white">LiLouPro Player sem anúncios</strong>, <strong className="text-white">Controle de cifra por Pedal Bluetooth</strong> e <strong className="text-white">Escala Inteligente do Culto</strong> até <strong className="text-white">Transposição em 1 clique</strong>, <strong className="text-white">Cálculo do Capotraste</strong>, e <strong className="text-white">Shapes do CAGED</strong>.
           </p>
         </div>
 
         {/* Grid de Consequências e Módulos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
           {consequenceModules.map((item) => {
             const IconComp = item.icon;
             const rawCardImage = moduleImages[item.id] || defaultModuleImages[item.id];
@@ -532,11 +532,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               <div
                 key={item.id}
                 onClick={() => setActiveModuleModal(item.id)}
-                className={`bg-slate-900/60 hover:bg-slate-900 border ${
+                className={`h-full bg-[#111827] hover:bg-[#161F33] border ${
                   item.isExclusive
                     ? 'border-amber-500/35 hover:border-amber-400/70 shadow-amber-500/5'
-                    : 'border-white/10 hover:border-brand/40'
-                } rounded-3xl p-4 sm:p-6 space-y-4 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-lg relative overflow-hidden`}
+                    : 'border-blue-400/20 hover:border-brand/40'
+                } rounded-3xl p-4 sm:p-6 space-y-4 transition-all duration-300 flex flex-col justify-between cursor-pointer group shadow-xl shadow-black/30 relative overflow-hidden`}
               >
                 <div className="space-y-3 sm:space-y-4">
                   <div className="flex items-center justify-between gap-2">
@@ -631,27 +631,27 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     <div className="relative w-full space-y-2.5 pt-1.5">
                       {item.id === 'repertorio' || item.id === 'cifras' || item.id === 'caged' || item.id === 'escala' ? (
                         <div className="relative z-0 mx-auto w-full cursor-pointer group before:absolute before:-inset-2 before:rounded-[2rem] before:bg-gradient-to-tr before:from-blue-600/20 before:via-cyan-500/5 before:to-amber-500/15 before:blur-xl before:-z-10">
-                          {/* Aro externo de titânio chanfrado */}
-                          <div className="relative rounded-[1.65rem] p-[2.5px] bg-gradient-to-b from-zinc-400/50 via-zinc-700/40 to-zinc-900 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85),0_0_20px_rgba(59,130,246,0.12)]">
+                          {/* Aro externo grafite/preto fosco */}
+                          <div className="relative rounded-[1.65rem] p-[2.5px] bg-gradient-to-b from-zinc-500/40 via-zinc-800/60 to-zinc-950 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.85),0_0_20px_rgba(59,130,246,0.12)]">
                             {/* Botões físicos discretos no topo direito da carcaça */}
                             <div className="absolute -top-[4px] right-10 w-7 h-[3px] rounded-t bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
                             <div className="absolute -top-[4px] right-20 w-5 h-[3px] rounded-t bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
 
                             {/* Moldura preta de vidro (Bezel fino) */}
-                            <div className="relative rounded-[1.5rem] bg-[#090a0f] p-2 sm:p-2.5 shadow-[inset_0_0_6px_rgba(255,255,255,0.12)] border border-black">
+                            <div className="relative rounded-[1.5rem] bg-zinc-900 p-2 sm:p-2.5 shadow-[inset_0_0_6px_rgba(255,255,255,0.08)] border border-zinc-800">
                               {/* Câmera frontal no centro superior do Bezel */}
                               <div className="mx-auto mb-1.5 w-2 h-2 rounded-full bg-[#11131c] ring-1 ring-white/15 flex items-center justify-center pointer-events-none">
                                 <span className="w-0.5 h-0.5 rounded-full bg-blue-400/70" />
                               </div>
 
-                              {/* Tela interna nítida + Reflexo de vidro + Barra Home do iPadOS */}
-                              <div className="relative rounded-[1.05rem] overflow-hidden border border-white/10 bg-[#060d1f] aspect-[16/10]">
+                              {/* Tela interna nítida preenchendo 100% sem sobras laterais */}
+                              <div className="relative w-full rounded-[1.05rem] overflow-hidden border border-white/10 bg-[#060d1f] aspect-[4/3]">
                                 <img
                                   src={cardImage}
                                   alt={`Print real do LiLouPro - ${item.title}`}
                                   loading="lazy"
                                   decoding="async"
-                                  className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                                  className="w-full h-full object-fill object-top transition-transform duration-500 group-hover:scale-[1.03]"
                                 />
                                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.07] z-10" />
                                 <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full bg-white/25 z-10" />
@@ -675,35 +675,35 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         </div>
                       )}
                       {item.id === 'caged' && (
-                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-white/10 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-white/10 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
                             🎸 5 formas de montar o mesmo acorde & campo harmônico
                           </span>
-                          <span className="text-slate-400">Toque para ampliar</span>
+                          <span className="text-slate-300">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'escala' && (
-                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-emerald-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-emerald-500/25 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-emerald-400">
                             ✓ Confirmação em 1 Toque • WhatsApp • Docs & PDF
                           </span>
-                          <span className="text-slate-400">Escala Real</span>
+                          <span className="text-slate-300">Escala Real</span>
                         </div>
                       )}
                       {item.id === 'cifras' && (
-                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-amber-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-amber-500/25 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
                             ⚡ Cifra Inteligente • Tom em 1 Clique • Player Integrado
                           </span>
-                          <span className="text-slate-400">Toque para ampliar</span>
+                          <span className="text-slate-300">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'repertorio' && (
-                        <div className="px-3 py-1.5 rounded-xl bg-slate-950/95 border border-amber-500/20 flex items-center justify-between text-[10px]">
+                        <div className="px-3 py-1.5 rounded-xl bg-[#0B1120] border border-amber-500/25 flex items-center justify-between text-[10px]">
                           <span className="font-bold text-amber-400">
                             🎵 Repertório organizado por culto, artista e categoria
                           </span>
-                          <span className="text-slate-400">Toque para ampliar</span>
+                          <span className="text-slate-300">Toque para ampliar</span>
                         </div>
                       )}
                       {item.id === 'exclusivo' && (
@@ -777,7 +777,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
       {/* SEÇÃO 6: VEJA FUNCIONANDO NA PRÁTICA (Simulador com Vídeo Real do Pedal Bluetooth e Prints Reais) */}
       <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-slate-900/80 border border-white/15 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl">
+        <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl shadow-black/40">
           <div className="text-center max-w-3xl mx-auto space-y-3 mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
               <Play className="w-3.5 h-3.5" />
@@ -786,7 +786,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
             <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
               Veja o sistema em funcionamento
             </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
+            <p className="text-slate-300 text-sm sm:text-base">
               Assista à rolagem inteligente da cifra no Modo Palco com acionamento mãos-livres por Pedal Bluetooth.
             </p>
           </div>
@@ -802,8 +802,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     onClick={() => handleSelectDemo(idx)}
                     className={`p-5 rounded-2xl border transition-all cursor-pointer ${
                       isActive 
-                        ? 'bg-slate-950 border-brand/50 shadow-lg' 
-                        : 'bg-slate-900/40 border-white/5 hover:border-white/15'
+                        ? 'bg-[#0F172A] border-brand/50 shadow-lg' 
+                        : 'bg-slate-800/60 border-white/10 hover:border-white/20'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -837,7 +837,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
               })}
 
               {/* Card visual do Pedal Bluetooth M-VAVE no palco */}
-              <div className="mt-4 rounded-2xl overflow-hidden border border-blue-500/20 bg-slate-900/60 shadow-xl relative group">
+              <div className="mt-4 rounded-2xl overflow-hidden border border-blue-400/25 bg-[#0F172A] shadow-xl relative group">
                 <img
                   src="/pedal-bluetooth.png"
                   alt="Controlador Pedal Bluetooth M-VAVE no palco"
@@ -917,11 +917,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                 return (
                   <div 
-                    className={`bg-slate-950 border ${
+                    className={`bg-[#0F172A] border ${
                       currentMedia 
-                        ? 'border-brand/40 shadow-brand/10' 
-                        : 'border-white/10'
-                    } rounded-3xl p-5 sm:p-6 shadow-2xl relative min-h-[400px] flex flex-col justify-between transition-all duration-300 overflow-hidden group`}
+                        ? 'border-blue-400/25 shadow-black/40' 
+                        : 'border-white/15'
+                    } rounded-3xl px-3 py-4 sm:p-6 shadow-2xl relative min-h-[400px] flex flex-col justify-between transition-all duration-300 overflow-hidden group`}
                   >
                     {/* Cabeçalho do Telão focado em Modo Palco & Pedal Bluetooth */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
@@ -943,42 +943,38 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     <div className="py-3 my-auto flex flex-col justify-center">
                       {currentMedia && (
                         activeDemo === 0 && stageSimSubTab === 'pedal' && currentMedia.type === 'video' && !currentMedia.isEmbed ? (
-                          <div className="w-full flex items-center justify-center py-3 px-1">
-                            {/* Mockup ultrarrealista de iPad Pro (Space Black / Titânio) com brilho de palco */}
-                            <div className="relative z-0 mx-auto w-full before:absolute before:-inset-3 before:rounded-[2.6rem] before:bg-gradient-to-tr before:from-blue-600/25 before:via-cyan-500/10 before:to-emerald-500/20 before:blur-2xl before:-z-10">
-                              {/* Aro externo de titânio/alumínio chanfrado */}
-                              <div className="relative rounded-[2.2rem] p-[3px] bg-gradient-to-b from-zinc-400/50 via-zinc-700/40 to-zinc-900 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9),0_0_25px_rgba(59,130,246,0.2)]">
-                                {/* Botões físicos salientes no topo direito da carcaça (Power + 2 Volume) */}
-                                <div className="absolute -top-[5px] right-14 w-9 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
-                                <div className="absolute -top-[5px] right-28 w-7 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
-                                <div className="absolute -top-[5px] right-36 w-7 h-[4px] rounded-t-md bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-600 border-t border-white/30 pointer-events-none" />
+                          <div className="w-full flex items-center justify-center py-2">
+                            {/* Mockup ultrarrealista de Tablet adaptado exatamente à proporção natural do vídeo */}
+                            <div className="relative z-0 w-full max-w-[540px] mx-auto before:absolute before:-inset-2 sm:before:-inset-3 before:rounded-[24px] before:bg-gradient-to-tr before:from-blue-600/25 before:via-cyan-500/10 before:to-emerald-500/20 before:blur-2xl before:-z-10">
+                              <div className="relative w-full bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700 p-[6px] sm:p-[10px] rounded-[18px] sm:rounded-[24px] shadow-[0_14px_35px_rgba(0,0,0,0.75)] border border-slate-400/40 ring-1 ring-inset ring-white/20">
+                                {/* Botões físicos sutis no topo direito da moldura */}
+                                <div className="absolute -top-[4px] right-10 sm:right-14 w-7 sm:w-9 h-[3px] sm:h-[4px] rounded-t-md bg-gradient-to-b from-slate-500 to-slate-700 border-t border-slate-400/30 pointer-events-none" />
+                                <div className="absolute -top-[4px] right-20 sm:right-28 w-5 sm:w-7 h-[3px] sm:h-[4px] rounded-t-md bg-gradient-to-b from-slate-500 to-slate-700 border-t border-slate-400/30 pointer-events-none" />
+                                <div className="absolute -top-[4px] right-28 sm:right-36 w-5 sm:w-7 h-[3px] sm:h-[4px] rounded-t-md bg-gradient-to-b from-slate-500 to-slate-700 border-t border-slate-400/30 pointer-events-none" />
 
-                                {/* Moldura preta de vidro (Bezel do iPad) */}
-                                <div className="relative rounded-[2.05rem] bg-[#090a0f] p-3 sm:p-4 shadow-[inset_0_0_8px_rgba(255,255,255,0.12)] border border-black">
-                                  {/* Câmera frontal e sensor realistas no bezel superior */}
-                                  <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none z-20">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-[#11131c] ring-1 ring-white/15 flex items-center justify-center">
-                                      <span className="w-1 h-1 rounded-full bg-blue-400/60" />
-                                    </span>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-800/80" />
-                                  </div>
+                                {/* Câmera frontal discreta centralizada na borda superior da moldura (sem cobrir a tela) */}
+                                <div className="mx-auto mb-1 sm:mb-1.5 flex items-center justify-center gap-1.5 pointer-events-none">
+                                  <span className="w-2 h-2 rounded-full bg-[#11131c] ring-1 ring-white/15 flex items-center justify-center">
+                                    <span className="w-0.5 h-0.5 sm:w-1 sm:h-1 rounded-full bg-blue-400/60" />
+                                  </span>
+                                  <span className="w-1 h-1 rounded-full bg-zinc-800/80" />
+                                </div>
 
-                                  {/* Tela interna com reflexo de vidro e barra Home do iPadOS */}
-                                  <div className="relative rounded-[1.35rem] overflow-hidden border border-white/10 bg-[#060d1f] shadow-inner">
-                                    <video
-                                      key={currentMedia.url}
-                                      src={currentMedia.url}
-                                      autoPlay
-                                      loop
-                                      muted
-                                      playsInline
-                                      className="w-full h-auto block object-contain"
-                                    />
-                                    {/* Reflexo diagonal sutil de vidro */}
-                                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08] z-20" />
-                                    {/* Barra Home horizontal do iPadOS */}
-                                    <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 w-28 h-1 rounded-full bg-white/30 z-20" />
-                                  </div>
+                                {/* Tela interna preenchendo 100% de ponta a ponta sem espaços vazios */}
+                                <div className="w-full overflow-hidden rounded-[12px] sm:rounded-[15px] bg-[#0B1120] border-[3px] border-zinc-950 relative">
+                                  <video
+                                    key={currentMedia.url}
+                                    src={currentMedia.url}
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                    className="w-full h-auto block object-cover"
+                                  />
+                                  {/* Reflexo diagonal sutil de vidro */}
+                                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08] z-20" />
+                                  {/* Barra Home horizontal do iPadOS */}
+                                  <div className="pointer-events-none absolute bottom-1 sm:bottom-1.5 left-1/2 -translate-x-1/2 w-20 sm:w-28 h-0.5 sm:h-1 rounded-full bg-white/30 z-20" />
                                 </div>
                               </div>
                             </div>
@@ -1105,11 +1101,11 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
       {/* RESPIRO VISUAL 4: MEMÓRIA DE MARCA */}
       <section className="max-w-5xl mx-auto px-6">
-        <div className="py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-slate-900/80 border border-white/10 text-center space-y-2">
+        <div className="py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-[#111827] border border-blue-400/20 text-center space-y-2 shadow-xl shadow-black/30">
           <p className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight italic">
             "Menos improviso. Mais adoração."
           </p>
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-300">
             Quando a técnica e a organização funcionam em paz, o ministério floresce
           </p>
         </div>

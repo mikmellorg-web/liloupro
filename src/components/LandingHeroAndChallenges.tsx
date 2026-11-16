@@ -232,7 +232,9 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
         <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-10 items-center">
           
           {/* Lado Esquerdo: Conceito, Slogan e Conexão Humana */}
-          <div className="w-full lg:col-span-6 space-y-5 sm:space-y-6 text-center lg:text-left">
+          <div className="w-full lg:col-span-6 space-y-5 sm:space-y-6 text-center lg:text-left relative">
+            {/* Ambient Glow azul-royal atrás do título principal */}
+            <div className="pointer-events-none absolute -top-8 left-1/2 lg:left-1/3 -translate-x-1/2 w-[320px] sm:w-[460px] h-[220px] sm:h-[260px] rounded-full bg-[#2563EB]/15 blur-3xl -z-10" />
             
             {/* CONCEITO CENTRAL UNIFICADOR (Com detalhe em âmbar/dourado para unidade visual) */}
             <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-full bg-brand/10 border border-amber-400/25 text-brand text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-sm">
@@ -258,7 +260,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <div className="pt-1 flex flex-col sm:flex-row items-center justify-center lg:justify-start w-full sm:w-auto gap-3">
               <button
                 onClick={() => onEnterApp('signup')}
-                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-sm sm:text-base uppercase tracking-wider whitespace-nowrap shadow-xl shadow-brand/25 lg:shadow-2xl lg:shadow-brand/35 lg:ring-2 lg:ring-brand/40 lg:ring-offset-2 lg:ring-offset-slate-950 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
+                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-brand hover:bg-brand/90 text-slate-950 font-black text-sm sm:text-base uppercase tracking-wider whitespace-nowrap shadow-lg shadow-blue-500/30 lg:ring-2 lg:ring-brand/40 lg:ring-offset-2 lg:ring-offset-[#0B1120] transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
               >
                 <span>Testar grátis 30 dias</span>
                 <ArrowRight className="w-4 h-4 shrink-0" />
@@ -266,39 +268,41 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
 
               <a
                 href="#jornada-ministerio"
-                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-semibold text-sm sm:text-base whitespace-nowrap transition-all text-center"
+                className="w-full sm:w-auto min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-600/60 text-slate-200 font-semibold text-sm sm:text-base whitespace-nowrap transition-all text-center shadow-sm"
               >
                 <span>Ver a jornada do ministério</span>
-                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
               </a>
             </div>
 
             {/* Confiança de Adoção */}
-            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs text-slate-400">
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 text-xs text-slate-200">
               <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Sem cartão de crédito
+                <Check className="w-3.5 h-3.5 text-[#3B82F6] shrink-0" /> Sem cartão de crédito
               </span>
               <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Teste sem compromisso
+                <Check className="w-3.5 h-3.5 text-[#3B82F6] shrink-0" /> Teste sem compromisso
               </span>
               <span className="flex items-center gap-1.5 whitespace-nowrap">
-                <Check className="w-3.5 h-3.5 text-brand shrink-0" /> Suporte humano em português
+                <Check className="w-3.5 h-3.5 text-[#3B82F6] shrink-0" /> Suporte humano em português
               </span>
             </div>
           </div>
 
           {/* Lado Direito: Preview do Produto (Imagem dos Dispositivos Alinhada e com Moldura Elegante) */}
-          <div className="w-full lg:col-span-6">
+          <div className="w-full lg:col-span-6 relative">
+            {/* Halo luminoso quente/dourado sutil atrás da imagem dos dispositivos */}
+            <div className="pointer-events-none absolute -inset-3 sm:-inset-5 rounded-3xl bg-[#F59E0B]/10 blur-3xl -z-10" />
             <div 
               className={`relative w-full transition-all duration-200 ${
                 activeHeroImage 
                   ? '' 
-                  : 'bg-slate-900/90 border border-white/15 rounded-2xl p-5 sm:p-6 shadow-2xl shadow-blue-950/50'
+                  : 'bg-[#111827] border border-blue-400/20 rounded-2xl p-5 sm:p-6 shadow-2xl shadow-blue-950/50'
               }`}
             >
               {/* SE TIVER IMAGEM REAL / PADRÃO: EXIBE A IMAGEM EM ALTA RESOLUÇÃO COM MOLDURA TRANSLÚCIDA */}
               {activeHeroImage ? (
-                <div className="relative w-full overflow-hidden border border-white/10 rounded-2xl shadow-2xl shadow-blue-950/50 bg-[#070b14] transform-gpu">
+                <div className="relative w-full overflow-hidden border border-blue-400/20 rounded-2xl shadow-2xl shadow-black/50 bg-[#0F172A] transform-gpu">
                   <img
                     src={activeHeroImage}
                     alt="Interface do LiLouPro no Celular, Notebook e Tablet"
@@ -499,12 +503,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
               )}
 
               {/* Rodapé de Sintonia (Espaçado e sem recorte nas bordas nem sobreposição com o botão flutuante) */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-between gap-4 pt-4 px-2 text-xs text-slate-400">
+              <div className="flex flex-wrap items-center justify-center sm:justify-between gap-4 pt-4 px-2 text-xs text-slate-300">
                 <span className="inline-flex items-center gap-2 whitespace-nowrap">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                   <span>Sincronizado na Nuvem</span>
                 </span>
-                <span className="font-semibold text-slate-300 text-center sm:text-right">
+                <span className="font-semibold text-slate-200 text-center sm:text-right">
                   Sem planilhas ou mensagens perdidas
                 </span>
               </div>
@@ -517,8 +521,8 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
 
       {/* RESPIRO VISUAL 1: MEMÓRIA DE MARCA E CONCEITO CENTRAL */}
       <section className="max-w-5xl mx-auto px-6">
-        <div className="relative py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-gradient-to-r from-slate-900 via-[#0d1627] to-slate-900 border border-white/10 text-center shadow-2xl overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-brand/10 via-transparent to-transparent pointer-events-none" />
+        <div className="relative py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-[#111827] border border-blue-400/20 text-center shadow-2xl shadow-black/40 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-brand/12 via-transparent to-transparent pointer-events-none" />
           
           <p className="relative z-10 text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-relaxed italic">
             "O culto começa muito antes do domingo."
@@ -539,7 +543,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Por que organizar o louvor parece um segundo trabalho?
           </h2>
-          <p className="text-slate-400 text-base leading-relaxed">
+          <p className="text-slate-300 text-base leading-relaxed">
             A maioria dos líderes de louvor ama servir, mas se esgota com a comunicação descentralizada antes de cada domingo.
           </p>
         </div>
@@ -547,7 +551,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           
           {/* Situação 1: O Líder */}
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-white/20 transition-all">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-blue-400/35 shadow-lg shadow-black/30 transition-all">
             <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300">
               <MessageSquare className="w-5 h-5" />
             </div>
@@ -555,13 +559,13 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <h3 className="text-lg font-bold text-white">
               Acabou a cobrança no WhatsApp na quinta à noite
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Os músicos informam a disponibilidade direto no app e a escala é gerada com confirmação automática, sem mensagens perdidas no grupo.
             </p>
           </div>
 
           {/* Situação 2: O Músico */}
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-white/20 transition-all">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-blue-400/35 shadow-lg shadow-black/30 transition-all">
             <div className="w-11 h-11 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-300">
               <Music className="w-5 h-5" />
             </div>
@@ -569,13 +573,13 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <h3 className="text-lg font-bold text-white">
               O tom certo para cada cantor, sem refazer cifras
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Transponha qualquer música em 1 clique direto na tela e deixe a referência de áudio pronta antes mesmo da equipe chegar para o ensaio.
             </p>
           </div>
 
           {/* Situação 3: A Mídia / Pastor */}
-          <div className="bg-slate-900/60 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-white/20 transition-all">
+          <div className="bg-[#111827] border border-blue-400/20 rounded-3xl p-6 sm:p-8 space-y-4 hover:border-blue-400/35 shadow-lg shadow-black/30 transition-all">
             <div className="w-11 h-11 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300">
               <Tv className="w-5 h-5" />
             </div>
@@ -583,7 +587,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <h3 className="text-lg font-bold text-white">
               A mídia nunca mais pergunta qual é a próxima música
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               O repertório do culto já vai pronto e ordenado para o telão, podendo ser controlado direto pelo celular, sem slides desatualizados.
             </p>
           </div>
@@ -593,7 +597,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
 
       {/* SEÇÃO 3: A SOLUÇÃO LILOUPRO (Da Escala ao Telão em harmonia) */}
       <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-gradient-to-br from-slate-900 via-[#0e172a] to-slate-900 border border-white/15 rounded-3xl p-8 sm:p-12 lg:p-14 shadow-2xl">
+        <div className="bg-gradient-to-br from-[#111827] via-[#0F172A] to-[#111827] border border-blue-400/20 rounded-3xl p-8 sm:p-12 lg:p-14 shadow-2xl shadow-black/40">
           <div className="max-w-3xl mx-auto text-center space-y-5">
             
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/25 text-brand text-xs font-bold uppercase tracking-wider">
@@ -611,28 +615,28 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 text-left">
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <div className="p-4 rounded-2xl bg-slate-800/70 border border-white/15 space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-brand uppercase">01 • Liderança</span>
                 <p className="text-sm font-bold text-white">Escalas sem conflito</p>
-                <p className="text-xs text-slate-400">Sabendo quem está disponível</p>
+                <p className="text-xs text-slate-300">Sabendo quem está disponível</p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <div className="p-4 rounded-2xl bg-slate-800/70 border border-white/15 space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-brand uppercase">02 • Músicos</span>
                 <p className="text-sm font-bold text-white">Cifras no tom ideal</p>
-                <p className="text-xs text-slate-400">Transposição e áudio de ensaio</p>
+                <p className="text-xs text-slate-300">Transposição e áudio de ensaio</p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <div className="p-4 rounded-2xl bg-slate-800/70 border border-white/15 space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-brand uppercase">03 • Pastor</span>
                 <p className="text-sm font-bold text-white">Liturgia organizada</p>
-                <p className="text-xs text-slate-400">Ordem do culto compartilhada</p>
+                <p className="text-xs text-slate-300">Ordem do culto compartilhada</p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <div className="p-4 rounded-2xl bg-slate-800/70 border border-white/15 space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-brand uppercase">04 • Mídia</span>
                 <p className="text-sm font-bold text-white">Projeção sincronizada</p>
-                <p className="text-xs text-slate-400">Letras corretas no telão</p>
+                <p className="text-xs text-slate-300">Letras corretas no telão</p>
               </div>
             </div>
 
@@ -653,7 +657,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
             Um ciclo, quantos cultos sua igreja precisar
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
             Não importa se sua igreja tem um culto por semana ou cinco — o LiLouPro se adapta ao ritmo real da sua rotina, repetindo esse ciclo automaticamente a cada culto.
           </p>
         </div>
@@ -667,11 +671,11 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             return (
               <div 
                 key={idx}
-                className={`shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink relative bg-slate-900/75 hover:bg-slate-900 border ${
+                className={`shrink-0 w-[84%] sm:w-[70%] snap-center md:w-auto md:shrink relative bg-[#111827] hover:bg-[#161F33] border ${
                   isLast 
-                    ? 'border-brand/40 bg-gradient-to-b from-slate-900 to-brand/5 shadow-brand/10' 
-                    : 'border-white/10 hover:border-brand/30'
-                } rounded-3xl p-6 sm:p-7 flex flex-col justify-between space-y-5 transition-all duration-300 group shadow-xl`}
+                    ? 'border-brand/40 bg-gradient-to-b from-[#111827] to-brand/10 shadow-brand/10' 
+                    : 'border-blue-400/20 hover:border-brand/35'
+                } rounded-3xl p-6 sm:p-7 flex flex-col justify-between space-y-5 transition-all duration-300 group shadow-xl shadow-black/30`}
               >
                 <div className="space-y-4">
                   {/* Cabeçalho da Etapa com Número e Badge */}
@@ -725,12 +729,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
           })}
         </div>
 
-        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-400">
+        <div className="flex md:hidden items-center justify-center gap-2 mt-2 text-xs text-slate-300">
           <span>← Deslize para ver as 6 etapas do ciclo →</span>
         </div>
 
         {/* Conector Visual em Loop (Seta do Card 06 de volta para o Card 01) */}
-        <div className="mt-8 p-5 sm:p-6 rounded-3xl bg-slate-900/90 border border-brand/30 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left shadow-2xl">
+        <div className="mt-8 p-5 sm:p-6 rounded-3xl bg-[#111827] border border-brand/35 bg-gradient-to-r from-[#0F172A] via-[#111827] to-[#0F172A] flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left shadow-2xl shadow-black/40">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand shrink-0">
               <RotateCcw className="w-6 h-6" />
@@ -738,7 +742,7 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             <div>
               <div className="flex items-center justify-center md:justify-start gap-2">
                 <span className="text-xs font-black uppercase tracking-wider text-brand">Ciclo Contínuo em Loop</span>
-                <span className="text-[10px] font-bold text-slate-300 bg-white/10 border border-white/15 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-slate-200 bg-white/10 border border-white/15 px-2 py-0.5 rounded-full">
                   Sem prender a rotina ao domingo
                 </span>
               </div>
@@ -748,8 +752,8 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-950 border border-white/15 text-xs font-bold text-slate-200 shrink-0">
-            <span className="text-slate-400">06 · Repete</span>
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-[#0B1120] border border-white/15 text-xs font-bold text-slate-200 shrink-0">
+            <span className="text-slate-300">06 · Repete</span>
             <ArrowRight className="w-4 h-4 text-brand shrink-0" />
             <span className="text-brand flex items-center gap-1.5">
               <RotateCcw className="w-3.5 h-3.5" />
@@ -761,11 +765,11 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
 
       {/* RESPIRO VISUAL 2: MEMÓRIA DE MARCA E POSICIONAMENTO */}
       <section className="max-w-5xl mx-auto px-6">
-        <div className="py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-slate-900/80 border border-white/10 text-center space-y-2">
+        <div className="py-6 sm:py-8 px-6 sm:px-8 rounded-3xl bg-[#111827] border border-blue-400/20 text-center space-y-2 shadow-xl shadow-black/30">
           <p className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight italic">
             "Organização também é ministério."
           </p>
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-300">
             Cuidar das pessoas começa por respeitar o tempo e a dedicação de cada voluntário
           </p>
         </div>

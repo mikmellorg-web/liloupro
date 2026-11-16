@@ -85,11 +85,19 @@ import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
-// Lazy-loaded components for code-splitting
-const DashboardView = lazy(() => import('./components/DashboardView'));
-const SongsView = lazy(() => import('./components/SongsView'));
-const LiturgyView = lazy(() => import('./components/LiturgyView'));
-import { SongDetailView, AvailabilityView, LiturgyEditor } from './components/SongsView';
+// Static imports for core views (prevents dynamic module fetch failures)
+import LiturgyView from './components/LiturgyView';
+import SongsView, { SongDetailView, AvailabilityView, LiturgyEditor } from './components/SongsView';
+
+// Lazy-loaded DashboardView (avoids circular init with COLOR_PRESETS) with retry on transient fetch error
+const DashboardView = lazy(async () => {
+  try {
+    return await import('./components/DashboardView');
+  } catch (err) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return await import('./components/DashboardView');
+  }
+});
 
 
 function cn(...inputs: ClassValue[]) {
@@ -3977,16 +3985,18 @@ function MainContent() {
       <main className="max-w-6xl mx-auto p-4 md:p-10">
         <AnimatePresence mode="wait">
           {activeTab === 'home' && (
-            <DashboardView 
-              key="home" 
-              onNavigate={setActiveTab} 
-              onOpenSong={handleOpenSongById}
-              createNotifications={createNotifications}
-              setShowLiturgySongs={setShowLiturgySongs}
-              theme={theme}
-              allSongs={allSongs}
-              onStartPlaylist={handleStartWorshipPlaylist}
-            />
+            <Suspense fallback={null}>
+              <DashboardView 
+                key="home" 
+                onNavigate={setActiveTab} 
+                onOpenSong={handleOpenSongById}
+                createNotifications={createNotifications}
+                setShowLiturgySongs={setShowLiturgySongs}
+                theme={theme}
+                allSongs={allSongs}
+                onStartPlaylist={handleStartWorshipPlaylist}
+              />
+            </Suspense>
           )}
           {activeTab === 'songs' && !selectedSong && (
             <SongsView 

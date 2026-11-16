@@ -206,7 +206,21 @@ self.addEventListener('activate', (event) => {
 
 // Network-First strategy for manifest and icon assets to ensure immediate home screen icon updates
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
+
+  // Never intercept Vite dev modules, source files, scripts, or API requests
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/api/') ||
+    /\.(tsx?|jsx?|mjs|cjs|css)(\?|$)/i.test(url.pathname)
+  ) {
+    return;
+  }
 
   if (
     url.pathname.includes('manifest.json') ||
@@ -228,9 +242,6 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-
-  // Pass-through for default requests
-  event.respondWith(fetch(event.request));
 });
 
 // Safely update badge on the device's home screen
