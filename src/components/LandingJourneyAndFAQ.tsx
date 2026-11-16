@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Check, 
   ArrowRight, 
@@ -31,9 +31,19 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
   const adoptionCarouselRef = useRef<HTMLDivElement>(null);
   const [activeAdoptionStep, setActiveAdoptionStep] = useState<number>(0);
 
+  useEffect(() => {
+    if (adoptionCarouselRef.current) {
+      adoptionCarouselRef.current.scrollLeft = 0;
+    }
+  }, []);
+
   const handleAdoptionScroll = () => {
     const el = adoptionCarouselRef.current;
     if (!el) return;
+    if (el.scrollLeft <= 10) {
+      setActiveAdoptionStep(0);
+      return;
+    }
     const children = Array.from(el.children) as HTMLElement[];
     if (children.length === 0) return;
     const containerCenter = el.scrollLeft + el.clientWidth / 2;
@@ -54,6 +64,10 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
     setActiveAdoptionStep(idx);
     const el = adoptionCarouselRef.current;
     if (!el) return;
+    if (idx === 0) {
+      el.scrollTo({ left: 0, behavior: 'smooth' });
+      return;
+    }
     const target = el.children[idx] as HTMLElement | undefined;
     if (!target) return;
     const targetLeft = target.offsetLeft - (el.clientWidth - target.offsetWidth) / 2;
@@ -171,46 +185,46 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         <div
           ref={adoptionCarouselRef}
           onScroll={handleAdoptionScroll}
-          className="flex md:grid md:grid-cols-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory gap-4 md:gap-8 pb-2 md:pb-0 no-scrollbar"
+          className="flex md:grid md:grid-cols-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory gap-4 px-4 -mx-4 pb-3 scroll-smooth md:gap-8 md:px-0 md:mx-0 md:pb-0 no-scrollbar"
         >
-          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+          <div className="w-[85vw] max-w-[320px] md:w-auto md:max-w-none shrink-0 snap-center p-6 rounded-2xl bg-[#0F172A] border border-slate-800/80 flex flex-col justify-start text-left space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               1
             </div>
-            <h3 className="text-xl font-bold text-white">
+            <h3 className="text-xl font-bold text-white whitespace-normal break-words">
               Cadastre sua igreja
             </h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed whitespace-normal break-words">
               Crie a conta em 2 minutos sem cartão de crédito. Insira o nome do ministério e defina seus horários de culto.
             </p>
           </div>
 
-          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+          <div className="w-[85vw] max-w-[320px] md:w-auto md:max-w-none shrink-0 snap-center p-6 rounded-2xl bg-[#0F172A] border border-slate-800/80 flex flex-col justify-start text-left space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               2
             </div>
-            <h3 className="text-xl font-bold text-white">
+            <h3 className="text-xl font-bold text-white whitespace-normal break-words">
               Convide os voluntários
             </h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed whitespace-normal break-words">
               Compartilhe o link da equipe com músicos e técnicos. Cada membro entra com seu nome e escolhe seus instrumentos.
             </p>
           </div>
 
-          <div className="min-w-[85%] sm:min-w-[70%] md:min-w-0 snap-center shrink-0 bg-[#111827] border border-blue-400/20 rounded-3xl p-8 space-y-4 shadow-lg shadow-black/30">
+          <div className="w-[85vw] max-w-[320px] md:w-auto md:max-w-none shrink-0 snap-center p-6 rounded-2xl bg-[#0F172A] border border-slate-800/80 flex flex-col justify-start text-left space-y-4 shadow-lg shadow-black/30">
             <div className="w-12 h-12 rounded-2xl bg-brand/20 border border-brand/30 flex items-center justify-center text-brand font-black text-xl">
               3
             </div>
-            <h3 className="text-xl font-bold text-white">
+            <h3 className="text-xl font-bold text-white whitespace-normal break-words">
               Monte sua primeira escala
             </h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed whitespace-normal break-words">
               Organize a escala do culto e o repertório. A equipe é notificada no celular e confirma presença em instantes.
             </p>
           </div>
         </div>
 
-        <div className="flex md:hidden justify-center gap-2 mt-4">
+        <div className="flex md:hidden justify-center items-center gap-2 mt-3">
           {[0, 1, 2].map((idx) => (
             <button
               key={idx}

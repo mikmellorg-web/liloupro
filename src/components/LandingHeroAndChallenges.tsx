@@ -307,12 +307,12 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
               {activeHeroImage ? (
                 <div className="relative w-full overflow-hidden border border-blue-400/20 rounded-2xl shadow-2xl shadow-black/50 bg-[#0F172A] transform-gpu">
                   <img
-                    src={activeHeroImage}
+                    src="/hero-liloupro.jpg"
                     alt="Interface do LiLouPro no Celular, Notebook e Tablet"
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    className="w-full h-auto object-contain block rounded-2xl landing-crisp-img"
+                    className="w-full h-auto object-contain block rounded-2xl shadow-2xl landing-crisp-img"
                   />
                   {/* Sutil vinheta interna para fusão suave com o fundo escuro */}
                   <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
@@ -504,17 +504,6 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
                   )}
                 </div>
               )}
-
-              {/* Rodapé de Sintonia (Espaçado e sem recorte nas bordas nem sobreposição com o botão flutuante) */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-between gap-4 pt-4 px-2 text-xs text-slate-300">
-                <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                  <span>Sincronizado na Nuvem</span>
-                </span>
-                <span className="font-semibold text-slate-200 text-center sm:text-right">
-                  Sem planilhas ou mensagens perdidas
-                </span>
-              </div>
 
             </div>
           </div>
