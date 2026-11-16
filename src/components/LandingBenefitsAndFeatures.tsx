@@ -492,7 +492,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
     },
     {
       id: "caged",
-      title: "5 Formas de Fazer o Mesmo Acorde & Guia Harmônico",
+      title: "Contexto Harmônico & 5 Formas de Fazer o Mesmo Acorde",
       featureLabel: "Módulo • Acordes & Campo Harmônico",
       icon: Sliders,
       isExclusive: true,
@@ -544,7 +544,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
             Veja as telas reais e os diferenciais exclusivos do LiLouPro
           </h2>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-            Do <strong className="text-white">LiLouPro Player sem anúncios</strong>, <strong className="text-white">Controle de cifra por Pedal Bluetooth</strong> e <strong className="text-white">Escala Inteligente do Culto</strong> até <strong className="text-white">Transposição em 1 clique</strong>, <strong className="text-white">Cálculo do Capotraste</strong>, e <strong className="text-white">Shapes do CAGED</strong>.
+            Do <strong className="text-white">LiLouPro Player sem anúncios</strong>, <strong className="text-white">Controle de cifra por Pedal Bluetooth</strong> e <strong className="text-white">Escala Inteligente do Culto</strong> até <strong className="text-white">Transposição em 1 clique</strong>, <strong className="text-white">Cálculo do Capotraste</strong>, e <strong className="text-white">Contexto Harmônico do Acorde</strong>.
           </p>
         </div>
 
