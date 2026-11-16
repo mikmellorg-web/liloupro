@@ -93,6 +93,8 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
   const [playerCardSubTab, setPlayerCardSubTab] = useState<'player' | 'playlist' | 'estudo'>('player');
   // Estado para alternar entre Bíblia/Harmonia e Seções/Dinâmica/Expressão no card Exclusivo LiLouPro
   const [exclusivoCardSubTab, setExclusivoCardSubTab] = useState<'biblia' | 'dinamica'>('dinamica');
+  // Estado para alternar entre Escala & Disparo WhatsApp e Disponibilidade em 3 Passos no modal de Escalas
+  const [escalaCardSubTab, setEscalaCardSubTab] = useState<'escala' | 'disponibilidade'>('escala');
   // Estado para alternar entre Pedal Bluetooth, Escala, Liturgia, Projeção e Chat no cenário 0 do simulador
   const [stageSimSubTab, setStageSimSubTab] = useState<'pedal' | 'escala' | 'liturgia' | 'projecao' | 'comunicacao'>('pedal');
   // Estado para alternar entre Player sem Anúncios, Exclusivo LiLouPro, Dinâmica/Expressão, Estudo e Playlist no cenário 2 do simulador
@@ -1144,7 +1146,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                           ? '/assets/aistudio/image_ed96a73b.png'
                           : '/tela-cifra.png')
                   : selected.id === 'escala'
-                    ? '/tela-escalas.png'
+                    ? (escalaCardSubTab === 'disponibilidade'
+                        ? '/disponibilidade-3-passos.png'
+                        : '/tela-escalas.png')
                     : selected.id === 'repertorio'
                       ? '/tela-repertorio.png'
                     : selected.id === 'exclusivo'
@@ -1240,7 +1244,7 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
 
                   {/* Seletor rápido Transposição 1 Clique + Capotraste + Cifra no modal de Cifras */}
                   {selected.id === 'cifras' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                    <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
                       <button
                         type="button"
                         onClick={() => setCifraCardSubTab('geral')}
@@ -1262,39 +1266,6 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         }`}
                       >
                         🔀 Tom + Capo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('transposicao')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          cifraCardSubTab === 'transposicao'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎵 1 Clique
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('capo')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          cifraCardSubTab === 'capo'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎸 Capotraste
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCifraCardSubTab('cifra')}
-                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
-                          cifraCardSubTab === 'cifra'
-                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        🎼 Cifra 2 Col
                       </button>
                     </div>
                   )}
@@ -1323,6 +1294,34 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                         }`}
                       >
                         📖 Fundamentação Bíblica, Mesmo Tema & Harmonia
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Seletor rápido Escala & Disparo WhatsApp vs Disponibilidade em 3 Passos no modal de Escalas */}
+                  {selected.id === 'escala' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-white/10 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setEscalaCardSubTab('escala')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          escalaCardSubTab === 'escala'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Escala &amp; Disparo WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEscalaCardSubTab('disponibilidade')}
+                        className={`py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                          escalaCardSubTab === 'disponibilidade'
+                            ? 'bg-brand text-slate-950 font-extrabold shadow-md'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        Disponibilidade em 3 Passos
                       </button>
                     </div>
                   )}
@@ -1404,7 +1403,9 @@ export default function LandingBenefitsAndFeatures({ onEnterApp }: LandingBenefi
                     <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
                       {selected.id === 'caged'
                         ? 'Recurso técnico completo para violão e guitarra: alterne entre os 5 Shapes do Sistema CAGED (Shape 1/5 a 5/5) para tocar o mesmo acorde em qualquer região do braço, com visualização detalhada de Dedos e Intervalos (T, 3, 5, 7m, 7M). Para tecladistas, o app oferece o Teclado Didático Centrado.'
-                        : selected.description}
+                        : selected.id === 'escala' && escalaCardSubTab === 'disponibilidade'
+                          ? "Cada músico marca sua agenda pelo celular em 3 passos simples: (1) escolhe os dias no calendário, (2) confirma 'Conte Comigo' ou 'Não Posso' com trava automática de 24h antes do culto, e (3) finaliza notificando a liderança."
+                          : selected.description}
                     </p>
 
                     <div className="pt-2 border-t border-white/5 space-y-2">

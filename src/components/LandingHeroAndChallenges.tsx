@@ -229,10 +229,10 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
     <div className="space-y-12 sm:space-y-16">
       {/* SEÇÃO 1: HERO INSTITUCIONAL */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 sm:pt-8 overflow-x-hidden">
-        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-10 items-center">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 lg:gap-x-10 lg:gap-y-6 lg:items-center">
           
-          {/* Lado Esquerdo: Conceito, Slogan e Conexão Humana */}
-          <div className="w-full lg:col-span-6 space-y-5 sm:space-y-6 text-center lg:text-left relative">
+          {/* 1º no Mobile / Topo Esquerda no Desktop: Badge, Título e Subtítulo */}
+          <div className="order-1 w-full lg:order-none lg:col-span-6 lg:col-start-1 lg:row-start-1 lg:self-end space-y-3.5 sm:space-y-4 lg:space-y-6 text-center lg:text-left relative">
             {/* Ambient Glow azul-royal atrás do título principal */}
             <div className="pointer-events-none absolute -top-8 left-1/2 lg:left-1/3 -translate-x-1/2 w-[320px] sm:w-[460px] h-[220px] sm:h-[260px] rounded-full bg-[#2563EB]/15 blur-3xl -z-10" />
             
@@ -255,7 +255,10 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
               Uma plataforma elegante e intuitiva criada para o ministério cristão. 
               Sincronize <strong>escalas, cifras no tom ideal, liturgia e projeção</strong> de forma simples — trazendo tranquilidade e paz para quem lidera.
             </p>
+          </div>
 
+          {/* 3º no Mobile / Base Esquerda no Desktop: Botões de Ação e Confiança */}
+          <div className="order-3 w-full lg:order-none lg:col-span-6 lg:col-start-1 lg:row-start-2 lg:self-start space-y-4 lg:space-y-5 text-center lg:text-left">
             {/* CTAs (Empilhados no Mobile 100% largura, texto sempre em linha única sem quebra) */}
             <div className="pt-1 flex flex-col sm:flex-row items-center justify-center lg:justify-start w-full sm:w-auto gap-3">
               <button
@@ -289,8 +292,8 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
             </div>
           </div>
 
-          {/* Lado Direito: Preview do Produto (Imagem dos Dispositivos Alinhada e com Moldura Elegante) */}
-          <div className="w-full lg:col-span-6 relative">
+          {/* 2º no Mobile / Coluna da Direita no Desktop: Preview do Produto (Imagem dos Dispositivos) */}
+          <div className="order-2 w-full my-5 sm:my-6 lg:my-0 lg:order-none lg:col-span-6 lg:col-start-7 lg:row-start-1 lg:row-span-2 lg:self-center relative">
             {/* Halo luminoso quente/dourado sutil atrás da imagem dos dispositivos */}
             <div className="pointer-events-none absolute -inset-3 sm:-inset-5 rounded-3xl bg-[#F59E0B]/10 blur-3xl -z-10" />
             <div 
