@@ -1,7 +1,7 @@
 // LiLouPro Plan and Subscription Management Service
 
 export interface EffectivePlanResult {
-  planId: 'vitalicio' | 'completo' | 'premium' | 'semeadora' | 'gratis' | string;
+  planId: 'vitalicio' | 'completo' | 'premium' | 'semeadora' | 'expired' | 'gratis' | string;
   planName: string;
   plan?: {
     id: string;
@@ -23,6 +23,9 @@ export interface EffectivePlanResult {
     googleDocsCaderno: boolean;
     scalesAndAvailability: boolean;
     customThemes: boolean;
+    multiCampus: boolean;
+    advancedReports: boolean;
+    prioritySupport: boolean;
     [key: string]: boolean;
   };
 }
@@ -56,20 +59,20 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
   completo: {
     id: 'completo',
     name: 'Plano Completo',
-    badge: 'Mais Popular',
+    badge: 'Igrejas Locais',
     priceMonthly: 49,
     priceAnnual: 470.40,
     kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/3qXHMCe',
     kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xrEKt4N',
-    description: 'Gestão integral com repertório ilimitado, projeção em tempo real e escalas.',
+    description: 'Ideal para igrejas e ministérios locais.',
     maxMembers: 50,
     maxSongs: 9999,
     features: [
-      'Repertório e cifras ilimitadas',
-      'Projeção simultânea em telão e OBS',
-      'Assistente de Voz Lilou Hands-free',
-      'Exportação de Caderno em PDF / Google Docs',
-      'Escalas de ministério e disponibilidades'
+      'Até 50 membros ativos na equipe',
+      'Repertório, cifras e liturgias ilimitadas',
+      'Escalas e confirmação de presença via WhatsApp',
+      'Projeção OBS Studio & Holyrics inclusa',
+      'Assistente IA e exportação Google Docs'
     ]
   },
   vitalicio: {
@@ -93,32 +96,33 @@ export const LILOU_PLANS: Record<string, PlanDefinition> = {
   premium: {
     id: 'premium',
     name: 'Plano Premium',
-    badge: 'Igrejas Grandes',
+    badge: 'Mais Popular / Redes & Multi-campus',
     priceMonthly: 99,
     priceAnnual: 950.40,
     kiwifyCheckoutUrl: 'https://pay.kiwify.com.br/BlF0RJs',
     kiwifyAnnualCheckoutUrl: 'https://pay.kiwify.com.br/xlsUZKY',
-    description: 'Para ministérios com múltiplos polos e grande quantidade de integrantes.',
+    description: 'Para igrejas em crescimento, redes e múltiplos polos.',
     maxMembers: 9999,
     maxSongs: 9999,
     features: [
-      'Membros ilimitados',
-      'Múltiplas salas de projeção simultâneas',
-      'Integrações avançadas'
+      'Membros ILIMITADOS na equipe',
+      'Gestão Multi-Campus / Múltiplas Congregações',
+      'Relatórios gerenciais consolidados de participação',
+      'Suporte prioritário via WhatsApp / VIP',
+      'Tudo do Plano Completo sem restrições'
     ]
   },
   semeadora: {
     id: 'semeadora',
-    name: 'Plano Semeadora',
+    name: 'Período de Testes Encerrado',
     priceMonthly: 0,
     priceAnnual: 0,
-    description: 'Plano inicial para pequenas congregações.',
-    maxMembers: 5,
-    maxSongs: 15,
+    description: 'Assine o Plano Completo ou Premium para continuar utilizando os recursos da equipe.',
+    maxMembers: 0,
+    maxSongs: 0,
     features: [
-      'Até 5 membros na equipe',
-      'Até 15 músicas no repertório',
-      'Projeção básica'
+      'Dados históricos preservados na nuvem',
+      'Requer assinatura ativa para novos cadastros'
     ]
   }
 };
@@ -149,24 +153,27 @@ export function isVitalicioPlan(churchData: any): boolean {
 export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   if (!churchData) {
     return {
-      planId: 'gratis',
-      planName: 'Plano Gratuito',
-      plan: { id: 'gratis', name: 'Plano Gratuito' },
+      planId: 'completo',
+      planName: 'Plano Completo (Teste 30 Dias)',
+      plan: { id: 'completo', name: 'Plano Completo' },
       isTrial: true,
       trialDaysLeft: 30,
       isExpiredTrial: false,
       isVitalicio: false,
       isPaidActive: false,
-      maxMembers: 5,
-      maxSongs: 15,
+      maxMembers: 50,
+      maxSongs: 9999,
       features: {
         projection: true,
-        unlimitedSongs: false,
+        unlimitedSongs: true,
         aiAssistant: true,
         fcmPush: true,
         googleDocsCaderno: true,
         scalesAndAvailability: true,
-        customThemes: true
+        customThemes: true,
+        multiCampus: false,
+        advancedReports: false,
+        prioritySupport: false
       }
     };
   }
@@ -191,12 +198,20 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
         fcmPush: true,
         googleDocsCaderno: true,
         scalesAndAvailability: true,
-        customThemes: true
+        customThemes: true,
+        multiCampus: true,
+        advancedReports: true,
+        prioritySupport: true
       }
     };
   }
 
-  const rawPlanId = (churchData.planId || churchData.subscription?.plan || 'completo').toLowerCase();
+  const rawPlanStr = String(
+    churchData.planId ||
+    churchData.subscription?.plan ||
+    churchData.planName ||
+    'completo'
+  ).toLowerCase();
   
   // Parse createdAt safely across Firestore Timestamp objects, numbers, and ISO strings
   let createdAtMs = Date.now();
@@ -218,29 +233,92 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
   const elapsed = Math.max(0, Date.now() - createdAtMs);
   const trialDaysLeft = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
-  const isExpired = elapsed > trialDurationMs && !churchData.subscription?.active;
-  const isPaidActive = Boolean(churchData.subscription?.active);
-  const pName = isExpired ? 'Plano Semeadora' : (LILOU_PLANS[rawPlanId]?.name || 'Plano Completo');
+  const planStatus = String(churchData.planStatus || '').toLowerCase();
+  const isSuspendedOrCancelled = planStatus === 'suspended' || planStatus === 'cancelled';
+  const isPaidActive = !isSuspendedOrCancelled && Boolean(churchData.subscription?.active || planStatus === 'active');
+  const isExpired = !isPaidActive && elapsed > trialDurationMs;
+  const isTrial = !isPaidActive && !isExpired;
+  const isPremiumPaid = isPaidActive && rawPlanStr.includes('premium');
 
+  // Trial expirado sem assinatura ativa: bloqueia novos membros e recursos premium/completos
+  if (isExpired) {
+    return {
+      planId: 'semeadora',
+      planName: 'Período de Testes Encerrado',
+      plan: { id: 'semeadora', name: 'Período de Testes Encerrado' },
+      isTrial: false,
+      trialDaysLeft: 0,
+      isExpiredTrial: true,
+      isVitalicio: false,
+      isPaidActive: false,
+      maxMembers: 0,
+      maxSongs: 0,
+      features: {
+        projection: false,
+        unlimitedSongs: false,
+        aiAssistant: false,
+        fcmPush: false,
+        googleDocsCaderno: false,
+        scalesAndAvailability: false,
+        customThemes: false,
+        multiCampus: false,
+        advancedReports: false,
+        prioritySupport: false
+      }
+    };
+  }
+
+  // Plano Premium ativo: membros ilimitados + multi-campus + relatórios consolidados + suporte VIP
+  if (isPremiumPaid) {
+    return {
+      planId: 'premium',
+      planName: 'Plano Premium',
+      plan: { id: 'premium', name: 'Plano Premium' },
+      isTrial: false,
+      trialDaysLeft: 0,
+      isExpiredTrial: false,
+      isVitalicio: false,
+      isPaidActive: true,
+      maxMembers: 9999,
+      maxSongs: 9999,
+      features: {
+        projection: true,
+        unlimitedSongs: true,
+        aiAssistant: true,
+        fcmPush: true,
+        googleDocsCaderno: true,
+        scalesAndAvailability: true,
+        customThemes: true,
+        multiCampus: true,
+        advancedReports: true,
+        prioritySupport: true
+      }
+    };
+  }
+
+  // Trial de 30 dias OU Plano Completo ativo: teto estrito de 50 membros + projeção OBS/Holyrics e recursos completos
   return {
-    planId: isExpired ? 'semeadora' : rawPlanId,
-    planName: pName,
-    plan: { id: isExpired ? 'semeadora' : rawPlanId, name: pName },
-    isTrial: !isPaidActive && !isExpired,
+    planId: 'completo',
+    planName: isTrial ? 'Plano Completo (Teste 30 Dias)' : 'Plano Completo',
+    plan: { id: 'completo', name: 'Plano Completo' },
+    isTrial,
     trialDaysLeft,
-    isExpiredTrial: isExpired,
+    isExpiredTrial: false,
     isVitalicio: false,
     isPaidActive,
-    maxMembers: isPaidActive ? 9999 : (isExpired ? 5 : 50),
-    maxSongs: isPaidActive ? 9999 : (isExpired ? 15 : 9999),
+    maxMembers: 50,
+    maxSongs: 9999,
     features: {
       projection: true,
-      unlimitedSongs: !isExpired,
+      unlimitedSongs: true,
       aiAssistant: true,
       fcmPush: true,
       googleDocsCaderno: true,
       scalesAndAvailability: true,
-      customThemes: true
+      customThemes: true,
+      multiCampus: false,
+      advancedReports: false,
+      prioritySupport: false
     }
   };
 }
@@ -252,16 +330,6 @@ export function checkResourceLimit(
 ): ResourceCheckResult {
   const plan = getChurchEffectivePlan(churchData);
 
-  if (plan.isVitalicio || plan.isPaidActive || plan.isTrial) {
-    return {
-      allowed: true,
-      resourceType,
-      currentCount,
-      maxAllowed: 9999,
-      effectivePlan: plan
-    };
-  }
-
   const resourceNameLabel =
     resourceType === 'members'
       ? 'membros'
@@ -271,18 +339,67 @@ export function checkResourceLimit(
           ? 'cultos'
           : resourceType;
 
-  const freeCap = resourceType === 'songs' ? 15 : resourceType === 'members' ? 5 : 0;
+  if (plan.isVitalicio) {
+    return {
+      allowed: true,
+      resourceType,
+      currentCount,
+      maxAllowed: 9999,
+      effectivePlan: plan
+    };
+  }
+
+  // Trial expirado sem assinatura ativa: bloqueia novos cadastros (maxMembers = 0)
+  if (plan.isExpiredTrial) {
+    return {
+      allowed: false,
+      resourceType,
+      currentCount,
+      maxAllowed: 0,
+      limit: 0,
+      resourceNameLabel,
+      message: `O período de teste gratuito de 30 dias encerrou e o cadastro de novos ${resourceNameLabel} foi bloqueado. Seus dados continuam 100% salvos na nuvem. Assine o Plano Completo ou faça upgrade para o Plano Premium para reativar todos os recursos da equipe.`,
+      effectivePlan: plan
+    };
+  }
+
+  // Validação real do teto estrito de 50 membros no Trial de 30 dias e no Plano Completo ativo
+  if (resourceType === 'members' && plan.maxMembers < 9999) {
+    // Observação: o fluxo de entrada por código sem autenticação prévia usa sentinela 999 apenas para checar expiração do trial
+    if (currentCount !== 999 && currentCount >= plan.maxMembers) {
+      return {
+        allowed: false,
+        resourceType: 'members',
+        currentCount,
+        maxAllowed: plan.maxMembers,
+        limit: plan.maxMembers,
+        resourceNameLabel: 'membros',
+        message: `Sua igreja atingiu o limite máximo de ${plan.maxMembers} membros ativos do ${plan.plan?.name || 'Plano Completo'}. Faça upgrade para o Plano Premium para liberar membros ILIMITADOS, gestão multi-campus e relatórios gerenciais consolidados!`,
+        effectivePlan: plan
+      };
+    }
+
+    return {
+      allowed: true,
+      resourceType: 'members',
+      currentCount,
+      maxAllowed: plan.maxMembers,
+      limit: plan.maxMembers,
+      effectivePlan: plan
+    };
+  }
 
   return {
-    allowed: false,
+    allowed: true,
     resourceType,
     currentCount,
-    maxAllowed: freeCap,
-    limit: freeCap,
-    resourceNameLabel,
-    message: `O período de teste gratuito de 30 dias encerrou e sua igreja está no Plano Semeadora (Gratuito, com acesso limitado a 15 músicas e 5 membros ativos). Seus dados já cadastrados permanecem salvos. Faça upgrade para cadastrar novos ${resourceNameLabel} e liberar toda a equipe e repertório.`,
+    maxAllowed: 9999,
     effectivePlan: plan
   };
+}
+
+export function checkMemberLimit(churchData: any, currentCount: number): ResourceCheckResult {
+  return checkResourceLimit(churchData, 'members', currentCount);
 }
 
 function parseMemberTimestamp(member: any, fallbackIndex: number): number {

@@ -133,15 +133,15 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
   const faqs = [
     {
       q: "Preciso de cartão de crédito para iniciar o teste de 30 dias?",
-      a: "Não, absolutamente nenhum cartão de crédito ou dado de pagamento é solicitado para criar a conta da sua igreja. O teste de 30 dias é 100% gratuito e livre de qualquer compromisso financeiro. Você só decide sobre um plano se e quando a plataforma fizer sentido real para o seu ministério."
+      a: "Não, absolutamente nenhum cartão de crédito ou dado de pagamento é solicitado para criar a conta da sua igreja. O teste de 30 dias oferece acesso gratuito ao Plano Completo (com limite de até 50 membros ativos, projeção OBS Studio & Holyrics, Assistente IA e exportação Google Docs), sem compromisso financeiro. Você só decide sobre a assinatura se e quando a plataforma fizer sentido real para o seu ministério."
     },
     {
       q: "O que acontece quando os 30 dias de teste terminarem?",
-      a: "Como não pedimos cartão de crédito, você nunca será cobrado de forma automática ou inesperada. Ao final dos 30 dias, todas as suas músicas, cifras cadastradas, voluntários e histórico de escalas continuam 100% salvos e protegidos na nuvem. Sua igreja poderá assinar o Plano Completo ou Premium para continuar aproveitando os recursos ilimitados, sem risco de perder o trabalho feito."
+      a: "Como não pedimos cartão de crédito, você nunca será cobrado de forma automática ou inesperada. Ao final dos 30 dias, todas as suas músicas, cifras cadastradas, voluntários e histórico de escalas continuam 100% salvos e protegidos na nuvem — nenhum dado é apagado. Sem uma assinatura ativa, o cadastro de novos membros, novos cultos e os recursos completos ficam pausados até que a igreja escolha assinar o Plano Completo (até 50 membros) ou fazer upgrade para o Plano Premium (membros ilimitados e multi-campus)."
     },
     {
       q: "Existe algum contrato de fidelidade ou multa se decidirmos cancelar?",
-      a: "Não existe qualquer tipo de contrato de fidelidade, carência ou multa. As assinaturas funcionam mês a mês (ou anual com desconto), e você pode pausar ou cancelar a renovação a qualquer momento com apenas 1 clique no painel da igreja, sem burocracia nem telefonemas."
+      a: "Não existe qualquer tipo de contrato de fidelidade, carência ou multa. As assinaturas funcionam mês a mês (ou anual com 20% de desconto), e você pode pausar ou cancelar a renovação a qualquer momento sem burocracia."
     },
     {
       q: "Como o sistema funciona no smartphone dos voluntários e músicos?",
@@ -149,7 +149,11 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
     },
     {
       q: "Quantos voluntários posso convidar no Plano Completo?",
-      a: "No Plano Completo e no Plano Premium, o número de voluntários, músicos, vocais, pastores e operadores de mídia é totalmente ilimitado. Entendemos que o ministério da igreja cresce e novos irmãos se juntam ao serviço, por isso você nunca é cobrado ou limitado por pessoa adicional."
+      a: "O Plano Completo — assim como o período de teste gratuito de 30 dias — comporta até 50 membros ativos na equipe (entre músicos, vocais, pastores e operadores de mídia), atendendo com folga igrejas e ministérios locais. Se a sua equipe atingir 50 membros ou a sua igreja atuar em rede e múltiplos polos, basta fazer o upgrade para o Plano Premium para liberar membros 100% ilimitados."
+    },
+    {
+      q: "Qual a diferença entre o Plano Completo e o Plano Premium?",
+      a: "O Plano Completo (R$ 49/mês ou R$ 39,20/mês no anual) é ideal para igrejas e ministérios locais e já inclui até 50 membros ativos, repertório, cifras e liturgias ilimitadas, escalas e confirmação via WhatsApp, projeção integrada para OBS Studio & Holyrics, Assistente IA e exportação para Google Docs. Já o Plano Premium (R$ 99/mês ou R$ 79,20/mês no anual) é voltado para igrejas em crescimento, redes e múltiplos polos, liberando membros ILIMITADOS na equipe, Gestão Multi-Campus / Múltiplas Congregações, relatórios gerenciais consolidados de participação e suporte prioritário via WhatsApp / VIP."
     },
     {
       q: "Posso importar cifras e repertórios que nossa igreja já utiliza?",
@@ -157,7 +161,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
     },
     {
       q: "Como funciona o suporte para a nossa liderança e equipe?",
-      a: "Nosso suporte é 100% humanizado e em português, realizado diretamente pelo WhatsApp e por e-mail por pessoas que conhecem de perto a rotina de ministérios de louvor e igrejas. Ajudamos na configuração inicial, cadastro de membros e qualquer alinhamento técnico ou litúrgico."
+      a: "Nosso suporte é 100% humanizado e em português, realizado pelo WhatsApp e por e-mail por pessoas que conhecem de perto a rotina de ministérios de louvor e igrejas. Ajudamos na configuração inicial, cadastro de membros e qualquer alinhamento técnico ou litúrgico — sendo que assinantes do Plano Premium contam com atendimento prioritário VIP via WhatsApp."
     },
     {
       q: "Como funciona a garantia caso decidamos assinar após o teste?",
@@ -330,7 +334,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
             Escolha o plano ideal para a sua igreja
           </h2>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-            Experimente gratuitamente por 30 dias sem precisar de cartão, ou assine para liberar o acesso contínuo da sua equipe.
+            Comece grátis por 30 dias com acesso ao Plano Completo. Após o período de testes, escolha assinar o Plano Completo ou fazer upgrade para o Premium.
           </p>
 
           {/* Seletor Mensal / Anual */}
@@ -376,7 +380,7 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               </span>
               <h3 className="text-2xl font-bold text-white">Plano Completo</h3>
               <p className="text-slate-300 text-xs leading-relaxed">
-                Ideal para ministérios que buscam organização eficiente de escalas, cifras transpostas e cancioneiro da congregação.
+                Ideal para igrejas e ministérios locais.
               </p>
               
               <div className="py-3 border-y border-white/10">
@@ -398,23 +402,23 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               <ul className="space-y-2.5 text-xs text-slate-200">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Músicos, vocais e voluntários ilimitados</span>
+                  <span>Até 50 membros ativos na equipe</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Escalas e repertórios sem limite</span>
+                  <span>Repertório, cifras e liturgias ilimitadas</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Cifras com transposição de tom e acordes</span>
+                  <span>Escalas e confirmação de presença via WhatsApp</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Confirmação de presença via smartphone</span>
+                  <span>Projeção LiLouPro + integração com OBS &amp; Holyrics</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Suporte em português via WhatsApp</span>
+                  <span>Assistente IA e exportação Google Docs</span>
                 </li>
               </ul>
             </div>
@@ -440,14 +444,20 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
           </div>
 
           {/* 2. PLANO PREMIUM */}
-          <div className="bg-[#131C31] border border-brand/45 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xl shadow-black/40 hover:border-brand/65 transition-all">
+          <div className="relative bg-[#131C31] border-2 border-brand/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-2xl shadow-brand/10 hover:border-brand transition-all">
             <div className="space-y-4">
-              <span className="text-xs font-bold text-brand uppercase tracking-wider">
-                {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
-              </span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-brand uppercase tracking-wider">
+                  {billingCycle === 'annual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                  <Sparkles className="w-3 h-3" />
+                  Mais Popular / Redes &amp; Multi-campus
+                </span>
+              </div>
               <h3 className="text-2xl font-bold text-white">Plano Premium</h3>
               <p className="text-slate-300 text-xs leading-relaxed">
-                A solução completa com projeção sincronizada no telão, múltiplos ministérios, relatórios e suporte prioritário.
+                Para igrejas em crescimento, redes e múltiplos polos.
               </p>
               
               <div className="py-3 border-y border-white/10">
@@ -469,23 +479,23 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
               <ul className="space-y-2.5 text-xs text-slate-200">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span><strong>Tudo incluído no Plano Completo</strong></span>
+                  <span><strong>Membros ILIMITADOS</strong> na equipe</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Projeção de letras no telão em tempo real</span>
+                  <span>Gestão Multi-Campus / Múltiplas Congregações</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Múltiplos ministérios e congregações</span>
+                  <span>Relatórios gerenciais consolidados de participação</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Histórico completo e relatórios de participação</span>
+                  <span>Suporte prioritário via WhatsApp / VIP</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-brand shrink-0" />
-                  <span>Suporte prioritário via WhatsApp</span>
+                  <span>Tudo do Plano Completo sem restrições</span>
                 </li>
               </ul>
             </div>
