@@ -58,11 +58,34 @@ interface ChurchItem {
   planStatus?: 'active' | 'trial' | 'suspended' | 'cancelled';
   planName?: string;
   planExpiresAt?: string | null;
+  expiresAt?: string | null;
+  trialEndsAt?: string | null;
+  trialStartDate?: string | null;
+  isVitalicio?: boolean;
+  isSeedChurch?: boolean;
   masterNotes?: string;
   maxMembers?: number;
   contactEmail?: string;
   contactPhone?: string;
 }
+
+const toIsoDateString = (val: any): string | null => {
+  if (!val) return null;
+  if (typeof val === 'string') return val;
+  if (typeof val?.toDate === 'function') return val.toDate().toISOString();
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val?.seconds === 'number') return new Date(val.seconds * 1000).toISOString();
+  return null;
+};
+
+const computeTrialExpirationFromCreatedAt = (createdAt?: string | null, trialStartDate?: string | null): string => {
+  const rawBase = trialStartDate || createdAt;
+  const parsed = rawBase ? new Date(rawBase) : new Date();
+  const safeDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const end = new Date(safeDate.getTime());
+  end.setDate(end.getDate() + 30);
+  return end.toISOString();
+};
 
 interface MemberItem {
   id: string;
@@ -427,6 +450,25 @@ Conte conosco para servir seu ministério com excelência!`
       const churchList: ChurchItem[] = snap.docs.map(docSnap => {
         const d = docSnap.data();
         const isSeedDoc = docSnap.id === 'semente';
+        const createdAtIso = toIsoDateString(d.createdAt) || new Date().toISOString();
+        const trialStartIso = toIsoDateString(d.trialStartDate);
+        const storedExpIso =
+          toIsoDateString(d.planExpiresAt) ||
+          toIsoDateString(d.expiresAt) ||
+          toIsoDateString(d.trialEndsAt) ||
+          null;
+        const effectivePlanStatus = d.planStatus || 'active';
+
+        if (!isSeedDoc && effectivePlanStatus === 'trial' && !storedExpIso) {
+          const computedExp = computeTrialExpirationFromCreatedAt(createdAtIso, trialStartIso);
+          updateDoc(doc(db, 'churches', docSnap.id), {
+            planExpiresAt: computedExp,
+            expiresAt: computedExp,
+            trialEndsAt: computedExp,
+            isVitalicio: false
+          }).catch(() => {});
+        }
+
         if (isSeedDoc && d.name !== 'Graça Soberana') {
           updateDoc(doc(db, 'churches', 'semente'), {
             name: 'Graça Soberana',
@@ -441,11 +483,16 @@ Conte conosco para servir seu ministério com excelência!`
           id: docSnap.id,
           name: isSeedDoc ? 'Graça Soberana' : (d.name || 'Igreja sem nome'),
           inviteCode: d.inviteCode || docSnap.id.toUpperCase(),
-          createdAt: d.createdAt || new Date().toISOString(),
+          createdAt: createdAtIso,
           createdBy: d.createdBy || 'Sistema',
-          planStatus: d.planStatus || 'active',
+          planStatus: effectivePlanStatus,
           planName: d.planName || 'PRO',
-          planExpiresAt: d.planExpiresAt || null,
+          planExpiresAt: isSeedDoc ? null : toIsoDateString(d.planExpiresAt),
+          expiresAt: isSeedDoc ? null : toIsoDateString(d.expiresAt),
+          trialEndsAt: isSeedDoc ? null : toIsoDateString(d.trialEndsAt),
+          trialStartDate: trialStartIso,
+          isVitalicio: isSeedDoc ? true : Boolean(d.isVitalicio),
+          isSeedChurch: isSeedDoc,
           masterNotes: d.masterNotes || '',
           maxMembers: d.maxMembers || 9999,
           contactEmail: d.contactEmail || '',
@@ -531,14 +578,46 @@ Conte conosco para servir seu ministério com excelência!`
   const handleUpdateStatus = async (churchId: string, status: 'active' | 'trial' | 'suspended' | 'cancelled') => {
     try {
       const churchRef = doc(db, 'churches', churchId);
-      await updateDoc(churchRef, {
+      const targetChurch = churches.find(c => c.id === churchId);
+      const existingExp = targetChurch?.planExpiresAt || targetChurch?.expiresAt || targetChurch?.trialEndsAt || null;
+      const payload: Record<string, any> = {
         planStatus: status,
         updatedAt: new Date().toISOString()
-      });
+      };
+
+      if (churchId !== 'semente' && status === 'trial') {
+        payload.isVitalicio = false;
+        if (!existingExp) {
+          const computedExp = computeTrialExpirationFromCreatedAt(targetChurch?.createdAt, targetChurch?.trialStartDate);
+          payload.planExpiresAt = computedExp;
+          payload.expiresAt = computedExp;
+          payload.trialEndsAt = computedExp;
+        }
+      }
+
+      await updateDoc(churchRef, payload);
       showToast(`Status da igreja atualizado para "${status.toUpperCase()}" com sucesso!`);
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
       showToast("Não foi possível atualizar o status.", "error");
+    }
+  };
+
+  // Save computed 30-day Trial expiration
+  const handleSaveTrialExpiration = async (churchId: string, expiresIso: string) => {
+    try {
+      const churchRef = doc(db, 'churches', churchId);
+      await updateDoc(churchRef, {
+        planExpiresAt: expiresIso,
+        expiresAt: expiresIso,
+        trialEndsAt: expiresIso,
+        isVitalicio: false,
+        updatedAt: new Date().toISOString()
+      });
+      showToast('Data de vencimento do Trial (30 dias) salva no Firestore!');
+    } catch (err) {
+      console.error('Erro ao salvar vencimento do trial:', err);
+      showToast('Não foi possível salvar a data de vencimento.', 'error');
     }
   };
 
@@ -555,6 +634,7 @@ Conte conosco para servir seu ministério com excelência!`
       const churchRef = doc(db, 'churches', churchId);
       await updateDoc(churchRef, {
         planExpiresAt: expiresAt,
+        expiresAt: expiresAt,
         planStatus: 'active',
         updatedAt: new Date().toISOString()
       });
@@ -628,6 +708,10 @@ Conte conosco para servir seu ministério com excelência!`
         const d = new Date();
         d.setDate(d.getDate() + parseInt(newPlanDurationDays, 10));
         expiresAt = d.toISOString();
+      } else if (newPlanStatus === 'trial') {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        expiresAt = d.toISOString();
       }
 
       const churchRef = doc(db, 'churches', generatedDocId);
@@ -637,6 +721,8 @@ Conte conosco para servir seu ministério com excelência!`
         planStatus: newPlanStatus,
         planName: newPlanName,
         planExpiresAt: expiresAt,
+        expiresAt: expiresAt,
+        ...(newPlanStatus === 'trial' ? { trialEndsAt: expiresAt, isVitalicio: false } : {}),
         contactEmail: newContactEmail.trim(),
         masterNotes: newMasterNotes.trim(),
         createdAt: new Date().toISOString(),
@@ -670,15 +756,21 @@ Conte conosco para servir seu ministério com excelência!`
       const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
 
       // 1. Create brand new church tenant with 30-day trial
+      const trialNowIso = new Date().toISOString();
+      const trialEndIso = computeTrialExpirationFromCreatedAt(trialNowIso);
       await setDoc(doc(db, 'churches', newChurchId), {
         name: customChurchName.trim(),
         inviteCode: newInvite,
-        createdAt: new Date().toISOString(),
+        createdAt: trialNowIso,
         createdBy: memberId,
         planStatus: 'trial',
         planId: 'completo',
         isTrial: true,
-        trialStartDate: new Date().toISOString(),
+        isVitalicio: false,
+        trialStartDate: trialNowIso,
+        planExpiresAt: trialEndIso,
+        expiresAt: trialEndIso,
+        trialEndsAt: trialEndIso,
         contactEmail: memberEmail || '',
         maxMembers: 50,
         maxSongs: 9999,
@@ -1995,15 +2087,39 @@ Conte conosco para servir seu ministério com excelência!`
               const isExtending = quickExtendChurchId === church.id;
 
               // Format date
+              const isSeedChurch = church.id === 'semente';
+              const isTrialChurch = !isSeedChurch && church.planStatus === 'trial';
+              const rawStoredExpiration = church.planExpiresAt || church.expiresAt || church.trialEndsAt || null;
+              const effectiveExpiresAt = isSeedChurch
+                ? null
+                : rawStoredExpiration || (isTrialChurch ? computeTrialExpirationFromCreatedAt(church.createdAt, church.trialStartDate) : null);
+
               const formattedCreated = church.createdAt
                 ? new Date(church.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
                 : 'Padrão';
 
-              const formattedExpires = church.planExpiresAt
-                ? new Date(church.planExpiresAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                : 'Sem expiração (Vitalício)';
+              const formattedExpires = isSeedChurch
+                ? 'Sem expiração (Vitalício)'
+                : effectiveExpiresAt
+                ? new Date(effectiveExpiresAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                : 'Sem data definida';
 
-              const isExpired = church.planExpiresAt && new Date(church.planExpiresAt) < new Date();
+              const trialDaysRemaining = (() => {
+                if (!isTrialChurch || !effectiveExpiresAt) return null;
+                const expDate = new Date(effectiveExpiresAt);
+                if (Number.isNaN(expDate.getTime())) return null;
+                const now = new Date();
+                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                const expireDayStart = new Date(expDate.getFullYear(), expDate.getMonth(), expDate.getDate()).getTime();
+                return Math.round((expireDayStart - todayStart) / (1000 * 60 * 60 * 24));
+              })();
+
+              const isExpired = Boolean(
+                !isSeedChurch && (
+                  (trialDaysRemaining !== null && trialDaysRemaining <= 0) ||
+                  (effectiveExpiresAt && trialDaysRemaining === null && new Date(effectiveExpiresAt) < new Date())
+                )
+              );
 
               return (
                 <div
@@ -2185,11 +2301,37 @@ Conte conosco para servir seu ministério com excelência!`
                       >
                         {/* Information Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                          <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-1">
+                          <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-1.5">
                             <span className="text-[10px] font-black uppercase text-text-muted">Validade Atual da Licença</span>
-                            <p className="text-sm font-bold text-text-main flex items-center gap-1.5">
-                              <Calendar size={14} className="text-brand" /> {formattedExpires}
-                            </p>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <p className="text-sm font-bold text-text-main flex items-center gap-1.5">
+                                <Calendar size={14} className="text-brand" /> {formattedExpires}
+                              </p>
+                              {isTrialChurch && trialDaysRemaining !== null && (
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                                    trialDaysRemaining <= 0
+                                      ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                                      : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                                  }`}
+                                >
+                                  {trialDaysRemaining <= 0
+                                    ? '🚨 Expirado'
+                                    : trialDaysRemaining === 1
+                                    ? '⏳ Falta 1 dia'
+                                    : `⏳ Faltam ${trialDaysRemaining} dias`}
+                                </span>
+                              )}
+                            </div>
+                            {isTrialChurch && !rawStoredExpiration && effectiveExpiresAt && (
+                              <button
+                                type="button"
+                                onClick={() => handleSaveTrialExpiration(church.id, effectiveExpiresAt)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                              >
+                                Salvar vencimento (30d)
+                              </button>
+                            )}
                           </div>
 
                           <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-1.5">
