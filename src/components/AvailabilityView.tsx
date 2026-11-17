@@ -1211,8 +1211,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               title="Disponibilidade: Como marcar?"
               description="A marcação de disponibilidade permite que a liderança crie escalas justas sem conflitos e sem a necessidade de perguntar um a um no WhatsApp."
               steps={[
+                "Liderança: Escolha o Mês de Referência pelas setas, defina o Tempo de Liberação e clique em 'Liberar Marcação' para abrir a agenda para a equipe.",
                 "Utilize os botões do Mês de Referência para planejar o mês correto.",
-                "Clique em qualquer dia do calendário para alternar o status: Disponível (Verde), Parcialmente Disponível (Amarelo) ou Indisponível (Vermelho).",
+                "Marque os dias de culto em 3 passos simples: siga a ordem dos cards abaixo (Passo 1 - Marque os dias que você pode; Passo 2 - Confirme Conte Comigo ou Não Posso; Passo 3 - Finalizar e Notificar Liderança).",
+                "Clique em um dia de culto no calendário e altere o status: Disponível (Verde), ou Indisponível (Vermelho).",
                 "Ao terminar de marcar, clique no botão 'Finalizar Envio' abaixo para notificar os líderes e confirmar sua participação."
               ]}
               tip="Mantenha sua agenda sempre atualizada! Se surgir um imprevisto ou viagem, você pode atualizar suas datas a qualquer momento antes do fechamento da escala."

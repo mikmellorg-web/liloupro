@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Listen to member changes dynamically
         unsubscribeMember = onSnapshot(memberRef, async (memberSnap) => {
           const userEmailLower = (currentUser.email || '').toLowerCase().trim();
-          const isMaster = userEmailLower === 'mikmellorg@gmail.com' || userEmailLower === 'miqueiasmellopro@gmail.com';
+          const isMaster = userEmailLower === 'mikmellorg@gmail.com';
           let currentMember: any = null;
           
           if (!memberSnap.exists()) {

@@ -78,9 +78,9 @@ interface MemberItem {
 export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
   const { user } = useAuth();
   
-  // Security Check: Authorized Master Emails
-  const userEmailLower = user?.email?.toLowerCase() || '';
-  const isAuthorized = userEmailLower === 'miqueiasmellopro@gmail.com' || userEmailLower === 'mikmellorg@gmail.com';
+  // Security Check: Exclusive Master Developer Email
+  const userEmailLower = (user?.email || '').toLowerCase().trim();
+  const isAuthorized = Boolean(user && userEmailLower === 'mikmellorg@gmail.com');
 
   const [churches, setChurches] = useState<ChurchItem[]>([]);
   const [members, setMembers] = useState<MemberItem[]>([]);
@@ -350,9 +350,13 @@ Conte conosco para servir seu ministério com excelência!`
   };
 
   const fetchWebhookLogs = async () => {
+    if (!isAuthorized || !user) return;
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/webhooks/kiwify/logs');
+      const idToken = await user.getIdToken();
+      const res = await fetch('/api/webhooks/kiwify/logs', {
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
       if (res.ok) {
         const data = await res.json();
         setWebhookLogs(data.logs || []);
@@ -365,20 +369,26 @@ Conte conosco para servir seu ministério com excelência!`
   };
 
   useEffect(() => {
+    if (!isAuthorized) return;
     if (activeTab === 'kiwify') {
       fetchWebhookLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, isAuthorized]);
 
   const handleSimulateWebhook = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthorized || !user) return;
     setSimulating(true);
     setSimResult(null);
 
     try {
+      const idToken = await user.getIdToken();
       const res = await fetch('/api/webhooks/kiwify/test-simulate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`
+        },
         body: JSON.stringify({
           name: simName,
           email: simEmail,
@@ -693,7 +703,7 @@ Conte conosco para servir seu ministério com excelência!`
         </div>
         <h2 className="text-2xl font-black text-text-main tracking-tight mb-2">Acesso Restrito ao Master Admin</h2>
         <p className="text-sm text-text-muted max-w-md leading-relaxed mb-6">
-          Este painel de controle central do Liloupro é exclusivo para o e-mail de negócios proprietário (<strong className="text-brand font-black">miqueiasmellopro@gmail.com</strong>).
+          Este painel de controle central do Liloupro é exclusivo para o desenvolvedor proprietário (<strong className="text-brand font-black">mikmellorg@gmail.com</strong>).
         </p>
         <div className="bg-black/5 dark:bg-white/5 border border-border/60 rounded-2xl p-4 text-xs font-mono text-text-muted">
           Sua conta atual: <span className="text-text-main font-bold">{user?.email || 'Não autenticado'}</span>
@@ -2231,7 +2241,7 @@ Conte conosco para servir seu ministério com excelência!`
                           ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                               {churchMembers.map(m => {
-                                const isMasterUser = m.email?.toLowerCase() === 'miqueiasmellopro@gmail.com' || m.email?.toLowerCase() === 'mikmellorg@gmail.com';
+                                const isMasterUser = m.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
                                 const canMigrateOut = church.id === 'semente' && !isMasterUser;
                                 return (
                                   <div key={m.id} className="p-3 bg-black/5 dark:bg-white/5 border border-border/50 rounded-2xl flex items-center justify-between gap-3">

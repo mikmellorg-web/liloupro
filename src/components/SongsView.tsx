@@ -1147,7 +1147,8 @@ export function SongsView({
               "Clique em 'PLAYLIST DO CULTO' para iniciar o playback contínuo com contagem e transição de acordes.",
               "Use 'CIFRAS DO CULTO' para gerar o caderno completo pronto para impressão ou Google Docs.",
               "Use os botões de seta para cima e para baixo ao lado de cada canção para ajustar o fluxo da liturgia.",
-              "Alterne para 'TODAS AS MÚSICAS' sempre que precisar buscar no acervo geral da igreja."
+              "Alterne para 'TODAS AS MÚSICAS' sempre que precisar buscar no acervo geral da igreja.",
+              "Para montar sua própria playlist personalizada, alterne para 'TODAS AS MÚSICAS', toque no ícone de fone (🎧) ao lado das canções desejadas e use o card 'Minha Playlist' para tocar em reprodução contínua ou gerenciar a ordem."
             ]}
             tip="As músicas do culto seguem o ritmo da liturgia: Criação/Adoração, Queda/Confissão, Redenção e Consumação!"
             theme={theme as any}
@@ -1235,7 +1236,7 @@ export function SongsView({
             className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer shrink-0"
           >
             <Plus size={13} />
-            <span>Cadastrar Música</span>
+            <span>Cadastrar</span>
           </button>
         )}
       </div>
@@ -2290,6 +2291,11 @@ export function SongsView({
               {/* Dica amigável */}
               <div className={`p-2.5 rounded-xl ${isLight ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-blue-950/30 border-blue-800/30 text-blue-300/80'} border text-[11px] leading-relaxed`}>
                 💡 Escolha uma das opções na lista acima para importar tudo automaticamente, ou salve sem cifra para digitar os acordes manualmente.
+              </div>
+
+              {/* Alerta sobre cadastrar o link do YouTube para o LiLouPro Player */}
+              <div className={`p-2.5 rounded-xl ${isLight ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-amber-950/30 border-amber-800/40 text-amber-200'} border text-[11px] leading-relaxed`}>
+                ⚠️ <strong>Alerta:</strong> Após importar uma nova música, não esqueça de cadastrar o link do YouTube da música para que o LiLouPro Player funcione corretamente.
               </div>
 
               {/* Botões Inferiores */}

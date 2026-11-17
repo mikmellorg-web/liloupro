@@ -1966,8 +1966,8 @@ function MainContent() {
     return !sessionStorage.getItem('liloupro_splash_shown');
   });
   const userChurchId = memberData?.churchId || 'semente';
-  const userEmailLower = user?.email?.toLowerCase() || '';
-  const isMasterAdmin = userEmailLower === 'miqueiasmellopro@gmail.com' || userEmailLower === 'mikmellorg@gmail.com' || memberData?.isMasterAdmin === true;
+  const MASTER_DEVELOPER_EMAIL = 'mikmellorg@gmail.com';
+  const isMasterDeveloper = Boolean(user && user?.email?.toLowerCase().trim() === MASTER_DEVELOPER_EMAIL);
 
   const [landingMode, setLandingMode] = useState<'landing' | 'login' | 'signup'>(() => {
     if (typeof window === 'undefined') return 'landing';
@@ -1995,12 +1995,94 @@ function MainContent() {
       sales === 'true' ||
       pathname === '/landing' ||
       pathname === '/sales' ||
+      pathname === '/apresentacao' ||
       window.location.hash === '#landing' ||
-      window.location.hash === '#sales'
+      window.location.hash === '#sales' ||
+      window.location.hash === '#apresentacao'
     );
   });
   const [activeTab, setActiveTab] = useState<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>('home');
+  const navigateTabSafely = useCallback((nextTab: React.SetStateAction<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>) => {
+    setActiveTab(prev => {
+      const resolved = typeof nextTab === 'function' ? nextTab(prev) : nextTab;
+      if (resolved === 'master' && !isMasterDeveloper) {
+        return 'home';
+      }
+      return resolved;
+    });
+  }, [isMasterDeveloper]);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+
+  // HARD-LOCK ROUTE GUARD: Bloqueia acesso ao Painel Master e à Página de Apresentação
+  // para qualquer usuário cujo e-mail autenticado não seja exatamente mikmellorg@gmail.com
+  useEffect(() => {
+    if (typeof window === 'undefined' || loading) return;
+
+    const enforceRestrictedRoutes = () => {
+      const pathname = window.location.pathname.toLowerCase();
+      const searchParams = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.toLowerCase();
+
+      const pageParam = (searchParams.get('page') || '').toLowerCase();
+      const viewParam = (searchParams.get('view') || '').toLowerCase();
+      const tabParam = (searchParams.get('tab') || '').toLowerCase();
+
+      const isMasterRoute =
+        pathname === '/master' ||
+        pathname === '/painel-master' ||
+        pathname === '/admin-master' ||
+        pageParam === 'master' ||
+        viewParam === 'master' ||
+        tabParam === 'master' ||
+        searchParams.get('master') === 'true' ||
+        hash === '#master' ||
+        hash === '#painel-master';
+
+      const isPresentationRoute =
+        pathname === '/landing' ||
+        pathname === '/sales' ||
+        pathname === '/apresentacao' ||
+        pageParam === 'landing' ||
+        pageParam === 'sales' ||
+        pageParam === 'apresentacao' ||
+        viewParam === 'landing' ||
+        viewParam === 'sales' ||
+        viewParam === 'apresentacao' ||
+        searchParams.get('landing') === 'true' ||
+        searchParams.get('sales') === 'true' ||
+        searchParams.get('apresentacao') === 'true' ||
+        hash === '#landing' ||
+        hash === '#sales' ||
+        hash === '#apresentacao';
+
+      if (!user) {
+        if (isMasterRoute) {
+          window.history.replaceState({}, document.title, '/');
+        }
+        return;
+      }
+
+      if (!isMasterDeveloper) {
+        if (activeTab === 'master' || showLandingPage || isMasterRoute || isPresentationRoute) {
+          if (activeTab === 'master') setActiveTab('home');
+          if (showLandingPage) setShowLandingPage(false);
+          if (isMasterRoute || isPresentationRoute) {
+            window.history.replaceState({}, document.title, '/');
+          }
+        }
+      } else if (isMasterRoute && activeTab !== 'master') {
+        setActiveTab('master');
+      }
+    };
+
+    enforceRestrictedRoutes();
+    window.addEventListener('popstate', enforceRestrictedRoutes);
+    window.addEventListener('hashchange', enforceRestrictedRoutes);
+    return () => {
+      window.removeEventListener('popstate', enforceRestrictedRoutes);
+      window.removeEventListener('hashchange', enforceRestrictedRoutes);
+    };
+  }, [user, isMasterDeveloper, loading, activeTab, showLandingPage]);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlineSyncTime, setOfflineSyncTime] = useState<string | null>(() => localStorage.getItem('liloupro_offline_sync_time'));
   const [isSyncing, setIsSyncing] = useState(false);
@@ -3525,7 +3607,7 @@ function MainContent() {
     );
   }
 
-  if (!user || showLandingPage) {
+  if (!user || (isMasterDeveloper && showLandingPage)) {
     if (landingMode === 'login' && !user) {
       return <AuthView defaultMode="login" onBackToLanding={() => { setLandingMode('landing'); }} />;
     }
@@ -3762,9 +3844,9 @@ function MainContent() {
                </motion.div>
              )}
           </div>
-          {isMasterAdmin && !isSidebarCollapsed && (
+          {isMasterDeveloper && !isSidebarCollapsed && (
             <button 
-              onClick={() => setActiveTab('master')}
+              onClick={() => navigateTabSafely('master')}
               className="mt-2 w-full py-1.5 px-2 bg-gradient-to-r from-amber-500/20 to-brand/20 hover:from-amber-500/30 hover:to-brand/30 border border-amber-500/30 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase text-amber-300 transition-all shadow-sm"
             >
               <Crown size={12} className="text-amber-400 animate-pulse" /> Painel Master
@@ -3845,7 +3927,7 @@ function MainContent() {
           <div className="flex flex-col">
             <NavIcon 
               icon={showMoreMenu ? <ChevronDown size={22} /> : <Menu size={22} />} 
-              active={['liturgy', 'availability', 'settings', 'theory', 'bible', 'songs', 'master'].includes(activeTab)} 
+              active={['liturgy', 'availability', 'settings', 'theory', 'bible', 'songs', ...(isMasterDeveloper ? ['master'] : [])].includes(activeTab)} 
               onClick={() => setShowMoreMenu(!showMoreMenu)} 
               label="Mais" 
               isCollapsed={isSidebarCollapsed} 
@@ -3912,13 +3994,15 @@ function MainContent() {
                     isCollapsed={isSidebarCollapsed} 
                     subItem 
                   />
-                  <NavIcon 
-                    icon={<Globe size={18} className="text-brand" />} 
-                    onClick={() => { setShowLandingPage(true); setShowMoreMenu(false); }} 
-                    label="Página de Apresentação" 
-                    isCollapsed={isSidebarCollapsed} 
-                    subItem 
-                  />
+                  {isMasterDeveloper && (
+                    <NavIcon 
+                      icon={<Globe size={18} className="text-brand" />} 
+                      onClick={() => { if (isMasterDeveloper) { setShowLandingPage(true); setShowMoreMenu(false); } }} 
+                      label="Página de Apresentação" 
+                      isCollapsed={isSidebarCollapsed} 
+                      subItem 
+                    />
+                  )}
                   <NavIcon 
                     icon={<Settings size={18} />} 
                     active={activeTab === 'settings'}
@@ -3927,11 +4011,11 @@ function MainContent() {
                     isCollapsed={isSidebarCollapsed} 
                     subItem 
                   />
-                  {isMasterAdmin && (
+                  {isMasterDeveloper && (
                     <NavIcon 
                       icon={<Crown size={18} className="text-amber-400 animate-pulse shrink-0" />} 
                       active={activeTab === 'master'}
-                      onClick={() => { setActiveTab('master'); setShowMoreMenu(false); }} 
+                      onClick={() => { navigateTabSafely('master'); setShowMoreMenu(false); }} 
                       label="Painel Master 👑" 
                       isCollapsed={isSidebarCollapsed} 
                       subItem 
@@ -3988,7 +4072,7 @@ function MainContent() {
             <Suspense fallback={null}>
               <DashboardView 
                 key="home" 
-                onNavigate={setActiveTab} 
+                onNavigate={navigateTabSafely} 
                 onOpenSong={handleOpenSongById}
                 createNotifications={createNotifications}
                 setShowLiturgySongs={setShowLiturgySongs}
@@ -4104,7 +4188,7 @@ function MainContent() {
               onlineMembers={allMembers}
             />
           )}
-          {activeTab === 'master' && (
+          {isMasterDeveloper && activeTab === 'master' && (
             <MasterAdminView key="master" theme={theme} />
           )}
         </AnimatePresence>
@@ -4114,7 +4198,7 @@ function MainContent() {
       <HelpCenter 
         theme={theme}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={navigateTabSafely}
         isAdmin={isAdmin}
         isOpen={isOpenHelpCenter}
         onClose={() => setIsOpenHelpCenter(false)}
@@ -4180,7 +4264,7 @@ function MainContent() {
             }
           }}
           onNavigate={(tab) => {
-            setActiveTab(tab);
+            navigateTabSafely(tab);
             setShowMoreMenu(false);
           }}
           onOpenSong={(song, options) => {
@@ -16499,6 +16583,7 @@ function CalendarView({
               title="Escala de Culto"
               description="A Escala do Culto reúne todo o time escalado (músicos, vocalistas e técnicos) e as músicas selecionadas para cada evento da igreja."
               steps={[
+                "Liderança: para agendar um novo culto, clique em '+ Novo Agendamento', preencha a identificação, o tema/ocasião, a data e o horário (e opcionalmente o link da playlist) e clique em 'Criar Agendamento'.",
                 "Localize o Culto desejado listado abaixo.",
                 "Consulte os integrantes e suas respectivas funções escaladas para o culto.",
                 "Clique em 'Lista de Músicas' para estudar o repertório específico daquele dia, abrindo cifras ou o player.",
@@ -17593,7 +17678,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   }, [upcomingServices]);
 
   const userEmailLower = (user?.email || '').toLowerCase().trim();
-  const isMaster = userEmailLower === 'mikmellorg@gmail.com' || userEmailLower === 'miqueiasmellopro@gmail.com';
+  const isMaster = userEmailLower === 'mikmellorg@gmail.com';
 
   const toggleAdmin = async (member: any) => {
     if (!isMaster) return;

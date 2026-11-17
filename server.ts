@@ -228,12 +228,14 @@ async function startServer() {
 
   // Initialize Firebase serverDb early for all endpoints
   let serverDb: any = null;
+  let firebaseApiKey = '';
   try {
     const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(cfgPath)) {
       const { initializeApp: initializeServerApp, getApps: getServerApps } = await import('firebase/app');
       const { initializeFirestore: initServerFirestore, getFirestore: getServerFirestore } = await import('firebase/firestore');
       const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      firebaseApiKey = String(firebaseConfig?.apiKey || '');
       const serverApp = getServerApps().find(a => a.name === 'server-app-kiwify') ||
         initializeServerApp(firebaseConfig, 'server-app-kiwify');
       try {
@@ -3937,9 +3939,49 @@ Complete a finalização da música`,
     }
   });
 
+  async function requireMasterDeveloper(req: express.Request, res: express.Response): Promise<boolean> {
+    const authHeader = String(req.headers.authorization || '');
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      res.status(401).json({ error: 'Acesso restrito ao desenvolvedor autorizado.' });
+      return false;
+    }
+
+    let verifiedEmail = '';
+    try {
+      const { getAuth } = await import('firebase-admin/auth');
+      const decoded = await getAuth().verifyIdToken(token);
+      verifiedEmail = String(decoded.email || '').toLowerCase().trim();
+    } catch {
+      if (firebaseApiKey) {
+        try {
+          const lookupRes = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseApiKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: token })
+            }
+          );
+          if (lookupRes.ok) {
+            const lookupJson = await lookupRes.json();
+            verifiedEmail = String(lookupJson?.users?.[0]?.email || '').toLowerCase().trim();
+          }
+        } catch {}
+      }
+    }
+
+    if (verifiedEmail !== 'mikmellorg@gmail.com') {
+      res.status(403).json({ error: 'Acesso negado: exclusivo para mikmellorg@gmail.com.' });
+      return false;
+    }
+    return true;
+  }
+
   // 2. Endpoint para o Master Admin buscar os logs de Webhooks recebidos (GET /api/webhooks/kiwify/logs)
   app.get("/api/webhooks/kiwify/logs", async (req, res) => {
     try {
+      if (!(await requireMasterDeveloper(req, res))) return;
       if (!serverDb) {
         return res.json({ logs: [] });
       }
@@ -3967,6 +4009,7 @@ Complete a finalização da música`,
   // 3. Endpoint para simular um teste de Webhook direto pelo Painel Master (POST /api/webhooks/kiwify/test-simulate)
   app.post("/api/webhooks/kiwify/test-simulate", async (req, res) => {
     try {
+      if (!(await requireMasterDeveloper(req, res))) return;
       const { email, name, productName, status, eventType } = req.body;
 
       const simPayload = {
