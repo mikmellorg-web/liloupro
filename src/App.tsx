@@ -1251,7 +1251,12 @@ function AuthView({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>('church_trial');
+  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('pending_invite_code')) {
+      return 'member_join';
+    }
+    return 'church_trial';
+  });
   const [churchNameInput, setChurchNameInput] = useState('');
   const [memberInviteCode, setMemberInviteCode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1408,9 +1413,16 @@ function AuthView({
   };
 
   const handleGoogleAuth = () => {
-    if (churchNameInput.trim()) {
-      localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
-    }
+    try {
+      if (mode === 'signup' && signupIntent === 'church_trial' && churchNameInput.trim().length >= 3) {
+        localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
+      } else {
+        localStorage.removeItem('pending_church_name_for_signup');
+      }
+      if (mode === 'signup' && signupIntent === 'member_join' && memberInviteCode.trim()) {
+        localStorage.setItem('pending_invite_code', memberInviteCode.trim().toUpperCase());
+      }
+    } catch {}
     loginWithGoogle();
   };
 
@@ -1703,6 +1715,232 @@ function AuthView({
       <CustomInstallBanner 
         onOpenGuideModal={() => setShowInstallModal(true)}
       />
+    </div>
+  );
+}
+
+function PendingChurchSetupView({
+  user,
+  memberData
+}: {
+  user: any;
+  memberData: any;
+}) {
+  const [tab, setTab] = useState<'join' | 'create'>('join');
+  const [inviteCode, setInviteCode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pending_invite_code') || '';
+    }
+    return '';
+  });
+  const [churchName, setChurchName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleJoinWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = inviteCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setError('Informe o código de ingresso da sua igreja.');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const q = query(collection(db, 'churches'), where('inviteCode', '==', cleanCode));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        setError(`Código "${cleanCode}" não encontrado. Confira com o líder do seu ministério.`);
+        setIsSubmitting(false);
+        return;
+      }
+      const churchDoc = snap.docs[0];
+      const limitCheck = checkResourceLimit({ id: churchDoc.id, ...churchDoc.data() }, 'members', 999);
+      if (!limitCheck.allowed) {
+        setError('O período de avaliação desta igreja encerrou. Peça ao líder para ativar o plano para liberar novos membros.');
+        setIsSubmitting(false);
+        return;
+      }
+      await updateDoc(doc(db, 'members', user.uid), {
+        churchId: churchDoc.id,
+        isAdmin: false
+      });
+      try {
+        localStorage.removeItem('pending_invite_code');
+        localStorage.setItem('lilo_active_church_id', churchDoc.id);
+      } catch {}
+    } catch (err) {
+      console.error('Erro ao ingressar na igreja:', err);
+      setError('Não foi possível validar o código agora. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateChurchExplicit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = churchName.trim();
+    if (cleanName.length < 3) {
+      setError('Informe o nome completo da sua igreja (mínimo 3 caracteres).');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
+      await setDoc(doc(db, 'churches', newChurchId), {
+        name: cleanName,
+        inviteCode: newInvite,
+        createdAt: new Date().toISOString(),
+        createdBy: user.uid,
+        planStatus: 'trial',
+        planId: 'completo',
+        isTrial: true,
+        trialStartDate: new Date().toISOString(),
+        contactEmail: user.email || '',
+        maxMembers: 50,
+        maxSongs: 9999,
+        roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
+      });
+      await updateDoc(doc(db, 'members', user.uid), {
+        churchId: newChurchId,
+        isAdmin: true,
+        roles: ['Coordenador/Líder'],
+        dismissedOnboarding: true
+      });
+      await setDoc(doc(db, 'admins', user.uid), {
+        active: true,
+        churchId: newChurchId,
+        role: 'admin'
+      });
+      try {
+        localStorage.setItem('lilo_active_church_id', newChurchId);
+      } catch {}
+    } catch (err) {
+      console.error('Erro ao criar igreja:', err);
+      setError('Não foi possível criar a igreja agora. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const firstName = (memberData?.name || user?.displayName || 'Ministro').split(' ')[0];
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6">
+      <Card className="max-w-md w-full p-7 sm:p-8 space-y-6 bg-slate-900/90 border border-white/10 shadow-2xl">
+        <div className="text-center space-y-2">
+          <img
+            src={luxuryAppIcon}
+            alt="LiLouPro"
+            className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg mx-auto"
+          />
+          <h1 className="text-xl font-black tracking-tight text-white">
+            Olá, {firstName}! Falta só vincular sua igreja
+          </h1>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Logado como <span className="font-bold text-brand">{user?.email}</span>. Escolha abaixo se você já faz parte de uma equipe ou se é líder cadastrando uma nova igreja.
+          </p>
+        </div>
+
+        <div className="flex rounded-xl bg-white/5 p-1 border border-white/10 text-xs">
+          <button
+            type="button"
+            onClick={() => { setTab('join'); setError(null); }}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-black transition-all cursor-pointer ${
+              tab === 'join' ? 'bg-brand text-white shadow-md' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Já sou Membro (Código)
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTab('create'); setError(null); }}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-black transition-all cursor-pointer ${
+              tab === 'create' ? 'bg-brand text-white shadow-md' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Cadastrar Nova Igreja
+          </button>
+        </div>
+
+        {tab === 'join' ? (
+          <form onSubmit={handleJoinWithCode} className="space-y-4">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-xs text-blue-200 flex items-start gap-2">
+              <Users size={16} className="shrink-0 text-blue-400 mt-0.5" />
+              <span>
+                Peça o <strong>Código de Ingresso</strong> ao seu líder (ex.: <code className="font-mono font-bold text-white">IGREJA-123456</code>) para acessar as escalas e músicas da sua equipe.
+              </span>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 pl-1">
+                Código de Ingresso da Igreja *
+              </label>
+              <Input
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                placeholder="Ex: IGREJA-123456"
+                className="font-mono uppercase"
+                required
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center font-semibold">
+                {error}
+              </p>
+            )}
+            <Button
+              disabled={isSubmitting}
+              className="w-full h-12 bg-brand hover:bg-brand/90 text-white font-black uppercase tracking-wider text-xs rounded-xl cursor-pointer"
+            >
+              {isSubmitting ? <RefreshCcw size={16} className="animate-spin mx-auto" /> : 'Entrar na Minha Igreja'}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleCreateChurchExplicit} className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 flex items-start gap-2">
+              <Building2 size={16} className="shrink-0 text-amber-400 mt-0.5" />
+              <span>
+                Use esta opção <strong>apenas se você é o líder/administrador</strong> criando um ambiente novo para sua congregação (30 dias grátis). Se sua igreja já usa o app, use a aba <strong>"Já sou Membro"</strong>.
+              </span>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 pl-1">
+                Nome da Sua Igreja / Congregação *
+              </label>
+              <Input
+                value={churchName}
+                onChange={(e) => setChurchName(e.target.value)}
+                placeholder="Ex: Igreja Batista Memorial..."
+                required
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center font-semibold">
+                {error}
+              </p>
+            )}
+            <Button
+              disabled={isSubmitting}
+              className="w-full h-12 bg-brand hover:bg-brand/90 text-white font-black uppercase tracking-wider text-xs rounded-xl cursor-pointer"
+            >
+              {isSubmitting ? <RefreshCcw size={16} className="animate-spin mx-auto" /> : 'Criar Nova Igreja (30 Dias Grátis)'}
+            </Button>
+          </form>
+        )}
+
+        <div className="pt-3 border-t border-white/10 text-center">
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <LogOut size={14} />
+            <span>Entrou com a conta errada? Sair e trocar de conta</span>
+          </button>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -3639,6 +3877,10 @@ function MainContent() {
         }} />
       </div>
     );
+  }
+
+  if (user && !isMasterDeveloper && memberData && !memberData.churchId) {
+    return <PendingChurchSetupView user={user} memberData={memberData} />;
   }
 
   return (
@@ -18427,6 +18669,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   onTriggerNotification?: (n: any) => void
 }) {
   const { user, memberData, churchData } = useAuth();
+  const isMasterDeveloper = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
   const [churchCodeInput, setChurchCodeInput] = useState('');
   const [newChurchName, setNewChurchName] = useState('');
   const [isJoiningChurch, setIsJoiningChurch] = useState(false);
@@ -18474,6 +18717,17 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
       }
       const churchDoc = querySnap.docs[0];
       const churchId = churchDoc.id;
+      if (churchId === churchData?.id) {
+        alert(`Você já está vinculado à igreja: ${churchDoc.data().name}.`);
+        setIsJoiningChurch(false);
+        return;
+      }
+      const joinLimitCheck = checkResourceLimit({ id: churchDoc.id, ...churchDoc.data() }, 'members', 999);
+      if (!joinLimitCheck.allowed) {
+        alert('O período de avaliação de 30 dias desta igreja encerrou. Peça ao líder para ativar o plano para liberar novos membros.');
+        setIsJoiningChurch(false);
+        return;
+      }
       
       // Update user member profile
       const memberRef = doc(db, 'members', user.uid);
@@ -19084,7 +19338,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     <p className="text-xs text-text-muted font-bold uppercase tracking-wider">Igreja Ativa:</p>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-black text-brand tracking-tight">{churchData.name}</p>
-                      {isAdmin && (
+                      {(isMasterDeveloper || (isAdmin && churchData.id !== 'semente')) && (
                         <Button 
                           onClick={async () => {
                             const newName = window.prompt("Digite o novo nome para a sua igreja:", churchData.name);
@@ -19143,7 +19397,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   </div>
 
                   {/* Criar uma igreja */}
-                  {isAdmin && (
+                  {isMasterDeveloper && (
                     <div className="space-y-1.5 pt-2 border-t border-border/30">
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Criar Nova Igreja (SaaS)</label>
                       <div className="space-y-2">

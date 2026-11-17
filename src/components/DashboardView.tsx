@@ -1512,7 +1512,6 @@ export default function DashboardView({
       }
     }
   }, [memberData, churchData, user]);
-  const [isRestoring, setIsRestoring] = useState(false);
 
   const today = new Date();
   const currentMonthNum = today.getMonth() + 1;
@@ -1541,43 +1540,6 @@ export default function DashboardView({
       const dayB = parseInt(b.birthDate.split('-')[2], 10);
       return dayA - dayB;
     });
-
-  const handleRestoreSementeHistory = async () => {
-    if (!user) return;
-    const currentName = churchData?.name || 'Minha Igreja';
-    
-    const confirmMessage = `Você deseja restaurar seu histórico de músicas, membros e cultos? \n\nIsso irá:\n1. Trazer de volta todas as suas músicas, integrantes e cultos antigos.\n2. Definir o nome de sua igreja atual ("${currentName}") na igreja principal.\n3. Recarregar o aplicativo para aplicar as mudanças.\n\nQuer continuar?`;
-    
-    if (!window.confirm(confirmMessage)) return;
-    
-    setIsRestoring(true);
-    try {
-      // 1. Rename 'semente' church name to this customized church name
-      const sementeChurchRef = doc(db, 'churches', 'semente');
-      await setDoc(sementeChurchRef, {
-        name: currentName,
-        updatedAt: serverTimestamp(),
-        updatedBy: user.uid
-      }, { merge: true });
-      
-      // 2. Point leader's member record back to 'semente'
-      const memberRef = doc(db, 'members', user.uid);
-      await updateDoc(memberRef, {
-        churchId: 'semente',
-        isAdmin: true,
-        dismissedOnboarding: true
-      });
-      localStorage.setItem('dismissed_leader_onboarding', 'true');
-      
-      alert(`Histórico restaurado com sucesso! A igreja "${currentName}" foi restabelecida com todas as suas músicas e membros.`);
-      window.location.reload();
-    } catch (err) {
-      console.error("Erro ao recuperar histórico:", err);
-      alert("Não foi possível restaurar os dados de forma automatizada.");
-    } finally {
-      setIsRestoring(false);
-    }
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -1999,34 +1961,7 @@ export default function DashboardView({
         </div>
       </header>
 
-      {userChurchId !== 'semente' && (
-        <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex gap-4 items-start">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0 border border-amber-500/20">
-              <AlertTriangle size={24} />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-black text-amber-500 uppercase tracking-wider">
-                Suas Músicas e Membros Sumiram?
-              </h3>
-              <p className="text-xs text-text-muted leading-relaxed max-w-2xl">
-                Percebemos que você registrou a igreja como <strong className="text-text-main">{churchData?.name || 'sua nova congregação'}</strong>. Isso criou um ambiente novo em branco. Suas músicas, integrantes e cultos anteriores ainda estão salvos no banco de dados principal. Você pode recuperar 100% de seus dados e manter seu novo nome de igreja!
-              </p>
-            </div>
-          </div>
-          <div className="shrink-0 w-full md:w-auto flex gap-3">
-            <Button 
-              onClick={handleRestoreSementeHistory}
-              disabled={isRestoring}
-              className="w-full md:w-auto bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs px-5 h-11 rounded-xl transition-all shadow-md shrink-0 flex items-center justify-center gap-2"
-            >
-              {isRestoring ? 'Restaurando...' : 'Recuperar Todo Histórico'}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {userChurchId === 'semente' && showOnboarding && (!churchData || churchData?.name?.toLowerCase() === 'semente') && (
+      {false && userChurchId === 'semente' && showOnboarding && (!churchData || churchData?.name?.toLowerCase() === 'semente') && (
         <LeaderOnboardingWizard 
           user={user}
           memberData={memberData}

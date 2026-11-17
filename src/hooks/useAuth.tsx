@@ -92,8 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const pendingChurchName = typeof window !== 'undefined' ? localStorage.getItem('pending_church_name_for_signup') : null;
               
               let targetChurchId = '';
-              let isUserAdmin = true;
-              let initialRoles = ['Coordenador/Líder'];
+              let isUserAdmin = false;
+              let initialRoles: string[] = [];
 
               if (pendingInvite) {
                 try {
@@ -110,11 +110,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }
 
-              if (!targetChurchId) {
-                // Provision a brand new isolated church tenant with 30-day trial
+              if (!targetChurchId && pendingChurchName && pendingChurchName.trim().length >= 3) {
+                // Only provision a brand new church when the user explicitly submitted a church name
                 const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
                 const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
-                const churchDisplayName = pendingChurchName?.trim() || `Igreja de ${currentUser.displayName || currentUser.email?.split('@')[0] || 'Louvor'}`;
+                const churchDisplayName = pendingChurchName.trim();
 
                 try {
                   await setDoc(doc(db, 'churches', newChurchId), {
@@ -132,13 +132,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
                   });
                   targetChurchId = newChurchId;
+                  isUserAdmin = true;
+                  initialRoles = ['Coordenador/Líder'];
                   if (typeof window !== 'undefined') {
                     localStorage.removeItem('pending_church_name_for_signup');
                     localStorage.setItem('lilo_active_church_id', newChurchId);
                   }
                 } catch (chErr) {
                   console.error("Erro ao provisionar nova igreja para usuário:", chErr);
-                  targetChurchId = newChurchId;
+                  targetChurchId = '';
                 }
               }
 
@@ -195,35 +197,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
 
-            // Auto-assign church ONLY if missing: master gets semente, normal user gets new church
-            if (!currentMember.churchId) {
-              if (isMaster) {
-                currentMember.churchId = 'semente';
-                try {
-                  await setDoc(memberRef, { churchId: 'semente' }, { merge: true });
-                } catch (err) {
-                  console.error("Erro ao migrar igreja master:", err);
-                }
-              } else {
-                const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-                const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
-                try {
-                  await setDoc(doc(db, 'churches', newChurchId), {
-                    name: `Igreja de ${currentMember.name || 'Louvor'}`,
-                    inviteCode: newInvite,
-                    createdAt: new Date().toISOString(),
-                    createdBy: currentUser.uid,
-                    planStatus: 'trial',
-                    planId: 'completo',
-                    isTrial: true,
-                    trialStartDate: new Date().toISOString()
-                  });
-                  currentMember.churchId = newChurchId;
-                  currentMember.isAdmin = true;
-                  await setDoc(memberRef, { churchId: newChurchId, isAdmin: true }, { merge: true });
-                } catch (e) {
-                  console.error("Erro ao criar igreja para membro sem igreja:", e);
-                }
+            // Auto-assign church ONLY for master developer if missing; normal users choose via onboarding selector
+            if (!currentMember.churchId && isMaster) {
+              currentMember.churchId = 'semente';
+              try {
+                await setDoc(memberRef, { churchId: 'semente' }, { merge: true });
+              } catch (err) {
+                console.error("Erro ao migrar igreja master:", err);
               }
             }
           }
@@ -251,7 +231,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           // Fetch the church config and listen to its changes (only re-subscribe if churchId changed)
-          const churchId = currentMember.churchId || 'semente';
+          const churchId = currentMember.churchId || (isMaster ? 'semente' : '');
+
+          if (!churchId) {
+            if (unsubscribeChurch) {
+              unsubscribeChurch();
+              unsubscribeChurch = null;
+            }
+            activeChurchId = null;
+            setChurchData(null);
+            setLoading(false);
+            return;
+          }
 
           if (activeChurchId !== churchId || !unsubscribeChurch) {
             if (unsubscribeChurch) {

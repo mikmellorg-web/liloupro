@@ -12,17 +12,24 @@ service cloud.firestore {
     }
 
     function isMasterAdmin() {
-      return isSignedIn() && request.auth.token.email != null && (
-        request.auth.token.email == 'mikmellorg@gmail.com' || 
-        request.auth.token.email == 'miqueiasmellopro@gmail.com' ||
-        request.auth.token.email.lower() == 'mikmellorg@gmail.com' || 
-        request.auth.token.email.lower() == 'miqueiasmellopro@gmail.com'
-      );
+      return isSignedIn() && request.auth.token.email != null &&
+        request.auth.token.email.lower() == 'mikmellorg@gmail.com';
     }
 
     function isMemberAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid)) && (
         get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
+      );
+    }
+
+    function isChurchAdminFor(churchId) {
+      return isSignedIn() && (
+        isMasterAdmin() ||
+        (
+          exists(/databases/$(database)/documents/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('churchId', '') == churchId &&
+          get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
+        )
       );
     }
 
@@ -349,8 +356,41 @@ service cloud.firestore {
 
     // Church Rules
     match /churches/{churchId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow get: if isValidId(churchId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(churchId)
+                    && isValidChurch(incoming())
+                    && (
+                      isMasterAdmin() ||
+                      (
+                        churchId != 'semente'
+                        && incoming().get('createdBy', '') == request.auth.uid
+                        && incoming().get('isSeedChurch', false) == false
+                        && incoming().get('isVitalicio', false) == false
+                      )
+                    );
+      allow update: if isSignedIn()
+                    && isValidId(churchId)
+                    && isValidChurch(incoming())
+                    && (
+                      isMasterAdmin() ||
+                      (
+                        churchId == 'semente'
+                        && isChurchAdminFor('semente')
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['teamDriveUrl'])
+                      ) ||
+                      (
+                        churchId != 'semente'
+                        && isChurchAdminFor(churchId)
+                        && incoming().get('isSeedChurch', false) == existing().get('isSeedChurch', false)
+                        && incoming().get('isVitalicio', false) == existing().get('isVitalicio', false)
+                        && incoming().get('planStatus', '') == existing().get('planStatus', '')
+                        && incoming().get('planName', '') == existing().get('planName', '')
+                        && incoming().get('planExpiresAt', null) == existing().get('planExpiresAt', null)
+                      )
+                    );
+      allow delete: if isValidId(churchId) && isMasterAdmin();
     }
 
     // Kiwify Webhook Log Rules
