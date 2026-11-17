@@ -1251,12 +1251,7 @@ function AuthView({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>(() => {
-    if (typeof window !== 'undefined' && localStorage.getItem('pending_invite_code')) {
-      return 'member_join';
-    }
-    return 'church_trial';
-  });
+  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>('member_join');
   const [churchNameInput, setChurchNameInput] = useState('');
   const [memberInviteCode, setMemberInviteCode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1295,61 +1290,13 @@ function AuthView({
 
     try {
       if (mode === 'signup') {
+        if (signupIntent === 'church_trial') {
+          throw new Error('Para cadastrar um novo ministério/igreja no LilouPro, adquira um plano oficial ou solicite o código de acesso ao líder da sua igreja.');
+        }
+
         if (!name.trim()) throw new Error('Por favor, informe seu nome completo.');
 
-        if (signupIntent === 'church_trial') {
-          if (!churchNameInput.trim()) {
-            throw new Error('Por favor, informe o nome da sua igreja.');
-          }
-
-          localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          await updateProfile(userCredential.user, { displayName: name.trim() });
-
-          const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-          const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
-
-          // 1. Create brand new church tenant with 30-day trial
-          await setDoc(doc(db, 'churches', newChurchId), {
-            name: churchNameInput.trim(),
-            inviteCode: newInvite,
-            createdAt: new Date().toISOString(),
-            createdBy: userCredential.user.uid,
-            planStatus: 'trial',
-            planId: 'completo',
-            isTrial: true,
-            trialStartDate: new Date().toISOString(),
-            contactEmail: email.trim().toLowerCase(),
-            maxMembers: 50,
-            maxSongs: 9999,
-            roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
-          });
-
-          // 2. Create member profile as Admin of their church
-          await setDoc(doc(db, 'members', userCredential.user.uid), {
-            uid: userCredential.user.uid,
-            name: name.trim(),
-            email: email.trim().toLowerCase(),
-            churchId: newChurchId,
-            isAdmin: true,
-            roles: ['Coordenador/Líder'],
-            availability: {},
-            defaultBibleVersion: 'BLIVRE',
-            dismissedOnboarding: true,
-            createdAt: new Date().toISOString()
-          });
-
-          // 3. Create admin privileges
-          await setDoc(doc(db, 'admins', userCredential.user.uid), {
-            active: true,
-            churchId: newChurchId,
-            role: 'admin'
-          });
-
-          localStorage.removeItem('pending_church_name_for_signup');
-          localStorage.removeItem('pending_invite_code');
-          localStorage.setItem('lilo_active_church_id', newChurchId);
-        } else {
+        {
           // Member joining existing church
           const code = (memberInviteCode.trim() || localStorage.getItem('pending_invite_code') || '').toUpperCase();
           if (!code) throw new Error('Por favor, informe o código de ingresso da sua igreja.');
@@ -1357,7 +1304,7 @@ function AuthView({
           const { collection, query, where, getDocs } = await import('firebase/firestore');
           const snap = await getDocs(query(collection(db, 'churches'), where('inviteCode', '==', code)));
           if (snap.empty) {
-            throw new Error(`Código "${code}" não encontrado. Verifique com seu líder ou selecione "Cadastrar Minha Igreja".`);
+            throw new Error(`Código "${code}" não encontrado. Confira com o líder da sua igreja.`);
           }
           const churchDoc = snap.docs[0];
           const targetChurchId = churchDoc.id;
@@ -1414,11 +1361,7 @@ function AuthView({
 
   const handleGoogleAuth = () => {
     try {
-      if (mode === 'signup' && signupIntent === 'church_trial' && churchNameInput.trim().length >= 3) {
-        localStorage.setItem('pending_church_name_for_signup', churchNameInput.trim());
-      } else {
-        localStorage.removeItem('pending_church_name_for_signup');
-      }
+      localStorage.removeItem('pending_church_name_for_signup');
       if (mode === 'signup' && signupIntent === 'member_join' && memberInviteCode.trim()) {
         localStorage.setItem('pending_invite_code', memberInviteCode.trim().toUpperCase());
       }
@@ -1473,18 +1416,7 @@ function AuthView({
             <div className="flex rounded-xl bg-slate-100 dark:bg-white/10 p-1 border border-slate-200 dark:border-white/10 text-xs">
               <button
                 type="button"
-                onClick={() => setSignupIntent('church_trial')}
-                className={`flex-1 py-2 px-2.5 rounded-lg font-black text-xs text-center transition-all cursor-pointer ${
-                  signupIntent === 'church_trial'
-                    ? 'bg-brand text-white shadow-md'
-                    : 'text-slate-600 dark:text-white/70 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Cadastrar Minha Igreja
-              </button>
-              <button
-                type="button"
-                onClick={() => setSignupIntent('member_join')}
+                onClick={() => { setSignupIntent('member_join'); setError(null); }}
                 className={`flex-1 py-2 px-2.5 rounded-lg font-black text-xs text-center transition-all cursor-pointer ${
                   signupIntent === 'member_join'
                     ? 'bg-brand text-white shadow-md'
@@ -1493,12 +1425,44 @@ function AuthView({
               >
                 Entrar com Código
               </button>
+              <button
+                type="button"
+                onClick={() => { setSignupIntent('church_trial'); setError(null); }}
+                className={`flex-1 py-2 px-2.5 rounded-lg font-black text-xs text-center transition-all cursor-pointer ${
+                  signupIntent === 'church_trial'
+                    ? 'bg-brand text-white shadow-md'
+                    : 'text-slate-600 dark:text-white/70 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Cadastrar Nova Igreja
+              </button>
             </div>
 
             {signupIntent === 'church_trial' ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                <Sparkles size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <span><strong>30 Dias Grátis VIP:</strong> Criaremos um espaço exclusivo para a sua igreja testar sem custo!</span>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3 text-left">
+                <div className="flex items-start gap-2.5 text-amber-800 dark:text-amber-200 text-xs font-semibold leading-relaxed">
+                  <Building2 size={18} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <span>
+                    Para cadastrar um novo ministério/igreja no LilouPro, adquira um plano oficial ou solicite o código de acesso ao líder da sua igreja.
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setSignupIntent('member_join'); setError(null); }}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-brand hover:bg-brand/90 text-white text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer text-center"
+                  >
+                    Inserir Código de Membro
+                  </button>
+                  <a
+                    href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Gostaria%20de%20adquirir%20um%20plano%20oficial%20para%20cadastrar%20minha%20igreja%20no%20LiLouPro."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider transition-all text-center"
+                  >
+                    Planos &amp; Suporte
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-blue-800 dark:text-blue-300 text-xs font-semibold flex items-center gap-2">
@@ -1521,20 +1485,8 @@ function AuthView({
           </div>
         )}
 
+        {!(mode === 'signup' && signupIntent === 'church_trial') && (
         <form onSubmit={handleAuth} className="space-y-4">
-          {mode === 'signup' && signupIntent === 'church_trial' && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-700 dark:text-white/70 uppercase tracking-widest pl-1">
-                Nome da sua Igreja / Congregação *
-              </label>
-              <Input 
-                placeholder="Ex: Igreja Batista Memorial, Comunidade Viva..." 
-                value={churchNameInput} 
-                onChange={e => setChurchNameInput(e.target.value)} 
-                required 
-              />
-            </div>
-          )}
 
           {mode === 'signup' && signupIntent === 'member_join' && (
             <div className="space-y-1">
@@ -1630,7 +1582,7 @@ function AuthView({
               mode === 'login' 
                 ? 'Entrar' 
                 : mode === 'signup' 
-                  ? (signupIntent === 'church_trial' ? 'Criar Igreja & Iniciar 30 Dias Grátis' : 'Cadastrar & Entrar na Igreja')
+                  ? 'Cadastrar & Entrar na Igreja'
                   : (
                     <>
                       <KeyRound size={16} />
@@ -1640,6 +1592,7 @@ function AuthView({
             )}
           </Button>
         </form>
+        )}
 
         <div className="space-y-4">
           {mode === 'login' && (
@@ -1777,54 +1730,6 @@ function PendingChurchSetupView({
     }
   };
 
-  const handleCreateChurchExplicit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanName = churchName.trim();
-    if (cleanName.length < 3) {
-      setError('Informe o nome completo da sua igreja (mínimo 3 caracteres).');
-      return;
-    }
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
-      await setDoc(doc(db, 'churches', newChurchId), {
-        name: cleanName,
-        inviteCode: newInvite,
-        createdAt: new Date().toISOString(),
-        createdBy: user.uid,
-        planStatus: 'trial',
-        planId: 'completo',
-        isTrial: true,
-        trialStartDate: new Date().toISOString(),
-        contactEmail: user.email || '',
-        maxMembers: 50,
-        maxSongs: 9999,
-        roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
-      });
-      await updateDoc(doc(db, 'members', user.uid), {
-        churchId: newChurchId,
-        isAdmin: true,
-        roles: ['Coordenador/Líder'],
-        dismissedOnboarding: true
-      });
-      await setDoc(doc(db, 'admins', user.uid), {
-        active: true,
-        churchId: newChurchId,
-        role: 'admin'
-      });
-      try {
-        localStorage.setItem('lilo_active_church_id', newChurchId);
-      } catch {}
-    } catch (err) {
-      console.error('Erro ao criar igreja:', err);
-      setError('Não foi possível criar a igreja agora. Tente novamente.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const firstName = (memberData?.name || user?.displayName || 'Ministro').split(' ')[0];
 
   return (
@@ -1837,10 +1742,10 @@ function PendingChurchSetupView({
             className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg mx-auto"
           />
           <h1 className="text-xl font-black tracking-tight text-white">
-            Olá, {firstName}! Falta só vincular sua igreja
+            Olá, {firstName}! Vincule sua conta à igreja
           </h1>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Logado como <span className="font-bold text-brand">{user?.email}</span>. Escolha abaixo se você já faz parte de uma equipe ou se é líder cadastrando uma nova igreja.
+            Logado como <span className="font-bold text-brand">{user?.email}</span>. Insira o código de acesso da sua igreja para continuar.
           </p>
         </div>
 
@@ -1852,7 +1757,7 @@ function PendingChurchSetupView({
               tab === 'join' ? 'bg-brand text-white shadow-md' : 'text-slate-300 hover:text-white'
             }`}
           >
-            Já sou Membro (Código)
+            Entrar com Código
           </button>
           <button
             type="button"
@@ -1898,36 +1803,31 @@ function PendingChurchSetupView({
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleCreateChurchExplicit} className="space-y-4">
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 flex items-start gap-2">
-              <Building2 size={16} className="shrink-0 text-amber-400 mt-0.5" />
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200 flex items-start gap-2.5 leading-relaxed">
+              <Building2 size={18} className="shrink-0 text-amber-400 mt-0.5" />
               <span>
-                Use esta opção <strong>apenas se você é o líder/administrador</strong> criando um ambiente novo para sua congregação (30 dias grátis). Se sua igreja já usa o app, use a aba <strong>"Já sou Membro"</strong>.
+                Para cadastrar um novo ministério/igreja no LilouPro, adquira um plano oficial ou solicite o código de acesso ao líder da sua igreja.
               </span>
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 pl-1">
-                Nome da Sua Igreja / Congregação *
-              </label>
-              <Input
-                value={churchName}
-                onChange={(e) => setChurchName(e.target.value)}
-                placeholder="Ex: Igreja Batista Memorial..."
-                required
-              />
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => { setTab('join'); setError(null); }}
+                className="w-full h-11 rounded-xl bg-brand hover:bg-brand/90 text-white font-black uppercase tracking-wider text-xs transition-all cursor-pointer"
+              >
+                Inserir Código de Membro
+              </button>
+              <a
+                href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Gostaria%20de%20adquirir%20um%20plano%20oficial%20para%20cadastrar%20minha%20igreja%20no%20LiLouPro."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center"
+              >
+                Adquirir Plano Oficial / Falar no Suporte
+              </a>
             </div>
-            {error && (
-              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center font-semibold">
-                {error}
-              </p>
-            )}
-            <Button
-              disabled={isSubmitting}
-              className="w-full h-12 bg-brand hover:bg-brand/90 text-white font-black uppercase tracking-wider text-xs rounded-xl cursor-pointer"
-            >
-              {isSubmitting ? <RefreshCcw size={16} className="animate-spin mx-auto" /> : 'Criar Nova Igreja (30 Dias Grátis)'}
-            </Button>
-          </form>
+          </div>
         )}
 
         <div className="pt-3 border-t border-white/10 text-center">
@@ -2203,9 +2103,9 @@ function MainContent() {
     if (typeof window === 'undefined') return false;
     return !sessionStorage.getItem('liloupro_splash_shown');
   });
-  const userChurchId = memberData?.churchId || 'semente';
   const MASTER_DEVELOPER_EMAIL = 'mikmellorg@gmail.com';
   const isMasterDeveloper = Boolean(user && user?.email?.toLowerCase().trim() === MASTER_DEVELOPER_EMAIL);
+  const userChurchId = memberData?.churchId || (isMasterDeveloper ? 'semente' : '');
 
   const [landingMode, setLandingMode] = useState<'landing' | 'login' | 'signup'>(() => {
     if (typeof window === 'undefined') return 'landing';
@@ -2322,7 +2222,21 @@ function MainContent() {
     };
   }, [user, isMasterDeveloper, loading, activeTab, showLandingPage]);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [offlineSyncTime, setOfflineSyncTime] = useState<string | null>(() => localStorage.getItem('liloupro_offline_sync_time'));
+  const [offlineSyncTime, setOfflineSyncTime] = useState<string | null>(() => {
+    if (!userChurchId) return null;
+    return localStorage.getItem(`liloupro_offline_sync_time_${userChurchId}`);
+  });
+  useEffect(() => {
+    if (!userChurchId) {
+      setOfflineSyncTime(null);
+      return;
+    }
+    try {
+      setOfflineSyncTime(localStorage.getItem(`liloupro_offline_sync_time_${userChurchId}`));
+    } catch {
+      setOfflineSyncTime(null);
+    }
+  }, [userChurchId]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [upgradeModalResult, setUpgradeModalResult] = useState<ResourceCheckResult | null>(null);
 
@@ -2689,15 +2603,16 @@ function MainContent() {
   }, []);
 
   const handleSyncOfflineData = useCallback(() => {
+    if (!userChurchId) return;
     setIsSyncing(true);
     try {
-      // Save all songs, members, and services to localStorage
-      localStorage.setItem('liloupro_offline_songs', JSON.stringify(allSongs));
-      localStorage.setItem('liloupro_offline_services', JSON.stringify(allServices));
-      localStorage.setItem('liloupro_offline_members', JSON.stringify(allMembers));
+      // Save church-scoped songs, members, and services to localStorage
+      localStorage.setItem(`liloupro_offline_songs_${userChurchId}`, JSON.stringify(allSongs));
+      localStorage.setItem(`liloupro_offline_services_${userChurchId}`, JSON.stringify(allServices));
+      localStorage.setItem(`liloupro_offline_members_${userChurchId}`, JSON.stringify(allMembers));
       
       const nowStr = new Date().toLocaleString('pt-BR');
-      localStorage.setItem('liloupro_offline_sync_time', nowStr);
+      localStorage.setItem(`liloupro_offline_sync_time_${userChurchId}`, nowStr);
       setOfflineSyncTime(nowStr);
       
       alert('Sincronização offline concluída com sucesso! 💾\nSuas cifras, escalas e dados de membros agora estão disponíveis offline.');
@@ -2707,7 +2622,7 @@ function MainContent() {
     } finally {
       setIsSyncing(false);
     }
-  }, [allSongs, allServices, allMembers]);
+  }, [allSongs, allServices, allMembers, userChurchId]);
 
   // Auto-join congregation when user & memberData are loaded successfully
   useEffect(() => {
@@ -2747,8 +2662,14 @@ function MainContent() {
   }, [user, memberData, loading]);
 
   useEffect(() => {
-    if (!user) return;
-    const unsub = onSnapshot(collection(db, 'songs'), (snap) => {
+    if (!user || !userChurchId) {
+      setAllSongs([]);
+      return;
+    }
+    const songsQ = userChurchId === 'semente'
+      ? collection(db, 'songs')
+      : query(collection(db, 'songs'), where('churchId', '==', userChurchId));
+    const unsub = onSnapshot(songsQ, (snap) => {
       const songs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filteredSongs = songs.filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
       setAllSongs(filteredSongs);
@@ -2843,8 +2764,14 @@ function MainContent() {
   }, [unreadCount]);
 
   useEffect(() => {
-    if (!user) return;
-    const unsub = onSnapshot(collection(db, 'members'), (snap) => {
+    if (!user || !userChurchId) {
+      setAllMembers([]);
+      return;
+    }
+    const membersQ = userChurchId === 'semente'
+      ? collection(db, 'members')
+      : query(collection(db, 'members'), where('churchId', '==', userChurchId));
+    const unsub = onSnapshot(membersQ, (snap) => {
       const members = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = members.filter(m => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
       setAllMembers(filtered);
@@ -2855,8 +2782,14 @@ function MainContent() {
   }, [user, userChurchId]);
 
   useEffect(() => {
-    if (!user) return;
-    const unsub = onSnapshot(collection(db, 'services'), (snap) => {
+    if (!user || !userChurchId) {
+      setAllServices([]);
+      return;
+    }
+    const servicesQ = userChurchId === 'semente'
+      ? collection(db, 'services')
+      : query(collection(db, 'services'), where('churchId', '==', userChurchId));
+    const unsub = onSnapshot(servicesQ, (snap) => {
       const services = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = services.filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
       setAllServices(filtered);
@@ -3121,6 +3054,7 @@ function MainContent() {
             content,
             type,
             read: false,
+            ...(userChurchId ? { churchId: userChurchId } : {}),
             createdAt: serverTimestamp()
           }).catch(err => {
             console.warn('[Notifications] Erro ao gravar notificação in-app para usuário:', userId, err);
@@ -3152,10 +3086,13 @@ function MainContent() {
         }
       });
 
-      // Coletar do Firestore apenas para destinatários que ainda não tenham token carregado em memória
+      // Coletar do Firestore apenas para destinatários da mesma igreja que ainda não tenham token carregado em memória
       try {
-        if (targetUserIds.size > 0) {
-          const fcmTokensSnap = await getDocs(collection(db, 'fcm_tokens'));
+        if (targetUserIds.size > 0 && userChurchId) {
+          const fcmTokensQ = userChurchId === 'semente'
+            ? collection(db, 'fcm_tokens')
+            : query(collection(db, 'fcm_tokens'), where('churchId', '==', userChurchId));
+          const fcmTokensSnap = await getDocs(fcmTokensQ);
           const tokensByUid = new Map<string, string>();
           fcmTokensSnap.forEach(docSnap => {
             const data = docSnap.data();
@@ -15847,7 +15784,9 @@ function CalendarView({
   onOpenUpgradeModal?: (check: ResourceCheckResult) => void
 }) {
   const { user, isAdmin, memberData, churchData } = useAuth();
-  const userChurchId = memberData?.churchId || 'semente';
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+  const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
   const [services, setServices] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
@@ -15860,13 +15799,23 @@ function CalendarView({
   const [allSongs, setAllSongs] = useState<any[]>([]);
 
   useEffect(() => {
-    return onSnapshot(collection(db, 'songs'), (snap) => {
-      setAllSongs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    if (!user || !userChurchId) {
+      setAllSongs([]);
+      return;
+    }
+    const songsQ = userChurchId === 'semente'
+      ? collection(db, 'songs')
+      : query(collection(db, 'songs'), where('churchId', '==', userChurchId));
+    return onSnapshot(songsQ, (snap) => {
+      const list = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
+      setAllSongs(list);
     }, (error) => {
       if (error?.message?.includes('CANCELLED') || error?.message?.includes('idle stream')) return;
       console.warn('[Calendar songs snapshot]:', error);
     });
-  }, []);
+  }, [user, userChurchId]);
 
   const roles = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Bateria', 'Baixo', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção'];
 
@@ -16053,11 +16002,14 @@ function CalendarView({
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     const servicePath = 'services';
     const memberPath = 'members';
     
-    const unsubServices = onSnapshot(query(collection(db, servicePath), orderBy('date', 'asc')), (snap) => {
+    const servicesQ = userChurchId === 'semente'
+      ? query(collection(db, servicePath), orderBy('date', 'asc'))
+      : query(collection(db, servicePath), where('churchId', '==', userChurchId));
+    const unsubServices = onSnapshot(servicesQ, (snap) => {
       const allServices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = allServices.filter((s: any) => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
       const now = getLocalDateTimeString();
@@ -16081,13 +16033,17 @@ function CalendarView({
         .filter((s: any) => {
           const sDay = s._serviceDateStr.split('T')[0];
           return sDay === nowDay || s._serviceDateStr >= now;
-        });
+        })
+        .sort((a: any, b: any) => a._serviceDateStr.localeCompare(b._serviceDateStr));
       setServices(futureServices);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, servicePath);
     });
 
-    const unsubMembers = onSnapshot(collection(db, memberPath), (snap) => {
+    const membersQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    const unsubMembers = onSnapshot(membersQ, (snap) => {
       const allMembers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = allMembers.filter((m: any) => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
       setMembers(filtered);
@@ -16095,9 +16051,11 @@ function CalendarView({
       handleFirestoreError(error, OperationType.GET, memberPath);
     });
 
-    const unsubGroupLink = onSnapshot(doc(db, 'settings', 'notifications'), (snap) => {
+    const unsubGroupLink = onSnapshot(doc(db, 'settings', settingsDocId), (snap) => {
       if (snap.exists()) {
         setWhatsappGroupLink(snap.data().whatsappGroupLink || '');
+      } else {
+        setWhatsappGroupLink('');
       }
     });
 
@@ -16106,10 +16064,10 @@ function CalendarView({
       unsubMembers();
       unsubGroupLink();
     };
-  }, [user, userChurchId]);
+  }, [user, userChurchId, settingsDocId]);
 
   const handleAddService = async () => {
-    if(!newService.title || !newService.date) return;
+    if (!newService.title || !newService.date || !userChurchId) return;
     const limitCheck = checkResourceLimit(churchData, 'services', services.length);
     if (!limitCheck.allowed) {
       setIsAdding(false);
@@ -16639,17 +16597,20 @@ function CalendarView({
                 ? service.date.substring(0, 10)
                 : getLocalDateString(sDateObj)));
 
-      // 2. Buscar disponibilidades registradas na coleção 'availability' para essa data exata
-      const availSnap = await getDocs(query(
-        collection(db, 'availability'),
-        where('date', '==', exactServiceDate)
-      ));
+      // 2. Buscar disponibilidades registradas na coleção 'availability' da igreja para essa data exata
+      const availQuery = userChurchId === 'semente'
+        ? query(collection(db, 'availability'), where('date', '==', exactServiceDate))
+        : query(collection(db, 'availability'), where('churchId', '==', userChurchId));
+      const availSnap = await getDocs(availQuery);
 
+      const memberIdSet = new Set(members.map(m => m.id || m.uid).filter(Boolean));
       const generalAvail: Record<string, string> = {};
       availSnap.docs.forEach(docSnap => {
-        const data = docSnap.data();
+        const data = docSnap.data() as any;
         const uId = data.userId || docSnap.id.split('_')[0];
-        if (uId && data.status) {
+        const matchDate = data.date === exactServiceDate;
+        const matchChurch = data.churchId === userChurchId || (!data.churchId && userChurchId === 'semente');
+        if (uId && data.status && matchDate && matchChurch && memberIdSet.has(uId)) {
           generalAvail[uId] = data.status;
         }
       });
@@ -17836,12 +17797,19 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   const [isMemberCameraActive, setIsMemberCameraActive] = useState(false);
   const rolesList = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Baixo', 'Bateria', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção', 'Professor Kids', 'Professor Babies'];
 
-  const userChurchId = memberData?.churchId || 'semente';
+  const isMasterMembers = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMasterMembers ? 'semente' : '');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) {
+      setMembers([]);
+      return;
+    }
     const memberPath = 'members';
-    return onSnapshot(collection(db, memberPath), (snap) => {
+    const membersQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    return onSnapshot(membersQ, (snap) => {
       const allMembers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const filtered = allMembers.filter((m: any) => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
       setMembers(filtered);
@@ -17851,8 +17819,14 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   }, [user, userChurchId]);
 
   useEffect(() => {
-    if (!user) return;
-    return onSnapshot(collection(db, 'services'), (snap) => {
+    if (!user || !userChurchId) {
+      setServices([]);
+      return;
+    }
+    const servicesQ = userChurchId === 'semente'
+      ? collection(db, 'services')
+      : query(collection(db, 'services'), where('churchId', '==', userChurchId));
+    return onSnapshot(servicesQ, (snap) => {
       const allServs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const filtered = allServs.filter((s: any) => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
       setServices(filtered);
@@ -17937,6 +17911,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
       if (newStatus) {
         await setDoc(doc(db, 'admins', member.id), {
           email: member.email,
+          churchId: member.churchId || userChurchId,
           assignedAt: serverTimestamp()
         });
       } else {
@@ -17948,7 +17923,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   };
 
   const handleSaveMember = async () => {
-    if (!newMember.name) return;
+    if (!newMember.name || !userChurchId) return;
     
     if (editingMember) {
       const memberPath = `members/${editingMember.id}`;
@@ -17974,7 +17949,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
         onOpenUpgradeModal?.(limitCheck);
         return;
       }
-      // Generate a pseudo-uid if it's manual
+      // Generate a pseudo-uid if it's manual, strictly stamped with userChurchId
       const manualUid = `manual_${Date.now()}`;
       const memberPath = `members/${manualUid}`;
       try {
@@ -17982,6 +17957,9 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
           ...newMember,
           birthDate: newMember.birthDate || '',
           uid: manualUid,
+          churchId: userChurchId,
+          isAdmin: false,
+          createdAt: serverTimestamp(),
           availability: {}
         });
         setIsAdding(false);
@@ -18670,6 +18648,8 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 }) {
   const { user, memberData, churchData } = useAuth();
   const isMasterDeveloper = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMasterDeveloper ? 'semente' : '');
+  const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
   const [churchCodeInput, setChurchCodeInput] = useState('');
   const [newChurchName, setNewChurchName] = useState('');
   const [isJoiningChurch, setIsJoiningChurch] = useState(false);
@@ -18748,7 +18728,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
   const handleCreateNewChurch = async () => {
     const name = newChurchName.trim();
-    if (!name || !user) return;
+    if (!isMasterDeveloper || !name || !user) return;
     setIsCreatingChurch(true);
     try {
       // Create random code
@@ -18997,8 +18977,8 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   };
 
   useEffect(() => {
-    if (!isAdmin) return;
-    const unsub = onSnapshot(doc(db, 'settings', 'notifications'), (snap) => {
+    if (!isAdmin || !userChurchId) return;
+    const unsub = onSnapshot(doc(db, 'settings', settingsDocId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         setAdminPhone(data.whatsappAdmin || '');
@@ -19008,10 +18988,18 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         setAdminEmail2(data.adminEmail2 || '');
         setAdminEmail3(data.adminEmail3 || '');
         setWhatsappGroupLink(data.whatsappGroupLink || '');
+      } else {
+        setAdminPhone('');
+        setAdminPhone2('');
+        setAdminPhone3('');
+        setAdminEmail('');
+        setAdminEmail2('');
+        setAdminEmail3('');
+        setWhatsappGroupLink('');
       }
     });
     return () => unsub();
-  }, [isAdmin]);
+  }, [isAdmin, userChurchId, settingsDocId]);
 
   const handleUpdateProfile = async () => {
     if (!user) return;
@@ -19035,9 +19023,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   };
 
   const handleSavePhone = async () => {
+    if (!userChurchId) return;
     setIsSavingPhone(true);
     try {
-      await setDoc(doc(db, 'settings', 'notifications'), {
+      await setDoc(doc(db, 'settings', settingsDocId), {
         whatsappAdmin: adminPhone,
         whatsappAdmin2: adminPhone2,
         whatsappAdmin3: adminPhone3,
@@ -19045,6 +19034,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         adminEmail2: adminEmail2,
         adminEmail3: adminEmail3,
         whatsappGroupLink: whatsappGroupLink,
+        churchId: userChurchId,
         updatedAt: serverTimestamp()
       }, { merge: true });
       alert("Configurações administrativas de WhatsApp e E-mail salvas com sucesso!");
@@ -21047,7 +21037,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 }
 
 function AdminDashboardView() {
-  const { user } = useAuth();
+  const { user, memberData } = useAuth();
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+  const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
   const [songs, setSongs] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -21077,18 +21070,24 @@ function AdminDashboardView() {
   const [whatsappAdminPhone, setWhatsappAdminPhone] = useState('');
 
   const handleViewAvailability = async (member: any) => {
+    if (!userChurchId) return;
+    const memberBelongs = member.churchId === userChurchId || (!member.churchId && userChurchId === 'semente');
+    if (!memberBelongs) return;
+
     setViewingMember(member);
     setLoadingAvailability(true);
     setViewingAvailability([]);
     
     try {
-      const q = query(
-        collection(db, 'availability'),
-        where('userId', '==', member.id || member.uid),
-        orderBy('date', 'desc')
-      );
+      const targetUid = member.id || member.uid;
+      const q = userChurchId === 'semente'
+        ? query(collection(db, 'availability'), where('userId', '==', targetUid), orderBy('date', 'desc'))
+        : query(collection(db, 'availability'), where('churchId', '==', userChurchId));
       const snap = await getDocs(q);
-      const data = snap.docs.map(doc => doc.data());
+      const data = snap.docs
+        .map(doc => doc.data() as any)
+        .filter(d => d.userId === targetUid && (d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente')))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
       setViewingAvailability(data);
     } catch (error) {
       console.error("Error fetching availability:", error);
@@ -21098,30 +21097,56 @@ function AdminDashboardView() {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) {
+      setSongs([]);
+      setMembers([]);
+      setServices([]);
+      setLoading(false);
+      return;
+    }
 
-    const unsubSongs = onSnapshot(collection(db, 'songs'), (snap) => {
-      setSongs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const songsQ = userChurchId === 'semente'
+      ? collection(db, 'songs')
+      : query(collection(db, 'songs'), where('churchId', '==', userChurchId));
+    const unsubSongs = onSnapshot(songsQ, (snap) => {
+      const list = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
+      setSongs(list);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'songs');
     });
 
-    const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
-      setMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const membersQ = userChurchId === 'semente'
+      ? collection(db, 'members')
+      : query(collection(db, 'members'), where('churchId', '==', userChurchId));
+    const unsubMembers = onSnapshot(membersQ, (snap) => {
+      const list = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(m => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
+      setMembers(list);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'members');
     });
 
-    const unsubServices = onSnapshot(collection(db, 'services'), (snap) => {
-      setServices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const servicesQ = userChurchId === 'semente'
+      ? collection(db, 'services')
+      : query(collection(db, 'services'), where('churchId', '==', userChurchId));
+    const unsubServices = onSnapshot(servicesQ, (snap) => {
+      const list = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
+      setServices(list);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'services');
     });
 
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'notifications'), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', settingsDocId), (snap) => {
       if (snap.exists()) {
         setWhatsappAdminPhone(snap.data().whatsappAdmin || '');
+      } else {
+        setWhatsappAdminPhone('');
       }
     }, (error) => {
       console.log("Error loading notifications settings for admin dashboard:", error);
@@ -21133,7 +21158,7 @@ function AdminDashboardView() {
       unsubServices();
       unsubSettings();
     };
-  }, [user]);
+  }, [user, userChurchId, settingsDocId]);
 
   const filteredServicesByTime = useMemo(() => {
     if (timeRange === 'all') return services;

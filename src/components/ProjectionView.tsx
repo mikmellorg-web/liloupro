@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BibleSearch } from './BibleSearch';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
-  collection, doc, setDoc, addDoc, deleteDoc, query, orderBy, onSnapshot 
+  collection, doc, setDoc, addDoc, deleteDoc, query, orderBy, where, onSnapshot 
 } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { cleanLyricsForProjection } from '../services/chordService';
@@ -205,8 +205,9 @@ interface ProjectionViewProps {
 }
 
 export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
-  const { memberData, churchData } = useAuth();
-  const userChurchId = memberData?.churchId || 'semente';
+  const { user, memberData, churchData } = useAuth();
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
 
   // Navigation & selection states
   const [selectedLiturgyId, setSelectedLiturgyId] = useState<string>('');
@@ -422,14 +423,26 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
   const [isUploadingBg, setIsUploadingBg] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'projection_presets'), orderBy('createdAt', 'asc'));
+    if (!userChurchId) {
+      setPresets(BG_PRESETS);
+      return;
+    }
+    const q = userChurchId === 'semente'
+      ? query(collection(db, 'projection_presets'), orderBy('createdAt', 'asc'))
+      : query(collection(db, 'projection_presets'), where('churchId', '==', userChurchId));
     const unsub = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      const filtered = docs.filter((d: any) => d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente'));
+      const filtered = docs
+        .filter((d: any) => d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente'))
+        .sort((a: any, b: any) => {
+          const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+          const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+          return tA - tB;
+        });
 
       if (filtered.length > 0) {
         setPresets(filtered);
@@ -465,15 +478,17 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
   }, [userChurchId]);
 
   const handleRestoreDefaultPresets = async () => {
+    if (!userChurchId) return;
     try {
       const batchPromises = BG_PRESETS.map((preset, idx) => {
-        const docRef = doc(collection(db, 'projection_presets'), preset.id);
+        const docRef = doc(collection(db, 'projection_presets'), `${userChurchId}_${preset.id}`);
         return setDoc(docRef, {
           name: preset.name,
           url: preset.url,
           desc: preset.desc || '',
           icon: preset.icon || '',
-          createdAt: new Date(Date.now() + idx * 1000)
+          createdAt: new Date(Date.now() + idx * 1000),
+          churchId: userChurchId
         });
       });
       await Promise.all(batchPromises);
@@ -547,7 +562,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
           iteration++;
         }
 
-        if (ctxOk && compressedBase64) {
+        if (ctxOk && compressedBase64 && userChurchId) {
           try {
             const cleanName = file.name.replace(/\.[^/.]+$/, "").substring(0, 30);
             await addDoc(collection(db, 'projection_presets'), {
@@ -872,22 +887,24 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
     }
 
     // 3. Cloud Firestore session sync for smartphone remote control
-    try {
-      const docRef = doc(db, 'projection_sessions', userChurchId);
-      setDoc(docRef, {
-        ...config,
-        churchId: userChurchId,
-        activeSlideIdx,
-        activeSongId: activeSong?.id || null,
-        activeSongTitle: activeSong?.title || null,
-        activeSongArtist: activeSong?.artist || null,
-        slides: slides.map((s, idx) => typeof s === 'string' ? { type: 'text', text: s, index: idx } : s),
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch((err) => {
-        console.warn("Projection session Firestore sync notice:", err);
-      });
-    } catch (err) {
-      // Safe fallback
+    if (userChurchId) {
+      try {
+        const docRef = doc(db, 'projection_sessions', userChurchId);
+        setDoc(docRef, {
+          ...config,
+          churchId: userChurchId,
+          activeSlideIdx,
+          activeSongId: activeSong?.id || null,
+          activeSongTitle: activeSong?.title || null,
+          activeSongArtist: activeSong?.artist || null,
+          slides: slides.map((s, idx) => typeof s === 'string' ? { type: 'text', text: s, index: idx } : s),
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch((err) => {
+          console.warn("Projection session Firestore sync notice:", err);
+        });
+      } catch (err) {
+        // Safe fallback
+      }
     }
   };
 
@@ -1231,6 +1248,7 @@ export function ProjectionView({ allSongs, allServices }: ProjectionViewProps) {
 
   // Listen to remote changes from smartphone / mobile remote
   useEffect(() => {
+    if (!userChurchId) return;
     const docRef = doc(db, 'projection_sessions', userChurchId);
     const unsub = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {

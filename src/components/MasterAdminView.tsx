@@ -424,26 +424,40 @@ Conte conosco para servir seu ministério com excelência!`
 
     // Listen to Churches
     const unsubChurches = onSnapshot(collection(db, 'churches'), (snap) => {
-      const churchList: ChurchItem[] = snap.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name || 'Igreja sem nome',
-        inviteCode: doc.data().inviteCode || doc.id.toUpperCase(),
-        createdAt: doc.data().createdAt || new Date().toISOString(),
-        createdBy: doc.data().createdBy || 'Sistema',
-        planStatus: doc.data().planStatus || 'active',
-        planName: doc.data().planName || 'PRO',
-        planExpiresAt: doc.data().planExpiresAt || null,
-        masterNotes: doc.data().masterNotes || '',
-        maxMembers: doc.data().maxMembers || 9999,
-        contactEmail: doc.data().contactEmail || '',
-        contactPhone: doc.data().contactPhone || ''
-      }));
+      const churchList: ChurchItem[] = snap.docs.map(docSnap => {
+        const d = docSnap.data();
+        const isSeedDoc = docSnap.id === 'semente';
+        if (isSeedDoc && d.name !== 'Graça Soberana') {
+          updateDoc(doc(db, 'churches', 'semente'), {
+            name: 'Graça Soberana',
+            isSeedChurch: true,
+            isVitalicio: true,
+            planStatus: 'active',
+            planName: 'PRO (Vitalício)',
+            planExpiresAt: null
+          }).catch(() => {});
+        }
+        return {
+          id: docSnap.id,
+          name: isSeedDoc ? 'Graça Soberana' : (d.name || 'Igreja sem nome'),
+          inviteCode: d.inviteCode || docSnap.id.toUpperCase(),
+          createdAt: d.createdAt || new Date().toISOString(),
+          createdBy: d.createdBy || 'Sistema',
+          planStatus: d.planStatus || 'active',
+          planName: d.planName || 'PRO',
+          planExpiresAt: d.planExpiresAt || null,
+          masterNotes: d.masterNotes || '',
+          maxMembers: d.maxMembers || 9999,
+          contactEmail: d.contactEmail || '',
+          contactPhone: d.contactPhone || ''
+        };
+      });
 
       // If 'semente' church is not in list, add a fallback representation
       if (!churchList.find(c => c.id === 'semente')) {
         churchList.unshift({
           id: 'semente',
-          name: 'Igreja Principal (Semente)',
+          name: 'Graça Soberana',
           inviteCode: 'SEMENTE123',
           createdAt: new Date().toISOString(),
           planStatus: 'active',
@@ -1976,7 +1990,7 @@ Conte conosco para servir seu ministério com excelência!`
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {filteredChurches.map((church) => {
-              const churchMembers = members.filter(m => (m.churchId || 'semente') === church.id);
+              const churchMembers = members.filter(m => m.churchId === church.id || (church.id === 'semente' && m.churchId === undefined));
               const isExpanded = expandedChurchId === church.id;
               const isExtending = quickExtendChurchId === church.id;
 

@@ -19,7 +19,7 @@ interface ObsState {
 
 export function ObsOverlayDisplay() {
   const searchParams = new URLSearchParams(window.location.search);
-  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || '';
   const sessionId = searchParams.get('session') || churchId;
 
   // Parâmetros opcionais de customização para o OBS
@@ -86,13 +86,15 @@ export function ObsOverlayDisplay() {
     // 3. Firestore (sincronização via nuvem para quando o OBS estiver em outro PC)
     let unsubFirestore: (() => void) | null = null;
     try {
-      const docRef = doc(db, 'projection_sessions', sessionId);
-      unsubFirestore = onSnapshot(docRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setState(prev => ({ ...prev, ...data }));
-        }
-      });
+      if (sessionId) {
+        const docRef = doc(db, 'projection_sessions', sessionId);
+        unsubFirestore = onSnapshot(docRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setState(prev => ({ ...prev, ...data }));
+          }
+        });
+      }
     } catch (err) {
       console.warn('Erro ao escutar Firestore no OBS Overlay:', err);
     }

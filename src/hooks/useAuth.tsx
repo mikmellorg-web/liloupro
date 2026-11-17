@@ -44,8 +44,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubscribeMember: (() => void) | null = null;
     let unsubscribeChurch: (() => void) | null = null;
     let activeChurchId: string | null = null;
+    let previousUid: string | null = null;
+
+    const purgeCrossTenantLocalCaches = (allowedChurchId?: string) => {
+      if (typeof window === 'undefined') return;
+      try {
+        const normalizedAllowed = (allowedChurchId || '').trim();
+        const prevChurchId = localStorage.getItem('lilo_active_church_id');
+
+        if (!normalizedAllowed) {
+          localStorage.removeItem('lilo_active_church_id');
+          localStorage.removeItem('lilo-projection-state');
+          localStorage.removeItem('liloupro_offline_sync_time');
+          localStorage.removeItem('liloupro_favorite_songs');
+        } else {
+          if (prevChurchId && prevChurchId !== normalizedAllowed) {
+            localStorage.removeItem('lilo-projection-state');
+          }
+          localStorage.setItem('lilo_active_church_id', normalizedAllowed);
+          localStorage.removeItem('liloupro_offline_sync_time');
+          localStorage.removeItem('liloupro_favorite_songs');
+        }
+
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          const isTenantScopedKey =
+            k.startsWith('liloupro_offline_') ||
+            k.startsWith('liloupro_favorite_songs_') ||
+            k.startsWith('liloupro_mural_cleanup_date');
+          if (!isTenantScopedKey) continue;
+
+          if (!normalizedAllowed) {
+            keysToRemove.push(k);
+          } else {
+            const belongsToAllowed =
+              k.endsWith(`_${normalizedAllowed}`) ||
+              k.startsWith(`liloupro_favorite_songs_${normalizedAllowed}_`);
+            if (!belongsToAllowed) {
+              keysToRemove.push(k);
+            }
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {
+        // Ignore storage access errors in restricted contexts
+      }
+    };
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      const nextUid = currentUser?.uid || null;
+      if (previousUid !== nextUid) {
+        previousUid = nextUid;
+        setMemberData(null);
+        setIsAdmin(false);
+        setChurchData(null);
+        if (nextUid) {
+          setLoading(true);
+        } else {
+          purgeCrossTenantLocalCaches();
+        }
+      }
+
       setUser(currentUser);
 
       // Clean up previous listeners
@@ -89,8 +150,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else {
               // For any new non-master user: check if there's an invite code, otherwise create an isolated new church tenant
               const pendingInvite = typeof window !== 'undefined' ? localStorage.getItem('pending_invite_code') : null;
-              const pendingChurchName = typeof window !== 'undefined' ? localStorage.getItem('pending_church_name_for_signup') : null;
-              
               let targetChurchId = '';
               let isUserAdmin = false;
               let initialRoles: string[] = [];
@@ -110,38 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }
 
-              if (!targetChurchId && pendingChurchName && pendingChurchName.trim().length >= 3) {
-                // Only provision a brand new church when the user explicitly submitted a church name
-                const newChurchId = `igreja_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-                const newInvite = `IGREJA-${Math.floor(100000 + Math.random() * 900000)}`;
-                const churchDisplayName = pendingChurchName.trim();
-
-                try {
-                  await setDoc(doc(db, 'churches', newChurchId), {
-                    name: churchDisplayName,
-                    inviteCode: newInvite,
-                    createdAt: new Date().toISOString(),
-                    createdBy: currentUser.uid,
-                    planStatus: 'trial',
-                    planId: 'completo',
-                    isTrial: true,
-                    trialStartDate: new Date().toISOString(),
-                    contactEmail: currentUser.email || '',
-                    maxMembers: 50,
-                    maxSongs: 9999,
-                    roles: ['Teclado', 'Violão', 'Voz', 'Guitarra', 'Baixo', 'Bateria', 'Mesa de Som']
-                  });
-                  targetChurchId = newChurchId;
-                  isUserAdmin = true;
-                  initialRoles = ['Coordenador/Líder'];
-                  if (typeof window !== 'undefined') {
-                    localStorage.removeItem('pending_church_name_for_signup');
-                    localStorage.setItem('lilo_active_church_id', newChurchId);
-                  }
-                } catch (chErr) {
-                  console.error("Erro ao provisionar nova igreja para usuário:", chErr);
-                  targetChurchId = '';
-                }
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('pending_church_name_for_signup');
               }
 
               currentMember = {
@@ -239,10 +268,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               unsubscribeChurch = null;
             }
             activeChurchId = null;
+            purgeCrossTenantLocalCaches();
             setChurchData(null);
             setLoading(false);
             return;
           }
+
+          purgeCrossTenantLocalCaches(churchId);
 
           if (activeChurchId !== churchId || !unsubscribeChurch) {
             if (unsubscribeChurch) {
@@ -276,10 +308,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               } else if (churchSnap.exists()) {
                 const data = churchSnap.data();
-                const isSeed = churchId === 'semente' || data.isSeedChurch === true || (data.name && data.name.toLowerCase().includes('graça soberana'));
-                setChurchData({ 
-                  id: churchSnap.id, 
+                const isSeed = churchId === 'semente';
+                if (
+                  isSeed &&
+                  isMaster &&
+                  (
+                    data.name !== 'Graça Soberana' ||
+                    data.isSeedChurch !== true ||
+                    data.isVitalicio !== true ||
+                    data.planStatus !== 'active' ||
+                    data.planName !== 'PRO (Vitalício)' ||
+                    data.planExpiresAt !== null
+                  )
+                ) {
+                  try {
+                    await setDoc(churchRef, {
+                      name: 'Graça Soberana',
+                      isSeedChurch: true,
+                      isVitalicio: true,
+                      planStatus: 'active',
+                      planName: 'PRO (Vitalício)',
+                      planExpiresAt: null
+                    }, { merge: true });
+                  } catch (restoreErr) {
+                    console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja Graça Soberana:", restoreErr);
+                  }
+                }
+                setChurchData({
+                  id: churchSnap.id,
                   ...data,
+                  name: isSeed ? 'Graça Soberana' : data.name,
                   isSeedChurch: isSeed,
                   isVitalicio: isSeed ? true : data.isVitalicio
                 });

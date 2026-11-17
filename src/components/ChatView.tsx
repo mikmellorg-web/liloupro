@@ -7,7 +7,8 @@ import {
   collection, 
   query, 
   orderBy, 
-  limit, 
+  limit,
+  where,
   addDoc, 
   setDoc,
   deleteDoc, 
@@ -45,9 +46,12 @@ export function ChatView() {
   const [typingLength, setTypingLength] = useState(0);
   const [onlineMembers, setOnlineMembers] = useState<{ id: string; name: string; lastActive: Date }[]>([]);
 
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+
   // Presence logic: update own presence
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
 
     const myPresenceRef = doc(db, 'presence', user.uid);
     const name = memberData?.name || user.displayName || 'Membro';
@@ -56,6 +60,7 @@ export function ChatView() {
       try {
         await setDoc(myPresenceRef, {
           name,
+          churchId: userChurchId,
           lastActive: serverTimestamp()
         }, { merge: true });
       } catch (e) {
@@ -79,21 +84,27 @@ export function ChatView() {
         });
       }
     };
-  }, [user, memberData]);
+  }, [user, memberData, userChurchId]);
 
-  // Presence logic: listen to all online users
+  // Presence logic: listen to online users of the same church
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
 
     const presenceCollection = collection(db, 'presence');
+    const presenceQ = userChurchId === 'semente'
+      ? presenceCollection
+      : query(presenceCollection, where('churchId', '==', userChurchId));
     
-    // Subscribe to snapshot of all online states
-    const unsubscribe = onSnapshot(presenceCollection, (snapshot) => {
+    // Subscribe to snapshot of online states of this church
+    const unsubscribe = onSnapshot(presenceQ, (snapshot) => {
       const list: { id: string; name: string; lastActive: Date }[] = [];
       const now = new Date().getTime();
       
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const matchChurch = data.churchId === userChurchId || (!data.churchId && userChurchId === 'semente');
+        if (!matchChurch) return;
+
         let lastActiveDate = new Date();
         
         if (data.lastActive instanceof Timestamp) {
@@ -126,28 +137,31 @@ export function ChatView() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, userChurchId]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   // Load messages in real-time
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) {
+      setMessages([]);
+      return;
+    }
 
     const chatCollection = collection(db, 'chat');
-    // Query last 300 messages sorted by date descending to allow local filtering by church without complexity
-    const q = query(chatCollection, orderBy('createdAt', 'desc'), limit(300));
-    const userChurchId = memberData?.churchId || 'semente';
+    const q = userChurchId === 'semente'
+      ? query(chatCollection, orderBy('createdAt', 'desc'), limit(300))
+      : query(chatCollection, where('churchId', '==', userChurchId));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs: ChatMessage[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const msgChurchId = data.churchId || 'semente';
+        const matchChurch = data.churchId === userChurchId || (!data.churchId && userChurchId === 'semente');
         
         // Isolate by churchId
-        if (msgChurchId !== userChurchId) {
+        if (!matchChurch) {
           return;
         }
 
@@ -168,15 +182,17 @@ export function ChatView() {
         });
       });
 
-      // Reverse in-memory to show chronologically ascending list (oldest to newest)
-      const sortedMsgs = msgs.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      // Sort chronologically and keep up to 300 most recent messages
+      const sortedMsgs = msgs
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .slice(-300);
       setMessages(sortedMsgs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'chat');
     });
 
     return () => unsubscribe();
-  }, [user, memberData]);
+  }, [user, userChurchId]);
 
   // Handle scrolling and scroll buttons
   const isAtBottom = () => {
@@ -204,7 +220,7 @@ export function ChatView() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newMessageText.trim() || isSending) return;
+    if (!user || !userChurchId || !newMessageText.trim() || isSending) return;
 
     setIsSending(true);
     const content = newMessageText.substring(0, 1000).trim();
@@ -216,8 +232,6 @@ export function ChatView() {
     } else if (memberData?.roles && memberData.roles.length > 0) {
       roleStr = memberData.roles.join(', ');
     }
-
-    const userChurchId = memberData?.churchId || 'semente';
 
     try {
       await addDoc(collection(db, 'chat'), {

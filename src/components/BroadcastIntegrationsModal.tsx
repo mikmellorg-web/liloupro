@@ -184,7 +184,7 @@ export function BroadcastIntegrationsModal({
 
   // Salva músicas importadas no Firestore
   const handleSaveImportedSongs = async () => {
-    if (importedSongsPreview.length === 0) return;
+    if (importedSongsPreview.length === 0 || !userChurchId) return;
     setIsSavingImport(true);
     let count = 0;
     try {
@@ -198,7 +198,7 @@ export function BroadcastIntegrationsModal({
           chords: song.chords,
           timeSignature: '4/4',
           createdAt: serverTimestamp(),
-          churchId: userChurchId || 'semente'
+          churchId: userChurchId
         });
         count++;
       }

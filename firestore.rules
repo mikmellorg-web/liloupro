@@ -11,34 +11,62 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    function isMasterAdmin() {
+    function isMasterDeveloper() {
       return isSignedIn() && request.auth.token.email != null &&
         request.auth.token.email.lower() == 'mikmellorg@gmail.com';
     }
 
-    function isMemberAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid)) && (
-        get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
+    function isMasterAdmin() {
+      return isMasterDeveloper();
+    }
+
+    function hasMemberDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+
+    function userChurchId() {
+      return hasMemberDoc()
+        ? get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('churchId', '')
+        : '';
+    }
+
+    function isSementeUser() {
+      return isSignedIn() && userChurchId() == 'semente';
+    }
+
+    function docChurchId(data) {
+      return data.get('churchId', null);
+    }
+
+    function docBelongsToChurch(data, targetChurchId) {
+      return targetChurchId != '' && (
+        docChurchId(data) == targetChurchId ||
+        (targetChurchId == 'semente' && docChurchId(data) == null)
       );
+    }
+
+    function docBelongsToMyChurch(data) {
+      return isMasterDeveloper() || (isSignedIn() && docBelongsToChurch(data, userChurchId()));
     }
 
     function isChurchAdminFor(churchId) {
       return isSignedIn() && (
         isMasterAdmin() ||
         (
-          exists(/databases/$(database)/documents/members/$(request.auth.uid)) &&
+          churchId != '' &&
+          hasMemberDoc() &&
           get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('churchId', '') == churchId &&
           get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
         )
       );
     }
 
+    function isMyChurchAdmin() {
+      return isMasterDeveloper() || (userChurchId() != '' && isChurchAdminFor(userChurchId()));
+    }
+
     function isAdmin() {
-      return isSignedIn() && (
-        isMasterAdmin() || 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        isMemberAdmin()
-      );
+      return isMyChurchAdmin();
     }
 
     function isValidSettings(data) {
@@ -57,8 +85,6 @@ service cloud.firestore {
     function existing() {
       return resource.data;
     }
-
-    // --- Validation Blueprints ---
 
     // --- Validation Blueprints ---
 
@@ -128,16 +154,18 @@ service cloud.firestore {
     }
 
     function isValidAvailability(data) {
-      return (data.get('userId', null) == null || data.userId == request.auth.uid || isAdmin())
+      return (data.get('userId', null) == null || data.userId == request.auth.uid || isMyChurchAdmin())
         && (data.get('date', null) == null || (data.date is string && data.date.size() >= 10 && data.date.size() <= 64))
         && (data.get('status', null) == null || data.status in ['available', 'unavailable'])
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
     }
 
     function isValidAvailabilityLock(data) {
       return (data.unlocked is bool)
         && (data.get('unlockedAt', null) == null || data.unlockedAt is string)
-        && (data.get('deadline', null) == null || data.deadline is string);
+        && (data.get('deadline', null) == null || data.deadline is string)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128));
     }
 
     function isValidAnnouncement(data) {
@@ -163,6 +191,7 @@ service cloud.firestore {
         && (data.get('type', null) == null || data.type in ['announcement', 'mural', 'service', 'general'])
         && (data.get('read', null) == null || data.read is bool)
         && (data.get('deleted', null) == null || data.deleted is bool)
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('createdAt', null) == null || data.createdAt is timestamp);
     }
 
@@ -180,6 +209,7 @@ service cloud.firestore {
         && (data.get('url', '') is string && data.get('url', '').size() > 0 && data.get('url', '').size() <= 2500000)
         && (data.get('desc', null) == null || (data.desc is string && data.desc.size() <= 1000))
         && (data.get('icon', null) == null || (data.icon is string && data.icon.size() <= 50))
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('createdAt', null) == null || data.createdAt is timestamp);
     }
 
@@ -205,6 +235,7 @@ service cloud.firestore {
 
     function isValidPresence(data) {
       return data.name is string && data.name.size() <= 200
+        && (data.get('churchId', null) == null || (data.churchId is string && data.churchId.size() <= 128))
         && (data.get('lastActive', null) == null || data.lastActive is timestamp);
     }
 
@@ -218,139 +249,222 @@ service cloud.firestore {
     // --- Collection Rules ---
     match /chord_overrides/{chordName} {
       allow get, list: if isSignedIn();
-      allow create: if isAdmin() && incoming().keys().hasAll(['frets']) && isValidChordOverride(incoming());
-      allow update: if isAdmin() && isValidChordOverride(incoming());
-      allow delete: if isAdmin();
+      allow create: if isMyChurchAdmin() && incoming().keys().hasAll(['frets']) && isValidChordOverride(incoming());
+      allow update: if isMyChurchAdmin() && isValidChordOverride(incoming());
+      allow delete: if isMyChurchAdmin();
     }
 
     match /piano_chord_overrides/{chordName} {
       allow get, list: if isSignedIn();
-      allow create: if isAdmin() && incoming().keys().hasAll(['keys']) && isValidPianoChordOverride(incoming());
-      allow update: if isAdmin() && isValidPianoChordOverride(incoming());
-      allow delete: if isAdmin();
+      allow create: if isMyChurchAdmin() && incoming().keys().hasAll(['keys']) && isValidPianoChordOverride(incoming());
+      allow update: if isMyChurchAdmin() && isValidPianoChordOverride(incoming());
+      allow delete: if isMyChurchAdmin();
     }
 
     match /settings/{docId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidSettings(incoming());
-      allow update: if isAdmin() && isValidSettings(incoming());
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper()
+                 || (isSignedIn() && userChurchId() != '' && (
+                      (docId == 'notifications' && isSementeUser()) ||
+                      docId == ('notifications_' + userChurchId())
+                    ));
+      allow list: if isMasterDeveloper();
+      allow create, update: if isValidSettings(incoming()) && (
+                              isMasterDeveloper() ||
+                              (
+                                isMyChurchAdmin() &&
+                                (
+                                  (docId == 'notifications' && isSementeUser()) ||
+                                  docId == ('notifications_' + userChurchId())
+                                ) &&
+                                incoming().get('churchId', userChurchId()) == userChurchId()
+                              )
+                            );
+      allow delete: if isMasterDeveloper();
     }
 
     match /projection_presets/{presetId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && incoming().keys().hasAll(['name', 'url']) && isValidProjectionPreset(incoming());
-      allow update: if isSignedIn() && isValidProjectionPreset(incoming());
-      allow delete: if isSignedIn();
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && userChurchId() != '' && incoming().keys().hasAll(['name', 'url']) && isValidProjectionPreset(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', '') == userChurchId());
+      allow update: if isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && isValidProjectionPreset(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', ''));
+      allow delete: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
     }
 
     match /projection_sessions/{sessionId} {
-      allow get, list: if true;
-      allow create, update: if true;
-      allow delete: if isSignedIn();
+      allow get: if isValidId(sessionId);
+      allow list: if isMasterDeveloper();
+      allow create, update: if isValidId(sessionId) && isValidProjectionSession(incoming()) && (
+                              isMasterDeveloper() ||
+                              (isSignedIn() && userChurchId() != '' && (sessionId == userChurchId() || incoming().get('churchId', '') == userChurchId()))
+                            );
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && sessionId == userChurchId());
     }
 
-    // Admin List Rules
+    // Admin List Rules (Strict Tenant Isolation)
     match /admins/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && (userId == request.auth.uid || (userChurchId() != '' && docBelongsToMyChurch(existing()))));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isMyChurchAdmin() && resource.data.churchId == userChurchId());
       allow create: if isMasterAdmin() && incoming().keys().hasAll(['email']) && isValidAdminEntry(incoming());
       allow update: if isMasterAdmin() && isValidAdminEntry(incoming());
       allow delete: if isMasterAdmin();
     }
 
-    // Announcement Rules
+    // Announcement Rules (Strict Tenant Isolation)
     match /announcements/{annId} {
-      allow get, list: if isSignedIn();
-      allow create: if isAdmin() && incoming().keys().hasAll(['text']) && isValidAnnouncement(incoming());
-      allow update: if isAdmin() && isValidAnnouncement(incoming());
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && incoming().keys().hasAll(['text']) && isValidAnnouncement(incoming())
+                    && (isMasterDeveloper() || (isMyChurchAdmin() && incoming().get('churchId', '') == userChurchId()));
+      allow update: if isSignedIn() && isValidAnnouncement(incoming())
+                    && (isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()) && incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')));
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()));
     }
 
-    // Availability Rules
+    // Availability Rules (Strict Tenant Isolation)
     match /availability/{availabilityId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && incoming().keys().hasAll(['userId', 'date', 'status']) && isValidAvailability(incoming());
-      allow update: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin()) && isValidAvailability(incoming());
-      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isMasterDeveloper() || (isSignedIn() && (existing().userId == request.auth.uid || (userChurchId() != '' && docBelongsToMyChurch(existing()))));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && resource.data.userId == request.auth.uid) || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && userChurchId() != '' && incoming().keys().hasAll(['userId', 'date', 'status']) && isValidAvailability(incoming())
+                    && (isMasterDeveloper() || (incoming().get('churchId', '') == userChurchId() && (incoming().userId == request.auth.uid || isMyChurchAdmin())));
+      allow update: if isSignedIn() && userChurchId() != '' && isValidAvailability(incoming())
+                    && (isMasterDeveloper() || (docBelongsToMyChurch(existing()) && (existing().userId == request.auth.uid || isMyChurchAdmin()) && incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')));
+      allow delete: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && (existing().userId == request.auth.uid || isMyChurchAdmin()));
     }
 
-    // Availability Lock Rules
+    // Availability Lock Rules (Strict Tenant Isolation)
     match /availability_locks/{lockId} {
-      allow get, list: if isSignedIn();
-      allow create: if isAdmin() && incoming().keys().hasAll(['unlocked']) && isValidAvailabilityLock(incoming());
-      allow update: if isAdmin() && isValidAvailabilityLock(incoming());
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && incoming().keys().hasAll(['unlocked']) && isValidAvailabilityLock(incoming())
+                    && (isMasterDeveloper() || (isMyChurchAdmin() && incoming().get('churchId', '') == userChurchId() && lockId.matches('^' + userChurchId() + '_.*')));
+      allow update: if isSignedIn() && isValidAvailabilityLock(incoming())
+                    && (isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()) && incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')));
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()));
     }
 
-    // Member Rules
+    // Member Rules (Strict Tenant Isolation)
     match /members/{memberId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && (incoming().uid == request.auth.uid || isAdmin()) && isValidMember(incoming());
-      allow update: if (isAdmin() || request.auth.uid == memberId || (existing().uid != null && existing().uid == request.auth.uid) || (existing().email != null && existing().email == request.auth.token.email)) && isValidMember(incoming());
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && (
+                   memberId == request.auth.uid ||
+                   existing().get('uid', '') == request.auth.uid ||
+                   (userChurchId() != '' && docBelongsToMyChurch(existing()))
+                 ));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && isValidMember(incoming()) && (
+                      isMasterDeveloper() ||
+                      (memberId == request.auth.uid && incoming().get('uid', '') == request.auth.uid && incoming().get('isAdmin', false) == false) ||
+                      (isMyChurchAdmin() && incoming().get('churchId', '') == userChurchId() && incoming().get('isAdmin', false) == false)
+                    );
+      allow update: if isSignedIn() && isValidMember(incoming()) && (
+                      isMasterDeveloper() ||
+                      (
+                        (
+                          request.auth.uid == memberId ||
+                          existing().get('uid', '') == request.auth.uid ||
+                          (
+                            isEmailVerified() &&
+                            existing().get('email', '') != '' &&
+                            existing().get('email', '') == request.auth.token.email &&
+                            existing().get('churchId', '') == userChurchId()
+                          )
+                        ) &&
+                        (
+                          existing().get('churchId', '') == '' ||
+                          incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')
+                        ) &&
+                        (incoming().get('isAdmin', existing().get('isAdmin', false)) == existing().get('isAdmin', false) || incoming().get('isAdmin', false) == false)
+                      ) ||
+                      (
+                        isMyChurchAdmin() &&
+                        docBelongsToMyChurch(existing()) &&
+                        incoming().get('isAdmin', existing().get('isAdmin', false)) == existing().get('isAdmin', false) &&
+                        incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')
+                      )
+                    );
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()));
     }
 
-    // FCM Device Tokens Rules
+    // FCM Device Tokens Rules (Strict Tenant Isolation)
     match /fcm_tokens/{tokenId} {
-      allow get, list: if isSignedIn();
-      allow create, update: if isSignedIn() && (incoming().uid == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow get: if isMasterDeveloper() || (isSignedIn() && (existing().uid == request.auth.uid || (userChurchId() != '' && docBelongsToMyChurch(existing()))));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && resource.data.uid == request.auth.uid) || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create, update: if isSignedIn() && (isMasterDeveloper() || incoming().uid == request.auth.uid || (isMyChurchAdmin() && incoming().get('churchId', '') == userChurchId()));
+      allow delete: if isMasterDeveloper() || (isSignedIn() && (existing().uid == request.auth.uid || (isMyChurchAdmin() && docBelongsToMyChurch(existing()))));
     }
 
-    // Song Rules
+    // Song Rules (Strict Multi-Tenant Isolation - Semente Completely Confidential)
     match /songs/{songId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && incoming().keys().hasAll(['title']) && isValidSong(incoming());
-      allow update: if (isAdmin() || isSignedIn()) && isValidSong(incoming());
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && userChurchId() != '' && incoming().keys().hasAll(['title']) && isValidSong(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', '') == userChurchId());
+      allow update: if isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && isValidSong(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', ''));
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()));
     }
 
     match /churches/{churchId}/songs/{songId} {
-      allow get, list: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isAdmin();
+      allow get, list: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
+      allow create, update: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
+      allow delete: if isMasterDeveloper() || isChurchAdminFor(churchId);
     }
 
-    // Service Rules
+    // Service Rules (Strict Multi-Tenant Isolation - Semente Completely Confidential)
     match /services/{serviceId} {
-      allow get, list: if true;
-      allow create: if isAdmin() && incoming().keys().hasAll(['title', 'date']) && isValidService(incoming());
-      allow update: if (isAdmin() && isValidService(incoming()))
-                      || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['availability']) && isValidService(incoming()));
-      allow delete: if isAdmin();
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && incoming().keys().hasAll(['title', 'date']) && isValidService(incoming())
+                    && (isMasterDeveloper() || (isMyChurchAdmin() && incoming().get('churchId', '') == userChurchId()));
+      allow update: if isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && isValidService(incoming())
+                    && (
+                      isMasterDeveloper() ||
+                      (
+                        (isMyChurchAdmin() || incoming().diff(existing()).affectedKeys().hasOnly(['availability'])) &&
+                        incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')
+                      )
+                    );
+      allow delete: if isMasterDeveloper() || (isMyChurchAdmin() && docBelongsToMyChurch(existing()));
     }
 
-    // Mural Rules
+    // Mural Rules (Strict Tenant Isolation)
     match /mural/{itemId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'type', 'authorId', 'authorName', 'createdAt']) && isValidMuralItem(incoming());
-      allow update: if (isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid)) && isValidMuralItem(incoming());
-      allow delete: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && userChurchId() != '' && incoming().keys().hasAll(['text', 'type', 'authorId', 'authorName', 'createdAt']) && isValidMuralItem(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', '') == userChurchId());
+      allow update: if isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && isValidMuralItem(incoming())
+                    && (isMasterDeveloper() || ((isMyChurchAdmin() || existing().authorId == request.auth.uid) && incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')));
+      allow delete: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && (isMyChurchAdmin() || existing().authorId == request.auth.uid));
     }
 
-    // Notification Rules
+    // Notification Rules (Strict User + Tenant Isolation)
     match /notifications/{notifId} {
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()) && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted']);
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isMasterDeveloper() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isMasterDeveloper() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && (isMasterDeveloper() || (userChurchId() != '' && incoming().get('churchId', userChurchId()) == userChurchId()));
+      allow update: if isSignedIn() && (isMasterDeveloper() || resource.data.userId == request.auth.uid) && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted']);
+      allow delete: if isSignedIn() && (isMasterDeveloper() || resource.data.userId == request.auth.uid);
     }
 
-    // Chat Rules
+    // Chat Rules (Strict Tenant Isolation)
     match /chat/{messageId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && incoming().keys().hasAll(['text', 'authorId', 'authorName', 'createdAt']) && isValidChatMessage(incoming());
-      allow update: if (isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid)) && isValidChatMessage(incoming());
-      allow delete: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
+      allow get: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create: if isSignedIn() && userChurchId() != '' && incoming().keys().hasAll(['text', 'authorId', 'authorName', 'createdAt']) && isValidChatMessage(incoming())
+                    && (isMasterDeveloper() || incoming().get('churchId', '') == userChurchId());
+      allow update: if isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && isValidChatMessage(incoming())
+                    && (isMasterDeveloper() || ((isMyChurchAdmin() || existing().authorId == request.auth.uid) && incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')));
+      allow delete: if isMasterDeveloper() || (isSignedIn() && userChurchId() != '' && docBelongsToMyChurch(existing()) && (isMyChurchAdmin() || existing().authorId == request.auth.uid));
     }
 
-    // Presence Rules
+    // Presence Rules (Strict Tenant Isolation)
     match /presence/{userId} {
-      allow get, list: if isSignedIn();
-      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidPresence(incoming());
+      allow get: if isMasterDeveloper() || (isSignedIn() && (userId == request.auth.uid || (userChurchId() != '' && docBelongsToMyChurch(existing()))));
+      allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidPresence(incoming())
+                            && (isMasterDeveloper() || (userChurchId() != '' && incoming().get('churchId', '') == userChurchId()));
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
@@ -358,39 +472,31 @@ service cloud.firestore {
     match /churches/{churchId} {
       allow get: if isValidId(churchId);
       allow list: if true;
-      allow create: if isSignedIn()
-                    && isValidId(churchId)
+      allow create: if isValidId(churchId)
                     && isValidChurch(incoming())
-                    && (
-                      isMasterAdmin() ||
-                      (
-                        churchId != 'semente'
-                        && incoming().get('createdBy', '') == request.auth.uid
-                        && incoming().get('isSeedChurch', false) == false
-                        && incoming().get('isVitalicio', false) == false
-                      )
-                    );
+                    && isMasterDeveloper();
       allow update: if isSignedIn()
                     && isValidId(churchId)
                     && isValidChurch(incoming())
                     && (
-                      isMasterAdmin() ||
+                      isMasterDeveloper() ||
                       (
                         churchId == 'semente'
                         && isChurchAdminFor('semente')
                         && incoming().diff(existing()).affectedKeys().hasOnly(['teamDriveUrl'])
+                        && incoming().get('name', existing().get('name', 'Graça Soberana')) == existing().get('name', 'Graça Soberana')
                       ) ||
                       (
                         churchId != 'semente'
                         && isChurchAdminFor(churchId)
-                        && incoming().get('isSeedChurch', false) == existing().get('isSeedChurch', false)
+                        && incoming().get('isSeedChurch', false) == false
                         && incoming().get('isVitalicio', false) == existing().get('isVitalicio', false)
                         && incoming().get('planStatus', '') == existing().get('planStatus', '')
                         && incoming().get('planName', '') == existing().get('planName', '')
                         && incoming().get('planExpiresAt', null) == existing().get('planExpiresAt', null)
                       )
                     );
-      allow delete: if isValidId(churchId) && isMasterAdmin();
+      allow delete: if isValidId(churchId) && isMasterDeveloper();
     }
 
     // Kiwify Webhook Log Rules

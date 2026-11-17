@@ -8,11 +8,10 @@ import {
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
-  collection, onSnapshot, addDoc, query, orderBy, serverTimestamp, doc, updateDoc 
+  collection, onSnapshot, addDoc, query, orderBy, where, serverTimestamp, doc, updateDoc 
 } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { getArtistImage, ArtistAvatar } from './songsShared';
-import { DEFAULT_LOCAL_SONGS } from '../songsDatabase';
 import { findBestSongMatch } from '../utils/servicePlaylistUtils';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
 import ContextualHelp from './ContextualHelp';
@@ -177,22 +176,26 @@ export function SongsView({
   allServices: propAllServices,
   onOpenUpgradeModal
 }: SongsViewProps) {
-  const { churchData, isAdmin, user, effectivePlan } = useAuth();
-  const churchId = churchData?.id || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const { churchData, isAdmin, user, effectivePlan, memberData } = useAuth();
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const churchId = memberData?.churchId || churchData?.id || (isMaster ? 'semente' : '');
   const isLight = theme === 'light' || (typeof document !== 'undefined' && document.documentElement.classList.contains('light'));
   const isExpiredFreePlan = Boolean(effectivePlan?.isExpiredTrial && !effectivePlan?.isPaidActive && !effectivePlan?.isVitalicio);
 
   // Lista de músicas principal
   const [songs, setSongs] = useState<any[]>(() => {
-    if (propAllSongs && propAllSongs.length > 0) return propAllSongs;
+    if (propAllSongs !== undefined) return propAllSongs;
+    if (!churchId) return [];
     try {
-      const cached = localStorage.getItem('liloupro_offline_songs');
+      const cached = localStorage.getItem(`liloupro_offline_songs_${churchId}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((s: any) => s.churchId === churchId || (!s.churchId && churchId === 'semente'));
+        }
       }
     } catch {}
-    return DEFAULT_LOCAL_SONGS.map((s, idx) => ({ id: `local_seed_${idx}`, ...s, tone: s.key }));
+    return [];
   });
 
   const [loading, setLoading] = useState(false);
@@ -209,10 +212,12 @@ export function SongsView({
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // Favoritos persistidos
+  // Favoritos persistidos (isolados por igreja e usuário)
+  const favoritesStorageKey = churchId ? `liloupro_favorite_songs_${churchId}_${user?.uid || 'anon'}` : '';
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => {
+    if (!favoritesStorageKey) return new Set();
     try {
-      const saved = localStorage.getItem('liloupro_favorite_songs');
+      const saved = localStorage.getItem(favoritesStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return new Set(parsed);
@@ -220,6 +225,24 @@ export function SongsView({
     } catch {}
     return new Set();
   });
+
+  useEffect(() => {
+    if (!favoritesStorageKey) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(favoritesStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setFavoriteIds(new Set(parsed));
+          return;
+        }
+      }
+    } catch {}
+    setFavoriteIds(new Set());
+  }, [favoritesStorageKey]);
 
   // Modal de Adicionar Música
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialAdd);
@@ -509,38 +532,42 @@ export function SongsView({
 
   // Sincronizar com propAllSongs quando disponível
   useEffect(() => {
-    if (propAllSongs && propAllSongs.length > 0) {
-      setSongs(propAllSongs);
+    if (propAllSongs !== undefined) {
+      if (!churchId) {
+        setSongs([]);
+      } else {
+        setSongs(propAllSongs.filter((s: any) => s.churchId === churchId || (!s.churchId && churchId === 'semente')));
+      }
       setLoading(false);
     }
-  }, [propAllSongs]);
+  }, [propAllSongs, churchId]);
 
   // Carregar e monitorar coleção 'songs' do Firestore
   useEffect(() => {
-    if (!db) return;
-    if (propAllSongs && propAllSongs.length > 0) return;
+    if (!db || !user || !churchId) {
+      setSongs([]);
+      setLoading(false);
+      return;
+    }
+    if (propAllSongs !== undefined) return;
 
     setLoading(true);
     try {
       const songsRef = collection(db, 'songs');
-      const q = query(songsRef, orderBy('title', 'asc'));
+      const q = churchId === 'semente'
+        ? query(songsRef, orderBy('title', 'asc'))
+        : query(songsRef, where('churchId', '==', churchId));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const loaded: any[] = [];
         snapshot.forEach((docSnap) => {
           loaded.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        const filtered = loaded.filter(
-          (s) => !s.churchId || s.churchId === churchId || s.churchId === 'semente' || churchId === 'semente'
-        );
+        const filtered = loaded
+          .filter((s) => s.churchId === churchId || (!s.churchId && churchId === 'semente'))
+          .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
-        if (filtered.length > 0) {
-          setSongs(filtered);
-        } else if (loaded.length > 0) {
-          setSongs(loaded);
-        } else {
-          setSongs(DEFAULT_LOCAL_SONGS.map((s, idx) => ({ id: `local_seed_${idx}`, ...s, tone: s.key })));
-        }
+        setSongs(filtered);
         setLoading(false);
       }, (err) => {
         console.warn('[SongsView] Erro no snapshot do Firestore:', err);
@@ -551,7 +578,7 @@ export function SongsView({
       console.warn('[SongsView] Erro ao carregar músicas:', e);
       setLoading(false);
     }
-  }, [churchId, propAllSongs]);
+  }, [churchId, propAllSongs, user]);
 
   // Alternar favorito
   const toggleFavorite = (songId: string) => {
@@ -562,9 +589,11 @@ export function SongsView({
       } else {
         next.add(songId);
       }
-      try {
-        localStorage.setItem('liloupro_favorite_songs', JSON.stringify(Array.from(next)));
-      } catch {}
+      if (favoritesStorageKey) {
+        try {
+          localStorage.setItem(favoritesStorageKey, JSON.stringify(Array.from(next)));
+        } catch {}
+      }
       return next;
     });
   };
@@ -668,6 +697,7 @@ export function SongsView({
       return;
     }
 
+    if (!churchId) return;
     setSavingSong(true);
     try {
       const trimmedTitle = newTitle.trim();
@@ -685,7 +715,7 @@ export function SongsView({
           chords: '',
           lyrics: '',
           tags: [],
-          churchId: churchId || 'semente',
+          churchId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -703,7 +733,7 @@ export function SongsView({
         chords: '',
         lyrics: '',
         tags: [],
-        churchId: churchId || 'semente',
+        churchId,
         initialEdit: true
       };
 
@@ -846,6 +876,7 @@ export function SongsView({
             : 'Ministério de Louvor');
       let createdId = `song_${Date.now()}`;
 
+      if (!churchId) return;
       const newSongPayload = {
         title: trimmedTitle,
         artist: trimmedArtist,
@@ -860,7 +891,7 @@ export function SongsView({
         artistImageUrl: songData.artistImageUrl || '',
         capo: songData.capo || '',
         tags: [],
-        churchId: churchId || 'semente',
+        churchId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };

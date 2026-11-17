@@ -644,7 +644,9 @@ export function LiturgyEditor({
   playlistOnly?: boolean,
   createNotifications?: (title: string, content: string, type: 'announcement' | 'mural' | 'service' | 'general', excludeUserId?: string, preferenceKey?: 'notifyNewSongs' | 'notifyScheduleChanges' | 'notifyDayBeforeReminder' | 'notifyNewLiturgy') => Promise<any>
 }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, memberData } = useAuth();
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || service?.churchId || (isMaster ? 'semente' : '');
   const [isEditing, setIsEditing] = useState((service?.liturgy || []).length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [songs, setSongs] = useState<any[]>([]);
@@ -713,15 +715,22 @@ export function LiturgyEditor({
   const [editItem, setEditItem] = useState({ type: 'reading', title: '', content: '', details: '', songId: '', moment: '', bibleVersion: 'BLIVRE', vocalist: '', duration: '' });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     const memberPath = 'members';
-    const unsub = onSnapshot(collection(db, memberPath), (snap) => {
-      setMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const memberQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    const unsub = onSnapshot(memberQ, (snap) => {
+      setMembers(
+        snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as any))
+          .filter(m => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'))
+      );
     }, (error) => {
       console.error("Error fetching members inside LiturgyEditor:", error);
     });
     return unsub;
-  }, [user]);
+  }, [user, userChurchId]);
 
   const vocalists = useMemo(() => {
     return (members || []).filter(m => 
@@ -785,28 +794,46 @@ export function LiturgyEditor({
   }, [service?.id]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     if (!isEditing && !editingId) return;
     const songPath = 'songs';
-    const q = query(collection(db, songPath), orderBy('title', 'asc'));
+    const q = userChurchId === 'semente'
+      ? query(collection(db, songPath), orderBy('title', 'asc'))
+      : query(collection(db, songPath), where('churchId', '==', userChurchId));
     return onSnapshot(q, (snap) => {
-      setSongs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setSongs(
+        snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as any))
+          .filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'))
+          .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+      );
     }, (error) => {
       console.error("Error fetching songs:", error);
     });
-  }, [isEditing, editingId, user]);
+  }, [isEditing, editingId, user, userChurchId]);
 
   useEffect(() => {
-    if (!isCloning || !user) return;
+    if (!isCloning || !user || !userChurchId) return;
     const servicePath = 'services';
-    const q = query(collection(db, servicePath), orderBy('date', 'desc'));
+    const q = userChurchId === 'semente'
+      ? query(collection(db, servicePath), orderBy('date', 'desc'))
+      : query(collection(db, servicePath), where('churchId', '==', userChurchId));
     return onSnapshot(q, (snap) => {
-      // Filtra cultos que já possuem liturgia
-      setPastServices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)).filter(s => s.id !== service.id && s.liturgy?.length > 0));
+      // Filtra cultos que já possuem liturgia da mesma igreja
+      setPastServices(
+        snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as any))
+          .filter(s =>
+            (s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente')) &&
+            s.id !== service.id &&
+            s.liturgy?.length > 0
+          )
+          .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      );
     }, (error) => {
        console.error("Error fetching past services:", error);
     });
-  }, [isCloning, user, service.id]);
+  }, [isCloning, user, userChurchId, service.id]);
 
   const handleCloneLiturgy = async (sourceId: string) => {
     const source = pastServices.find(s => s.id === sourceId);

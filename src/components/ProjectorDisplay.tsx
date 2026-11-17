@@ -21,7 +21,7 @@ interface ProjectorState {
 
 export function ProjectorDisplay() {
   const searchParams = new URLSearchParams(window.location.search);
-  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || '';
   const sessionId = searchParams.get('session') || churchId;
 
   const [state, setState] = useState<ProjectorState>(() => {

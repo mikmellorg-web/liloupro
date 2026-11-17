@@ -1370,7 +1370,8 @@ export default function DashboardView({
   onStartPlaylist?: (songs: any[]) => void
 }) {
   const { user, memberData, isAdmin, churchData } = useAuth();
-  const userChurchId = memberData?.churchId || 'semente';
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
   const teamDriveUrl = (churchData?.teamDriveUrl || churchData?.driveUrl || '').trim();
 
   const handleOpenDrive = () => {
@@ -1542,10 +1543,12 @@ export default function DashboardView({
     });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
 
     const servicePath = 'services';
-    const q = query(collection(db, servicePath), orderBy('date', 'desc'));
+    const q = userChurchId === 'semente'
+      ? query(collection(db, servicePath), orderBy('date', 'desc'))
+      : query(collection(db, servicePath), where('churchId', '==', userChurchId));
     const unsubServices = onSnapshot(q, (snap) => {
       const services = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = services.filter((s: any) => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
@@ -1579,7 +1582,9 @@ export default function DashboardView({
     });
 
     const annPath = 'announcements';
-    const annQ = query(collection(db, annPath));
+    const annQ = userChurchId === 'semente'
+      ? query(collection(db, annPath))
+      : query(collection(db, annPath), where('churchId', '==', userChurchId));
     const unsubAnn = onSnapshot(annQ, (snap) => {
       const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter((item: any) => item.churchId === userChurchId || (!item.churchId && userChurchId === 'semente'))
@@ -1594,7 +1599,9 @@ export default function DashboardView({
     });
 
     const muralPath = 'mural';
-    const muralQ = query(collection(db, muralPath));
+    const muralQ = userChurchId === 'semente'
+      ? query(collection(db, muralPath))
+      : query(collection(db, muralPath), where('churchId', '==', userChurchId));
     const unsubMural = onSnapshot(muralQ, (snap) => {
       const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter((item: any) => item.churchId === userChurchId || (!item.churchId && userChurchId === 'semente'))
@@ -1609,7 +1616,10 @@ export default function DashboardView({
     });
 
     const songPath = 'songs';
-    const unsubSongs = onSnapshot(collection(db, songPath), (snap) => {
+    const songQ = userChurchId === 'semente'
+      ? collection(db, songPath)
+      : query(collection(db, songPath), where('churchId', '==', userChurchId));
+    const unsubSongs = onSnapshot(songQ, (snap) => {
       const count = snap.docs.map(doc => doc.data() as any)
         .filter((s: any) => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente')).length;
       setSongCount(count);
@@ -1618,7 +1628,10 @@ export default function DashboardView({
     });
 
     const memberPath = 'members';
-    const unsubMembers = onSnapshot(collection(db, memberPath), (snap) => {
+    const memberQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    const unsubMembers = onSnapshot(memberQ, (snap) => {
       const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter((m: any) => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
       setDashboardMembers(list);
@@ -1638,26 +1651,33 @@ export default function DashboardView({
 
   // Limpeza automática do Mural (itens com mais de uma semana, executada no máximo 1x por dia)
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    if (!user || !isAdmin || !userChurchId) return;
     
     const cleanupMural = async () => {
       try {
         const todayKey = new Date().toISOString().slice(0, 10);
-        const lastCleanup = localStorage.getItem('liloupro_mural_cleanup_date');
+        const lastCleanup = localStorage.getItem(`liloupro_mural_cleanup_date_${userChurchId}`);
         if (lastCleanup === todayKey) return;
 
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const oneWeekAgoMs = oneWeekAgo.getTime();
         
-        const q = query(
-          collection(db, 'mural'),
-          where('createdAt', '<', Timestamp.fromDate(oneWeekAgo))
-        );
+        const q = userChurchId === 'semente'
+          ? query(collection(db, 'mural'), where('createdAt', '<', Timestamp.fromDate(oneWeekAgo)))
+          : query(collection(db, 'mural'), where('churchId', '==', userChurchId));
         
         const snap = await getDocs(q);
-        localStorage.setItem('liloupro_mural_cleanup_date', todayKey);
+        localStorage.setItem(`liloupro_mural_cleanup_date_${userChurchId}`, todayKey);
         if (!snap.empty) {
-          const deletions = snap.docs.map(d => deleteDoc(d.ref));
+          const toDelete = snap.docs.filter(d => {
+            const data = d.data() as any;
+            const matchChurch = data.churchId === userChurchId || (!data.churchId && userChurchId === 'semente');
+            if (!matchChurch) return false;
+            const createdMs = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : 0;
+            return createdMs > 0 && createdMs < oneWeekAgoMs;
+          });
+          const deletions = toDelete.map(d => deleteDoc(d.ref));
           await Promise.all(deletions);
         }
       } catch (error) {
@@ -1666,10 +1686,10 @@ export default function DashboardView({
     };
 
     cleanupMural();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, userChurchId]);
 
   const handleAddAnnouncement = async () => {
-    if (!newAnnouncement.trim()) return;
+    if (!newAnnouncement.trim() || !userChurchId) return;
     try {
       await addDoc(collection(db, 'announcements'), {
         text: newAnnouncement,
@@ -1701,7 +1721,7 @@ export default function DashboardView({
   };
 
   const handleAddMuralItem = async () => {
-    if (!newMuralText.trim() || !user) return;
+    if (!newMuralText.trim() || !user || !userChurchId) return;
     try {
       await addDoc(collection(db, 'mural'), {
         text: newMuralText,

@@ -7,6 +7,7 @@ import {
   Settings, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { transposeLyricsAndChords } from '../services/chordService';
+import { useAuth } from '../hooks/useAuth';
 
 interface OfflineViewProps {
   isOnline: boolean;
@@ -27,7 +28,11 @@ export function OfflineView({
   onlineServices,
   onlineMembers
 }: OfflineViewProps) {
-  // Offline State loads directly from localStorage to guarantee functionality without server connections
+  const { user, memberData } = useAuth();
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+
+  // Offline State loads directly from church-scoped localStorage
   const [cachedSongs, setCachedSongs] = useState<any[]>([]);
   const [cachedServices, setCachedServices] = useState<any[]>([]);
   const [cachedMembers, setCachedMembers] = useState<any[]>([]);
@@ -41,16 +46,23 @@ export function OfflineView({
   const [songTranspose, setSongTranspose] = useState(0);
   const [fontSize, setFontSize] = useState(14);
 
-  // Load cached items from localStorage
+  // Load cached items from church-scoped localStorage
   const loadCache = () => {
+    if (!userChurchId) {
+      setCachedSongs([]);
+      setCachedServices([]);
+      setCachedMembers([]);
+      return;
+    }
     try {
-      const storedSongs = localStorage.getItem('liloupro_offline_songs');
-      const storedServices = localStorage.getItem('liloupro_offline_services');
-      const storedMembers = localStorage.getItem('liloupro_offline_members');
+      const storedSongs = localStorage.getItem(`liloupro_offline_songs_${userChurchId}`);
+      const storedServices = localStorage.getItem(`liloupro_offline_services_${userChurchId}`);
+      const storedMembers = localStorage.getItem(`liloupro_offline_members_${userChurchId}`);
 
-      if (storedSongs) setCachedSongs(JSON.parse(storedSongs));
-      if (storedServices) setCachedServices(JSON.parse(storedServices));
-      if (storedMembers) setCachedMembers(JSON.parse(storedMembers));
+      const matchChurch = (item: any) => item.churchId === userChurchId || (!item.churchId && userChurchId === 'semente');
+      setCachedSongs(storedSongs ? JSON.parse(storedSongs).filter(matchChurch) : []);
+      setCachedServices(storedServices ? JSON.parse(storedServices).filter(matchChurch) : []);
+      setCachedMembers(storedMembers ? JSON.parse(storedMembers).filter(matchChurch) : []);
     } catch (e) {
       console.error("Error reading localStorage offline cache:", e);
     }
@@ -59,12 +71,14 @@ export function OfflineView({
   useEffect(() => {
     loadCache();
     // Default to the most useful offline tabs if we already have cached data
-    const storedSongs = localStorage.getItem('liloupro_offline_songs');
-    const storedServices = localStorage.getItem('liloupro_offline_services');
-    if (storedSongs || storedServices) {
-      setActiveSubTab('escalas');
+    if (userChurchId) {
+      const storedSongs = localStorage.getItem(`liloupro_offline_songs_${userChurchId}`);
+      const storedServices = localStorage.getItem(`liloupro_offline_services_${userChurchId}`);
+      if (storedSongs || storedServices) {
+        setActiveSubTab('escalas');
+      }
     }
-  }, [offlineSyncTime]);
+  }, [offlineSyncTime, userChurchId]);
 
   // Filter cached services
   const filteredServices = useMemo(() => {

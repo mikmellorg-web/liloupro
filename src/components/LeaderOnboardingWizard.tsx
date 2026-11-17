@@ -66,6 +66,10 @@ export const LeaderOnboardingWizard: React.FC<LeaderOnboardingWizardProps> = ({
 
   const handleCreateChurch = async () => {
     if (!churchName.trim() || !user) return;
+    if ((user?.email || '').toLowerCase().trim() !== 'mikmellorg@gmail.com') {
+      alert('Para cadastrar um novo ministério/igreja no LilouPro, adquira um plano oficial ou solicite o código de acesso ao líder da sua igreja.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       // Create random uppercase invite code

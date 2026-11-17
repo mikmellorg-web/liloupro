@@ -12,7 +12,7 @@ import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
-  doc, setDoc, getDoc, onSnapshot, collection, query, orderBy 
+  doc, setDoc, getDoc, onSnapshot, collection, query, orderBy, where 
 } from 'firebase/firestore';
 import { cleanLyricsForProjection } from '../services/chordService';
 import { useAuth } from '../hooks/useAuth';
@@ -106,14 +106,17 @@ export function ProjectionRemoteView({
   allServices: propsServices = [],
   onBackToApp 
 }: ProjectionRemoteViewProps) {
-  const { memberData, churchData } = useAuth();
+  const { user, memberData, churchData } = useAuth();
   
   // URL parameters detection
   const searchParams = new URLSearchParams(window.location.search);
   const paramChurch = searchParams.get('church');
   const paramSession = searchParams.get('session');
   
-  const churchId = paramChurch || memberData?.churchId || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const churchId = isMaster
+    ? (paramChurch || memberData?.churchId || 'semente')
+    : (memberData?.churchId || '');
   const sessionId = paramSession || churchId;
 
   // Real-time Firestore fetching fallback (if props are empty in standalone remote mode)
@@ -121,8 +124,15 @@ export function ProjectionRemoteView({
   const [fetchedServices, setFetchedServices] = useState<any[]>([]);
 
   useEffect(() => {
+    if (!user || !churchId) {
+      setFetchedSongs([]);
+      setFetchedServices([]);
+      return;
+    }
     // Listen to church songs
-    const qSongs = query(collection(db, 'songs'));
+    const qSongs = churchId === 'semente'
+      ? query(collection(db, 'songs'))
+      : query(collection(db, 'songs'), where('churchId', '==', churchId));
     const unsubSongs = onSnapshot(qSongs, (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
       const filtered = docs.filter(s => s.churchId === churchId || (!s.churchId && churchId === 'semente'));
@@ -132,7 +142,9 @@ export function ProjectionRemoteView({
     });
 
     // Listen to church services
-    const qServices = query(collection(db, 'services'));
+    const qServices = churchId === 'semente'
+      ? query(collection(db, 'services'))
+      : query(collection(db, 'services'), where('churchId', '==', churchId));
     const unsubServices = onSnapshot(qServices, (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
       const filtered = docs.filter(s => s.churchId === churchId || (!s.churchId && churchId === 'semente'));
@@ -145,7 +157,7 @@ export function ProjectionRemoteView({
       unsubSongs();
       unsubServices();
     };
-  }, [churchId]);
+  }, [user, churchId]);
 
   const allSongs = useMemo(() => {
     return propsSongs.length > 0 ? propsSongs : fetchedSongs;
@@ -205,6 +217,7 @@ export function ProjectionRemoteView({
 
   // Listen to Firestore projection session
   useEffect(() => {
+    if (!sessionId) return;
     const docRef = doc(db, 'projection_sessions', sessionId);
     const unsub = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {

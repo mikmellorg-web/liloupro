@@ -1359,7 +1359,8 @@ export default function LiturgyView({
   theme?: 'light' | 'dark'
 }) {
   const { user, isAdmin, memberData, churchData } = useAuth();
-  const userChurchId = memberData?.churchId || 'semente';
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
   const [services, setServices] = useState<any[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [isCadernoModalOpen, setIsCadernoModalOpen] = useState(false);
@@ -1389,14 +1390,20 @@ export default function LiturgyView({
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     const memberPath = 'members';
-    return onSnapshot(collection(db, memberPath), (snap) => {
-      setMembers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const memberQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    return onSnapshot(memberQ, (snap) => {
+      const list = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter((m: any) => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
+      setMembers(list);
     }, (error) => {
       console.error("Error fetching members in LiturgyView:", error);
     });
-  }, [user]);
+  }, [user, userChurchId]);
 
   const selectedService = services.find(s => s.id === selectedServiceId);
 
@@ -1445,28 +1452,26 @@ export default function LiturgyView({
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     const servicePath = 'services';
-    const q = query(collection(db, servicePath), orderBy('date', 'desc'));
+    const q = userChurchId === 'semente'
+      ? query(collection(db, servicePath), orderBy('date', 'desc'))
+      : query(collection(db, servicePath), where('churchId', '==', userChurchId));
     return onSnapshot(q, (snap) => {
       const allServices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const filtered = allServices.filter((s: any) => {
-        const matchChurch = s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente');
-        if (!matchChurch) return false;
-
-        if (!s.date) return false;
-        
-        let d;
-        if (s.date?.toDate) {
-          d = s.date.toDate();
-        } else if (s.date instanceof Date) {
-          d = s.date;
-        } else {
-          d = new Date(s.date);
-        }
-        
-        return !isNaN(d.getTime());
-      });
+      const parseSvcDate = (s: any) => {
+        if (s.date?.toDate) return s.date.toDate();
+        if (s.date instanceof Date) return s.date;
+        return new Date(s.date);
+      };
+      const filtered = allServices
+        .filter((s: any) => {
+          const matchChurch = s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente');
+          if (!matchChurch) return false;
+          if (!s.date) return false;
+          return !isNaN(parseSvcDate(s).getTime());
+        })
+        .sort((a: any, b: any) => parseSvcDate(b).getTime() - parseSvcDate(a).getTime());
       
       setServices(filtered);
       

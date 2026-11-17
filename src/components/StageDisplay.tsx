@@ -20,7 +20,7 @@ interface StageState {
 
 export function StageDisplay() {
   const searchParams = new URLSearchParams(window.location.search);
-  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || 'semente';
+  const churchId = searchParams.get('church') || localStorage.getItem('lilo_active_church_id') || '';
   const sessionId = searchParams.get('session') || churchId;
 
   const [state, setState] = useState<StageState>(() => {
@@ -112,13 +112,15 @@ export function StageDisplay() {
 
     let unsubFirestore: (() => void) | null = null;
     try {
-      const docRef = doc(db, 'projection_sessions', sessionId);
-      unsubFirestore = onSnapshot(docRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setState(prev => ({ ...prev, ...data }));
-        }
-      });
+      if (sessionId) {
+        const docRef = doc(db, 'projection_sessions', sessionId);
+        unsubFirestore = onSnapshot(docRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setState(prev => ({ ...prev, ...data }));
+          }
+        });
+      }
     } catch (err) {}
 
     return () => {

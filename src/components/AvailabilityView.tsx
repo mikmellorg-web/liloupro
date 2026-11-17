@@ -81,7 +81,17 @@ import {
 export function AvailabilityView({ createNotifications, theme }: { createNotifications?: any, theme?: 'light' | 'dark' }) {
   const { user, isAdmin, memberData, effectivePlan } = useAuth();
   const isExpiredFreePlan = Boolean(effectivePlan?.isExpiredTrial && !effectivePlan?.isPaidActive && !effectivePlan?.isVitalicio);
-  const userChurchId = memberData?.churchId || 'semente';
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+  const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
+  const getLockDocId = (monthKey: string) => userChurchId === 'semente' ? monthKey : `${userChurchId}_${monthKey}`;
+  const parseLockMonthKey = (lock: any) => {
+    if (lock.monthKey) return lock.monthKey;
+    if (userChurchId && userChurchId !== 'semente' && typeof lock.id === 'string' && lock.id.startsWith(`${userChurchId}_`)) {
+      return lock.id.slice(userChurchId.length + 1);
+    }
+    return lock.id;
+  };
   const [currentDate, setCurrentDate] = useState(new Date());
   const lastUnlockedTargetRef = useRef<string | null>(null);
   const [services, setServices] = useState<any[]>([]);
@@ -120,21 +130,27 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   // Automatically detect if there is a month that has been unlocked (released) for scheduling,
   // and direct the member to that month as the default on first load or when a new month is unlocked.
   useEffect(() => {
-    if (!user) return;
-    const locksQuery = collection(db, 'availability_locks');
+    if (!user || !userChurchId) return;
+    const locksQuery = userChurchId === 'semente'
+      ? collection(db, 'availability_locks')
+      : query(collection(db, 'availability_locks'), where('churchId', '==', userChurchId));
     const unsubscribe = onSnapshot(locksQuery, (snap) => {
-      const allLocks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      const unlockedLocks = allLocks.filter(lock => lock.unlocked === true);
+      const allLocks = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(lock => lock.churchId === userChurchId || (!lock.churchId && userChurchId === 'semente'));
+      const unlockedLocks = allLocks
+        .filter(lock => lock.unlocked === true)
+        .map(lock => ({ ...lock, _monthKey: parseLockMonthKey(lock) }));
 
       if (unlockedLocks.length > 0) {
-        // Sort chronologically (ID is "YYYY-MM" so alphabetical sort matches chronological)
-        unlockedLocks.sort((a, b) => a.id.localeCompare(b.id));
+        // Sort chronologically (monthKey is "YYYY-MM" so alphabetical sort matches chronological)
+        unlockedLocks.sort((a, b) => String(a._monthKey).localeCompare(String(b._monthKey)));
 
         const now = new Date();
         const nowMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
         // Look for future unlocked months relative to today (e.g. '2026-08' > '2026-07')
-        const futureUnlockedLocks = unlockedLocks.filter(lock => lock.id > nowMonthStr);
+        const futureUnlockedLocks = unlockedLocks.filter(lock => lock._monthKey > nowMonthStr);
 
         let targetLock: any = null;
         if (futureUnlockedLocks.length > 0) {
@@ -142,7 +158,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           targetLock = futureUnlockedLocks[futureUnlockedLocks.length - 1];
         } else {
           // If no future month unlocked, check if current month is unlocked
-          const currentLock = unlockedLocks.find(lock => lock.id === nowMonthStr);
+          const currentLock = unlockedLocks.find(lock => lock._monthKey === nowMonthStr);
           if (currentLock) {
             targetLock = currentLock;
           } else {
@@ -151,13 +167,13 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           }
         }
 
-        if (targetLock && targetLock.id !== lastUnlockedTargetRef.current) {
-          const [yearStr, monthStr] = targetLock.id.split('-');
+        if (targetLock && targetLock._monthKey !== lastUnlockedTargetRef.current) {
+          const [yearStr, monthStr] = String(targetLock._monthKey).split('-');
           const targetYear = parseInt(yearStr, 10);
           const targetMonth = parseInt(monthStr, 10) - 1;
 
           if (!isNaN(targetYear) && !isNaN(targetMonth)) {
-            lastUnlockedTargetRef.current = targetLock.id;
+            lastUnlockedTargetRef.current = targetLock._monthKey;
             const updatedDate = new Date(targetYear, targetMonth, 1);
             setCurrentDate(updatedDate);
             setSelectedDate(updatedDate);
@@ -169,7 +185,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, userChurchId]);
   
   const [detailMember, setDetailMember] = useState<any>(null);
   const [detailAvailability, setDetailAvailability] = useState<any[]>([]);
@@ -235,6 +251,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   };
 
   const handleViewAvailabilityDetail = async (member: any) => {
+    if (!userChurchId) return;
+    const memberBelongs = member.churchId === userChurchId || (!member.churchId && userChurchId === 'semente');
+    if (!memberBelongs) return;
+
     setDetailMember(member);
     setModalMode('view');
     setAdminSelectedDate(null);
@@ -242,13 +262,15 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     setDetailAvailability([]);
     
     try {
-      const q = query(
-        collection(db, 'availability'),
-        where('userId', '==', member.id || member.uid || member.userId),
-        orderBy('date', 'desc')
-      );
+      const targetUid = member.id || member.uid || member.userId;
+      const q = userChurchId === 'semente'
+        ? query(collection(db, 'availability'), where('userId', '==', targetUid), orderBy('date', 'desc'))
+        : query(collection(db, 'availability'), where('churchId', '==', userChurchId));
       const snap = await getDocs(q);
-      const data = snap.docs.map(doc => doc.data());
+      const data = snap.docs
+        .map(doc => doc.data() as any)
+        .filter(d => d.userId === targetUid && (d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente')))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
       setDetailAvailability(data);
     } catch (e) {
       console.error("Erro ao carregar disponibilidade detalhada:", e);
@@ -258,7 +280,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   };
 
   const setAdminMemberAvailability = async (memberId: string, date: Date, status: 'available' | 'unavailable' | 'clear') => {
-    if (!isAdmin) return;
+    if (!isAdmin || !userChurchId) return;
     const dateStr = getLocalDateString(date);
     const availabilityPath = 'availability';
     const availabilityId = `${memberId}_${dateStr}`;
@@ -271,12 +293,14 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       } else {
         await setDoc(availRef, {
           userId: memberId,
+          churchId: userChurchId,
           date: dateStr,
           status: status,
           updatedAt: serverTimestamp(),
         });
         const updated = {
           userId: memberId,
+          churchId: userChurchId,
           date: dateStr,
           status: status,
           updatedAt: new Date()
@@ -334,13 +358,15 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       const nextMonth = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
       const endStr = `${nextYear}-${nextMonth}-01`;
 
-      const qAllAvail = query(
-        collection(db, 'availability'),
-        where('date', '>=', startStr),
-        where('date', '<', endStr)
-      );
+      if (!userChurchId) return;
+      const qAllAvail = userChurchId === 'semente'
+        ? query(collection(db, 'availability'), where('date', '>=', startStr), where('date', '<', endStr))
+        : query(collection(db, 'availability'), where('churchId', '==', userChurchId));
       const snapAllAvail = await getDocs(qAllAvail);
-      const allAvailDocs = snapAllAvail.docs.map(doc => doc.data());
+      const memberIdSet = new Set(allMembers.map(m => m.id || m.uid).filter(Boolean));
+      const allAvailDocs = snapAllAvail.docs
+        .map(doc => doc.data() as any)
+        .filter(d => d.date >= startStr && d.date < endStr && (d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente')) && memberIdSet.has(d.userId));
 
       const excelData = finishedMembers.map(m => {
         const memberAvailDocs = allAvailDocs.filter(doc => doc.userId === m.id && doc.status === 'available');
@@ -388,8 +414,9 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
   const handleSendAvailabilityEmailReport = async () => {
     try {
+      if (!userChurchId) return;
       let recipients: string[] = [];
-      const settingsSnap = await getDoc(doc(db, 'settings', 'notifications'));
+      const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
       if (settingsSnap.exists()) {
         const sd = settingsSnap.data();
         if (sd.adminEmail && sd.adminEmail.trim()) recipients.push(sd.adminEmail.trim());
@@ -397,7 +424,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         if (sd.adminEmail3 && sd.adminEmail3.trim()) recipients.push(sd.adminEmail3.trim());
       }
       if (recipients.length === 0) {
-        const adminMembers = allMembers.filter(m => (m.isAdmin || m.email === 'mikmellorg@gmail.com') && m.email);
+        const adminMembers = allMembers.filter(m => (m.isAdmin || (userChurchId === 'semente' && m.email === 'mikmellorg@gmail.com')) && m.email);
         adminMembers.forEach(a => { if (a.email && !recipients.includes(a.email)) recipients.push(a.email); });
       }
 
@@ -442,13 +469,15 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       const nextMonth = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
       const endStr = `${nextYear}-${nextMonth}-01`;
 
-      const qAllAvail = query(
-        collection(db, 'availability'),
-        where('date', '>=', startStr),
-        where('date', '<', endStr)
-      );
+      if (!userChurchId) return;
+      const qAllAvail = userChurchId === 'semente'
+        ? query(collection(db, 'availability'), where('date', '>=', startStr), where('date', '<', endStr))
+        : query(collection(db, 'availability'), where('churchId', '==', userChurchId));
       const snapAllAvail = await getDocs(qAllAvail);
-      const allAvailDocs = snapAllAvail.docs.map(doc => doc.data());
+      const memberIdSet = new Set(allMembers.map(m => m.id || m.uid).filter(Boolean));
+      const allAvailDocs = snapAllAvail.docs
+        .map(doc => doc.data() as any)
+        .filter(d => d.date >= startStr && d.date < endStr && (d.churchId === userChurchId || (!d.churchId && userChurchId === 'semente')) && memberIdSet.has(d.userId));
 
       const availMapByDate: Record<string, string[]> = {};
       allAvailDocs.filter(d => d.status === 'available').forEach(doc => {
@@ -639,7 +668,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     const year = currentDate.getFullYear();
     const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const startStr = `${year}-${month}-01T00:00`;
@@ -652,7 +681,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     
     // All members for context
     const memberPath = 'members';
-    const unsubMembers = onSnapshot(collection(db, memberPath), (snap) => {
+    const memberQ = userChurchId === 'semente'
+      ? collection(db, memberPath)
+      : query(collection(db, memberPath), where('churchId', '==', userChurchId));
+    const unsubMembers = onSnapshot(memberQ, (snap) => {
       const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       const filtered = docs.filter(m => m.churchId === userChurchId || (!m.churchId && userChurchId === 'semente'));
       setAllMembers(filtered);
@@ -662,16 +694,20 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
     // Scheduled services for context
     const servicePath = 'services';
-    const qServices = query(
-      collection(db, servicePath),
-      where('date', '>=', startStr),
-      where('date', '<', endStr),
-      orderBy('date', 'asc')
-    );
+    const qServices = userChurchId === 'semente'
+      ? query(
+          collection(db, servicePath),
+          where('date', '>=', startStr),
+          where('date', '<', endStr),
+          orderBy('date', 'asc')
+        )
+      : query(collection(db, servicePath), where('churchId', '==', userChurchId));
 
     const unsubServices = onSnapshot(qServices, (snap) => {
       const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      const filtered = docs.filter(s => s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente'));
+      const filtered = docs
+        .filter(s => (s.churchId === userChurchId || (!s.churchId && userChurchId === 'semente')) && String(s.date || '') >= startStr && String(s.date || '') < endStr)
+        .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
       setServices(filtered);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, servicePath);
@@ -692,9 +728,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       handleFirestoreError(error, OperationType.GET, availabilityPath);
     });
 
-    // Lock status for the current month
+    // Lock status for the current month scoped per church
     const currentMonthStr = `${year}-${month}`;
-    const lockRef = doc(db, 'availability_locks', currentMonthStr);
+    const lockDocId = getLockDocId(currentMonthStr);
+    const lockRef = doc(db, 'availability_locks', lockDocId);
     const unsubLock = onSnapshot(lockRef, (snap) => {
       if (snap.exists()) {
         setLockStatus(snap.data());
@@ -702,7 +739,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         setLockStatus({ unlocked: false });
       }
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `availability_locks/${currentMonthStr}`);
+      handleFirestoreError(error, OperationType.GET, `availability_locks/${lockDocId}`);
     });
 
     return () => {
@@ -751,7 +788,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   const isLocked = !lockStatus?.unlocked || timeLeft === 'expired';
 
   const setDayAvailability = async (date: Date, status: 'available' | 'unavailable') => {
-    if (!user) return;
+    if (!user || !userChurchId) return;
     if (isExpiredFreePlan) {
       alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
       return;
@@ -773,6 +810,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       } else {
         await setDoc(availRef, {
           userId: user.uid,
+          churchId: userChurchId,
           date: dateStr,
           status: status,
           updatedAt: serverTimestamp(),
@@ -852,10 +890,11 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
   }, [lockStatus, unlockHours]);
 
   const handleToggleAvailabilityLock = async () => {
+    if (!userChurchId) return;
     const wantToUnlock = isLocked;
 
     try {
-      const lockRef = doc(db, 'availability_locks', currentMonthStr);
+      const lockRef = doc(db, 'availability_locks', getLockDocId(currentMonthStr));
       if (wantToUnlock) {
         const hoursToSet = unlockHours > 0 ? unlockHours : 48;
         const unlockedAt = new Date().toISOString();
@@ -866,6 +905,8 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           unlockedAt,
           deadline,
           hours: hoursToSet,
+          churchId: userChurchId,
+          monthKey: currentMonthStr,
         });
 
         // Trigger notifications to everyone
@@ -884,6 +925,8 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         await setDoc(lockRef, {
           unlocked: false,
           hours: activeLockHours,
+          churchId: userChurchId,
+          monthKey: currentMonthStr,
         });
       }
     } catch (e) {
@@ -940,7 +983,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       let adminTargets: { name: string; phone: string }[] = [];
       let adminEmailTargets: { name: string; email: string }[] = [];
       try {
-        const settingsSnap = await getDoc(doc(db, 'settings', 'notifications'));
+        const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
         if (settingsSnap.exists()) {
           const sd = settingsSnap.data();
           if (sd.whatsappAdmin) {
@@ -990,7 +1033,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
       // Fallback from members where isAdmin is true if not configured
       if (adminTargets.length === 0 || adminEmailTargets.length === 0) {
-        const adminMembers = allMembers.filter(m => m.isAdmin === true || m.email === 'mikmellorg@gmail.com');
+        const adminMembers = allMembers.filter(m => m.isAdmin === true || (userChurchId === 'semente' && m.email === 'mikmellorg@gmail.com'));
         adminMembers.forEach(a => {
           const phone = cleanWhatsapp(a.whatsapp || '');
           if (phone && adminTargets.length === 0) {
@@ -1036,7 +1079,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         if (m.role === 'admin' || m.role === 'leader' || m.role === 'master_admin') return true;
         if (Array.isArray(m.roles) && m.roles.some((r: any) => /admin|líder|lider|coordenador/i.test(String(r)))) return true;
         const emailLower = (m.email || '').toLowerCase().trim();
-        if (emailLower === 'mikmellorg@gmail.com' || emailLower === 'miqueiasmellopro@gmail.com') return true;
+        if (userChurchId === 'semente' && (emailLower === 'mikmellorg@gmail.com' || emailLower === 'miqueiasmellopro@gmail.com')) return true;
         if (adminEmailTargets.some(t => t.email && t.email.toLowerCase().trim() === emailLower)) return true;
         return false;
       };
@@ -1092,16 +1135,18 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         if (currentUserId) adminUidSet.delete(currentUserId);
 
         const adminEmailSet = new Set<string>([
-          'mikmellorg@gmail.com',
-          'miqueiasmellopro@gmail.com',
+          ...(userChurchId === 'semente' ? ['mikmellorg@gmail.com', 'miqueiasmellopro@gmail.com'] : []),
           ...adminEmailTargets.map(t => (t.email || '').toLowerCase().trim()).filter(Boolean),
           ...adminUsersDocs.map(a => (a.email || '').toLowerCase().trim()).filter(Boolean)
         ]);
         if (currentUserEmail) adminEmailSet.delete(currentUserEmail);
 
         try {
-          if (adminTokens.length === 0) {
-            const fcmSnap = await getDocs(collection(db, 'fcm_tokens'));
+          if (adminTokens.length === 0 && userChurchId) {
+            const fcmQuery = userChurchId === 'semente'
+              ? collection(db, 'fcm_tokens')
+              : query(collection(db, 'fcm_tokens'), where('churchId', '==', userChurchId));
+            const fcmSnap = await getDocs(fcmQuery);
             const tokensByUid = new Map<string, string>();
             fcmSnap.forEach(docSnap => {
               const data = docSnap.data();

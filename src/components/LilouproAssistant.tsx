@@ -285,14 +285,21 @@ export function LilouproAssistant({
     return servicesWithDates[servicesWithDates.length - 1] || null;
   }, [activeService, services]);
 
+  const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const assistantChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
+
   const resolveMemberName = useCallback((idOrName: string) => {
     if (!idOrName) return '';
     const cleanId = String(idOrName).trim();
     
     const list = Array.isArray(allMembers) && allMembers.length > 0 ? allMembers : (() => {
+      if (!assistantChurchId) return [];
       try {
-        const cached = localStorage.getItem('liloupro_offline_members');
-        return cached ? JSON.parse(cached) : [];
+        const cached = localStorage.getItem(`liloupro_offline_members_${assistantChurchId}`);
+        const parsed = cached ? JSON.parse(cached) : [];
+        return Array.isArray(parsed)
+          ? parsed.filter((m: any) => m.churchId === assistantChurchId || (!m.churchId && assistantChurchId === 'semente'))
+          : [];
       } catch {
         return [];
       }

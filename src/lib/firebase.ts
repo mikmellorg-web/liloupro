@@ -82,8 +82,31 @@ export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const logout = async () => {
   try {
     sessionStorage.setItem('liloupro_just_logged_out', 'true');
-    // Also remove the permanent hide flag on manual logout so next login asks again
+    // Remove install prompt hide flag so next login asks again
     localStorage.removeItem('liloupro_hide_install_prompt');
+    // Purge all tenant/session cached data so switching accounts never leaks visual or cached data
+    localStorage.removeItem('lilo_active_church_id');
+    localStorage.removeItem('lilo-projection-state');
+    localStorage.removeItem('liloupro_offline_sync_time');
+    localStorage.removeItem('liloupro_favorite_songs');
+    localStorage.removeItem('dismissed_leader_onboarding');
+    localStorage.removeItem('liloupro_member_guide_banner_dismissed');
+    localStorage.removeItem('liloupro_member_tour_completed');
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (
+        k &&
+        (
+          k.startsWith('liloupro_offline_') ||
+          k.startsWith('liloupro_favorite_songs_') ||
+          k.startsWith('liloupro_mural_cleanup_date')
+        )
+      ) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
   } catch (e) {}
   return signOut(auth);
 };

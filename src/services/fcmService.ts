@@ -1,6 +1,6 @@
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { getFirebaseMessaging, db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, setDoc, getDocs, collection, query, where, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, query, where, arrayUnion } from 'firebase/firestore';
 
 /**
  * Service to manage Firebase Cloud Messaging (FCM) Web Push tokens and foreground messages.
@@ -215,7 +215,15 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
   }
 
   try {
-    // 1. Registra na coleção global de aparelhos 'fcm_tokens' para indexação rápida
+    let resolvedChurchId = '';
+    try {
+      const existingMemberSnap = await getDoc(doc(db, 'members', currentUser.uid));
+      if (existingMemberSnap.exists()) {
+        resolvedChurchId = String(existingMemberSnap.data()?.churchId || '');
+      }
+    } catch {}
+
+    // 1. Registra na coleção global de aparelhos 'fcm_tokens' com churchId para isolamento multi-tenant
     const safeTokenSuffix = token.slice(-16).replace(/[^a-zA-Z0-9]/g, '');
     const tokenDocId = `${currentUser.uid}_${safeTokenSuffix}`;
     await setDoc(doc(db, 'fcm_tokens', tokenDocId), {
@@ -223,6 +231,7 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       uid: currentUser.uid,
       email: currentUser.email || '',
       name: currentUser.displayName || '',
+      ...(resolvedChurchId ? { churchId: resolvedChurchId } : {}),
       updatedAt: new Date()
     }, { merge: true });
 
@@ -242,13 +251,17 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       console.warn('[FCM] Aviso ao atualizar doc do membro no Firestore:', memErr);
     }
 
-    // 3. Se houver outro documento de membro com mesmo e-mail (criado por líder), atualiza também
-    if (currentUser.email) {
+    // 3. Se houver outro documento de membro com mesmo e-mail na mesma igreja (criado por líder), atualiza também
+    if (currentUser.email && resolvedChurchId) {
       try {
-        const q = query(collection(db, 'members'), where('email', '==', currentUser.email));
+        const q = resolvedChurchId === 'semente'
+          ? query(collection(db, 'members'), where('email', '==', currentUser.email))
+          : query(collection(db, 'members'), where('churchId', '==', resolvedChurchId));
         const emailSnap = await getDocs(q);
         emailSnap.forEach(async (d) => {
-          if (d.id !== currentUser.uid) {
+          const data = d.data() as any;
+          const matchChurch = data.churchId === resolvedChurchId || (!data.churchId && resolvedChurchId === 'semente');
+          if (d.id !== currentUser.uid && data.email === currentUser.email && matchChurch) {
             await setDoc(doc(db, 'members', d.id), {
               fcmTokens: arrayUnion(token),
               fcmToken: token,
