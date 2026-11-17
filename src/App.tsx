@@ -24,7 +24,7 @@ import {
   Settings, FileDown, Youtube, MessageSquare, Share2, Zap, BarChart2, Copy, Repeat, SkipForward,
   Send, Star, Lock, Unlock, CornerDownRight, Bold, Italic, Underline, Tv,
   AlertTriangle, Smartphone, Columns, Mic, MicOff, Loader2, GraduationCap, Camera, Gift, Baby, HelpCircle,
-  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2, KeyRound
+  Crown, ShieldCheck, Globe, Laptop, Mail, UserCheck, UserX, Building2, KeyRound, MessageCircle
 } from 'lucide-react';
 import { Music2 } from './components/MusicIcon';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
@@ -1395,7 +1395,7 @@ function AuthView({
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight">LiLouPro</h1>
           <p className="text-slate-600 dark:text-white/90 text-sm font-medium">
             {mode === 'login' && 'Faça login para acessar sua escala e repertório.'}
-            {mode === 'signup' && 'Comece seu período de teste ou acesse sua equipe.'}
+            {mode === 'signup' && 'Acesse a equipe da sua igreja ou solicite um teste para o seu ministério.'}
             {mode === 'forgot' && 'Recupere o acesso à sua conta.'}
           </p>
 
@@ -1439,50 +1439,43 @@ function AuthView({
             </div>
 
             {signupIntent === 'church_trial' ? (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3.5 text-left">
-                <div className="flex items-start gap-2.5 text-amber-800 dark:text-amber-200 text-xs leading-relaxed">
-                  <Building2 size={18} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-bold text-amber-900 dark:text-amber-100">
-                      Quer levar o LilouPro para o seu Ministério?
+              <div className="bg-emerald-500/5 dark:bg-white/[0.04] border border-emerald-500/25 dark:border-white/15 rounded-2xl p-5 space-y-4 text-left shadow-sm">
+                <div className="flex items-start gap-3 text-slate-700 dark:text-slate-200 text-xs leading-relaxed">
+                  <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                    <Building2 size={18} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="font-black text-sm text-slate-900 dark:text-white leading-snug">
+                      Quer levar o LiLouPro para a sua Igreja?
                     </p>
-                    <p className="font-medium">
-                      O cadastro de novas igrejas é liberado através dos nossos planos oficiais ou mediante solicitação de período de avaliação (Trial) para líderes e pastores.
+                    <p className="font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Para garantir a melhor experiência e segurança na implantação do sistema no seu ministério, a liberação de novas igrejas e do período de teste grátis (Trial) é feita diretamente pela nossa equipe.
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2.5">
-                  <a
-                    href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20um%20teste%20gr%C3%A1tis%20(Trial)%20para%20o%20meu%20minist%C3%A9rio%20no%20LiLouPro."
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider transition-all text-center shadow-lg shadow-emerald-600/20"
-                  >
-                    SOLICITAR TESTE GRÁTIS NO WHATSAPP
-                  </a>
-                  <a
-                    href="https://www.liloupro.com.br/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-wider transition-all text-center"
-                  >
-                    CONHECER PLANOS E RECURSOS
-                  </a>
-                </div>
-                <div className="text-center pt-1">
+                <a
+                  href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Sou%20l%C3%ADder%2Fpastor%20e%20gostaria%20de%20solicitar%20um%20teste%20do%20LiLouPro%20para%20a%20minha%20igreja."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 text-center shadow-lg shadow-emerald-600/25"
+                >
+                  <MessageCircle size={17} className="shrink-0" />
+                  <span>FALAR COM ESPECIALISTA E LIBERAR TESTE</span>
+                </a>
+                <div className="text-center pt-0.5">
                   <button
                     type="button"
                     onClick={() => { setSignupIntent('member_join'); setError(null); }}
                     className="text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-brand dark:hover:text-white hover:underline underline-offset-2 transition-colors cursor-pointer"
                   >
-                    Sua igreja já tem conta? Voltar para digitar código de membro
+                    Já faz parte de uma igreja cadastrada? Clique aqui para digitar seu código
                   </button>
                 </div>
               </div>
             ) : (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-blue-800 dark:text-blue-300 text-xs font-semibold flex items-start gap-2 leading-relaxed">
                 <Building2 size={16} className="shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <span>Sua igreja já usa o LilouPro? Digite abaixo o código de convite enviado pelo seu líder para entrar na sua equipe.</span>
+                <span>Sua igreja já usa o LiLouPro? Digite abaixo o código de convite enviado pelo seu líder de louvor para entrar na equipe.</span>
               </div>
             )}
           </div>
@@ -1790,7 +1783,7 @@ function PendingChurchSetupView({
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-xs text-blue-200 flex items-start gap-2 leading-relaxed">
               <Users size={16} className="shrink-0 text-blue-400 mt-0.5" />
               <span>
-                Sua igreja já usa o LilouPro? Digite abaixo o código de convite enviado pelo seu líder para entrar na sua equipe.
+                Sua igreja já usa o LiLouPro? Digite abaixo o código de convite enviado pelo seu líder de louvor para entrar na equipe.
               </span>
             </div>
             <div className="space-y-1">
@@ -1818,43 +1811,36 @@ function PendingChurchSetupView({
             </Button>
           </form>
         ) : (
-          <div className="space-y-4">
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200 flex items-start gap-2.5 leading-relaxed">
-              <Building2 size={18} className="shrink-0 text-amber-400 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-bold text-amber-100">
-                  Quer levar o LilouPro para o seu Ministério?
+          <div className="bg-white/[0.04] border border-white/15 rounded-2xl p-5 space-y-4">
+            <div className="flex items-start gap-3 text-xs text-slate-200 leading-relaxed">
+              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
+                <Building2 size={18} />
+              </div>
+              <div className="space-y-1.5">
+                <p className="font-black text-sm text-white leading-snug">
+                  Quer levar o LiLouPro para a sua Igreja?
                 </p>
-                <p>
-                  O cadastro de novas igrejas é liberado através dos nossos planos oficiais ou mediante solicitação de período de avaliação (Trial) para líderes e pastores.
+                <p className="text-slate-300 leading-relaxed">
+                  Para garantir a melhor experiência e segurança na implantação do sistema no seu ministério, a liberação de novas igrejas e do período de teste grátis (Trial) é feita diretamente pela nossa equipe.
                 </p>
               </div>
             </div>
-            <div className="flex flex-col gap-2.5">
-              <a
-                href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20um%20teste%20gr%C3%A1tis%20(Trial)%20para%20o%20meu%20minist%C3%A9rio%20no%20LiLouPro."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center shadow-lg shadow-emerald-600/20"
-              >
-                SOLICITAR TESTE GRÁTIS NO WHATSAPP
-              </a>
-              <a
-                href="https://www.liloupro.com.br/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center"
-              >
-                CONHECER PLANOS E RECURSOS
-              </a>
-            </div>
-            <div className="text-center pt-1">
+            <a
+              href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Sou%20l%C3%ADder%2Fpastor%20e%20gostaria%20de%20solicitar%20um%20teste%20do%20LiLouPro%20para%20a%20minha%20igreja."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 text-center shadow-lg shadow-emerald-600/25"
+            >
+              <MessageCircle size={17} className="shrink-0" />
+              <span>FALAR COM ESPECIALISTA E LIBERAR TESTE</span>
+            </a>
+            <div className="text-center pt-0.5">
               <button
                 type="button"
                 onClick={() => { setTab('join'); setError(null); }}
                 className="text-[11px] font-medium text-slate-400 hover:text-white hover:underline underline-offset-2 transition-colors cursor-pointer"
               >
-                Sua igreja já tem conta? Voltar para digitar código de membro
+                Já faz parte de uma igreja cadastrada? Clique aqui para digitar seu código
               </button>
             </div>
           </div>
