@@ -242,6 +242,7 @@ service cloud.firestore {
     function isValidChurch(data) {
       return (data.get('name', null) == null || (data.name is string && data.name.size() > 0 && data.name.size() <= 500))
         && (data.get('inviteCode', null) == null || (data.inviteCode is string && data.inviteCode.size() > 0 && data.inviteCode.size() <= 100))
+        && (data.get('leaderWhatsapp', null) == null || (data.leaderWhatsapp is string && data.leaderWhatsapp.size() <= 40))
         && (data.get('createdBy', null) == null || (data.createdBy is string))
         && (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt is string);
     }
@@ -483,7 +484,7 @@ service cloud.firestore {
                       (
                         churchId == 'semente'
                         && isChurchAdminFor('semente')
-                        && incoming().diff(existing()).affectedKeys().hasOnly(['teamDriveUrl'])
+                        && incoming().diff(existing()).affectedKeys().hasOnly(['teamDriveUrl', 'leaderWhatsapp', 'updatedAt'])
                         && incoming().get('name', existing().get('name', 'Graça Soberana')) == existing().get('name', 'Graça Soberana')
                       ) ||
                       (

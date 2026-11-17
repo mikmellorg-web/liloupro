@@ -71,6 +71,7 @@ import { BibleVersionProvider } from './contexts/BibleVersionContext';
 import HelpCenter from './components/HelpCenter';
 import ContextualHelp from './components/ContextualHelp';
 import MasterAdminView from './components/MasterAdminView';
+import { SandboxRecordingControls } from './components/SandboxRecordingControls';
 import { TrialBanner } from './components/TrialBanner';
 import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
@@ -83,6 +84,14 @@ import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, isMemberPa
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl, parseYoutubeVideoId, parseYoutubePlaylistId } from './utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
+import {
+  notifyChurchLeadersOfNewMember,
+  readPendingJoinWelcome,
+  clearPendingJoinWelcome,
+  buildLeaderWhatsAppUrl,
+  WELCOME_JOIN_EVENT_NAME,
+  type MemberJoinWelcomePayload
+} from './services/memberJoinNotificationService';
 import luxuryAppIcon from './assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 // Static imports for core views (prevents dynamic module fetch failures)
@@ -942,12 +951,13 @@ const formatTime = (date: any) => {
   }
 };
 
-const NotificationCenter = ({ notifications, onMarkRead, onDelete, onClearRead, onClose, isSidebarCollapsed }: { 
+const NotificationCenter = ({ notifications, onMarkRead, onDelete, onClearRead, onClose, onNavigateTab, isSidebarCollapsed }: { 
   notifications: any[], 
   onMarkRead: (id: string) => void,
   onDelete: (id: string) => void,
   onClearRead: () => void,
   onClose: () => void,
+  onNavigateTab?: (tab: any) => void,
   isSidebarCollapsed?: boolean
 }) => {
   const readCount = notifications.filter(n => n.read).length;
@@ -989,20 +999,29 @@ const NotificationCenter = ({ notifications, onMarkRead, onDelete, onClearRead, 
               key={notif.id} 
               className={cn(
                 "p-3 rounded-xl border transition-all relative group/notif",
+                (notif.targetTab === 'members' || notif.type === 'member_join') && "cursor-pointer hover:border-emerald-500/40",
                 notif.read 
                   ? "bg-transparent border-transparent opacity-90" 
                   : "bg-brand/5 border-brand/20 shadow-sm"
               )}
-              onClick={() => !notif.read && onMarkRead(notif.id)}
+              onClick={() => {
+                if (!notif.read) onMarkRead(notif.id);
+                if (notif.targetTab === 'members' || notif.type === 'member_join') {
+                  onNavigateTab?.('members');
+                  onClose();
+                }
+              }}
             >
               <div className="flex gap-3">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                  notif.type === 'member_join' ? "bg-emerald-500/20 text-emerald-500" :
                   notif.type === 'announcement' ? "bg-amber-500/20 text-amber-500" :
                   notif.type === 'mural' ? "bg-brand/20 text-brand" :
                   "bg-blue-500/20 text-blue-500"
                 )}>
-                  {notif.type === 'announcement' ? <Bell size={20} /> :
+                  {notif.type === 'member_join' ? <UserCheck size={20} /> :
+                   notif.type === 'announcement' ? <Bell size={20} /> :
                    notif.type === 'mural' ? <MessageSquare size={20} /> :
                    <Activity size={20} />}
                 </div>
@@ -1313,6 +1332,7 @@ function AuthView({
             throw new Error('O período de teste gratuito de 30 dias desta igreja encerrou. Peça ao líder do ministério para ativar a assinatura do LiLouPro para liberar o cadastro de novos membros.');
           }
 
+          try { localStorage.setItem('pending_invite_code', code); } catch {}
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
           await updateProfile(userCredential.user, { displayName: name.trim() });
 
@@ -1331,6 +1351,14 @@ function AuthView({
 
           localStorage.removeItem('pending_invite_code');
           localStorage.setItem('lilo_active_church_id', targetChurchId);
+
+          notifyChurchLeadersOfNewMember({
+            memberUid: userCredential.user.uid,
+            memberName: name.trim(),
+            memberEmail: email.trim().toLowerCase(),
+            churchId: targetChurchId,
+            churchData: { id: churchDoc.id, ...churchDoc.data() }
+          }).catch(() => {});
         }
       } else if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email, password);
@@ -1730,6 +1758,14 @@ function PendingChurchSetupView({
         localStorage.removeItem('pending_invite_code');
         localStorage.setItem('lilo_active_church_id', churchDoc.id);
       } catch {}
+
+      notifyChurchLeadersOfNewMember({
+        memberUid: user.uid,
+        memberName: memberData?.name || user?.displayName || user?.email?.split('@')[0] || 'Novo Membro',
+        memberEmail: user?.email || '',
+        churchId: churchDoc.id,
+        churchData: { id: churchDoc.id, ...churchDoc.data() }
+      }).catch(() => {});
     } catch (err) {
       console.error('Erro ao ingressar na igreja:', err);
       setError('Não foi possível validar o código agora. Tente novamente.');
@@ -2114,13 +2150,20 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
 }
 
 function MainContent() {
-  const { user, loading, memberData, isAdmin, churchData } = useAuth();
+  const { user, loading, memberData, isAdmin, churchData, isSandboxMode, switchChurchContext } = useAuth();
+  const [isCleanRecordingMode, setIsCleanRecordingMode] = useState(false);
+  useEffect(() => {
+    if (!isSandboxMode && isCleanRecordingMode) {
+      setIsCleanRecordingMode(false);
+    }
+  }, [isSandboxMode, isCleanRecordingMode]);
   const [showSplash, setShowSplash] = useState(() => {
     if (typeof window === 'undefined') return false;
     return !sessionStorage.getItem('liloupro_splash_shown');
   });
   const MASTER_DEVELOPER_EMAIL = 'mikmellorg@gmail.com';
   const isMasterDeveloper = Boolean(user && user?.email?.toLowerCase().trim() === MASTER_DEVELOPER_EMAIL);
+  const showMasterSidebarControls = isMasterDeveloper && !(isSandboxMode && isCleanRecordingMode);
   const userChurchId = memberData?.churchId || (isMasterDeveloper ? 'semente' : '');
 
   const [landingMode, setLandingMode] = useState<'landing' | 'login' | 'signup'>(() => {
@@ -2166,6 +2209,32 @@ function MainContent() {
     });
   }, [isMasterDeveloper]);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [memberJoinWelcome, setMemberJoinWelcome] = useState<MemberJoinWelcomePayload | null>(() => readPendingJoinWelcome());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleJoinedEvent = (e: Event) => {
+      const detail = (e as CustomEvent<MemberJoinWelcomePayload>)?.detail;
+      if (detail && detail.churchId) {
+        setMemberJoinWelcome(detail);
+      } else {
+        setMemberJoinWelcome(readPendingJoinWelcome());
+      }
+    };
+    window.addEventListener(WELCOME_JOIN_EVENT_NAME, handleJoinedEvent);
+    return () => window.removeEventListener(WELCOME_JOIN_EVENT_NAME, handleJoinedEvent);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'members') {
+      navigateTabSafely('members');
+      params.delete('tab');
+      const nextUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+      window.history.replaceState({}, document.title, nextUrl);
+    }
+  }, [user, navigateTabSafely]);
 
   // HARD-LOCK ROUTE GUARD: Bloqueia acesso ao Painel Master e à Página de Apresentação
   // para qualquer usuário cujo e-mail autenticado não seja exatamente mikmellorg@gmail.com
@@ -2654,12 +2723,21 @@ function MainContent() {
             const churchName = churchDoc.data().name;
 
             if (memberData.churchId !== churchId) {
+              const isFirstJoin = !memberData.churchId;
               const memberRef = doc(db, 'members', user.uid);
               await updateDoc(memberRef, {
                 churchId: churchId,
                 isAdmin: false // Joined musicians are standard members initially
               });
-              alert(`Você entrou com sucesso na congregação: ${churchName}! ✨`);
+              if (isFirstJoin) {
+                notifyChurchLeadersOfNewMember({
+                  memberUid: user.uid,
+                  memberName: memberData?.name || user?.displayName || user?.email?.split('@')[0] || 'Novo Membro',
+                  memberEmail: user?.email || '',
+                  churchId,
+                  churchData: { id: churchDoc.id, ...churchDoc.data() }
+                }).catch(() => {});
+              }
             }
           } else {
             console.warn("Código de convite inválido:", pendingCode);
@@ -3972,6 +4050,7 @@ function MainContent() {
             onDelete={handleDeleteNotif}
             onClearRead={handleClearReadNotifications}
             onClose={() => setShowNotifications(false)}
+            onNavigateTab={navigateTabSafely}
             isSidebarCollapsed={isSidebarCollapsed}
           />
         )}
@@ -4039,13 +4118,29 @@ function MainContent() {
                </motion.div>
              )}
           </div>
-          {isMasterDeveloper && !isSidebarCollapsed && (
-            <button 
-              onClick={() => navigateTabSafely('master')}
-              className="mt-2 w-full py-1.5 px-2 bg-gradient-to-r from-amber-500/20 to-brand/20 hover:from-amber-500/30 hover:to-brand/30 border border-amber-500/30 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase text-amber-300 transition-all shadow-sm"
-            >
-              <Crown size={12} className="text-amber-400 animate-pulse" /> Painel Master
-            </button>
+          {showMasterSidebarControls && !isSidebarCollapsed && (
+            <>
+              <button 
+                onClick={() => navigateTabSafely('master')}
+                className="mt-2 w-full py-1.5 px-2 bg-gradient-to-r from-amber-500/20 to-brand/20 hover:from-amber-500/30 hover:to-brand/30 border border-amber-500/30 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase text-amber-300 transition-all shadow-sm"
+              >
+                <Crown size={12} className="text-amber-400 animate-pulse" /> Painel Master
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await switchChurchContext(isSandboxMode ? 'semente' : 'demo_sandbox');
+                  setActiveTab('home');
+                }}
+                className={`mt-1.5 w-full py-1.5 px-2 rounded-xl border flex items-center justify-center gap-1.5 text-[10px] font-black uppercase transition-all shadow-sm ${
+                  isSandboxMode
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-200'
+                }`}
+              >
+                {isSandboxMode ? '🔙 Voltar p/ Graça Soberana' : '🎬 Modo Gravação / Igreja Demo'}
+              </button>
+            </>
           )}
         </div>
 
@@ -4122,7 +4217,7 @@ function MainContent() {
           <div className="flex flex-col">
             <NavIcon 
               icon={showMoreMenu ? <ChevronDown size={22} /> : <Menu size={22} />} 
-              active={['liturgy', 'availability', 'settings', 'theory', 'bible', 'songs', ...(isMasterDeveloper ? ['master'] : [])].includes(activeTab)} 
+              active={['liturgy', 'availability', 'settings', 'theory', 'bible', 'songs', ...(showMasterSidebarControls ? ['master'] : [])].includes(activeTab)} 
               onClick={() => setShowMoreMenu(!showMoreMenu)} 
               label="Mais" 
               isCollapsed={isSidebarCollapsed} 
@@ -4189,7 +4284,7 @@ function MainContent() {
                     isCollapsed={isSidebarCollapsed} 
                     subItem 
                   />
-                  {isMasterDeveloper && (
+                  {showMasterSidebarControls && (
                     <NavIcon 
                       icon={<Globe size={18} className="text-brand" />} 
                       onClick={() => { if (isMasterDeveloper) { setShowLandingPage(true); setShowMoreMenu(false); } }} 
@@ -4206,7 +4301,7 @@ function MainContent() {
                     isCollapsed={isSidebarCollapsed} 
                     subItem 
                   />
-                  {isMasterDeveloper && (
+                  {showMasterSidebarControls && (
                     <NavIcon 
                       icon={<Crown size={18} className="text-amber-400 animate-pulse shrink-0" />} 
                       active={activeTab === 'master'}
@@ -4388,6 +4483,83 @@ function MainContent() {
           )}
         </AnimatePresence>
       </main>
+
+      {isMasterDeveloper && isSandboxMode && (
+        <SandboxRecordingControls
+          onNavigateTab={navigateTabSafely}
+          isCleanRecordingMode={isCleanRecordingMode}
+          onToggleCleanRecordingMode={setIsCleanRecordingMode}
+        />
+      )}
+
+      {/* Modal de Boas-Vindas ao Novo Membro com atalho direto para WhatsApp do Líder */}
+      <AnimatePresence>
+        {memberJoinWelcome && (!userChurchId || memberJoinWelcome.churchId === userChurchId) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              className="w-full max-w-md bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl p-6 sm:p-7 space-y-5 text-white relative overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  clearPendingJoinWelcome();
+                  setMemberJoinWelcome(null);
+                }}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex flex-col items-center text-center space-y-3 pt-1">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <UserCheck size={28} />
+                </div>
+                <h2 className="text-xl font-black tracking-tight text-white leading-snug">
+                  Cadastro concluído na Igreja {memberJoinWelcome.churchName}!
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Seu cadastro como membro foi concluído com sucesso. Já enviamos uma notificação no aplicativo para o líder da igreja, e você também pode confirmar diretamente no WhatsApp dele agora mesmo:
+                </p>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                <a
+                  href={buildLeaderWhatsAppUrl(memberJoinWelcome.leaderPhone, memberJoinWelcome.whatsappText)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    clearPendingJoinWelcome();
+                    setMemberJoinWelcome(null);
+                  }}
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 text-center shadow-lg shadow-emerald-600/25"
+                >
+                  <MessageCircle size={17} className="shrink-0" />
+                  <span>📲 Confirmar Entrada no WhatsApp do Líder</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearPendingJoinWelcome();
+                    setMemberJoinWelcome(null);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Continuar para o App
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Interactive Onboarding, Help & Training Center */}
       <HelpCenter 
@@ -18670,7 +18842,14 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [newChurchName, setNewChurchName] = useState('');
   const [isJoiningChurch, setIsJoiningChurch] = useState(false);
   const [isCreatingChurch, setIsCreatingChurch] = useState(false);
+  const [leaderWhatsappInput, setLeaderWhatsappInput] = useState(churchData?.leaderWhatsapp || '');
+  const [isSavingLeaderWhatsapp, setIsSavingLeaderWhatsapp] = useState(false);
+  const [leaderWhatsappSaved, setLeaderWhatsappSaved] = useState(false);
   const [section, setSection] = useState<'general' | 'reports'>('general');
+
+  useEffect(() => {
+    setLeaderWhatsappInput(churchData?.leaderWhatsapp || '');
+  }, [churchData?.id, churchData?.leaderWhatsapp]);
 
   // Local Branding Preview state
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -19372,6 +19551,47 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                         {churchData.inviteCode}
                       </span>
                     </div>
+
+                    {isAdmin && (
+                      <div className="space-y-1.5 pt-2 border-t border-border/50">
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-widest block">
+                          WhatsApp do Líder (para receber avisos da equipe)
+                        </label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={leaderWhatsappInput}
+                            onChange={(e) => setLeaderWhatsappInput(e.target.value)}
+                            placeholder="Ex: (53) 99999-9999"
+                            className="text-xs"
+                          />
+                          <Button
+                            onClick={async () => {
+                              if (!churchData?.id) return;
+                              setIsSavingLeaderWhatsapp(true);
+                              setLeaderWhatsappSaved(false);
+                              try {
+                                await updateDoc(doc(db, 'churches', churchData.id), {
+                                  leaderWhatsapp: leaderWhatsappInput.trim(),
+                                  updatedAt: new Date().toISOString()
+                                });
+                                setLeaderWhatsappSaved(true);
+                                setTimeout(() => setLeaderWhatsappSaved(false), 2500);
+                              } catch (err) {
+                                console.error('Erro ao salvar WhatsApp do líder:', err);
+                                alert('Não foi possível salvar o WhatsApp do líder.');
+                              } finally {
+                                setIsSavingLeaderWhatsapp(false);
+                              }
+                            }}
+                            disabled={isSavingLeaderWhatsapp}
+                            variant="secondary"
+                            className="shrink-0 text-xs font-bold"
+                          >
+                            {isSavingLeaderWhatsapp ? <RefreshCcw size={14} className="animate-spin" /> : (leaderWhatsappSaved ? 'Salvo ✓' : 'Salvar')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 text-xs text-text-muted">

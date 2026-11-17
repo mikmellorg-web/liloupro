@@ -67,6 +67,7 @@ interface ChurchItem {
   maxMembers?: number;
   contactEmail?: string;
   contactPhone?: string;
+  leaderWhatsapp?: string;
 }
 
 const toIsoDateString = (val: any): string | null => {
@@ -99,7 +100,7 @@ interface MemberItem {
 }
 
 export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
-  const { user } = useAuth();
+  const { user, isSandboxMode, switchChurchContext } = useAuth();
   
   // Security Check: Exclusive Master Developer Email
   const userEmailLower = (user?.email || '').toLowerCase().trim();
@@ -126,6 +127,7 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
   const [newPlanName, setNewPlanName] = useState('Plano Completo');
   const [newPlanDurationDays, setNewPlanDurationDays] = useState('365');
   const [newContactEmail, setNewContactEmail] = useState('');
+  const [newLeaderWhatsapp, setNewLeaderWhatsapp] = useState('');
   const [newMasterNotes, setNewMasterNotes] = useState('');
 
   const handleDownloadResizedIcon = (targetSize: number, fileName: string, isCircular: boolean = true) => {
@@ -496,7 +498,8 @@ Conte conosco para servir seu ministério com excelência!`
           masterNotes: d.masterNotes || '',
           maxMembers: d.maxMembers || 9999,
           contactEmail: d.contactEmail || '',
-          contactPhone: d.contactPhone || ''
+          contactPhone: d.contactPhone || '',
+          leaderWhatsapp: d.leaderWhatsapp || ''
         };
       });
 
@@ -540,13 +543,15 @@ Conte conosco para servir seu ministério com excelência!`
     };
   }, [isAuthorized]);
 
-  // Compute Stats
+  // Compute Stats (excluding sandbox demo church & fake members)
   const stats = useMemo(() => {
-    const totalChurches = churches.length;
-    const activeChurches = churches.filter(c => c.planStatus === 'active' || !c.planStatus).length;
-    const trialChurches = churches.filter(c => c.planStatus === 'trial').length;
-    const suspendedChurches = churches.filter(c => c.planStatus === 'suspended' || c.planStatus === 'cancelled').length;
-    const totalMembers = members.length;
+    const realChurches = churches.filter(c => c.id !== 'demo_sandbox');
+    const realMembers = members.filter(m => m.churchId !== 'demo_sandbox');
+    const totalChurches = realChurches.length;
+    const activeChurches = realChurches.filter(c => c.planStatus === 'active' || !c.planStatus).length;
+    const trialChurches = realChurches.filter(c => c.planStatus === 'trial').length;
+    const suspendedChurches = realChurches.filter(c => c.planStatus === 'suspended' || c.planStatus === 'cancelled').length;
+    const totalMembers = realMembers.length;
     const avgMembersPerChurch = totalChurches > 0 ? (totalMembers / totalChurches).toFixed(1) : '0';
 
     return {
@@ -559,9 +564,11 @@ Conte conosco para servir seu ministério com excelência!`
     };
   }, [churches, members]);
 
-  // Filtered Churches
+  // Filtered Churches (excluding sandbox demo church from commercial client list)
   const filteredChurches = useMemo(() => {
     return churches.filter(church => {
+      if (church.id === 'demo_sandbox') return false;
+
       const matchesSearch = 
         church.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         church.inviteCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -678,6 +685,21 @@ Conte conosco para servir seu ministério com excelência!`
     }
   };
 
+  // Handle Save Leader WhatsApp
+  const handleSaveLeaderWhatsapp = async (churchId: string, whatsappValue: string) => {
+    try {
+      const churchRef = doc(db, 'churches', churchId);
+      await updateDoc(churchRef, {
+        leaderWhatsapp: whatsappValue.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      showToast("WhatsApp do líder salvo com sucesso!");
+    } catch (err) {
+      console.error("Erro ao salvar WhatsApp do líder:", err);
+      showToast("Falha ao salvar WhatsApp do líder.", "error");
+    }
+  };
+
   // Handle Delete Church
   const handleDeleteChurch = async (churchId: string, churchName: string) => {
     try {
@@ -724,6 +746,7 @@ Conte conosco para servir seu ministério com excelência!`
         expiresAt: expiresAt,
         ...(newPlanStatus === 'trial' ? { trialEndsAt: expiresAt, isVitalicio: false } : {}),
         contactEmail: newContactEmail.trim(),
+        leaderWhatsapp: newLeaderWhatsapp.trim(),
         masterNotes: newMasterNotes.trim(),
         createdAt: new Date().toISOString(),
         createdBy: user?.email || 'MasterAdmin'
@@ -734,6 +757,7 @@ Conte conosco para servir seu ministério com excelência!`
       setNewChurchName('');
       setNewInviteCode('');
       setNewContactEmail('');
+      setNewLeaderWhatsapp('');
       setNewMasterNotes('');
     } catch (err) {
       console.error("Erro ao criar igreja:", err);
@@ -859,6 +883,17 @@ Conte conosco para servir seu ministério com excelência!`
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
+              type="button"
+              onClick={() => switchChurchContext(isSandboxMode ? 'semente' : 'demo_sandbox')}
+              className={`px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer border ${
+                isSandboxMode
+                  ? 'bg-emerald-600/90 hover:bg-emerald-500 border-emerald-400/40 text-white shadow-emerald-500/20'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/40 text-amber-200 shadow-amber-500/10'
+              }`}
+            >
+              {isSandboxMode ? '🔙 Voltar p/ Graça Soberana' : '🎬 Modo Gravação / Igreja Demo'}
+            </button>
+            <button
               onClick={() => setShowCreateModal(true)}
               className="px-5 py-3 rounded-2xl bg-gradient-to-r from-brand to-indigo-600 hover:from-brand-hover hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
             >
@@ -878,7 +913,7 @@ Conte conosco para servir seu ministério com excelência!`
               : 'bg-black/5 dark:bg-white/5 text-text-muted hover:text-text-main'
           }`}
         >
-          <Building2 size={16} /> Gestão de Igrejas ({churches.length})
+          <Building2 size={16} /> Gestão de Igrejas ({stats.totalChurches})
         </button>
 
         <button
@@ -2357,6 +2392,31 @@ Conte conosco para servir seu ministério com excelência!`
                               <Mail size={14} className="text-indigo-400" /> {church.contactEmail || 'Não informado'}
                             </p>
                           </div>
+
+                          <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-1.5 md:col-span-3">
+                            <span className="text-[10px] font-black uppercase text-text-muted flex items-center gap-1.5">
+                              <Phone size={12} className="text-emerald-400" /> WhatsApp do Líder (para receber avisos da equipe)
+                            </span>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="text"
+                                defaultValue={church.leaderWhatsapp || ''}
+                                id={`leader-wa-${church.id}`}
+                                placeholder="Ex: (53) 99999-9999"
+                                className="flex-1 px-3 py-2 rounded-xl bg-black/10 dark:bg-white/10 border border-border/80 text-text-main text-xs font-bold focus:outline-none focus:border-emerald-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = (document.getElementById(`leader-wa-${church.id}`) as HTMLInputElement)?.value || '';
+                                  handleSaveLeaderWhatsapp(church.id, val);
+                                }}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 shrink-0 transition-all cursor-pointer"
+                              >
+                                <Save size={13} /> Salvar WhatsApp
+                              </button>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Internal Master Notes Editor */}
@@ -2567,6 +2627,19 @@ Conte conosco para servir seu ministério com excelência!`
                       className="w-full p-3 rounded-2xl bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    WhatsApp do Líder (para receber avisos da equipe)
+                  </label>
+                  <input
+                    type="text"
+                    value={newLeaderWhatsapp}
+                    onChange={(e) => setNewLeaderWhatsapp(e.target.value)}
+                    placeholder="Ex: (53) 99999-9999"
+                    className="w-full p-3 rounded-2xl bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
 
                 <div>

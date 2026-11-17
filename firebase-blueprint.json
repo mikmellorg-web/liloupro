@@ -198,6 +198,7 @@
       "properties": {
         "name": { "type": "string" },
         "inviteCode": { "type": "string" },
+        "leaderWhatsapp": { "type": "string", "maxLength": 40 },
         "createdAt": { "type": "string" },
         "createdBy": { "type": "string" }
       },

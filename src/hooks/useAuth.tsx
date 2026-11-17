@@ -4,6 +4,7 @@ import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getChurchEffectivePlan, isVitalicioPlan, EffectivePlanResult } from '../services/planService';
 import { requestFcmToken, setupForegroundMessageListener } from '../services/fcmService';
+import { notifyChurchLeadersOfNewMember } from '../services/memberJoinNotificationService';
 
 interface AuthContextType {
   user: User | null;
@@ -14,6 +15,8 @@ interface AuthContextType {
   effectivePlan: EffectivePlanResult | null;
   isVitalicio: boolean;
   isPaidActive: boolean;
+  isSandboxMode: boolean;
+  switchChurchContext: (targetChurchId: 'semente' | 'demo_sandbox') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,15 +27,44 @@ const AuthContext = createContext<AuthContextType>({
   churchData: null,
   effectivePlan: null,
   isVitalicio: false,
-  isPaidActive: false
+  isPaidActive: false,
+  isSandboxMode: false,
+  switchChurchContext: async () => {}
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [memberData, setMemberData] = useState<any | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [rawMemberData, setRawMemberData] = useState<any | null>(null);
+  const [rawIsAdmin, setRawIsAdmin] = useState(false);
   const [churchData, setChurchData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [masterChurchOverride, setMasterChurchOverride] = useState<'semente' | 'demo_sandbox' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem('liloupro_master_sandbox_active') === 'true' ? 'demo_sandbox' : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const isMasterUser = Boolean(user && (user.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com');
+  const isSandboxMode = Boolean(isMasterUser && masterChurchOverride === 'demo_sandbox');
+  const effectiveChurchId = isSandboxMode
+    ? 'demo_sandbox'
+    : (rawMemberData?.churchId || (isMasterUser ? 'semente' : ''));
+
+  const memberData = rawMemberData
+    ? (isSandboxMode
+        ? {
+            ...rawMemberData,
+            churchId: 'demo_sandbox',
+            isAdmin: true,
+            dismissedOnboarding: Boolean(churchData?.onboardingDismissed)
+          }
+        : rawMemberData)
+    : null;
+
+  const isAdmin = isSandboxMode ? true : rawIsAdmin;
 
   const effectivePlan = churchData ? getChurchEffectivePlan(churchData) : null;
   const isVitalicio = churchData ? isVitalicioPlan(churchData) : false;
@@ -40,95 +72,147 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ? (!effectivePlan.isTrial && !effectivePlan.isExpiredTrial && effectivePlan.planId !== 'semeadora')
     : false;
 
-  useEffect(() => {
-    let unsubscribeMember: (() => void) | null = null;
-    let unsubscribeChurch: (() => void) | null = null;
-    let activeChurchId: string | null = null;
-    let previousUid: string | null = null;
+  const purgeCrossTenantLocalCaches = (allowedChurchId?: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const normalizedAllowed = (allowedChurchId || '').trim();
+      const prevChurchId = localStorage.getItem('lilo_active_church_id');
 
-    const purgeCrossTenantLocalCaches = (allowedChurchId?: string) => {
-      if (typeof window === 'undefined') return;
-      try {
-        const normalizedAllowed = (allowedChurchId || '').trim();
-        const prevChurchId = localStorage.getItem('lilo_active_church_id');
+      if (!normalizedAllowed) {
+        localStorage.removeItem('lilo_active_church_id');
+        localStorage.removeItem('lilo-projection-state');
+        localStorage.removeItem('liloupro_offline_sync_time');
+        localStorage.removeItem('liloupro_favorite_songs');
+      } else {
+        if (prevChurchId && prevChurchId !== normalizedAllowed) {
+          localStorage.removeItem('lilo-projection-state');
+        }
+        localStorage.setItem('lilo_active_church_id', normalizedAllowed);
+        localStorage.removeItem('liloupro_offline_sync_time');
+        localStorage.removeItem('liloupro_favorite_songs');
+      }
+
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        const isTenantScopedKey =
+          k.startsWith('liloupro_offline_') ||
+          k.startsWith('liloupro_favorite_songs_') ||
+          k.startsWith('liloupro_mural_cleanup_date');
+        if (!isTenantScopedKey) continue;
 
         if (!normalizedAllowed) {
-          localStorage.removeItem('lilo_active_church_id');
-          localStorage.removeItem('lilo-projection-state');
-          localStorage.removeItem('liloupro_offline_sync_time');
-          localStorage.removeItem('liloupro_favorite_songs');
+          keysToRemove.push(k);
         } else {
-          if (prevChurchId && prevChurchId !== normalizedAllowed) {
-            localStorage.removeItem('lilo-projection-state');
-          }
-          localStorage.setItem('lilo_active_church_id', normalizedAllowed);
-          localStorage.removeItem('liloupro_offline_sync_time');
-          localStorage.removeItem('liloupro_favorite_songs');
-        }
-
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (!k) continue;
-          const isTenantScopedKey =
-            k.startsWith('liloupro_offline_') ||
-            k.startsWith('liloupro_favorite_songs_') ||
-            k.startsWith('liloupro_mural_cleanup_date');
-          if (!isTenantScopedKey) continue;
-
-          if (!normalizedAllowed) {
+          const belongsToAllowed =
+            k.endsWith(`_${normalizedAllowed}`) ||
+            k.startsWith(`liloupro_favorite_songs_${normalizedAllowed}_`);
+          if (!belongsToAllowed) {
             keysToRemove.push(k);
-          } else {
-            const belongsToAllowed =
-              k.endsWith(`_${normalizedAllowed}`) ||
-              k.startsWith(`liloupro_favorite_songs_${normalizedAllowed}_`);
-            if (!belongsToAllowed) {
-              keysToRemove.push(k);
-            }
           }
         }
-        keysToRemove.forEach((k) => localStorage.removeItem(k));
-      } catch (e) {
-        // Ignore storage access errors in restricted contexts
       }
-    };
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch (e) {
+      // Ignore storage access errors in restricted contexts
+    }
+  };
+
+  const ensureDemoSandboxChurch = async (creatorUid?: string) => {
+    const sandboxRef = doc(db, 'churches', 'demo_sandbox');
+    const snap = await getDoc(sandboxRef);
+    if (!snap.exists()) {
+      const nextYear = new Date();
+      nextYear.setFullYear(nextYear.getFullYear() + 1);
+      const nextYearIso = nextYear.toISOString();
+      const defaultSandbox = {
+        name: 'Igreja Demonstração (Sandbox)',
+        inviteCode: 'DEMO123',
+        createdAt: new Date().toISOString(),
+        createdBy: creatorUid || user?.uid || 'master',
+        isSandbox: true,
+        isSeedChurch: false,
+        isVitalicio: false,
+        planStatus: 'active',
+        planName: 'Plano Premium',
+        planId: 'premium',
+        planExpiresAt: nextYearIso,
+        expiresAt: nextYearIso,
+        maxMembers: 9999,
+        maxSongs: 9999,
+        onboardingDismissed: false,
+        onboardingCompleted: false,
+        roles: ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Baixo', 'Bateria', 'Teclado'],
+        masterNotes: 'Ambiente isolado de demonstração, gravação de tutoriais e onboarding.'
+      };
+      await setDoc(sandboxRef, defaultSandbox);
+      return { id: 'demo_sandbox', ...defaultSandbox };
+    }
+    return { id: snap.id, ...snap.data() };
+  };
+
+  const switchChurchContext = async (targetChurchId: 'semente' | 'demo_sandbox') => {
+    if (!isMasterUser || !user) return;
+    try {
+      if (targetChurchId === 'demo_sandbox') {
+        await ensureDemoSandboxChurch(user.uid);
+        try {
+          localStorage.setItem('liloupro_master_sandbox_active', 'true');
+        } catch {}
+        purgeCrossTenantLocalCaches('demo_sandbox');
+        setMasterChurchOverride('demo_sandbox');
+      } else {
+        try {
+          localStorage.removeItem('liloupro_master_sandbox_active');
+        } catch {}
+        purgeCrossTenantLocalCaches('semente');
+        setMasterChurchOverride('semente');
+      }
+    } catch (err) {
+      console.error('Erro ao alternar contexto de igreja master:', err);
+    }
+  };
+
+  useEffect(() => {
+    let unsubscribeMember: (() => void) | null = null;
+    let previousUid: string | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       const nextUid = currentUser?.uid || null;
       if (previousUid !== nextUid) {
         previousUid = nextUid;
-        setMemberData(null);
-        setIsAdmin(false);
+        setRawMemberData(null);
+        setRawIsAdmin(false);
         setChurchData(null);
         if (nextUid) {
           setLoading(true);
         } else {
+          setMasterChurchOverride(null);
+          try {
+            localStorage.removeItem('liloupro_master_sandbox_active');
+          } catch {}
           purgeCrossTenantLocalCaches();
         }
       }
 
       setUser(currentUser);
 
-      // Clean up previous listeners
+      // Clean up previous member listener
       if (unsubscribeMember) {
         unsubscribeMember();
         unsubscribeMember = null;
       }
-      if (unsubscribeChurch) {
-        unsubscribeChurch();
-        unsubscribeChurch = null;
-      }
-      activeChurchId = null;
 
       if (currentUser) {
         const memberRef = doc(db, 'members', currentUser.uid);
-        
+
         // Listen to member changes dynamically
         unsubscribeMember = onSnapshot(memberRef, async (memberSnap) => {
           const userEmailLower = (currentUser.email || '').toLowerCase().trim();
           const isMaster = userEmailLower === 'mikmellorg@gmail.com';
           let currentMember: any = null;
-          
+
           if (!memberSnap.exists()) {
             if (isMaster) {
               currentMember = {
@@ -148,9 +232,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.error("Erro ao criar perfil master:", err);
               }
             } else {
-              // For any new non-master user: check if there's an invite code, otherwise create an isolated new church tenant
+              // For any new non-master user: check if there's an invite code, otherwise require code linking
               const pendingInvite = typeof window !== 'undefined' ? localStorage.getItem('pending_invite_code') : null;
               let targetChurchId = '';
+              let resolvedChurchDocData: Record<string, any> | null = null;
               let isUserAdmin = false;
               let initialRoles: string[] = [];
 
@@ -160,6 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const snap = await gDocs(qQuery(col(db, 'churches'), wWhere('inviteCode', '==', pendingInvite.trim().toUpperCase())));
                   if (!snap.empty) {
                     targetChurchId = snap.docs[0].id;
+                    resolvedChurchDocData = { id: snap.docs[0].id, ...snap.docs[0].data() };
                     isUserAdmin = false;
                     initialRoles = [];
                     localStorage.removeItem('pending_invite_code');
@@ -189,13 +275,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
               try {
                 await setDoc(memberRef, currentMember);
+                if (targetChurchId) {
+                  notifyChurchLeadersOfNewMember({
+                    memberUid: currentUser.uid,
+                    memberName: currentMember.name,
+                    memberEmail: currentMember.email,
+                    churchId: targetChurchId,
+                    churchData: resolvedChurchDocData
+                  }).catch(() => {});
+                }
               } catch (err) {
                 console.error("Erro ao criar perfil de membro inicial:", err);
               }
             }
           } else {
             currentMember = { id: memberSnap.id, ...memberSnap.data() };
-            
+
             // Auto-sync master admin flag if logging in with master email
             if (isMaster && !currentMember.isAdmin) {
               currentMember.isAdmin = true;
@@ -236,8 +331,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
           }
-          
-          setMemberData(currentMember);
+
+          setRawMemberData(currentMember);
 
           // Check admin status (Google account or custom admin setting or in profile)
           const hasLeaderRole = Array.isArray(currentMember.roles) && (
@@ -249,117 +344,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const adminRef = doc(db, 'admins', currentUser.uid);
             const adminSnap = await getDoc(adminRef);
-            setIsAdmin(
-              isMaster || 
-              adminSnap.exists() || 
+            setRawIsAdmin(
+              isMaster ||
+              adminSnap.exists() ||
               !!currentMember.isAdmin ||
               hasLeaderRole
             );
           } catch (adminErr) {
-            setIsAdmin(isMaster || !!currentMember.isAdmin || hasLeaderRole);
+            setRawIsAdmin(isMaster || !!currentMember.isAdmin || hasLeaderRole);
           }
-
-          // Fetch the church config and listen to its changes (only re-subscribe if churchId changed)
-          const churchId = currentMember.churchId || (isMaster ? 'semente' : '');
-
-          if (!churchId) {
-            if (unsubscribeChurch) {
-              unsubscribeChurch();
-              unsubscribeChurch = null;
-            }
-            activeChurchId = null;
-            purgeCrossTenantLocalCaches();
-            setChurchData(null);
-            setLoading(false);
-            return;
-          }
-
-          purgeCrossTenantLocalCaches(churchId);
-
-          if (activeChurchId !== churchId || !unsubscribeChurch) {
-            if (unsubscribeChurch) {
-              unsubscribeChurch();
-              unsubscribeChurch = null;
-            }
-            activeChurchId = churchId;
-            const churchRef = doc(db, 'churches', churchId);
-
-            unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
-              if (!churchSnap.exists() && churchId === 'semente') {
-                // Ensure default semente church is created with lifetime seed protection
-                const defaultChurch = {
-                  name: 'Graça Soberana',
-                  inviteCode: 'SEMENTE123',
-                  createdAt: '2024-01-01T00:00:00.000Z',
-                  createdBy: 'system',
-                  isSeedChurch: true,
-                  isVitalicio: true,
-                  planStatus: 'active',
-                  planName: 'PRO (Vitalício)',
-                  planExpiresAt: null,
-                  masterNotes: 'Igreja Pioneira e Matriz (Graça Soberana) - Acesso Vitalício Permanente.'
-                };
-                try {
-                  await setDoc(churchRef, defaultChurch);
-                  setChurchData({ id: 'semente', ...defaultChurch });
-                } catch (err) {
-                  console.error("Erro ao inicializar igreja de semente:", err);
-                  setChurchData({ id: 'semente', ...defaultChurch });
-                }
-              } else if (churchSnap.exists()) {
-                const data = churchSnap.data();
-                const isSeed = churchId === 'semente';
-                if (
-                  isSeed &&
-                  isMaster &&
-                  (
-                    data.name !== 'Graça Soberana' ||
-                    data.isSeedChurch !== true ||
-                    data.isVitalicio !== true ||
-                    data.planStatus !== 'active' ||
-                    data.planName !== 'PRO (Vitalício)' ||
-                    data.planExpiresAt !== null
-                  )
-                ) {
-                  try {
-                    await setDoc(churchRef, {
-                      name: 'Graça Soberana',
-                      isSeedChurch: true,
-                      isVitalicio: true,
-                      planStatus: 'active',
-                      planName: 'PRO (Vitalício)',
-                      planExpiresAt: null
-                    }, { merge: true });
-                  } catch (restoreErr) {
-                    console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja Graça Soberana:", restoreErr);
-                  }
-                }
-                setChurchData({
-                  id: churchSnap.id,
-                  ...data,
-                  name: isSeed ? 'Graça Soberana' : data.name,
-                  isSeedChurch: isSeed,
-                  isVitalicio: isSeed ? true : data.isVitalicio
-                });
-              } else {
-                setChurchData(null);
-              }
-              setLoading(false);
-            }, (err) => {
-              console.error("Erro ao assinar canal da igreja:", err);
-              setLoading(false);
-              handleFirestoreError(err, OperationType.GET, 'churches/' + churchId);
-            });
-          }
-
         }, (err) => {
           console.error("Erro ao assinar dados do membro:", err);
           setLoading(false);
           handleFirestoreError(err, OperationType.GET, 'members/' + currentUser.uid);
         });
       } else {
-        setMemberData(null);
-        setIsAdmin(false);
+        setRawMemberData(null);
+        setRawIsAdmin(false);
         setChurchData(null);
         setLoading(false);
       }
@@ -368,9 +369,108 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribeAuth();
       if (unsubscribeMember) unsubscribeMember();
-      if (unsubscribeChurch) unsubscribeChurch();
     };
   }, []);
+
+  // Dedicated Church Config Subscription (supports Master Developer switching semente <-> demo_sandbox cleanly)
+  useEffect(() => {
+    if (!user) {
+      setChurchData(null);
+      return;
+    }
+
+    if (!rawMemberData) {
+      return;
+    }
+
+    if (!effectiveChurchId) {
+      purgeCrossTenantLocalCaches();
+      setChurchData(null);
+      setLoading(false);
+      return;
+    }
+
+    purgeCrossTenantLocalCaches(effectiveChurchId);
+    const churchRef = doc(db, 'churches', effectiveChurchId);
+
+    const unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
+      if (!churchSnap.exists() && effectiveChurchId === 'semente') {
+        const defaultChurch = {
+          name: 'Graça Soberana',
+          inviteCode: 'SEMENTE123',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'system',
+          isSeedChurch: true,
+          isVitalicio: true,
+          planStatus: 'active',
+          planName: 'PRO (Vitalício)',
+          planExpiresAt: null,
+          masterNotes: 'Igreja Pioneira e Matriz (Graça Soberana) - Acesso Vitalício Permanente.'
+        };
+        try {
+          await setDoc(churchRef, defaultChurch);
+          setChurchData({ id: 'semente', ...defaultChurch });
+        } catch (err) {
+          console.error("Erro ao inicializar igreja de semente:", err);
+          setChurchData({ id: 'semente', ...defaultChurch });
+        }
+      } else if (!churchSnap.exists() && effectiveChurchId === 'demo_sandbox' && isMasterUser) {
+        try {
+          const created = await ensureDemoSandboxChurch(user.uid);
+          setChurchData(created);
+        } catch (err) {
+          console.error("Erro ao inicializar igreja sandbox:", err);
+          setChurchData(null);
+        }
+      } else if (churchSnap.exists()) {
+        const data = churchSnap.data();
+        const isSeed = effectiveChurchId === 'semente';
+        if (
+          isSeed &&
+          isMasterUser &&
+          (
+            data.name !== 'Graça Soberana' ||
+            data.isSeedChurch !== true ||
+            data.isVitalicio !== true ||
+            data.planStatus !== 'active' ||
+            data.planName !== 'PRO (Vitalício)' ||
+            data.planExpiresAt !== null
+          )
+        ) {
+          try {
+            await setDoc(churchRef, {
+              name: 'Graça Soberana',
+              isSeedChurch: true,
+              isVitalicio: true,
+              planStatus: 'active',
+              planName: 'PRO (Vitalício)',
+              planExpiresAt: null
+            }, { merge: true });
+          } catch (restoreErr) {
+            console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja Graça Soberana:", restoreErr);
+          }
+        }
+        setChurchData({
+          id: churchSnap.id,
+          ...data,
+          name: isSeed ? 'Graça Soberana' : data.name,
+          isSeedChurch: isSeed,
+          isVitalicio: isSeed ? true : data.isVitalicio
+        });
+      } else {
+        setChurchData(null);
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Erro ao assinar canal da igreja:", err);
+      setLoading(false);
+      handleFirestoreError(err, OperationType.GET, 'churches/' + effectiveChurchId);
+    });
+
+    return () => {
+      unsubscribeChurch();
+    };
+  }, [user?.uid, rawMemberData?.churchId, effectiveChurchId, isMasterUser]);
 
   // Firebase Cloud Messaging (FCM) token registration and foreground message listener
   const fcmRegisteredUidRef = useRef<string | null>(null);
@@ -408,7 +508,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.uid]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, memberData, isAdmin, churchData, effectivePlan, isVitalicio, isPaidActive }}>
+    <AuthContext.Provider value={{ user, loading, memberData, isAdmin, churchData, effectivePlan, isVitalicio, isPaidActive, isSandboxMode, switchChurchContext }}>
       {children}
     </AuthContext.Provider>
   );
