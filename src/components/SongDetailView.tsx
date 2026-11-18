@@ -2833,6 +2833,259 @@ export function SongDetailView({
     );
   };
 
+  const renderKeyAndCapoModals = () => (
+    <>
+      {/* Tom/Key Selection Modal */}
+      <AnimatePresence>
+        {showKeyMenu && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[250] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface border border-border rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col space-y-4 relative"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Music2 className="text-brand h-5 w-5" />
+                  <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
+                    Transposição de Tom
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setShowKeyMenu(false)}
+                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all"
+                  title="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-xs text-text-muted leading-relaxed">
+                Mude a tonalidade da cifra automaticamente escolhendo um dos tons abaixo:
+              </p>
+
+              {/* Stepper rápido de 1/2 Tom */}
+              <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => setTranspose(t => t - 1)}
+                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
+                  title="Diminuir meio tom"
+                >
+                  - 1/2 Tom
+                </button>
+                <div className="text-center">
+                  <span className="text-base font-black text-brand">{currentKey}</span>
+                  {isCapoEnabled && shapeKey && shapeKey !== currentKey && (
+                    <span className="block text-[10px] text-text-muted font-bold leading-none mt-0.5">Shape: {shapeKey}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTranspose(t => t + 1)}
+                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
+                  title="Aumentar meio tom"
+                >
+                  + 1/2 Tom
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 py-1">
+                {['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].map((note) => {
+                  const getBaseNote = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
+                  const currentBase = getBaseNote(currentKey);
+                  const normalizedCurrent = FLATS[currentBase] || currentBase;
+                  const normalizedButton = FLATS[note] || note;
+                  const isActive = normalizedCurrent === normalizedButton;
+                  
+                  return (
+                    <button
+                      key={note}
+                      onClick={() => {
+                        handleKeySelect(note);
+                        setShowKeyMenu(false);
+                      }}
+                      className={cn(
+                        "py-2.5 sm:py-3 rounded-xl text-xs font-black transition-all border cursor-pointer select-none",
+                        isActive 
+                          ? "bg-brand text-white border-brand shadow-lg scale-105" 
+                          : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-border"
+                      )}
+                    >
+                      {note}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="border-t border-border pt-3">
+                <button 
+                  onClick={() => {
+                    setTranspose(0);
+                    setShowKeyMenu(false);
+                  }}
+                  className="w-full py-2.5 bg-black/5 dark:bg-white/5 border border-border rounded-xl text-xs font-black uppercase text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-all cursor-pointer select-none"
+                >
+                  Tom Original ({effectiveBaseKey})
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Capo Selection Modal / Caixa de Opções do Capo */}
+      <AnimatePresence>
+        {showCapoMenu && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[250] flex items-center justify-center p-3 sm:p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface border border-border rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl flex flex-col space-y-4 relative max-h-[90vh] overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
+                    <Sliders size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
+                      Posição do Capo
+                    </h3>
+                    <p className="text-[10px] text-text-muted font-bold">
+                      Tom Real: <span className="text-brand font-black">{currentKey}</span>
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowCapoMenu(false)}
+                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all cursor-pointer"
+                  title="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Informação e Dica Musical */}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-xs text-text-main space-y-1 shrink-0">
+                <p className="font-bold flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <Sparkles size={14} /> Caixa de Posições do Capotraste
+                </p>
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  Escolha em qual casa colocar a braçadeira. O tom real da música permanece <strong className="text-brand">{currentKey}</strong> e os acordes (shapes) são recalculados para criar diferentes sonoridades no instrumento!
+                </p>
+              </div>
+
+              {/* Botão de Alternância Rápida Sem Capo */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCapoEnabled(false);
+                    setSelectedCapoFret(0);
+                    setShowCapoMenu(false);
+                  }}
+                  className={cn(
+                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer select-none",
+                    !isCapoEnabled || activeCapoFret === 0
+                      ? "bg-brand text-white border-brand shadow-md"
+                      : "bg-black/5 dark:bg-white/5 text-text-muted border-border hover:bg-black/10 dark:hover:bg-white/10"
+                  )}
+                >
+                  <X size={14} />
+                  <span>Sem Capo (Tom Natural - Shape {currentKey})</span>
+                </button>
+              </div>
+
+              {/* Grid / Lista de Posições do Capo (1ª a 12ª Casa) */}
+              <div className="overflow-y-auto custom-scrollbar pr-1 space-y-1.5 max-h-[320px]">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((fret) => {
+                  const calculatedShape = transposeChord(currentKey, -fret);
+                  const isSelected = isCapoEnabled && activeCapoFret === fret;
+                  const cleanShapeRoot = calculatedShape.replace(/[^A-G#b]/g, '');
+                  const isCaged = ['C', 'A', 'G', 'E', 'D'].includes(cleanShapeRoot);
+
+                  return (
+                    <button
+                      key={fret}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCapoFret(fret);
+                        setIsCapoEnabled(true);
+                        setShowCapoMenu(false);
+                      }}
+                      className={cn(
+                        "w-full p-2.5 sm:p-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between cursor-pointer group text-left select-none",
+                        isSelected
+                          ? "bg-amber-500 text-black border-amber-400 font-black shadow-lg shadow-amber-500/20 scale-[1.01]"
+                          : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-amber-500/40"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 border",
+                          isSelected
+                            ? "bg-black text-amber-400 border-black/20"
+                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black"
+                        )}>
+                          {fret}º
+                        </span>
+                        <div>
+                          <div className="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+                            <span>{fret}ª Casa</span>
+                            {isCaged && (
+                              <span className={cn(
+                                "text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-tight",
+                                isSelected ? "bg-black/20 text-black" : "bg-amber-500/20 text-amber-600 dark:text-amber-300"
+                              )}>
+                                🎸 Shape Aberto
+                              </span>
+                            )}
+                          </div>
+                          <p className={cn("text-[10px]", isSelected ? "text-black/80 font-bold" : "text-text-muted")}>
+                            Acordes do braço em {calculatedShape}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] uppercase tracking-wider block opacity-75 font-bold">
+                          Shape:
+                        </span>
+                        <span className={cn(
+                          "text-sm sm:text-base font-black px-2 py-0.5 rounded-lg inline-block",
+                          isSelected ? "bg-black text-amber-400" : "bg-brand/10 text-brand dark:bg-brand/20 dark:text-brand"
+                        )}>
+                          {calculatedShape}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] text-text-muted shrink-0">
+                <span>Toque para aplicar a casa desejada</span>
+                <button
+                  type="button"
+                  onClick={() => setShowCapoMenu(false)}
+                  className="px-3 py-1.5 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main font-bold rounded-lg transition-all cursor-pointer"
+                >
+                  Ok
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+
   if (isFocusMode) {
     return (
       <motion.div 
@@ -3201,63 +3454,92 @@ export function SongDetailView({
 
         {/* Sub-barra Compacta Mobile-First do Modo Foco (2ª linha em celular e tablets/telas sem espaço lateral suficiente) */}
         {!isFocusSingleRow && (
-          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 px-3 sm:px-5 py-1.5 bg-[#0F172A]/95 border-b border-slate-800/80 overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] select-none z-[109] shrink-0">
-            {/* 1. Seletor CIFRA | LETRA */}
-            <div className="flex items-center rounded-lg bg-slate-900/90 border border-slate-700/80 p-0.5 shrink-0">
+          <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-[#0F172A]/95 border-b border-slate-800/80 overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] select-none z-[109] shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* 1. Seletor CIFRA | LETRA */}
+              <div className="flex items-center h-9 rounded-lg bg-slate-900/90 border border-slate-700/80 p-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('chords')}
+                  className={cn(
+                    "h-full px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
+                    detailTab === 'chords'
+                      ? "bg-brand text-white shadow-xs"
+                      : "text-slate-300 hover:text-white hover:bg-white/5"
+                  )}
+                  title="Visualizar Cifra com acordes"
+                >
+                  CIFRA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('lyrics')}
+                  className={cn(
+                    "h-full px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
+                    detailTab === 'lyrics'
+                      ? "bg-brand text-white shadow-xs"
+                      : "text-slate-300 hover:text-white hover:bg-white/5"
+                  )}
+                  title="Visualizar apenas Letra limpa"
+                >
+                  LETRA
+                </button>
+              </div>
+
+              {/* 2. Botão de TOM */}
               <button
                 type="button"
-                onClick={() => setDetailTab('chords')}
-                className={cn(
-                  "min-h-[38px] px-3 rounded-md text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
-                  detailTab === 'chords'
-                    ? "bg-brand text-white shadow-xs"
-                    : "text-slate-300 hover:text-white hover:bg-white/5"
-                )}
-                title="Visualizar Cifra com acordes"
+                onClick={() => setShowKeyMenu(prev => !prev)}
+                className="h-9 px-2.5 rounded-lg bg-brand/20 hover:bg-brand/30 border border-brand/50 text-white flex items-center justify-center gap-1 shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs notranslate"
+                translate="no"
+                title={isCapoEnabled && shapeKey && shapeKey !== currentKey ? `Tom Real: ${currentKey} | Shape: ${shapeKey} • Toque para alterar` : `Tom: ${currentKey} • Toque para alterar`}
               >
-                CIFRA
+                <span className="text-[9px] font-bold uppercase text-slate-300 hidden min-[400px]:inline">Tom</span>
+                <span className="text-xs font-black text-brand">{currentKey}</span>
               </button>
+
+              {/* 3. Botão de CAPOTRASTE */}
               <button
                 type="button"
-                onClick={() => setDetailTab('lyrics')}
+                onClick={() => setShowCapoMenu(prev => !prev)}
                 className={cn(
-                  "min-h-[38px] px-3 rounded-md text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
-                  detailTab === 'lyrics'
-                    ? "bg-brand text-white shadow-xs"
-                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                  "h-9 px-2.5 rounded-lg border flex items-center justify-center text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs",
+                  isCapoEnabled && activeCapoFret > 0
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30"
+                    : "bg-slate-900/90 text-slate-300 border-slate-700/80 hover:text-white hover:bg-white/5"
                 )}
-                title="Visualizar apenas Letra limpa"
+                title="Abrir Posições do Capotraste (1ª a 12ª Casa)"
               >
-                LETRA
+                {isCapoEnabled && activeCapoFret > 0 ? `Capo ${activeCapoFret}` : 'Capo'}
+              </button>
+
+              {/* 4. Botão do Player LiLouPro */}
+              <button
+                type="button"
+                onClick={handleToggleLilouPlayer}
+                className={cn(
+                  "h-9 px-2 sm:px-2.5 rounded-lg border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
+                  isLilouPlayerActive
+                    ? "border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
+                    : "border-slate-700/80 bg-slate-900/90 hover:border-amber-400/60 hover:bg-amber-500/10 text-slate-100"
+                )}
+                title={isLilouPlayerActive ? "Fechar LiLouPro Player" : "Abrir LiLouPro Player"}
+              >
+                <img
+                  src={luxuryAppIcon}
+                  alt="LiLouPro Player"
+                  className={cn(
+                    "w-5 h-5 rounded-md object-cover shrink-0",
+                    isLilouPlayerActive && "ring-1 ring-amber-400"
+                  )}
+                />
+                <span className="hidden min-[430px]:inline text-[11px] font-black tracking-tight whitespace-nowrap">
+                  LiLouPro
+                </span>
               </button>
             </div>
 
-            {/* 2. Botão do Player LiLouPro */}
-            <button
-              type="button"
-              onClick={handleToggleLilouPlayer}
-              className={cn(
-                "min-h-[38px] px-3 rounded-lg border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
-                isLilouPlayerActive
-                  ? "border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
-                  : "border-slate-700/80 bg-slate-900/90 hover:border-amber-400/60 hover:bg-amber-500/10 text-slate-100"
-              )}
-              title={isLilouPlayerActive ? "Fechar LiLouPro Player" : "Abrir LiLouPro Player"}
-            >
-              <img
-                src={luxuryAppIcon}
-                alt="LiLouPro Player"
-                className={cn(
-                  "w-5 h-5 rounded-md object-cover shrink-0",
-                  isLilouPlayerActive && "ring-1 ring-amber-400"
-                )}
-              />
-              <span className="text-[11px] font-black tracking-tight whitespace-nowrap">
-                LiLouPro
-              </span>
-            </button>
-
-            {/* 3. Botão Alternador Harmônico (ACORDES / GRAUS / FUNÇÕES) */}
+            {/* 5. Botão Alternador Harmônico (ACORDES / GRAUS / FUNÇÕES) */}
             <button
               type="button"
               onClick={() => {
@@ -3268,7 +3550,7 @@ export function SongDetailView({
                 });
               }}
               className={cn(
-                "min-h-[38px] px-2.5 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
+                "h-9 px-2.5 rounded-lg border flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
                 harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/40 hover:bg-brand/25",
                 harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
                 harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
@@ -3858,6 +4140,9 @@ export function SongDetailView({
           onUpdateVolume={setMetronomeVolume}
           onTapTempo={handleTapTempo}
         />
+
+        {/* Modais de Troca de Tom e Capotraste no Modo Foco */}
+        {renderKeyAndCapoModals()}
 
         {/* Footswitch Visual Feedback Toast no Modo Foco */}
         <AnimatePresence>
@@ -6838,254 +7123,8 @@ export function SongDetailView({
         </aside>
       </div>
 
-      {/* Tom/Key Selection Modal */}
-      <AnimatePresence>
-        {showKeyMenu && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[250] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-surface border border-border rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col space-y-4 relative"
-            >
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <Music2 className="text-brand h-5 w-5" />
-                  <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
-                    Transposição de Tom
-                  </h3>
-                </div>
-                <button 
-                  onClick={() => setShowKeyMenu(false)}
-                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all"
-                  title="Fechar"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <p className="text-xs text-text-muted leading-relaxed">
-                Mude a tonalidade da cifra automaticamente escolhendo um dos tons abaixo:
-              </p>
-
-              {/* Stepper rápido de 1/2 Tom */}
-              <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-border">
-                <button
-                  type="button"
-                  onClick={() => setTranspose(t => t - 1)}
-                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
-                  title="Diminuir meio tom"
-                >
-                  - 1/2 Tom
-                </button>
-                <div className="text-center">
-                  <span className="text-base font-black text-brand">{currentKey}</span>
-                  {isCapoEnabled && shapeKey && shapeKey !== currentKey && (
-                    <span className="block text-[10px] text-text-muted font-bold leading-none mt-0.5">Shape: {shapeKey}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTranspose(t => t + 1)}
-                  className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
-                  title="Aumentar meio tom"
-                >
-                  + 1/2 Tom
-                </button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 py-1">
-                {['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].map((note) => {
-                  const getBaseNote = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
-                  const currentBase = getBaseNote(currentKey);
-                  const normalizedCurrent = FLATS[currentBase] || currentBase;
-                  const normalizedButton = FLATS[note] || note;
-                  const isActive = normalizedCurrent === normalizedButton;
-                  
-                  return (
-                    <button
-                      key={note}
-                      onClick={() => {
-                        handleKeySelect(note);
-                        setShowKeyMenu(false);
-                      }}
-                      className={cn(
-                        "py-2.5 sm:py-3 rounded-xl text-xs font-black transition-all border cursor-pointer select-none",
-                        isActive 
-                          ? "bg-brand text-white border-brand shadow-lg scale-105" 
-                          : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-border"
-                      )}
-                    >
-                      {note}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="border-t border-border pt-3">
-                <button 
-                  onClick={() => {
-                    setTranspose(0);
-                    setShowKeyMenu(false);
-                  }}
-                  className="w-full py-2.5 bg-black/5 dark:bg-white/5 border border-border rounded-xl text-xs font-black uppercase text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-all cursor-pointer select-none"
-                >
-                  Tom Original ({effectiveBaseKey})
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Capo Selection Modal / Caixa de Opções do Capo */}
-      <AnimatePresence>
-        {showCapoMenu && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[250] flex items-center justify-center p-3 sm:p-4">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-surface border border-border rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl flex flex-col space-y-4 relative max-h-[90vh] overflow-hidden"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
-                    <Sliders size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-text-main">
-                      Posição do Capo
-                    </h3>
-                    <p className="text-[10px] text-text-muted font-bold">
-                      Tom Real: <span className="text-brand font-black">{currentKey}</span>
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setShowCapoMenu(false)}
-                  className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-text-muted hover:text-text-main transition-all cursor-pointer"
-                  title="Fechar"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Informação e Dica Musical */}
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-xs text-text-main space-y-1 shrink-0">
-                <p className="font-bold flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                  <Sparkles size={14} /> Caixa de Posições do Capotraste
-                </p>
-                <p className="text-text-muted text-[11px] leading-relaxed">
-                  Escolha em qual casa colocar a braçadeira. O tom real da música permanece <strong className="text-brand">{currentKey}</strong> e os acordes (shapes) são recalculados para criar diferentes sonoridades no instrumento!
-                </p>
-              </div>
-
-              {/* Botão de Alternância Rápida Sem Capo */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCapoEnabled(false);
-                    setSelectedCapoFret(0);
-                    setShowCapoMenu(false);
-                  }}
-                  className={cn(
-                    "flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer select-none",
-                    !isCapoEnabled || activeCapoFret === 0
-                      ? "bg-brand text-white border-brand shadow-md"
-                      : "bg-black/5 dark:bg-white/5 text-text-muted border-border hover:bg-black/10 dark:hover:bg-white/10"
-                  )}
-                >
-                  <X size={14} />
-                  <span>Sem Capo (Tom Natural - Shape {currentKey})</span>
-                </button>
-              </div>
-
-              {/* Grid / Lista de Posições do Capo (1ª a 12ª Casa) */}
-              <div className="overflow-y-auto custom-scrollbar pr-1 space-y-1.5 max-h-[320px]">
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((fret) => {
-                  const calculatedShape = transposeChord(currentKey, -fret);
-                  const isSelected = isCapoEnabled && activeCapoFret === fret;
-                  const cleanShapeRoot = calculatedShape.replace(/[^A-G#b]/g, '');
-                  const isCaged = ['C', 'A', 'G', 'E', 'D'].includes(cleanShapeRoot);
-
-                  return (
-                    <button
-                      key={fret}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCapoFret(fret);
-                        setIsCapoEnabled(true);
-                        setShowCapoMenu(false);
-                      }}
-                      className={cn(
-                        "w-full p-2.5 sm:p-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between cursor-pointer group text-left select-none",
-                        isSelected
-                          ? "bg-amber-500 text-black border-amber-400 font-black shadow-lg shadow-amber-500/20 scale-[1.01]"
-                          : "bg-black/5 dark:bg-white/5 text-text-main border-transparent hover:bg-black/10 dark:hover:bg-white/10 hover:border-amber-500/40"
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn(
-                          "w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 border",
-                          isSelected
-                            ? "bg-black text-amber-400 border-black/20"
-                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black"
-                        )}>
-                          {fret}º
-                        </span>
-                        <div>
-                          <div className="font-bold text-xs sm:text-sm flex items-center gap-1.5">
-                            <span>{fret}ª Casa</span>
-                            {isCaged && (
-                              <span className={cn(
-                                "text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-tight",
-                                isSelected ? "bg-black/20 text-black" : "bg-amber-500/20 text-amber-600 dark:text-amber-300"
-                              )}>
-                                🎸 Shape Aberto
-                              </span>
-                            )}
-                          </div>
-                          <p className={cn("text-[10px]", isSelected ? "text-black/80 font-bold" : "text-text-muted")}>
-                            Acordes do braço em {calculatedShape}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] uppercase tracking-wider block opacity-75 font-bold">
-                          Shape:
-                        </span>
-                        <span className={cn(
-                          "text-sm sm:text-base font-black px-2 py-0.5 rounded-lg inline-block",
-                          isSelected ? "bg-black text-amber-400" : "bg-brand/10 text-brand dark:bg-brand/20 dark:text-brand"
-                        )}>
-                          {calculatedShape}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Footer */}
-              <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] text-text-muted shrink-0">
-                <span>Toque para aplicar a casa desejada</span>
-                <button
-                  type="button"
-                  onClick={() => setShowCapoMenu(false)}
-                  className="px-3 py-1.5 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main font-bold rounded-lg transition-all cursor-pointer"
-                >
-                  Ok
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Modais de Troca de Tom e Capotraste */}
+      {renderKeyAndCapoModals()}
 
       {/* Modal de Escolha da Visão Harmônica (CIFRA, GRAUS, FUNÇÕES) */}
       <AnimatePresence>
@@ -7314,7 +7353,7 @@ export function SongDetailView({
                   <Sparkles size={14} /> Como funciona a Visão Harmônica?
                 </p>
                 <p className="text-text-muted text-[11px] leading-relaxed">
-                  A <strong>Visão Harmônica</strong> analisa as cifras no tom selecionado (<strong>{currentKey || 'C'}</strong>) e permite alternar entre <strong>CIFRA</strong> (acordes originais), <strong>GRAUS</strong> (em algarismos romanos: I, V, VIm, IV) e <strong>FUNÇÃO</strong> (papel harmônico: Tôn, Dom, Rel, Subd).
+                  A <strong>Visão Harmônica</strong> analisa as cifras no tom selecionado (<strong>{currentKey || 'C'}</strong>) e permite alternar entre <strong>CIFRA</strong> (acordes originais), <strong>GRAUS</strong> (em algarismos romanos: I, V, VIm, IV) e <strong>FUNÇÃO</strong> (papel harmônico: T, SD, D, Tr, Ta, SDr, SDm, Dsec).
                 </p>
               </div>
 
@@ -7339,79 +7378,79 @@ export function SongDetailView({
                         const degrees = [
                           { 
                             roman: 'I', 
-                            abbrev: 'Tôn', 
-                            name: 'Tônica Principal', 
+                            abbrev: 'T', 
+                            name: 'Tônica Principal (T)', 
                             desc: 'Centro tonal primordial e repouso absoluto', 
                             roleType: 'Principal',
                             badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
                             semitones: 0, 
-                            minor: false 
+                            suffix: '' 
                           },
                           { 
                             roman: 'IIm', 
-                            abbrev: 'Subd', 
-                            name: 'Subdominante Substituta (IIm)', 
+                            abbrev: 'SDr', 
+                            name: 'Subdominante Relativa (SDr / IIm)', 
                             desc: 'Substituto do IV grau (preparação fluida para o V)', 
                             roleType: 'Substituto',
                             badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30',
                             semitones: 2, 
-                            minor: true 
+                            suffix: 'm' 
                           },
                           { 
                             roman: 'IIIm', 
-                            abbrev: 'Tôn', 
-                            name: 'Tônica Substituta (IIIm)', 
+                            abbrev: 'Ta', 
+                            name: 'Tônica Antirrelativa (Ta / IIIm)', 
                             desc: 'Substituto do I grau (repouso suave e meditativo)', 
                             roleType: 'Substituto',
                             badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
                             semitones: 4, 
-                            minor: true 
+                            suffix: 'm' 
                           },
                           { 
                             roman: 'IV', 
-                            abbrev: 'Subd', 
-                            name: 'Subdominante Principal', 
+                            abbrev: 'SD', 
+                            name: 'Subdominante Principal (SD)', 
                             desc: 'Afastamento primordial e transição em andamento', 
                             roleType: 'Principal',
                             badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30',
                             semitones: 5, 
-                            minor: false 
+                            suffix: '' 
                           },
                           { 
                             roman: 'V', 
-                            abbrev: 'Dom', 
-                            name: 'Dominante Principal', 
+                            abbrev: 'D', 
+                            name: 'Dominante Principal (D)', 
                             desc: 'Tensão máxima que atrai e clama por resolução na Tônica', 
                             roleType: 'Principal',
                             badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
                             semitones: 7, 
-                            minor: false 
+                            suffix: '' 
                           },
                           { 
                             roman: 'VIm', 
-                            abbrev: 'Tôn', 
-                            name: 'Tônica Substituta (VIm / Relativa)', 
+                            abbrev: 'Tr', 
+                            name: 'Tônica Relativa (Tr / VIm)', 
                             desc: 'Substituto do I grau (relativa menor / repouso íntimo)', 
                             roleType: 'Substituto',
                             badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
                             semitones: 9, 
-                            minor: true 
+                            suffix: 'm' 
                           },
                           { 
-                            roman: 'VIIº', 
-                            abbrev: 'Dom', 
-                            name: 'Dominante Substituta (VII° / Sensível)', 
+                            roman: 'VII°', 
+                            abbrev: 'D', 
+                            name: 'Dominante Substituta (D / VII° Sensível)', 
                             desc: 'Substituto do V grau (contém o mesmo trítono de tensão)', 
                             roleType: 'Substituto',
                             badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
                             semitones: 11, 
-                            minor: true 
+                            suffix: '°' 
                           },
                         ];
 
                         return degrees.map(deg => {
                           const chordNote = transposeChord(keyBase, deg.semitones);
-                          const fullChord = `${chordNote}${deg.minor ? 'm' : ''}`;
+                          const fullChord = `${chordNote}${deg.suffix}`;
 
                           return (
                             <tr key={deg.roman} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -7456,35 +7495,35 @@ export function SongDetailView({
                     {/* Tônica */}
                     <div className="p-2.5 rounded-xl bg-card border border-emerald-500/30 text-center space-y-1">
                       <span className="text-[10px] font-black uppercase text-emerald-500 dark:text-emerald-400 block">
-                        Tônica (Repouso)
+                        Tônica (T • Repouso)
                       </span>
                       <div className="text-xs font-mono font-bold text-text-main">
                         Principal: <strong className="text-emerald-600 dark:text-emerald-400 font-black">I7M</strong>
                       </div>
                       <div className="text-[10px] text-emerald-500 font-bold">↓ substitui</div>
                       <div className="text-[11px] font-mono text-text-muted">
-                        Substitutos: <strong className="text-text-main">IIIm7</strong> e <strong className="text-text-main">VIm7</strong>
+                        Substitutos: <strong className="text-text-main">Ta (IIIm7)</strong> e <strong className="text-text-main">Tr (VIm7)</strong>
                       </div>
                     </div>
 
                     {/* Subdominante */}
                     <div className="p-2.5 rounded-xl bg-card border border-blue-500/30 text-center space-y-1">
                       <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 block">
-                        Subdominante (Passagem)
+                        Subdominante (SD • Passagem)
                       </span>
                       <div className="text-xs font-mono font-bold text-text-main">
                         Principal: <strong className="text-blue-600 dark:text-blue-400 font-black">IV7M</strong>
                       </div>
                       <div className="text-[10px] text-blue-500 font-bold">↓ substitui</div>
                       <div className="text-[11px] font-mono text-text-muted">
-                        Substituto: <strong className="text-text-main">IIm7</strong>
+                        Substituto: <strong className="text-text-main">SDr (IIm7)</strong>
                       </div>
                     </div>
 
                     {/* Dominante */}
                     <div className="p-2.5 rounded-xl bg-card border border-amber-500/30 text-center space-y-1">
                       <span className="text-[10px] font-black uppercase text-amber-500 dark:text-amber-400 block">
-                        Dominante (Tensão)
+                        Dominante (D • Tensão)
                       </span>
                       <div className="text-xs font-mono font-bold text-text-main">
                         Principal: <strong className="text-amber-600 dark:text-amber-400 font-black">V7</strong>
@@ -7493,6 +7532,18 @@ export function SongDetailView({
                       <div className="text-[11px] font-mono text-text-muted">
                         Substituto: <strong className="text-text-main">VIIm7(b5) / VII°</strong>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Nota compacta de funções fora do campo diatônico */}
+                  <div className="pt-1 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-text-muted">
+                    <div className="p-2 rounded-xl bg-card/80 border border-border/70">
+                      <strong className="font-mono font-black text-cyan-600 dark:text-cyan-400">SDm</strong>{' '}
+                      <strong className="text-text-main">(Subdominante Menor):</strong> Empréstimo modal (<span className="font-mono">IVm, bVI, bVII, bII</span>) que traz cor melancólica/cinematográfica.
+                    </div>
+                    <div className="p-2 rounded-xl bg-card/80 border border-border/70">
+                      <strong className="font-mono font-black text-amber-600 dark:text-amber-400">Dsec</strong>{' '}
+                      <strong className="text-text-main">(Dominante Secundário):</strong> Acorde maior/com sétima fora do tom (<span className="font-mono">V/x</span>) que prepara com tensão extra um grau específico.
                     </div>
                   </div>
                 </div>
