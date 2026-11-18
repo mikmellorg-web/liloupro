@@ -1699,7 +1699,9 @@ export default function LiturgyView({
             doc.setTextColor(40);
             doc.setFont('courier', 'normal');
             
-            const lyrics = song.chords || '';
+            const lyrics = (song.chords || '')
+              .replace(/<\s*\/?\s*(b|strong)\b[^>]*>/gi, '')
+              .replace(/\*\*([^*\n]+)\*\*/g, '$1');
             const splitLyrics = doc.splitTextToSize(lyrics, pageWidth - (margin * 2));
             
             doc.text(splitLyrics, margin, 50);

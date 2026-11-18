@@ -1,1 +1,102 @@
-[]
+[
+  {
+    "uid": "PAu5JTCGQCYiPWRCJCMjXN2QsG13",
+    "name": "Miquéias",
+    "email": "mikmellorg@gmail.com",
+    "tokens": [
+      "cLtUPQmbQ3bUI_RBgThgfO:APA91bFV7GvjQePkUR5BcEbutLYOoLNygP7KjDyJyEpg1N1cVTR-JyyprsFlvVsN9oYNu56TRE3_nLejEJMtwq6UE8jmPe7YRO83QC8La1HaHjm0gqcMYSU",
+      "fpCEmxwaPmOYiZUVniZxZD:APA91bGTd0_Mc79S54x4R6kHRPSvrMG9Xd5KzzWrPD-iIk9DPhiN5stHMQm6pUe43HXpq2QHebtRCSEd3kVgbFryfdr7bchCbOlHEPs68UWgFVM6nzblcLs",
+      "ewK2PEZ5qkFldE6TWp8ldm:APA91bH77XTLyXUIC-ko54guQK_0LyLuDsRA6xH9QQcNMXaG8JDJkPdxF4M21MGDjgQXwom7nXwsnWi81UnqLl5wg37oZQ_z3xm3CJqD5_uudHciBLvaGlA",
+      "fgqzLyyP71o5Xriz7GCL2A:APA91bFEt2Dl8acrFoKcgiaMZbvHnn5Vnn4wi9_2JRSTJaxYdiWfCGys22fYAs32yDqP0aJgVZzvCcPf44oayCgzLadOKocbynGkZxRw69KmVPBq9EbBDJ0"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "5M7skEkAXWNo6GT6WXrHMF7LxW83",
+    "name": "Endrel Scott ",
+    "email": "endrelhood@gmail.com",
+    "tokens": [
+      "dqr3hWXIBelJUtmZR_6yMU:APA91bEuW6OKLMTm9qxyAEypmM_Fplwa0KZH_hVczWo47tYAhHQQ3wHJcL0LmP3iCyZo5tIyLZI2fCySqfzc9c0mcHXntR0ju1yA0jRxcHG5N3M813PoCZg",
+      "dqr3hWXIBelJUtmZR_6yMU:APA91bEikiN2zTjF3qVhcCdQ7_RUu1iTIh5LtrSfXaHxCt1fLV038nOrQh09IkC8L2ozVuHwHbM8HIhZF6adQN1q0NF20hCYnFOEEw0qAT2oNFX3CX2sczU"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "61ngiAxCxVTtWnX7Vx4o7dM7GuG2",
+    "name": "Franciane Pedra",
+    "email": "francii.pedra@gmail.com",
+    "tokens": [
+      "f-oB8ztd6gCKgfhjbcTxFt:APA91bErmCXc_5qLJA9S4iH3eoVjOWDWDMDDf5NbauzTo61OUCaoKOKNQCQ9hYLvbEuPamfsoV2pp8w2_PJ_O0ThZOR-jICn6E3Lt0KJxwBmEz97EAjEc5Q"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "DyhHqwjpJddXqdksVn4ZBJEy3V03",
+    "name": "Arion Kurtz dos Santos",
+    "email": "arionkurtz@gmail.com",
+    "tokens": [
+      "dNhsHKX5HqXQO4sZS2A7km:APA91bGUbk6rvspJSSBzT6kHswxbxtnHzS8BIeFcn0vOvyhO9_ISbKuB3lNnaUoHX5Cij_G5GMtciRcAUflaWlpS6_Rrt1Kwad-oZE6uYoHLeqgZzx320K0",
+      "cE-bzuIIglTIu_dCv72bij:APA91bEJaSyVc20gzqVgpG_sfT68zC_hknyLVSMszvSUXV8JOb20DZrcqgZXE_PH-8ddUNitm3Bzx4XD3KriJl_1UhAe59ooe6Aa5deHHDAmoSA7qBZrduE",
+      "cxfyCk43DGJC9VPADCtoSj:APA91bF4QpBGAnltI1VaxPJW8cC10eKtwEIV_9pOWK2iNxJIEBOK5ryYKx6oZ9xNcgyZbLBycTELDTnAUya9uCvqpP1l16OaA7h0TZou95H2ualeIYbJe7k"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "L317yMYs1PQx1omJSD7QdFqrpZm2",
+    "name": "Lucas Carvalho",
+    "email": "lcarvalho.en@gmail.com",
+    "tokens": [
+      "fNPMigEroAJSjmCwCzQTbw:APA91bEpi_j5eVQRmgOT_sjhWK_1tioAMXT-mltWU_pMeGWonINZXO72Rj_jZn_LsydkQNUc33eS16KPFs9AcdmlUCCCIqYlmlzWCz1zoH42YUOA3KdvaZU",
+      "fNPMigEroAJSjmCwCzQTbw:APA91bHtUzFaGzygTvUCnhgBMzNN2YMxSio8oZ27O5nULnjxghctbgJqoTjKCfSwNyg3A6B0UBp2KjUW3bDQ5o7gfBRv-cs3tlFxEWq235PY5IQokd5rS4g",
+      "fNPMigEroAJSjmCwCzQTbw:APA91bHsQHgsVB0MocwhxTSK1i2ZHoeddBVQqfIYGFDoRjlStRRDf07ewCVReJbCCZSNKKEy6AtgKpzGoPwHv9PpjlhlsmL8TL3imYkipWzpE22OCj_DxVg",
+      "fNPMigEroAJSjmCwCzQTbw:APA91bFW3-G5s124Li28XSoNBXC4zfzd3URXEseqWEB51kDLV8bFL9axW-tN_ef93EX_yD_1D5jCEeju67tLT3ddwfl_TgQ6PB1xGZjm_gzG3E-f1TmbULg",
+      "e1ROaMzviVgTn8AZIzrq0G:APA91bHRU7NPN7SO7z8vyTlOP7NGtx7Fo4OAhVwn5PYaVs3uxvyu3tbVSuDfgSpQqyl-Px7Bhy95vUpQcxSjb4R8m1ZPb0t8ZCMewZc5rWetYZgUtS-4Big"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "OCkC7bzdeBXHS464RCC1fA7aDCm1",
+    "name": "Carolina Almeida ",
+    "email": "carmocarol@hotmail.com",
+    "tokens": [
+      "cxgaSacJa7aJcdZRkhQeM4:APA91bFOMFvOMVxQFe0t6VY_LFOJEt9YQJpEUZT-5XbFAXGQvuzUzttgDyTIoLUkWtoyfySSz7986CiNi3qyyBNZtozDoXH4l5_uMqOY3NxQWnOardN3aM4"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "OMVCRuf3ZlNNoRRTvi3odfPew7k1",
+    "name": "Catarina Oliveira",
+    "email": "catarinaoli94@gmail.com",
+    "tokens": [
+      "fDXtNv2fSpRkPEj6p_JMIe:APA91bGYVnPxTCdzw1olZgiDNnedZvIqcXtnejp7egWDOhRT2aBXoOcuavLaeA8mkfTGDNL_605jocXmszQAbNEC15X0pRvS3q5MoUZ2gRfPg7VbV4x-KpE"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "vxpR6DFBzhUk2JnnhiNnJy2rvka2",
+    "name": "Francine Mello",
+    "email": "f.francine_varzim@hotmail.com",
+    "tokens": [
+      "dlibUg-c4z4kYmxLFLJ3zP:APA91bFIZZFjWhfe98Pp925ufBFesstuQ0ZvAu3dYb2OW74Mxe6HxQ1ym2m0Lcp5-IfeqiXUFWGcMUINnT0wuNJ7SSQUdFW2nrSsQEFdHUe1agLCFVMQjfw"
+    ],
+    "notifyDayBeforeReminder": true,
+    "updatedAt": 1795001387058
+  },
+  {
+    "uid": "zeMoRNXTJmUOa0TgNnPnPEmkbmp1",
+    "name": "Emerson Soares ",
+    "email": "emersonsoares@gracasoberana.com.br",
+    "tokens": [
+      "cqlA0fj4gVPG-bVxCW-j73:APA91bEjufXUzuWQnrTLaxdzut_QH5FvVubqje6IvzAkN0wXI7kTOIsJ2ykelMlcBVNOhXqV10fLAkxbBJTnQaIeTcQE-8H9AssmRgQEfsHJr5NEdqznWiA"
+    ],
+    "notifyDayBeforeReminder": false,
+    "updatedAt": 1795001387058
+  }
+]

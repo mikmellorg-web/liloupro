@@ -99,6 +99,9 @@ export function formatSongForHolyrics(song: HolyricsSongExport): string {
       return true;
     })
     .join('\n')
+    // Remove quaisquer tags literais de negrito (<b>, <strong>) ou markdown (**...**) no .txt puro
+    .replace(/<\s*\/?\s*(b|strong)\b[^>]*>/gi, '')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
     // Remove múltiplos espaços ou quebras vazias consecutivas
     .replace(/\n{3,}/g, '\n\n')
     .trim();

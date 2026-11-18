@@ -2210,6 +2210,215 @@ export function SongDetailView({
     return blocks;
   };
 
+  const renderTwoColumnChords = (content: string, isFocus: boolean) => {
+    const blocks = getSongBlocks(content);
+    type CifraUnit = {
+      key: string;
+      weight: number;
+      isSpacer?: boolean;
+      isSectionTag?: boolean;
+      node: React.ReactNode;
+    };
+
+    const units: CifraUnit[] = [];
+
+    blocks.forEach((block, bIdx) => {
+      if (block.length === 1 && block[0] === '') {
+        units.push({
+          key: `spacer-raw-${bIdx}`,
+          weight: 1,
+          isSpacer: true,
+          node: <div key={`spacer-raw-${bIdx}`} className={isFocus ? "h-2 sm:h-2.5 block" : "h-1.5 sm:h-2 block"} />
+        });
+        return;
+      }
+
+      let lIdx = 0;
+      while (lIdx < block.length) {
+        const currentLine = block[lIdx];
+        const isCurrentChord = isChordLine(currentLine);
+        const isCurrentInlineDyn = !isCurrentChord && isInlineAnnotationLine(currentLine);
+        const hasNext = lIdx + 1 < block.length;
+        const nextLine = hasNext ? block[lIdx + 1] : '';
+        const isNextSectionOrDyn = hasNext && (
+          (parseLineSectionAndDynamics(nextLine).isMatch && !isInlineAnnotationLine(nextLine)) ||
+          isSectionHeaderContent(nextLine.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toLowerCase())
+        );
+        const isNextLyric = hasNext && !isChordLine(nextLine) && !isInlineAnnotationLine(nextLine) && !isNextSectionOrDyn;
+
+        if ((isCurrentChord || isCurrentInlineDyn) && isNextLyric) {
+          units.push({
+            key: `b${bIdx}-pair-${lIdx}`,
+            weight: 2,
+            node: (
+              <PairedChordLyricsRow
+                key={`b${bIdx}-pair-${lIdx}`}
+                chordLine={currentLine}
+                lyricLine={nextLine}
+                setActiveChordInDict={setActiveChordInDict}
+              />
+            )
+          });
+          lIdx += 2;
+        } else {
+          const currentParsed = parseLineSectionAndDynamics(currentLine);
+          if (currentParsed.isMatch && (currentParsed.sections.length > 0 || currentParsed.dynamics.length > 0 || currentParsed.repeats.length > 0)) {
+            const mergedSections = [...currentParsed.sections];
+            const mergedDynamics = [...currentParsed.dynamics];
+            const mergedRepeats = [...currentParsed.repeats];
+            let mergedRemaining = currentParsed.remainingText || '';
+            let consumed = 1;
+
+            while (lIdx + consumed < block.length) {
+              const candidateLine = block[lIdx + consumed];
+              if (isChordLine(candidateLine)) break;
+
+              const candidateParsed = parseLineSectionAndDynamics(candidateLine);
+              if (!candidateParsed.isMatch || (candidateParsed.sections.length === 0 && candidateParsed.dynamics.length === 0 && candidateParsed.repeats.length === 0)) {
+                break;
+              }
+
+              const candidateHasNext = lIdx + consumed + 1 < block.length;
+              const candidateNextLine = candidateHasNext ? block[lIdx + consumed + 1] : '';
+              const candidateNextParsed = candidateHasNext ? parseLineSectionAndDynamics(candidateNextLine) : null;
+              const candidateIsNextLyric = candidateHasNext &&
+                !isChordLine(candidateNextLine) &&
+                !isInlineAnnotationLine(candidateNextLine) &&
+                (!candidateNextParsed || !candidateNextParsed.isMatch);
+
+              if (isInlineAnnotationLine(candidateLine) && candidateIsNextLyric) {
+                break;
+              }
+
+              mergedSections.push(...candidateParsed.sections);
+              mergedDynamics.push(...candidateParsed.dynamics);
+              mergedRepeats.push(...candidateParsed.repeats);
+              if (candidateParsed.remainingText) {
+                mergedRemaining = (mergedRemaining + ' ' + candidateParsed.remainingText).trim();
+              }
+              consumed++;
+            }
+
+            const mergedParsed = {
+              isMatch: true,
+              sections: mergedSections,
+              dynamics: mergedDynamics,
+              repeats: mergedRepeats,
+              remainingText: mergedRemaining
+            };
+
+            units.push({
+              key: `b${bIdx}-sec-${lIdx}`,
+              weight: 1,
+              isSectionTag: true,
+              node: <RenderSectionOrDynamicsLine key={`b${bIdx}-sec-${lIdx}`} parsed={mergedParsed} />
+            });
+            lIdx += consumed;
+          } else {
+            units.push({
+              key: `b${bIdx}-single-${lIdx}`,
+              weight: 1,
+              node: (
+                <SingleLineRow
+                  key={`b${bIdx}-single-${lIdx}`}
+                  line={currentLine}
+                  isChord={isCurrentChord}
+                  setActiveChordInDict={setActiveChordInDict}
+                />
+              )
+            });
+            lIdx += 1;
+          }
+        }
+      }
+
+      if (bIdx < blocks.length - 1) {
+        units.push({
+          key: `stanza-spacer-${bIdx}`,
+          weight: 1,
+          isSpacer: true,
+          node: <div key={`stanza-spacer-${bIdx}`} className={isFocus ? "h-2.5 sm:h-3 block" : "h-2 sm:h-3 block"} />
+        });
+      }
+    });
+
+    const totalLines = units.reduce((acc, u) => acc + u.weight, 0);
+    if (units.length <= 1 || totalLines <= 3) {
+      return (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) 1px minmax(0, 1fr)',
+            columnGap: '0.85rem',
+            alignItems: 'start'
+          }}
+        >
+          <div className="min-w-0">{units.map(u => u.node)}</div>
+          <div style={{ borderLeft: '1px dashed rgba(128, 128, 128, 0.2)', height: '100%' }} />
+          <div className="min-w-0" />
+        </div>
+      );
+    }
+
+    const targetHalf = Math.ceil(totalLines / 2);
+    const maxStanzaDrift = Math.max(4, Math.floor(totalLines * 0.22));
+
+    let bestStanzaSplit = -1;
+    let bestStanzaDist = Infinity;
+    let bestAnySplit = 1;
+    let bestAnyScore = Infinity;
+
+    let cumulative = 0;
+    for (let k = 1; k < units.length; k++) {
+      cumulative += units[k - 1].weight;
+      const dist = Math.abs(cumulative - targetHalf);
+
+      if (units[k].isSpacer) {
+        if (dist < bestStanzaDist) {
+          bestStanzaDist = dist;
+          bestStanzaSplit = k;
+        }
+      }
+
+      const prevIsSection = Boolean(units[k - 1].isSectionTag);
+      const anyScore = dist + (prevIsSection ? 3.5 : 0);
+      if (anyScore < bestAnyScore) {
+        bestAnyScore = anyScore;
+        bestAnySplit = k;
+      }
+    }
+
+    const splitIndex =
+      bestStanzaSplit !== -1 && bestStanzaDist <= maxStanzaDrift
+        ? bestStanzaSplit
+        : bestAnySplit;
+
+    let leftUnits = units.slice(0, splitIndex);
+    let rightUnits = units.slice(splitIndex);
+
+    while (leftUnits.length > 0 && leftUnits[leftUnits.length - 1].isSpacer) {
+      leftUnits = leftUnits.slice(0, -1);
+    }
+    while (rightUnits.length > 0 && rightUnits[0].isSpacer) {
+      rightUnits = rightUnits.slice(1);
+    }
+
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 1px minmax(0, 1fr)',
+          columnGap: '0.85rem',
+          alignItems: 'start'
+        }}
+      >
+        <div className="min-w-0">{leftUnits.map(u => u.node)}</div>
+        <div style={{ borderLeft: '1px dashed rgba(128, 128, 128, 0.2)', height: '100%' }} />
+        <div className="min-w-0">{rightUnits.map(u => u.node)}</div>
+      </div>
+    );
+  };
+
   const handleToggleEdit = () => {
     if (!isEditing && transpose !== 0) {
       // Apply the active transposition to the edited song permanently
@@ -2878,9 +3087,6 @@ export function SongDetailView({
                   fontSize: `${songFontSize}px`,
                   letterSpacing: '0',
                   lineHeight: '1.4',
-                  columnCount: numColumns,
-                  columnGap: numColumns > 1 ? '3rem' : '0px',
-                  columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none',
                   touchAction: isPinching ? 'none' : 'manipulation'
                 }}
               >
@@ -3080,108 +3286,112 @@ export function SongDetailView({
                   `}
                 </style>
                 {displayedContent ? (
-                  getSongBlocks(displayedContent).map((block, bIdx) => {
-                    if (block.length === 1 && block[0] === '') {
-                      return <div key={`spacer-${bIdx}`} className="h-2 sm:h-2.5 break-inside-avoid block" />;
-                    }
+                  numColumns === 2 ? (
+                    renderTwoColumnChords(displayedContent, true)
+                  ) : (
+                    getSongBlocks(displayedContent).map((block, bIdx) => {
+                      if (block.length === 1 && block[0] === '') {
+                        return <div key={`spacer-${bIdx}`} className="h-2 sm:h-2.5 break-inside-avoid block" />;
+                      }
 
-                    const rows: React.ReactNode[] = [];
-                    let lIdx = 0;
-                    while (lIdx < block.length) {
-                      const currentLine = block[lIdx];
-                      const isCurrentChord = isChordLine(currentLine);
-                      const isCurrentInlineDyn = !isCurrentChord && isInlineAnnotationLine(currentLine);
-                      const hasNext = lIdx + 1 < block.length;
-                      const nextLine = hasNext ? block[lIdx + 1] : '';
-                      const isNextSectionOrDyn = hasNext && (
-                        (parseLineSectionAndDynamics(nextLine).isMatch && !isInlineAnnotationLine(nextLine)) ||
-                        isSectionHeaderContent(nextLine.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toLowerCase())
-                      );
-                      const isNextLyric = hasNext && !isChordLine(nextLine) && !isInlineAnnotationLine(nextLine) && !isNextSectionOrDyn;
-
-                      if ((isCurrentChord || isCurrentInlineDyn) && isNextLyric) {
-                        const nextLine = block[lIdx + 1];
-                        rows.push(
-                          <PairedChordLyricsRow 
-                            key={`pair-${lIdx}`}
-                            chordLine={currentLine}
-                            lyricLine={nextLine}
-                            setActiveChordInDict={setActiveChordInDict}
-                          />
+                      const rows: React.ReactNode[] = [];
+                      let lIdx = 0;
+                      while (lIdx < block.length) {
+                        const currentLine = block[lIdx];
+                        const isCurrentChord = isChordLine(currentLine);
+                        const isCurrentInlineDyn = !isCurrentChord && isInlineAnnotationLine(currentLine);
+                        const hasNext = lIdx + 1 < block.length;
+                        const nextLine = hasNext ? block[lIdx + 1] : '';
+                        const isNextSectionOrDyn = hasNext && (
+                          (parseLineSectionAndDynamics(nextLine).isMatch && !isInlineAnnotationLine(nextLine)) ||
+                          isSectionHeaderContent(nextLine.replace(/^[\[\(\{]+|[\]\)\}]+$/g, '').trim().toLowerCase())
                         );
-                        lIdx += 2;
-                      } else {
-                        const currentParsed = parseLineSectionAndDynamics(currentLine);
-                        if (currentParsed.isMatch && (currentParsed.sections.length > 0 || currentParsed.dynamics.length > 0 || currentParsed.repeats.length > 0)) {
-                          // Collect all consecutive section and dynamic lines so they display side-by-side horizontally
-                          const mergedSections = [...currentParsed.sections];
-                          const mergedDynamics = [...currentParsed.dynamics];
-                          const mergedRepeats = [...currentParsed.repeats];
-                          let mergedRemaining = currentParsed.remainingText || '';
-                          let consumed = 1;
+                        const isNextLyric = hasNext && !isChordLine(nextLine) && !isInlineAnnotationLine(nextLine) && !isNextSectionOrDyn;
 
-                          while (lIdx + consumed < block.length) {
-                            const candidateLine = block[lIdx + consumed];
-                            if (isChordLine(candidateLine)) break;
-
-                            const candidateParsed = parseLineSectionAndDynamics(candidateLine);
-                            if (!candidateParsed.isMatch || (candidateParsed.sections.length === 0 && candidateParsed.dynamics.length === 0 && candidateParsed.repeats.length === 0)) {
-                              break;
-                            }
-
-                            const candidateHasNext = lIdx + consumed + 1 < block.length;
-                            const candidateNextLine = candidateHasNext ? block[lIdx + consumed + 1] : '';
-                            const candidateNextParsed = candidateHasNext ? parseLineSectionAndDynamics(candidateNextLine) : null;
-                            const candidateIsNextLyric = candidateHasNext && 
-                              !isChordLine(candidateNextLine) && 
-                              !isInlineAnnotationLine(candidateNextLine) && 
-                              (!candidateNextParsed || !candidateNextParsed.isMatch);
-
-                            if (isInlineAnnotationLine(candidateLine) && candidateIsNextLyric) {
-                              break;
-                            }
-
-                            mergedSections.push(...candidateParsed.sections);
-                            mergedDynamics.push(...candidateParsed.dynamics);
-                            mergedRepeats.push(...candidateParsed.repeats);
-                            if (candidateParsed.remainingText) {
-                              mergedRemaining = (mergedRemaining + ' ' + candidateParsed.remainingText).trim();
-                            }
-                            consumed++;
-                          }
-
-                          const mergedParsed = {
-                            isMatch: true,
-                            sections: mergedSections,
-                            dynamics: mergedDynamics,
-                            repeats: mergedRepeats,
-                            remainingText: mergedRemaining
-                          };
-
+                        if ((isCurrentChord || isCurrentInlineDyn) && isNextLyric) {
+                          const nextLine = block[lIdx + 1];
                           rows.push(
-                            <RenderSectionOrDynamicsLine key={`merged-sec-dyn-${lIdx}`} parsed={mergedParsed} />
-                          );
-                          lIdx += consumed;
-                        } else {
-                          rows.push(
-                            <SingleLineRow 
-                              key={`single-${lIdx}`}
-                              line={currentLine}
-                              isChord={isCurrentChord}
+                            <PairedChordLyricsRow 
+                              key={`pair-${lIdx}`}
+                              chordLine={currentLine}
+                              lyricLine={nextLine}
                               setActiveChordInDict={setActiveChordInDict}
                             />
                           );
-                          lIdx += 1;
+                          lIdx += 2;
+                        } else {
+                          const currentParsed = parseLineSectionAndDynamics(currentLine);
+                          if (currentParsed.isMatch && (currentParsed.sections.length > 0 || currentParsed.dynamics.length > 0 || currentParsed.repeats.length > 0)) {
+                            // Collect all consecutive section and dynamic lines so they display side-by-side horizontally
+                            const mergedSections = [...currentParsed.sections];
+                            const mergedDynamics = [...currentParsed.dynamics];
+                            const mergedRepeats = [...currentParsed.repeats];
+                            let mergedRemaining = currentParsed.remainingText || '';
+                            let consumed = 1;
+
+                            while (lIdx + consumed < block.length) {
+                              const candidateLine = block[lIdx + consumed];
+                              if (isChordLine(candidateLine)) break;
+
+                              const candidateParsed = parseLineSectionAndDynamics(candidateLine);
+                              if (!candidateParsed.isMatch || (candidateParsed.sections.length === 0 && candidateParsed.dynamics.length === 0 && candidateParsed.repeats.length === 0)) {
+                                break;
+                              }
+
+                              const candidateHasNext = lIdx + consumed + 1 < block.length;
+                              const candidateNextLine = candidateHasNext ? block[lIdx + consumed + 1] : '';
+                              const candidateNextParsed = candidateHasNext ? parseLineSectionAndDynamics(candidateNextLine) : null;
+                              const candidateIsNextLyric = candidateHasNext && 
+                                !isChordLine(candidateNextLine) && 
+                                !isInlineAnnotationLine(candidateNextLine) && 
+                                (!candidateNextParsed || !candidateNextParsed.isMatch);
+
+                              if (isInlineAnnotationLine(candidateLine) && candidateIsNextLyric) {
+                                break;
+                              }
+
+                              mergedSections.push(...candidateParsed.sections);
+                              mergedDynamics.push(...candidateParsed.dynamics);
+                              mergedRepeats.push(...candidateParsed.repeats);
+                              if (candidateParsed.remainingText) {
+                                mergedRemaining = (mergedRemaining + ' ' + candidateParsed.remainingText).trim();
+                              }
+                              consumed++;
+                            }
+
+                            const mergedParsed = {
+                              isMatch: true,
+                              sections: mergedSections,
+                              dynamics: mergedDynamics,
+                              repeats: mergedRepeats,
+                              remainingText: mergedRemaining
+                            };
+
+                            rows.push(
+                              <RenderSectionOrDynamicsLine key={`merged-sec-dyn-${lIdx}`} parsed={mergedParsed} />
+                            );
+                            lIdx += consumed;
+                          } else {
+                            rows.push(
+                              <SingleLineRow 
+                                key={`single-${lIdx}`}
+                                line={currentLine}
+                                isChord={isCurrentChord}
+                                setActiveChordInDict={setActiveChordInDict}
+                              />
+                            );
+                            lIdx += 1;
+                          }
                         }
                       }
-                    }
 
-                    return (
-                      <div key={`block-${bIdx}`} className="break-inside-avoid mb-2 sm:mb-2.5 block">
-                        {rows}
-                      </div>
-                    );
-                  })
+                      return (
+                        <div key={`block-${bIdx}`} className="break-inside-avoid mb-2 sm:mb-2.5 block">
+                          {rows}
+                        </div>
+                      );
+                    })
+                  )
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-text-muted">
                     <p className="italic font-sans text-lg">Nenhuma cifra cadastrada.</p>
@@ -4986,13 +5196,13 @@ export function SongDetailView({
                           fontFamily: '"JetBrains Mono", monospace',
                           fontSize: isFullscreen ? `${songFontSize * 1.5}px` : `${songFontSize}px`,
                           letterSpacing: '0',
-                          lineHeight: '1.4',
-                          columnCount: numColumns,
-                          columnGap: numColumns > 1 ? '3rem' : '0px',
-                          columnRule: numColumns > 1 ? '1px dashed rgba(128, 128, 128, 0.2)' : 'none'
+                          lineHeight: '1.4'
                         }}
                       >
-                        {getSongBlocks(displayedContent).map((block, bIdx) => {
+                        {numColumns === 2 ? (
+                          renderTwoColumnChords(displayedContent, false)
+                        ) : (
+                          getSongBlocks(displayedContent).map((block, bIdx) => {
                           if (block.length === 1 && block[0] === '') {
                             return <div key={`spacer-${bIdx}`} className="h-1.5 sm:h-2 break-inside-avoid block" />;
                           }
@@ -5093,7 +5303,8 @@ export function SongDetailView({
                               {rows}
                             </div>
                           );
-                        })}
+                        })
+                        )}
                       </div>
                       {renderLiturgyNavigation()}
                     </>

@@ -47,6 +47,124 @@ function escapeHtml(str: string): string {
 }
 
 /**
+ * Remove marcações literais de negrito (<b>, </b>, <strong>, </strong> e **texto**)
+ * preservando apenas o texto puro sem deslocar colunas.
+ */
+export function stripInlineBoldTags(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<\s*\/?\s*(b|strong)\b[^>]*>/gi, '')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1');
+}
+
+interface BoldTextSegment {
+  text: string;
+  bold: boolean;
+}
+
+/**
+ * Converte marcações de negrito (<b>...</b>, <strong>...</strong>, **...**)
+ * em segmentos limpos { text, bold }, sem caracteres de tag no fluxo final.
+ */
+export function parseBoldSegments(line: string): BoldTextSegment[] {
+  if (!line) return [];
+
+  const normalized = line.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  const segments: BoldTextSegment[] = [];
+  const tagRegex = /<\s*(\/?)\s*(b|strong)\b[^>]*>/gi;
+
+  let isBold = false;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  const pushSegment = (text: string, bold: boolean) => {
+    if (!text) return;
+    const prev = segments[segments.length - 1];
+    if (prev && prev.bold === bold) {
+      prev.text += text;
+    } else {
+      segments.push({ text, bold });
+    }
+  };
+
+  while ((match = tagRegex.exec(normalized)) !== null) {
+    if (match.index > lastIdx) {
+      pushSegment(normalized.slice(lastIdx, match.index), isBold);
+    }
+    const isClosing = match[1] === '/';
+    isBold = !isClosing;
+    lastIdx = tagRegex.lastIndex;
+  }
+
+  if (lastIdx < normalized.length) {
+    pushSegment(normalized.slice(lastIdx), isBold);
+  }
+
+  return segments;
+}
+
+/**
+ * Converte marcações de negrito (e itálico/sublinhado opcionais) em HTML real seguro com escapeHtml,
+ * preservando espaços e tabulações em linhas monoespaçadas sem ocupar colunas extras.
+ */
+function formatInlineBoldHtml(line: string, preserveMonospaceSpaces: boolean = false): string {
+  if (!line) return '';
+
+  const normalized = line.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  const tagRegex = /<\s*(\/?)\s*(b|strong|i|em|u)\b[^>]*>/gi;
+
+  let isBold = false;
+  let isItalic = false;
+  let isUnderline = false;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  let out = '';
+
+  const emitChunk = (text: string) => {
+    if (!text) return;
+    let htmlText = escapeHtml(text);
+    if (preserveMonospaceSpaces) {
+      htmlText = htmlText
+        .replace(/ /g, '&nbsp;')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    }
+    if (isUnderline) htmlText = `<u>${htmlText}</u>`;
+    if (isItalic) htmlText = `<em>${htmlText}</em>`;
+    if (isBold) htmlText = `<strong style="font-weight: bold;">${htmlText}</strong>`;
+    out += htmlText;
+  };
+
+  while ((match = tagRegex.exec(normalized)) !== null) {
+    if (match.index > lastIdx) {
+      emitChunk(normalized.slice(lastIdx, match.index));
+    }
+    const isClosing = match[1] === '/';
+    const tag = match[2].toLowerCase();
+    if (tag === 'b' || tag === 'strong') isBold = !isClosing;
+    else if (tag === 'i' || tag === 'em') isItalic = !isClosing;
+    else if (tag === 'u') isUnderline = !isClosing;
+    lastIdx = tagRegex.lastIndex;
+  }
+
+  if (lastIdx < normalized.length) {
+    emitChunk(normalized.slice(lastIdx));
+  }
+
+  return out;
+}
+
+/**
+ * Remove tags inline (<b>, <strong>, <i>, <u> e **...**) mantendo apenas o texto visível
+ * para medição exata de largura/quebra de linha e detecção de seções/acordes.
+ */
+function stripInlineFormattingForMeasure(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<\s*\/?\s*(b|strong|i|em|u)\b[^>]*>/gi, '')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1');
+}
+
+/**
  * Remove qualquer menção de versão da Bíblia (ex: (NAA), (NVI), (ARC), (BLIVRE), etc.)
  * tanto de textos litúrgicos, passagens bíblicas quanto de títulos de músicas.
  */
@@ -57,21 +175,126 @@ export function removeBibleVersionTags(text: string): string {
     .trim();
 }
 
+interface HtmlDensityProfile {
+  name: 'normal' | 'compact' | 'tight';
+  fontPt: number;
+  lineHeightRatio: number;
+  lineHeightPt: number;
+  spacerFontPt: number;
+  spacerHeightPt: number;
+  sectionHeightPt: number;
+  topSectionHeightPt: number;
+  consecutiveSectionHeightPt: number;
+  badgeFontPt: number;
+  dynFontPt: number;
+  badgePad: string;
+  dynPad: string;
+  sectionTopPt: number;
+  sectionBottomPt: number;
+  sectionLineH: number;
+  colTopPadPt: number;
+  maxCharsPerLine: number;
+  collapseSectionSpacer: boolean;
+}
+
+const HTML_DENSITY_NORMAL: HtmlDensityProfile = {
+  name: 'normal',
+  fontPt: 10,
+  lineHeightRatio: 1.15,
+  lineHeightPt: 11.5,
+  spacerFontPt: 10,
+  spacerHeightPt: 11.5,
+  sectionHeightPt: 25,
+  topSectionHeightPt: 19,
+  consecutiveSectionHeightPt: 20.5,
+  badgeFontPt: 8,
+  dynFontPt: 7.5,
+  badgePad: '2pt 6pt',
+  dynPad: '2pt 5pt',
+  sectionTopPt: 6,
+  sectionBottomPt: 3,
+  sectionLineH: 1.25,
+  colTopPadPt: 8,
+  maxCharsPerLine: 40,
+  collapseSectionSpacer: false
+};
+
+const HTML_DENSITY_COMPACT: HtmlDensityProfile = {
+  name: 'compact',
+  fontPt: 9.0,
+  lineHeightRatio: 1.08,
+  lineHeightPt: 9.72,
+  spacerFontPt: 7.0,
+  spacerHeightPt: 7.35,
+  sectionHeightPt: 18.5,
+  topSectionHeightPt: 15.5,
+  consecutiveSectionHeightPt: 16,
+  badgeFontPt: 7.2,
+  dynFontPt: 6.8,
+  badgePad: '1.5pt 5pt',
+  dynPad: '1.5pt 4pt',
+  sectionTopPt: 3,
+  sectionBottomPt: 1.5,
+  sectionLineH: 1.12,
+  colTopPadPt: 5,
+  maxCharsPerLine: 45,
+  collapseSectionSpacer: true
+};
+
+const HTML_DENSITY_TIGHT: HtmlDensityProfile = {
+  name: 'tight',
+  fontPt: 8.4,
+  lineHeightRatio: 1.04,
+  lineHeightPt: 8.74,
+  spacerFontPt: 6.0,
+  spacerHeightPt: 6.24,
+  sectionHeightPt: 16.5,
+  topSectionHeightPt: 14,
+  consecutiveSectionHeightPt: 14.5,
+  badgeFontPt: 6.8,
+  dynFontPt: 6.4,
+  badgePad: '1pt 4pt',
+  dynPad: '1pt 3.5pt',
+  sectionTopPt: 2,
+  sectionBottomPt: 1,
+  sectionLineH: 1.06,
+  colTopPadPt: 4,
+  maxCharsPerLine: 49,
+  collapseSectionSpacer: true
+};
+
+function resolveHtmlDensity(compactOrProfile: boolean | HtmlDensityProfile): HtmlDensityProfile {
+  if (typeof compactOrProfile === 'boolean') {
+    return compactOrProfile ? HTML_DENSITY_COMPACT : HTML_DENSITY_NORMAL;
+  }
+  return compactOrProfile;
+}
+
 /**
  * Formata os badges de seção, dinâmica e repetições em HTML compatível com Word e Google Docs,
  * replicando fielmente as cores, bordas, badges e espaçamentos do PDF ("Cifras do Culto")
  * e da visualização direta pelo app (SongDetailView).
  */
-export function formatSectionDynamicsHtml(parsed: ParsedSectionAndDynamics, isTop: boolean = false): string {
+export function formatSectionDynamicsHtml(
+  parsed: ParsedSectionAndDynamics,
+  isTop: boolean = false,
+  compactOrProfile: boolean | HtmlDensityProfile = false
+): string {
   if (!parsed || !parsed.isMatch) return '';
 
+  const density = resolveHtmlDensity(compactOrProfile);
+  const isCompact = density.name !== 'normal';
   const badgesHtml: string[] = [];
+  const badgeFontPt = `${density.badgeFontPt}pt`;
+  const dynFontPt = `${density.dynFontPt}pt`;
+  const badgePad = density.badgePad;
+  const dynPad = density.dynPad;
 
   // 1. Badges de Seção ([Intro], [Verso], [Refrão], [Ponte], etc.) - ciano/teal LiLouPro
   for (const sec of parsed.sections) {
     const title = sec.title.toUpperCase();
     badgesHtml.push(
-      `<span style="display: inline-block; padding: 2pt 6pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #eef6f8; color: #0e7490; border: 1pt solid #2ba9b8; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(title)}</span>`
+      `<span style="display: inline-block; padding: ${badgePad}; margin-right: 4pt; margin-bottom: ${isCompact ? '1pt' : '2pt'}; font-family: Arial, Helvetica, sans-serif; font-size: ${badgeFontPt}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #eef6f8; color: #0e7490; border: 1pt solid #2ba9b8; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(title)}</span>`
     );
   }
 
@@ -108,7 +331,7 @@ export function formatSectionDynamicsHtml(parsed: ParsedSectionAndDynamics, isTo
     }
 
     badgesHtml.push(
-      `<span style="display: inline-block; padding: 2pt 5pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: ${bg}; color: ${textC}; border: 1pt solid ${border}; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(cleanLabel)}</span>`
+      `<span style="display: inline-block; padding: ${dynPad}; margin-right: 4pt; margin-bottom: ${isCompact ? '1pt' : '2pt'}; font-family: Arial, Helvetica, sans-serif; font-size: ${dynFontPt}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: ${bg}; color: ${textC}; border: 1pt solid ${border}; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">${escapeHtml(cleanLabel)}</span>`
     );
   }
 
@@ -116,94 +339,435 @@ export function formatSectionDynamicsHtml(parsed: ParsedSectionAndDynamics, isTo
   for (const rep of parsed.repeats) {
     const repLabel = rep.toUpperCase();
     badgesHtml.push(
-      `<span style="display: inline-block; padding: 2pt 5pt; margin-right: 4pt; margin-bottom: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #fef3c7; color: #b45309; border: 1pt solid #fcd34d; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">🔁 ${escapeHtml(repLabel)}</span>`
+      `<span style="display: inline-block; padding: ${dynPad}; margin-right: 4pt; margin-bottom: ${isCompact ? '1pt' : '2pt'}; font-family: Arial, Helvetica, sans-serif; font-size: ${dynFontPt}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #fef3c7; color: #b45309; border: 1pt solid #fcd34d; border-radius: 4pt; vertical-align: middle; white-space: nowrap;">🔁 ${escapeHtml(repLabel)}</span>`
     );
   }
 
   // 4. Texto remanescente após tags
   if (parsed.remainingText) {
     badgesHtml.push(
-      `<span style="font-family: Arial, Helvetica, sans-serif; font-size: 8pt; font-style: italic; font-weight: bold; color: #64748b; margin-left: 4pt; vertical-align: middle;">${escapeHtml(parsed.remainingText)}</span>`
+      `<span style="font-family: Arial, Helvetica, sans-serif; font-size: ${badgeFontPt}; font-style: italic; font-weight: bold; color: #64748b; margin-left: 4pt; vertical-align: middle;">${formatInlineBoldHtml(parsed.remainingText, false)}</span>`
     );
   }
 
-  const topMargin = isTop ? '0pt' : '6pt';
-  return `<p class="cifra-section MsoNormal" style="margin: 0pt; margin-top: ${topMargin}; margin-bottom: 3pt; mso-margin-top-alt: ${topMargin}; mso-margin-bottom-alt: 3pt; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">${badgesHtml.join('')}</p>`;
+  const topMargin = isTop ? '0pt' : `${density.sectionTopPt}pt`;
+  const bottomMargin = `${density.sectionBottomPt}pt`;
+  const sectionLineHeight = `${density.sectionLineH}`;
+  return `<p class="cifra-section MsoNormal" style="margin: 0pt; margin-top: ${topMargin}; margin-bottom: ${bottomMargin}; mso-margin-top-alt: ${topMargin}; mso-margin-bottom-alt: ${bottomMargin}; line-height: ${sectionLineHeight}; page-break-after: avoid; mso-pagination: lines-together;">${badgesHtml.join('')}</p>`;
+}
+
+function renderHtmlSingleCifraLine(
+  cleanLine: string,
+  isChord: boolean,
+  density: HtmlDensityProfile
+): string {
+  const fontPt = `${density.fontPt}pt`;
+  const lineH = `${density.lineHeightRatio}`;
+
+  if (isChord) {
+    const cleanChordLine = stripInlineFormattingForMeasure(cleanLine);
+    const tokens = cleanChordLine.match(/(\S+|\s+)/g) || [cleanChordLine];
+    const formattedTokens = tokens.map(token => {
+      if (/^\s+$/.test(token)) {
+        return token.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+      }
+      return `<b><span style="color: #2ba9b8; font-weight: bold;">${escapeHtml(token)}</span></b>`;
+    }).join('');
+
+    return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${fontPt}; font-weight: bold; color: #2ba9b8; white-space: pre-wrap;"><b>${formattedTokens}</b></p>`;
+  }
+
+  const formattedLyric = formatInlineBoldHtml(cleanLine, true);
+  return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${fontPt}; font-weight: normal; color: #3c3c3c; white-space: pre-wrap;">${formattedLyric}</p>`;
 }
 
 /**
  * Formata um conjunto de linhas de cifra para uma coluna usando parágrafos (<p>)
- * com margens estritamente zeradas (margin: 0pt) e altura de linha compacta (line-height: 1.15).
- * Isso garante que tanto no Google Docs (Ctrl+V) quanto no Microsoft Word (.doc) o espaçamento
- * seja compacto e idêntico ao PDF do aplicativo, sem grandes lacunas entre acordes e letras.
+ * com margens estritamente zeradas (margin: 0pt) e altura de linha compacta.
  */
-function formatCifraColumnLines(lines: string[]): string {
+function formatCifraColumnLines(lines: string[], compactOrProfile: boolean | HtmlDensityProfile = false): string {
   if (!lines || lines.length === 0) return '';
 
+  const density = resolveHtmlDensity(compactOrProfile);
   const rendered: string[] = [];
   let lastWasEmpty = false;
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const cleanLine = rawLine ? rawLine.replace(/\r/g, '') : '';
-    const trimmed = cleanLine.trim();
+    const trimmed = stripInlineFormattingForMeasure(cleanLine).trim();
 
     if (!trimmed) {
-      // Evita acumular linhas vazias repetidas
       if (lastWasEmpty) continue;
+      if (density.collapseSectionSpacer && i + 1 < lines.length) {
+        const nextNorm = normalizeSpacedTags(stripInlineFormattingForMeasure(lines[i + 1] || ''));
+        if (parseLineSectionAndDynamics(nextNorm).isMatch) continue;
+      }
       lastWasEmpty = true;
       rendered.push(
-        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: 1.15; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: 10pt;">&nbsp;</p>`
+        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
       );
       continue;
     }
 
     lastWasEmpty = false;
 
-    // Seção ou dinâmica: detecta usando o mesmo parser do PDF e SongDetailView (parseLineSectionAndDynamics)
-    const norm = normalizeSpacedTags(cleanLine);
+    const norm = normalizeSpacedTags(stripInlineFormattingForMeasure(cleanLine));
     const parsed = parseLineSectionAndDynamics(norm);
 
     if (parsed.isMatch) {
       const isTop = i === 0 || rendered.length === 0;
-      rendered.push(formatSectionDynamicsHtml(parsed, isTop));
+      rendered.push(formatSectionDynamicsHtml(parsed, isTop, density));
       continue;
     }
 
-    const isChord = isChordLine(cleanLine);
-
-    if (isChord) {
-      // Linha de acordes: acordes destacados em negrito (<b>) e cor azul/teal (#2ba9b8) exatamente como no PDF
-      const tokens = cleanLine.match(/(\S+|\s+)/g) || [cleanLine];
-      const formattedTokens = tokens.map(token => {
-        if (/^\s+$/.test(token)) {
-          return token.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
-        }
-        return `<b><span style="color: #2ba9b8; font-weight: bold;">${escapeHtml(token)}</span></b>`;
-      }).join('');
-
-      rendered.push(
-        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: 1.15; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; color: #2ba9b8; white-space: pre;"><b>${formattedTokens}</b></p>`
-      );
-      continue;
-    }
-
-    // Linha de letra normal: cor cinza escuro (#3c3c3c) igual ao PDF
-    const escapedLyric = escapeHtml(cleanLine)
-      .replace(/ /g, '&nbsp;')
-      .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
-
-    rendered.push(
-      `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: 1.15; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: normal; color: #3c3c3c; white-space: pre;">${escapedLyric}</p>`
-    );
+    const isChord = isChordLine(stripInlineFormattingForMeasure(cleanLine));
+    rendered.push(renderHtmlSingleCifraLine(cleanLine, isChord, density));
   }
 
   return rendered.join('\n');
 }
 
+type HtmlSongItem =
+  | { type: 'section'; parsed: ParsedSectionAndDynamics; heightPt: number; isFirstInSong: boolean }
+  | { type: 'pair'; chordLine: string; lyricLine: string; heightPt: number; lineUnits: number }
+  | { type: 'single'; line: string; isChord: boolean; heightPt: number; lineUnits: number }
+  | { type: 'spacer'; heightPt: number };
+
+interface HtmlSongBlock {
+  items: HtmlSongItem[];
+  heightPt: number;
+  lineUnits: number;
+}
+
+interface PackedHtmlPage {
+  col1: HtmlSongBlock[];
+  col2: HtmlSongBlock[];
+  h1: number;
+  h2: number;
+  lines1: number;
+  lines2: number;
+}
+
+function estimateWrappedLineCount(line: string, maxCharsPerLine: number): number {
+  const visible = stripInlineFormattingForMeasure(line || '').replace(/\t/g, '    ');
+  const trimmedRightLen = visible.replace(/\s+$/, '').length;
+  if (trimmedRightLen <= maxCharsPerLine) return 1;
+  return Math.max(1, Math.ceil(trimmedRightLen / maxCharsPerLine));
+}
+
+function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): HtmlSongBlock[] {
+  const rawLines = (rawCifra || '').split(/\r?\n/);
+  while (rawLines.length > 0 && !stripInlineFormattingForMeasure(rawLines[rawLines.length - 1] || '').trim()) {
+    rawLines.pop();
+  }
+
+  const items: HtmlSongItem[] = [];
+  let i = 0;
+  while (i < rawLines.length) {
+    const cleanLine = (rawLines[i] || '').replace(/\r/g, '');
+    const visibleLine = stripInlineFormattingForMeasure(cleanLine);
+    const trimmed = visibleLine.trim();
+
+    if (!trimmed) {
+      if (items.length > 0 && items[items.length - 1].type !== 'spacer') {
+        items.push({ type: 'spacer', heightPt: density.spacerHeightPt });
+      }
+      i++;
+      continue;
+    }
+
+    const norm = normalizeSpacedTags(visibleLine);
+    const parsed = parseLineSectionAndDynamics(norm);
+
+    if (parsed.isMatch) {
+      if (density.collapseSectionSpacer && items.length > 0 && items[items.length - 1].type === 'spacer') {
+        items.pop();
+      }
+      const hasNext = i + 1 < rawLines.length;
+      const nextVisible = hasNext ? stripInlineFormattingForMeasure(rawLines[i + 1] || '') : '';
+      const nextNorm = hasNext ? normalizeSpacedTags(nextVisible) : '';
+      const nextParsed = hasNext ? parseLineSectionAndDynamics(nextNorm) : { isMatch: false };
+      const isNextSection = nextParsed.isMatch;
+      const isTop = items.length === 0;
+      const heightPt = isTop
+        ? density.topSectionHeightPt
+        : isNextSection
+          ? density.consecutiveSectionHeightPt
+          : density.sectionHeightPt;
+
+      items.push({ type: 'section', parsed, heightPt, isFirstInSong: isTop });
+      i++;
+      continue;
+    }
+
+    const isCurrentChord = isChordLine(visibleLine);
+    const hasNext = i + 1 < rawLines.length;
+    const nextRaw = hasNext ? (rawLines[i + 1] || '').replace(/\r/g, '') : '';
+    const nextVisible = hasNext ? stripInlineFormattingForMeasure(nextRaw) : '';
+    const nextNorm = hasNext ? normalizeSpacedTags(nextVisible) : '';
+    const nextParsed = hasNext ? parseLineSectionAndDynamics(nextNorm) : { isMatch: false };
+    const isNextLyric = hasNext && !isChordLine(nextVisible) && !nextParsed.isMatch && nextVisible.trim() !== '';
+
+    if (isCurrentChord && isNextLyric) {
+      const chordWrapped = estimateWrappedLineCount(cleanLine, density.maxCharsPerLine);
+      const lyricWrapped = estimateWrappedLineCount(nextRaw, density.maxCharsPerLine);
+      const totalWrapped = chordWrapped + lyricWrapped;
+      items.push({
+        type: 'pair',
+        chordLine: cleanLine,
+        lyricLine: nextRaw,
+        heightPt: density.lineHeightPt * totalWrapped,
+        lineUnits: totalWrapped
+      });
+      i += 2;
+    } else {
+      const wrapped = estimateWrappedLineCount(cleanLine, density.maxCharsPerLine);
+      items.push({
+        type: 'single',
+        line: cleanLine,
+        isChord: isCurrentChord,
+        heightPt: density.lineHeightPt * wrapped,
+        lineUnits: wrapped
+      });
+      i++;
+    }
+  }
+
+  // Agrupa em blocos lógicos (mantendo cabeçalho de seção conectado ao início da estrofe e pares acorde+letra atômicos)
+  const blocks: HtmlSongBlock[] = [];
+  let currentItems: HtmlSongItem[] = [];
+  let currentHeightPt = 0;
+  let currentLineUnits = 0;
+
+  const getItemLines = (it: HtmlSongItem): number => {
+    if (it.type === 'pair' || it.type === 'single') return it.lineUnits;
+    if (it.type === 'section') return 1;
+    return 0;
+  };
+
+  for (const item of items) {
+    if (item.type === 'section') {
+      const hasMusicContent = currentItems.some(it => it.type === 'pair' || it.type === 'single');
+      if (hasMusicContent) {
+        blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
+        currentItems = [];
+        currentHeightPt = 0;
+        currentLineUnits = 0;
+      }
+      currentItems.push(item);
+      currentHeightPt += item.heightPt;
+      currentLineUnits += getItemLines(item);
+    } else if (item.type === 'spacer') {
+      if (currentItems.length > 0) {
+        // Anexa o spacer ao final do bloco anterior apenas como espaçamento entre estrofes
+        currentItems.push(item);
+        currentHeightPt += item.heightPt;
+        blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
+        currentItems = [];
+        currentHeightPt = 0;
+        currentLineUnits = 0;
+      }
+    } else {
+      const musicCount = currentItems.filter(it => it.type === 'pair' || it.type === 'single').length;
+      if (musicCount >= 4) {
+        blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
+        currentItems = [];
+        currentHeightPt = 0;
+        currentLineUnits = 0;
+      }
+      currentItems.push(item);
+      currentHeightPt += item.heightPt;
+      currentLineUnits += getItemLines(item);
+    }
+  }
+
+  if (currentItems.length > 0) {
+    // Remove spacer sobrando no último bloco
+    while (currentItems.length > 0 && currentItems[currentItems.length - 1].type === 'spacer') {
+      const removed = currentItems.pop()!;
+      currentHeightPt -= removed.heightPt;
+    }
+    if (currentItems.length > 0) {
+      blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
+    }
+  }
+
+  return blocks;
+}
+
+function measureHtmlBlocksHeightPt(blocks: HtmlSongBlock[]): number {
+  let total = 0;
+  for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+    const b = blocks[bIdx];
+    total += b.heightPt;
+    // Se é o último bloco da coluna, desconta eventual spacer final que não será renderizado
+    if (bIdx === blocks.length - 1 && b.items.length > 0) {
+      const lastIt = b.items[b.items.length - 1];
+      if (lastIt.type === 'spacer') {
+        total -= lastIt.heightPt;
+      }
+    }
+  }
+  return Math.max(0, total);
+}
+
+function sumHtmlBlockLines(blocks: HtmlSongBlock[]): number {
+  let total = 0;
+  for (const b of blocks) {
+    total += b.lineUnits;
+  }
+  return total;
+}
+
+function findBalancedHtmlTwoColSplit(
+  remainingBlocks: HtmlSongBlock[],
+  availColHeightPt: number
+): number | null {
+  if (remainingBlocks.length === 0) return 0;
+  if (remainingBlocks.length === 1) {
+    return measureHtmlBlocksHeightPt(remainingBlocks) <= availColHeightPt ? 1 : null;
+  }
+
+  let bestSplit: number | null = null;
+  let minDiff = Infinity;
+
+  for (let i = 0; i < remainingBlocks.length - 1; i++) {
+    const col1 = remainingBlocks.slice(0, i + 1);
+    const h1 = measureHtmlBlocksHeightPt(col1);
+    if (h1 > availColHeightPt) break;
+
+    const col2 = remainingBlocks.slice(i + 1);
+    const h2 = measureHtmlBlocksHeightPt(col2);
+    if (h2 <= availColHeightPt) {
+      const diff = Math.abs(h1 - h2);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestSplit = i + 1;
+      }
+    }
+  }
+
+  return bestSplit;
+}
+
+function packHtmlSongPages(
+  blocks: HtmlSongBlock[],
+  firstPageAvailPt: number,
+  contPageAvailPt: number
+): PackedHtmlPage[] {
+  const pages: PackedHtmlPage[] = [];
+  let curBlockIdx = 0;
+  let isFirstPage = true;
+
+  while (curBlockIdx < blocks.length) {
+    const availColHeightPt = isFirstPage ? firstPageAvailPt : contPageAvailPt;
+    const remainingBlocks = blocks.slice(curBlockIdx);
+    const balancedSplit = findBalancedHtmlTwoColSplit(remainingBlocks, availColHeightPt);
+
+    if (balancedSplit !== null) {
+      const col1 = remainingBlocks.slice(0, balancedSplit);
+      const col2 = remainingBlocks.slice(balancedSplit);
+      pages.push({
+        col1,
+        col2,
+        h1: measureHtmlBlocksHeightPt(col1),
+        h2: measureHtmlBlocksHeightPt(col2),
+        lines1: sumHtmlBlockLines(col1),
+        lines2: sumHtmlBlockLines(col2)
+      });
+      break;
+    }
+
+    let col1EndIdx = 0;
+    while (curBlockIdx + col1EndIdx < blocks.length) {
+      const candidate = blocks.slice(curBlockIdx, curBlockIdx + col1EndIdx + 1);
+      if (measureHtmlBlocksHeightPt(candidate) <= availColHeightPt) {
+        col1EndIdx++;
+      } else {
+        break;
+      }
+    }
+    if (col1EndIdx === 0) col1EndIdx = 1;
+
+    const col1 = blocks.slice(curBlockIdx, curBlockIdx + col1EndIdx);
+    curBlockIdx += col1EndIdx;
+
+    let col2EndIdx = 0;
+    while (curBlockIdx + col2EndIdx < blocks.length) {
+      const candidate = blocks.slice(curBlockIdx, curBlockIdx + col2EndIdx + 1);
+      if (measureHtmlBlocksHeightPt(candidate) <= availColHeightPt) {
+        col2EndIdx++;
+      } else {
+        break;
+      }
+    }
+
+    const col2 = blocks.slice(curBlockIdx, curBlockIdx + col2EndIdx);
+    curBlockIdx += col2EndIdx;
+
+    pages.push({
+      col1,
+      col2,
+      h1: measureHtmlBlocksHeightPt(col1),
+      h2: measureHtmlBlocksHeightPt(col2),
+      lines1: sumHtmlBlockLines(col1),
+      lines2: sumHtmlBlockLines(col2)
+    });
+
+    isFirstPage = false;
+  }
+
+  return pages;
+}
+
+function renderHtmlBlocksToColumn(blocks: HtmlSongBlock[], density: HtmlDensityProfile): string {
+  if (!blocks || blocks.length === 0) {
+    return '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>';
+  }
+
+  const out: string[] = [];
+  const flatItems: HtmlSongItem[] = [];
+  for (const b of blocks) {
+    for (const it of b.items) {
+      flatItems.push(it);
+    }
+  }
+
+  // Remove spacer inicial ou final da coluna para alinhamento limpo no topo/rodapé
+  while (flatItems.length > 0 && flatItems[0].type === 'spacer') {
+    flatItems.shift();
+  }
+  while (flatItems.length > 0 && flatItems[flatItems.length - 1].type === 'spacer') {
+    flatItems.pop();
+  }
+
+  for (let idx = 0; idx < flatItems.length; idx++) {
+    const item = flatItems[idx];
+    if (item.type === 'section') {
+      const isTop = out.length === 0;
+      out.push(formatSectionDynamicsHtml(item.parsed, isTop, density));
+    } else if (item.type === 'pair') {
+      out.push(renderHtmlSingleCifraLine(item.chordLine, true, density));
+      out.push(renderHtmlSingleCifraLine(item.lyricLine, false, density));
+    } else if (item.type === 'single') {
+      out.push(renderHtmlSingleCifraLine(item.line, item.isChord, density));
+    } else if (item.type === 'spacer') {
+      if (density.collapseSectionSpacer && idx + 1 < flatItems.length && flatItems[idx + 1].type === 'section') {
+        continue;
+      }
+      out.push(
+        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
+      );
+    }
+  }
+
+  return out.length > 0 ? out.join('\n') : '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>';
+}
+
 /**
- * Divide uma cifra em duas colunas balanceadas para economizar espaço
- * e garantir o mesmo espaçamento compacto do PDF do aplicativo.
+ * Divide uma cifra em duas colunas balanceadas (50% / 50% por altura real)
+ * utilizando o algoritmo "Smart Fit" anti-órfãos para Word (.doc) e Prévia.
  */
 function splitCifraIntoTwoColumnsHtml(rawCifra: string): { col1Html: string; col2Html: string } {
   if (!rawCifra || !rawCifra.trim()) {
@@ -213,60 +777,56 @@ function splitCifraIntoTwoColumnsHtml(rawCifra: string): { col1Html: string; col
     };
   }
 
-  const lines = rawCifra.split(/\r?\n/);
+  const firstPageAvailPt = 640;
+  const contPageAvailPt = 675;
+  const normalBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_NORMAL);
+  const normalPages = packHtmlSongPages(normalBlocks, firstPageAvailPt, contPageAvailPt);
 
-  // Se a cifra tiver poucas linhas (ex: <= 14 linhas), renderiza na coluna 1 e deixa coluna 2 limpa
-  if (lines.length <= 14) {
-    return {
-      col1Html: formatCifraColumnLines(lines),
-      col2Html: '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>'
-    };
-  }
+  let selectedDensity: HtmlDensityProfile = HTML_DENSITY_NORMAL;
+  let selectedPages: PackedHtmlPage[] = normalPages;
 
-  // Encontra o melhor ponto de divisão perto do centro (priorizando seções e linhas vazias)
-  const total = lines.length;
-  const targetSplit = Math.ceil(total / 2);
-  let bestSplit = targetSplit;
-  let minDiff = Infinity;
+  if (normalPages.length > 1) {
+    const normalLast = normalPages[normalPages.length - 1];
+    const normalLastLines = normalLast.lines1 + normalLast.lines2;
+    const refCap = 2 * (normalPages.length === 2 ? firstPageAvailPt : contPageAvailPt);
+    const normalLastRatio = (normalLast.h1 + normalLast.h2) / refCap;
 
-  const minIdx = Math.max(4, Math.floor(total * 0.35));
-  const maxIdx = Math.min(total - 4, Math.ceil(total * 0.65));
-
-  for (let i = minIdx; i <= maxIdx; i++) {
-    const rawL = lines[i] || '';
-    const norm = normalizeSpacedTags(rawL);
-    const parsed = parseLineSectionAndDynamics(norm);
-    const isSection = parsed.isMatch || /^[\s\[\(\{\-]*([0-9]+\.?)?\s*(verso|refrão|refrao|chorus|intro|introdução|introducao|ponte|bridge|solo|outro|final|fim|coro|estrofe|parte|part|primeira parte|segunda parte|terceira parte|quarta parte|1ª parte|2ª parte|3ª parte|4ª parte|ministração|ministracao|interlúdio|interludio|interlude|pre-chorus|pré-refrão|pre-refrao|coda|tag|hook|vocal|todos|instr|instrumental|bis)/i.test(rawL.trim());
-    const isEmpty = rawL.trim().length === 0;
-
-    if (isSection || isEmpty) {
-      const distance = Math.abs(i - targetSplit);
-      const score = isSection ? distance * 0.7 : distance;
-      if (score < minDiff) {
-        minDiff = score;
-        bestSplit = i;
+    if (normalLastLines <= 15 || normalLastRatio < 0.28) {
+      const compactBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_COMPACT);
+      const compactPages = packHtmlSongPages(compactBlocks, firstPageAvailPt, contPageAvailPt);
+      if (compactPages.length < normalPages.length) {
+        selectedDensity = HTML_DENSITY_COMPACT;
+        selectedPages = compactPages;
+      } else {
+        const tightBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_TIGHT);
+        const tightPages = packHtmlSongPages(tightBlocks, firstPageAvailPt, contPageAvailPt);
+        if (tightPages.length < normalPages.length) {
+          selectedDensity = HTML_DENSITY_TIGHT;
+          selectedPages = tightPages;
+        }
       }
     }
   }
 
-  const col1Lines = lines.slice(0, bestSplit);
-  let col2Lines = lines.slice(bestSplit);
-
-  // Remove linha vazia inicial da coluna 2 se o corte foi em uma quebra de estrofe
-  if (col2Lines.length > 0 && !col2Lines[0].trim()) {
-    col2Lines = col2Lines.slice(1);
+  const firstPage = selectedPages[0];
+  if (!firstPage) {
+    return {
+      col1Html: '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>',
+      col2Html: '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>'
+    };
   }
 
   return {
-    col1Html: formatCifraColumnLines(col1Lines),
-    col2Html: formatCifraColumnLines(col2Lines)
+    col1Html: renderHtmlBlocksToColumn(firstPage.col1, selectedDensity),
+    col2Html: renderHtmlBlocksToColumn(firstPage.col2, selectedDensity)
   };
 }
 
 /**
- * Renderiza uma música com seu cabeçalho completo seguido diretamente pelas cifras em 2 colunas compactas.
- * Usa quebra de página explícita (page-break-before: always) anterior à música para que Word e Google Docs
- * mantenham título, artista, tom/compasso e a primeira página de acordes juntos, sem gerar páginas em branco.
+ * Renderiza uma música com seu cabeçalho completo seguido diretamente pelas cifras em 2 colunas compactas
+ * usando o algoritmo "Smart Fit" anti-órfãos (idêntico ao PDF "Cifras do Culto").
+ * Cada folha gerada é uma tabela indivisível com page-break-before: always e margem inferior zerada,
+ * eliminando páginas extras em branco ou páginas de continuação com 1-4 linhas órfãs.
  */
 function renderSongSheetHtml(song: {
   title: string;
@@ -276,41 +836,134 @@ function renderSongSheetHtml(song: {
   timeSignature: string;
   chords: string;
 }, index: number = 0): string {
-  const { col1Html, col2Html } = splitCifraIntoTwoColumnsHtml(song.chords);
+  const rawCifra = (song.chords || '').trim();
+  const safeTitleHtml = formatInlineBoldHtml(song.title || 'Música Sem Título', false);
+  const safeArtistHtml = formatInlineBoldHtml(song.artist || 'Desconhecido', false);
+  const safeKeyHtml = escapeHtml(song.key || '-');
+  const safeBpmHtml = song.bpm ? ` | BPM: ${escapeHtml(song.bpm)}` : '';
+  const safeTimeHtml = song.timeSignature ? ` | Compasso: ${escapeHtml(song.timeSignature)}` : '';
 
-  // O cabeçalho e as duas colunas de cifra são estruturados dentro da MESMA tabela (cifra-song-table).
-  // A linha do cabeçalho (<thead>) possui keep-with-next (page-break-after: avoid) e borda inferior direta,
-  // enquanto a linha das colunas permite divisão suave (mso-row-cant-split: false).
-  // Isso impede que o Word ou Google Docs separem o cabeçalho da música ou criem folhas em branco isoladas.
-  return `
+  if (!rawCifra) {
+    const emptyCol = splitCifraIntoTwoColumnsHtml('');
+    return `
   <!-- MÚSICA ${index + 1}: ${escapeHtml(song.title)} -->
-  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 24pt; padding: 0; table-layout: fixed; page-break-before: always; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
+  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 0pt; padding: 0; table-layout: fixed; page-break-before: always; page-break-inside: avoid; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
     <thead>
       <tr class="cifra-header-row" style="page-break-after: avoid; page-break-inside: avoid; mso-special-format: keep-with-next;">
         <th colspan="2" style="text-align: left; font-weight: normal; padding: 0; margin: 0; border: none; border-bottom: 1.5pt solid #cbd5e1; padding-bottom: 6pt;">
           <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
-            ${escapeHtml(song.title)}
+            ${safeTitleHtml}
           </p>
           <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Artista: ${escapeHtml(song.artist || 'Desconhecido')}
+            Artista: ${safeArtistHtml}
           </p>
           <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Tom: <b>${escapeHtml(song.key || '-')}</b>${song.bpm ? ` | BPM: ${escapeHtml(song.bpm)}` : ''}${song.timeSignature ? ` | Compasso: ${escapeHtml(song.timeSignature)}` : ''}
+            Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
           </p>
         </th>
       </tr>
     </thead>
     <tbody>
-      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: auto; mso-row-cant-split: false;">
+      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: avoid; mso-row-cant-split: true;">
         <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-right: 12pt; border: none; margin: 0;">
-          ${col1Html}
+          ${emptyCol.col1Html}
         </td>
         <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-left: 12pt; border: none; margin: 0;">
+          ${emptyCol.col2Html}
+        </td>
+      </tr>
+    </tbody>
+  </table>`;
+  }
+
+  // Orçamento vertical seguro em pontos (A4 Word: 297mm = 841.9pt, margens 20mm+20mm = 113.4pt -> área útil = 728.5pt).
+  // Descontando cabeçalho completo (~62pt) na 1ª folha e cabeçalho de continuação (~28pt) nas seguintes:
+  const firstPageAvailPt = 640;
+  const contPageAvailPt = 675;
+
+  const normalBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_NORMAL);
+  const normalPages = packHtmlSongPages(normalBlocks, firstPageAvailPt, contPageAvailPt);
+
+  let selectedDensity: HtmlDensityProfile = HTML_DENSITY_NORMAL;
+  let selectedPages: PackedHtmlPage[] = normalPages;
+
+  // Smart Fit: Detecta sobra pequena na última página (até ~15 linhas ou < 28% da folha) para eliminar páginas órfãs
+  if (normalPages.length > 1) {
+    const normalLast = normalPages[normalPages.length - 1];
+    const normalLastLines = normalLast.lines1 + normalLast.lines2;
+    const normalLastHeight = normalLast.h1 + normalLast.h2;
+    const refPageCapacity = 2 * (normalPages.length === 2 ? firstPageAvailPt : contPageAvailPt);
+    const normalLastRatio = normalLastHeight / refPageCapacity;
+
+    const isSmallOverflow = normalLastLines <= 15 || normalLastRatio < 0.28;
+
+    if (isSmallOverflow) {
+      const compactBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_COMPACT);
+      const compactPages = packHtmlSongPages(compactBlocks, firstPageAvailPt, contPageAvailPt);
+
+      if (compactPages.length < normalPages.length) {
+        selectedDensity = HTML_DENSITY_COMPACT;
+        selectedPages = compactPages;
+      } else {
+        const compactLast = compactPages[compactPages.length - 1];
+        const compactLastLines = compactLast.lines1 + compactLast.lines2;
+        const compactLastRatio = (compactLast.h1 + compactLast.h2) / refPageCapacity;
+
+        if (compactLastLines <= 15 || compactLastRatio < 0.28) {
+          const tightBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_TIGHT);
+          const tightPages = packHtmlSongPages(tightBlocks, firstPageAvailPt, contPageAvailPt);
+          if (tightPages.length < normalPages.length) {
+            selectedDensity = HTML_DENSITY_TIGHT;
+            selectedPages = tightPages;
+          }
+        }
+      }
+    }
+  }
+
+  return selectedPages.map((pagePlan, pageIdx) => {
+    const col1Html = renderHtmlBlocksToColumn(pagePlan.col1, selectedDensity);
+    const col2Html = renderHtmlBlocksToColumn(pagePlan.col2, selectedDensity);
+    const colPadTop = `${selectedDensity.colTopPadPt}pt`;
+
+    const headerHtml = pageIdx === 0
+      ? `
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
+            ${safeTitleHtml}
+          </p>
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+            Artista: ${safeArtistHtml}
+          </p>
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+            Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
+          </p>`
+      : `
+          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: bold; color: #64748b; line-height: 1.2; page-break-after: avoid; mso-pagination: lines-together;">
+            ${safeTitleHtml} (Continuação)
+          </p>`;
+
+    return `
+  <!-- MÚSICA ${index + 1} (PÁGINA ${pageIdx + 1}/${selectedPages.length}): ${escapeHtml(song.title)} -->
+  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 0pt; padding: 0; table-layout: fixed; page-break-before: always; page-break-inside: avoid; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
+    <thead>
+      <tr class="cifra-header-row" style="page-break-after: avoid; page-break-inside: avoid; mso-special-format: keep-with-next;">
+        <th colspan="2" style="text-align: left; font-weight: normal; padding: 0; margin: 0; border: none; border-bottom: ${pageIdx === 0 ? '1.5pt' : '0.75pt'} solid #cbd5e1; padding-bottom: ${pageIdx === 0 ? '6pt' : '3pt'};">
+          ${headerHtml}
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: avoid; mso-row-cant-split: true;">
+        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: ${colPadTop}; padding-right: 12pt; border: none; margin: 0;">
+          ${col1Html}
+        </td>
+        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: ${colPadTop}; padding-left: 12pt; border: none; margin: 0;">
           ${col2Html}
         </td>
       </tr>
     </tbody>
   </table>`;
+  }).join('\n');
 }
 
 /**
@@ -505,7 +1158,7 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
   let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
 <head>
   <meta charset="utf-8">
-  <title>Caderno do Culto — ${serviceTitle}</title>
+  <title>Caderno do Culto — ${escapeHtml(stripInlineFormattingForMeasure(serviceTitle))}</title>
   <!--[if gte mso 9]>
   <xml>
     <w:WordDocument>
@@ -586,6 +1239,10 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       padding: 6pt 8pt;
       text-align: left;
     }
+    table.data-table tr {
+      page-break-inside: avoid;
+      mso-row-cant-split: true;
+    }
     table.data-table th {
       background-color: #f1f5f9;
       color: #1e293b;
@@ -596,7 +1253,7 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
     }
     .song-sheet {
       margin-top: 0pt;
-      margin-bottom: 24pt;
+      margin-bottom: 0pt;
     }
     p.cifra-line {
       margin: 0pt;
@@ -608,7 +1265,7 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       font-size: 10pt;
       line-height: 1.15;
       mso-line-height-rule: exactly;
-      white-space: pre;
+      white-space: pre-wrap;
     }
     p.cifra-section {
       margin: 0pt;
@@ -625,10 +1282,11 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       border-collapse: collapse;
       border: none;
       margin: 0;
-      margin-bottom: 24pt;
+      margin-bottom: 0pt;
       padding: 0;
       table-layout: fixed;
       page-break-before: always;
+      page-break-inside: avoid;
       mso-table-lspace: 0pt;
       mso-table-rspace: 0pt;
     }
@@ -644,8 +1302,8 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
     }
     tr.cifra-body-row {
       vertical-align: top;
-      page-break-inside: auto;
-      mso-row-cant-split: false;
+      page-break-inside: avoid;
+      mso-row-cant-split: true;
     }
     table.cifra-columns-table {
       width: 100%;
@@ -680,18 +1338,18 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
   <!-- CABEÇALHO OFICIAL DO CULTO -->
   <div style="text-align: center; margin-bottom: 15pt;">
     <div style="font-size: 13pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 1px;">
-      ${churchName}
+      ${formatInlineBoldHtml(churchName)}
     </div>
     <h1 style="text-align: center; border-bottom: none; margin: 6pt 0 4pt 0;">
       Caderno do Culto & Liturgia
     </h1>
     <div style="font-size: 16pt; font-weight: bold; color: #2563eb; margin-bottom: 6pt;">
-      ${serviceTitle}
+      ${formatInlineBoldHtml(serviceTitle)}
     </div>
     <div class="header-info" style="text-align: center;">
-      📅 <b>Data:</b> ${formattedDate}
-      ${location ? `<br>📍 <b>Local:</b> ${location}` : ''}
-      ${service.theme && service.theme !== 'normal' ? `<br>✨ <b>Tema / Ocasião:</b> ${service.theme.toUpperCase()}` : ''}
+      📅 <b>Data:</b> ${escapeHtml(formattedDate)}
+      ${location ? `<br>📍 <b>Local:</b> ${formatInlineBoldHtml(location)}` : ''}
+      ${service.theme && service.theme !== 'normal' ? `<br>✨ <b>Tema / Ocasião:</b> ${formatInlineBoldHtml(String(service.theme).toUpperCase())}` : ''}
     </div>
   </div>
 
@@ -712,8 +1370,8 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
     <tbody>
       ${scaleEntries.map(entry => `
       <tr>
-        <td><b>${entry.role}</b></td>
-        <td>${entry.names}</td>
+        <td><b>${formatInlineBoldHtml(entry.role)}</b></td>
+        <td>${formatInlineBoldHtml(entry.names)}</td>
       </tr>`).join('')}
     </tbody>
   </table>
@@ -738,18 +1396,20 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       ${liturgyItems.map((item: any, idx: number) => {
         const typeLabel = LITURGY_TYPE_LABELS[item.type] || item.type || 'Momento';
         const durationText = item.duration ? `${item.duration} min` : '-';
-        
-        // Remove qualquer menção à versão da Bíblia (ex: (NAA), (NVI), etc.)
+
+        // Remove qualquer menção à versão da Bíblia (ex: (NAA), (NVI), etc.) e aplica negrito real seguro
         const cleanTitle = removeBibleVersionTags(item.title || '-');
-        const cleanDetails = item.details ? `<br><small style="color: #64748b;">${removeBibleVersionTags(item.details)}</small>` : '';
+        const cleanDetailsRaw = item.details ? removeBibleVersionTags(item.details) : '';
+        const cleanDetails = cleanDetailsRaw ? `<br><small style="color: #64748b;">${formatInlineBoldHtml(cleanDetailsRaw)}</small>` : '';
+        const responsible = item.responsible || item.vocalist || item.person || '-';
 
         return `
       <tr>
         <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
-        <td><span class="badge">${typeLabel}</span></td>
-        <td><b>${cleanTitle}</b>${cleanDetails}</td>
-        <td>${item.responsible || item.vocalist || '-'}</td>
-        <td style="text-align: center;">${durationText}</td>
+        <td><span class="badge">${formatInlineBoldHtml(typeLabel)}</span></td>
+        <td><b>${formatInlineBoldHtml(cleanTitle)}</b>${cleanDetails}</td>
+        <td>${formatInlineBoldHtml(responsible)}</td>
+        <td style="text-align: center;">${escapeHtml(durationText)}</td>
       </tr>`;
       }).join('')}
     </tbody>
@@ -757,21 +1417,26 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
 `;
   }
 
-  // 3. SEÇÃO DE CIFRAS E REPERTÓRIO COMPLETO
-  // Cada música é renderizada em sua própria tabela indivisível (cabeçalho + cifras em 2 colunas)
-  // com page-break-before: always, garantindo que o título nunca fique isolado em página em branco.
-  if (songs.length > 0) {
-    songs.forEach((song, idx) => {
-      html += renderSongSheetHtml(song, idx);
-    });
-  }
-
-  // RODAPÉ
-  html += `
+  // RODAPÉ DA LITURGIA (quando há músicas, posicionado antes das cifras para não criar página órfã no final do .doc)
+  const footerHtml = `
   <div class="footer">
     Documento oficial gerado automaticamente pelo <b>LiLouPro</b> — Gestão de Louvor e Culto.<br>
     Acesse em: <a href="https://liloupro.app" style="color: #2563eb;">https://liloupro.app</a>
-  </div>
+  </div>`;
+
+  // 3. SEÇÃO DE CIFRAS E REPERTÓRIO COMPLETO
+  // Cada folha de música é renderizada em sua própria tabela indivisível (cabeçalho + cifras em 2 colunas)
+  // com Smart Fit anti-órfãos e page-break-before: always.
+  if (songs.length > 0) {
+    html += footerHtml;
+    songs.forEach((song, idx) => {
+      html += renderSongSheetHtml(song, idx);
+    });
+  } else {
+    html += footerHtml;
+  }
+
+  html += `
 </div>
 </body>
 </html>`;
@@ -817,7 +1482,7 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Caderno do Culto — ${escapeHtml(serviceTitle)}</title>
+  <title>Caderno do Culto — ${escapeHtml(stripInlineFormattingForMeasure(serviceTitle))}</title>
   <style>
     body {
       font-family: Arial, Helvetica, sans-serif;
@@ -834,6 +1499,9 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
       border: 1px solid #cbd5e1;
       padding: 6pt 8pt;
       text-align: left;
+    }
+    table.data-table tr {
+      page-break-inside: avoid;
     }
     table.data-table th {
       background-color: #f1f5f9;
@@ -861,18 +1529,18 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
   <!-- CABEÇALHO OFICIAL DO CULTO -->
   <div style="text-align: center; margin-bottom: 14pt;">
     <div style="font-size: 13pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 1px;">
-      ${escapeHtml(churchName)}
+      ${formatInlineBoldHtml(churchName)}
     </div>
     <div style="font-size: 22pt; font-weight: bold; color: #000000; margin: 4pt 0 4pt 0;">
       <b>Caderno do Culto & Liturgia</b>
     </div>
     <div style="font-size: 16pt; font-weight: bold; color: #2563eb; margin-bottom: 6pt;">
-      ${escapeHtml(serviceTitle)}
+      ${formatInlineBoldHtml(serviceTitle)}
     </div>
     <div style="font-size: 10pt; color: #64748b; text-align: center;">
       📅 <b>Data:</b> ${escapeHtml(formattedDate)}
-      ${location ? `<br>📍 <b>Local:</b> ${escapeHtml(location)}` : ''}
-      ${service.theme && service.theme !== 'normal' ? `<br>✨ <b>Tema / Ocasião:</b> ${escapeHtml(service.theme.toUpperCase())}` : ''}
+      ${location ? `<br>📍 <b>Local:</b> ${formatInlineBoldHtml(location)}` : ''}
+      ${service.theme && service.theme !== 'normal' ? `<br>✨ <b>Tema / Ocasião:</b> ${formatInlineBoldHtml(String(service.theme).toUpperCase())}` : ''}
     </div>
   </div>
 
@@ -882,21 +1550,21 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
   // 1. SEÇÃO DE EQUIPE ESCALADA
   if (scaleEntries.length > 0) {
     html += `
-  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 12pt 0 6pt 0;">
+  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 12pt 0 6pt 0; page-break-after: avoid;">
     <b>👥 Equipe Escalada (Ministério de Louvor & Culto)</b>
   </div>
   <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 16pt;">
     <thead>
-      <tr style="background-color: #f1f5f9;">
+      <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
         <th style="width: 35%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Função / Ministério</th>
         <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Integrantes Escalados</th>
       </tr>
     </thead>
     <tbody>
       ${scaleEntries.map(entry => `
-      <tr>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${escapeHtml(entry.role)}</b></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(entry.names)}</td>
+      <tr style="page-break-inside: avoid;">
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(entry.role)}</b></td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(entry.names)}</td>
       </tr>`).join('')}
     </tbody>
   </table>
@@ -906,12 +1574,12 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
   // 2. SEÇÃO DE LITURGIA (ORDEM DO CULTO)
   if (liturgyItems.length > 0) {
     html += `
-  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0;">
+  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0; page-break-after: avoid;">
     <b>📖 Ordem do Culto (Liturgia Oficial)</b>
   </div>
   <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 18pt;">
     <thead>
-      <tr style="background-color: #f1f5f9;">
+      <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
         <th style="width: 5%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
         <th style="width: 25%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Momento</th>
         <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Detalhes / Título / Passagem Bíblica</th>
@@ -924,14 +1592,16 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
         const typeLabel = LITURGY_TYPE_LABELS[item.type] || item.type || 'Momento';
         const durationText = item.duration ? `${item.duration} min` : '-';
         const cleanTitle = removeBibleVersionTags(item.title || '-');
-        const cleanDetails = item.details ? `<br><small style="color: #64748b;">${escapeHtml(removeBibleVersionTags(item.details))}</small>` : '';
+        const cleanDetailsRaw = item.details ? removeBibleVersionTags(item.details) : '';
+        const cleanDetails = cleanDetailsRaw ? `<br><small style="color: #64748b;">${formatInlineBoldHtml(cleanDetailsRaw)}</small>` : '';
+        const responsible = item.responsible || item.vocalist || item.person || '-';
 
         return `
-      <tr>
+      <tr style="page-break-inside: avoid;">
         <td style="text-align: center; font-weight: bold; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${idx + 1}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><span class="badge">${escapeHtml(typeLabel)}</span></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${escapeHtml(cleanTitle)}</b>${cleanDetails}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(item.person || '-')}</td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><span class="badge">${formatInlineBoldHtml(typeLabel)}</span></td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(cleanTitle)}</b>${cleanDetails}</td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(responsible)}</td>
         <td style="text-align: center; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(durationText)}</td>
       </tr>`;
       }).join('')}
@@ -943,12 +1613,12 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
   // 3. SEÇÃO DE REPERTÓRIO MUSICAL (LISTA DE MÚSICAS SEM CIFRAS)
   if (songs.length > 0) {
     html += `
-  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0;">
+  <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0; page-break-after: avoid;">
     <b>🎵 Músicas do Culto (Repertório)</b>
   </div>
   <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 12pt;">
     <thead>
-      <tr style="background-color: #f1f5f9;">
+      <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
         <th style="width: 6%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
         <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Música / Título</th>
         <th style="width: 25%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Artista / Ministério</th>
@@ -958,10 +1628,10 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
     </thead>
     <tbody>
       ${songs.map((song, idx) => `
-      <tr>
+      <tr style="page-break-inside: avoid;">
         <td style="text-align: center; font-weight: bold; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${idx + 1}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${escapeHtml(song.title)}</b></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(song.artist || 'Desconhecido')}</td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(song.title)}</b></td>
+        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(song.artist || 'Desconhecido')}</td>
         <td style="text-align: center; font-weight: bold; color: #2563eb; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(song.key || '-')}</td>
         <td style="text-align: center; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(song.bpm || '-')}</td>
       </tr>`).join('')}
@@ -975,7 +1645,7 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
 
   // RODAPÉ
   html += `
-  <div style="margin-top: 20pt; padding-top: 8pt; border-top: 1px solid #cbd5e1; font-size: 8.5pt; color: #94a3b8; text-align: center;">
+  <div style="margin-top: 20pt; padding-top: 8pt; border-top: 1px solid #cbd5e1; font-size: 8.5pt; color: #94a3b8; text-align: center; page-break-inside: avoid;">
     Documento oficial gerado automaticamente pelo <b>LiLouPro</b> — Gestão de Louvor e Culto.<br>
     Acesse em: <a href="https://liloupro.app" style="color: #2563eb;">https://liloupro.app</a>
   </div>
@@ -1077,6 +1747,62 @@ export function formatDynamicLabelForPdf(label: string): string {
   return clean;
 }
 
+export interface PdfDensityProfile {
+  name: 'normal' | 'compact' | 'tight';
+  fontSize: number;
+  lineHeight: number;
+  sectionHeight: number;
+  consecutiveSectionHeight: number;
+  badgeHeight: number;
+  badgeStartOffset: number;
+  badgeFontSize: number;
+  dynFontSize: number;
+  blockGap: number;
+  collapseSectionSpacer: boolean;
+}
+
+const PDF_DENSITY_NORMAL: PdfDensityProfile = {
+  name: 'normal',
+  fontSize: 9,
+  lineHeight: 4.2,
+  sectionHeight: 9.6,
+  consecutiveSectionHeight: 5.8,
+  badgeHeight: 4.2,
+  badgeStartOffset: 0.6,
+  badgeFontSize: 7.5,
+  dynFontSize: 7.0,
+  blockGap: 2.0,
+  collapseSectionSpacer: false
+};
+
+const PDF_DENSITY_COMPACT: PdfDensityProfile = {
+  name: 'compact',
+  fontSize: 8.0,
+  lineHeight: 3.45,
+  sectionHeight: 7.2,
+  consecutiveSectionHeight: 4.7,
+  badgeHeight: 3.5,
+  badgeStartOffset: 0.4,
+  badgeFontSize: 6.8,
+  dynFontSize: 6.3,
+  blockGap: 1.0,
+  collapseSectionSpacer: true
+};
+
+const PDF_DENSITY_TIGHT: PdfDensityProfile = {
+  name: 'tight',
+  fontSize: 7.5,
+  lineHeight: 3.2,
+  sectionHeight: 6.4,
+  consecutiveSectionHeight: 4.3,
+  badgeHeight: 3.2,
+  badgeStartOffset: 0.35,
+  badgeFontSize: 6.4,
+  dynFontSize: 6.0,
+  blockGap: 0.7,
+  collapseSectionSpacer: true
+};
+
 /**
  * Renderiza os badges de seção, dinâmica e repetições no PDF exatamente no mesmo padrão
  * visual proporcional da visualização direta pelo app (SongDetailView), respeitando a largura
@@ -1088,20 +1814,21 @@ export function printSectionDynamicsToPdf(
   x: number,
   y: number,
   colWidth: number,
-  isFollowedBySection: boolean = false
+  isFollowedBySection: boolean = false,
+  density: PdfDensityProfile = PDF_DENSITY_NORMAL
 ): number {
-  const badgeHeight = 4.2;
+  const badgeHeight = density.badgeHeight;
   const radius = 1.0;
   let curX = x;
-  const startY = y + 0.6; // Posição superior do retângulo do badge
+  const startY = y + density.badgeStartOffset; // Posição superior do retângulo do badge
 
   // 1. Badges de Seção ([Intro], [Verso], [Refrão], [Ponte], etc.)
   for (const sec of parsed.sections) {
     const title = sec.title.toUpperCase();
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(density.badgeFontSize);
     const textWidth = doc.getTextWidth(title);
-    const padX = 2.2;
+    const padX = density.name === 'normal' ? 2.2 : 1.8;
     const badgeW = Math.min(textWidth + padX * 2, colWidth - (curX - x));
     if (badgeW <= 4) break;
 
@@ -1113,7 +1840,7 @@ export function printSectionDynamicsToPdf(
 
     // Texto nítido em azul petróleo escuro
     doc.setTextColor(14, 116, 144);
-    doc.text(title, curX + padX, startY + badgeHeight - 1.1);
+    doc.text(title, curX + padX, startY + badgeHeight - (density.name === 'normal' ? 1.1 : 0.9));
 
     curX += badgeW + 2.0;
   }
@@ -1126,9 +1853,9 @@ export function printSectionDynamicsToPdf(
     if (!cleanLabel) continue;
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.0);
+    doc.setFontSize(density.dynFontSize);
     const textWidth = doc.getTextWidth(cleanLabel);
-    const padX = 2.0;
+    const padX = density.name === 'normal' ? 2.0 : 1.6;
     const badgeW = Math.min(textWidth + padX * 2, colWidth - (curX - x));
     if (badgeW <= 4) break;
 
@@ -1166,7 +1893,7 @@ export function printSectionDynamicsToPdf(
     doc.roundedRect(curX, startY, badgeW, badgeHeight, radius, radius, 'FD');
 
     doc.setTextColor(textC[0], textC[1], textC[2]);
-    doc.text(cleanLabel, curX + padX, startY + badgeHeight - 1.1);
+    doc.text(cleanLabel, curX + padX, startY + badgeHeight - (density.name === 'normal' ? 1.1 : 0.9));
 
     curX += badgeW + 2.0;
   }
@@ -1177,9 +1904,9 @@ export function printSectionDynamicsToPdf(
 
     const repLabel = rep.toUpperCase();
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.0);
+    doc.setFontSize(density.dynFontSize);
     const textWidth = doc.getTextWidth(repLabel);
-    const padX = 1.8;
+    const padX = density.name === 'normal' ? 1.8 : 1.5;
     const badgeW = Math.min(textWidth + padX * 2, colWidth - (curX - x));
     if (badgeW <= 4) break;
 
@@ -1189,15 +1916,12 @@ export function printSectionDynamicsToPdf(
     doc.roundedRect(curX, startY, badgeW, badgeHeight, radius, radius, 'FD');
 
     doc.setTextColor(180, 83, 9);
-    doc.text(repLabel, curX + padX, startY + badgeHeight - 1.1);
+    doc.text(repLabel, curX + padX, startY + badgeHeight - (density.name === 'normal' ? 1.1 : 0.9));
 
     curX += badgeW + 2.0;
   }
 
-  // Se a próxima linha for outro badge de seção/dinâmica consecutivo, avança 5.8mm (gap de 1.6mm entre badges).
-  // Se a próxima linha for texto (cifras ou letra), avança 9.6mm para que a linha de base do texto
-  // mantenha uma margem de respiro limpa de ~2.3mm abaixo da borda inferior do badge, eliminando colisões.
-  return isFollowedBySection ? 5.8 : 9.6;
+  return isFollowedBySection ? density.consecutiveSectionHeight : density.sectionHeight;
 }
 
 /**
@@ -1211,35 +1935,60 @@ export function printCifraLineToPdf(
   x: number,
   y: number,
   colWidth: number,
-  isChord: boolean
+  isChord: boolean,
+  fontSize: number = 9
 ): void {
   const cleanLine = (rawLine || '').replace(/\r/g, '').replace(/\t/g, '    ');
-  const trimmed = cleanLine.trim();
+  const trimmed = stripInlineBoldTags(cleanLine).trim();
   if (!trimmed) return;
 
-  doc.setFontSize(9);
-  if (isChord) {
-    // Courier Bold + cor da marca (rgb 43, 169, 184)
-    doc.setFont('courier', 'bold');
-    doc.setTextColor(43, 169, 184);
-  } else {
-    // Letra em cinza escuro nítido
-    doc.setFont('courier', 'normal');
-    doc.setTextColor(30, 41, 59);
-  }
-
+  doc.setFontSize(fontSize);
   const safeLine = cleanLine.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
 
-  let displayLine = safeLine;
-  if (doc.getTextWidth(displayLine) > colWidth - 1) {
-    let temp = displayLine;
-    while (temp.length > 0 && doc.getTextWidth(temp) > colWidth - 2) {
-      temp = temp.slice(0, -1);
+  if (isChord) {
+    // Courier Bold + cor da marca (rgb 43, 169, 184) sem tags literais
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(43, 169, 184);
+
+    let displayLine = stripInlineBoldTags(safeLine);
+    if (doc.getTextWidth(displayLine) > colWidth - 1) {
+      let temp = displayLine;
+      while (temp.length > 0 && doc.getTextWidth(temp) > colWidth - 2) {
+        temp = temp.slice(0, -1);
+      }
+      displayLine = temp;
     }
-    displayLine = temp;
+
+    doc.text(displayLine, x, y);
+    return;
   }
 
-  doc.text(displayLine, x, y);
+  // Letra em cinza escuro nítido, aplicando negrito real em <b>/<strong>/**...** sem deslocar colunas
+  doc.setTextColor(30, 41, 59);
+  const segments = parseBoldSegments(safeLine);
+  let curX = x;
+  const maxX = x + colWidth - 1;
+
+  for (const seg of segments) {
+    if (!seg.text) continue;
+    doc.setFont('courier', seg.bold ? 'bold' : 'normal');
+    const segWidth = doc.getTextWidth(seg.text);
+
+    if (curX + segWidth > maxX) {
+      let clipped = '';
+      for (const ch of seg.text) {
+        if (curX + doc.getTextWidth(clipped + ch) > maxX) break;
+        clipped += ch;
+      }
+      if (clipped) {
+        doc.text(clipped, curX, y);
+      }
+      break;
+    }
+
+    doc.text(seg.text, curX, y);
+    curX += segWidth;
+  }
 }
 
 export type SongItem = 
@@ -1251,6 +2000,7 @@ export type SongItem =
 export interface SongBlock {
   items: SongItem[];
   height: number;
+  lineUnits: number;
 }
 
 /**
@@ -1258,7 +2008,10 @@ export interface SongBlock {
  * garantindo que pares de acordes e letras permaneçam atômicos e que seções e dinâmicas
  * sejam identificadas e tratadas como badges de cabeçalho.
  */
-export function buildSongBlocks(rawContent: string): SongBlock[] {
+export function buildSongBlocks(
+  rawContent: string,
+  density: PdfDensityProfile = PDF_DENSITY_NORMAL
+): SongBlock[] {
   const rawLines = (rawContent || '').split(/\r?\n/);
   while (rawLines.length > 0 && !rawLines[rawLines.length - 1].trim()) {
     rawLines.pop();
@@ -1268,11 +2021,11 @@ export function buildSongBlocks(rawContent: string): SongBlock[] {
   let i = 0;
   while (i < rawLines.length) {
     const line = rawLines[i];
-    const trimmed = line.trim();
+    const trimmed = stripInlineBoldTags(line).trim();
 
     if (!trimmed) {
       if (items.length > 0 && items[items.length - 1].type !== 'spacer') {
-        items.push({ type: 'spacer', height: 2.5 });
+        items.push({ type: 'spacer', height: density.collapseSectionSpacer ? 1.5 : 2.5 });
       }
       i++;
       continue;
@@ -1282,12 +2035,16 @@ export function buildSongBlocks(rawContent: string): SongBlock[] {
     const parsed = parseLineSectionAndDynamics(norm);
 
     if (parsed.isMatch) {
+      // No modo compacto, evita acumular spacer imediatamente antes de um cabeçalho de seção
+      if (density.collapseSectionSpacer && items.length > 0 && items[items.length - 1].type === 'spacer') {
+        items.pop();
+      }
       const hasNext = i + 1 < rawLines.length;
       const nextLine = hasNext ? rawLines[i + 1] : '';
       const nextNorm = hasNext ? normalizeSpacedTags(nextLine) : '';
       const nextParsed = hasNext ? parseLineSectionAndDynamics(nextNorm) : { isMatch: false };
       const isNextSection = nextParsed.isMatch;
-      const height = isNextSection ? 5.8 : 9.6;
+      const height = isNextSection ? density.consecutiveSectionHeight : density.sectionHeight;
 
       items.push({ type: 'section', parsed, height, raw: line });
       i++;
@@ -1302,10 +2059,10 @@ export function buildSongBlocks(rawContent: string): SongBlock[] {
     const isNextLyric = hasNext && !isChordLine(nextLine) && !nextParsed.isMatch && nextLine.trim() !== '';
 
     if (isCurrentChord && isNextLyric) {
-      items.push({ type: 'pair', chordLine: line, lyricLine: nextLine, height: 8.4 });
+      items.push({ type: 'pair', chordLine: line, lyricLine: nextLine, height: density.lineHeight * 2 });
       i += 2;
     } else {
-      items.push({ type: 'single', line, isChord: isCurrentChord, height: 4.2 });
+      items.push({ type: 'single', line, isChord: isCurrentChord, height: density.lineHeight });
       i++;
     }
   }
@@ -1314,41 +2071,49 @@ export function buildSongBlocks(rawContent: string): SongBlock[] {
   const blocks: SongBlock[] = [];
   let currentItems: SongItem[] = [];
   let currentHeight = 0;
+  let currentLineUnits = 0;
+
+  const getItemLines = (it: SongItem): number => {
+    if (it.type === 'pair') return 2;
+    if (it.type === 'single' || it.type === 'section') return 1;
+    return 0;
+  };
 
   for (const item of items) {
     if (item.type === 'section') {
-      // Se currentItems já contém acordes ou letras, fecha o bloco anterior e inicia novo
       const hasMusicContent = currentItems.some(it => it.type === 'pair' || it.type === 'single');
       if (hasMusicContent) {
-        blocks.push({ items: currentItems, height: currentHeight });
+        blocks.push({ items: currentItems, height: currentHeight, lineUnits: currentLineUnits });
         currentItems = [];
         currentHeight = 0;
+        currentLineUnits = 0;
       }
       currentItems.push(item);
       currentHeight += item.height;
+      currentLineUnits += getItemLines(item);
     } else if (item.type === 'spacer') {
       if (currentItems.length > 0) {
-        blocks.push({ items: currentItems, height: currentHeight });
+        blocks.push({ items: currentItems, height: currentHeight, lineUnits: currentLineUnits });
         currentItems = [];
         currentHeight = 0;
+        currentLineUnits = 0;
       }
     } else {
-      // Se o bloco já acumulou 4 ou mais itens de música (pares de acorde/letra ou linhas avulsas),
-      // fecha o bloco atual para evitar blocos monolíticos e garantir que mesmo estrofes longas
-      // ou páginas de continuação sejam distribuídas perfeitamente em 2 colunas
       const musicCount = currentItems.filter(it => it.type === 'pair' || it.type === 'single').length;
       if (musicCount >= 4) {
-        blocks.push({ items: currentItems, height: currentHeight });
+        blocks.push({ items: currentItems, height: currentHeight, lineUnits: currentLineUnits });
         currentItems = [];
         currentHeight = 0;
+        currentLineUnits = 0;
       }
       currentItems.push(item);
       currentHeight += item.height;
+      currentLineUnits += getItemLines(item);
     }
   }
 
   if (currentItems.length > 0) {
-    blocks.push({ items: currentItems, height: currentHeight });
+    blocks.push({ items: currentItems, height: currentHeight, lineUnits: currentLineUnits });
   }
 
   return blocks;
@@ -1362,13 +2127,14 @@ export function renderBlocksToColumn(
   blocks: SongBlock[],
   x: number,
   startY: number,
-  colWidth: number
+  colWidth: number,
+  density: PdfDensityProfile = PDF_DENSITY_NORMAL
 ): number {
   let y = startY;
   for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
     const block = blocks[bIdx];
     if (bIdx > 0) {
-      y += 2.0; // Espaço sutil entre blocos
+      y += density.blockGap; // Espaço sutil entre blocos
     }
     for (let itemIdx = 0; itemIdx < block.items.length; itemIdx++) {
       const item = block.items[itemIdx];
@@ -1376,21 +2142,157 @@ export function renderBlocksToColumn(
 
       if (item.type === 'section') {
         const isFollowedBySection = nextItem && nextItem.type === 'section';
-        const h = printSectionDynamicsToPdf(doc, item.parsed, x, y, colWidth, isFollowedBySection);
+        const h = printSectionDynamicsToPdf(doc, item.parsed, x, y, colWidth, isFollowedBySection, density);
         y += h;
       } else if (item.type === 'pair') {
-        printCifraLineToPdf(doc, item.chordLine, x, y, colWidth, true);
-        printCifraLineToPdf(doc, item.lyricLine, x, y + 4.2, colWidth, false);
-        y += 8.4;
+        printCifraLineToPdf(doc, item.chordLine, x, y, colWidth, true, density.fontSize);
+        printCifraLineToPdf(doc, item.lyricLine, x, y + density.lineHeight, colWidth, false, density.fontSize);
+        y += density.lineHeight * 2;
       } else if (item.type === 'single') {
-        printCifraLineToPdf(doc, item.line, x, y, colWidth, item.isChord);
-        y += 4.2;
+        printCifraLineToPdf(doc, item.line, x, y, colWidth, item.isChord, density.fontSize);
+        y += density.lineHeight;
       } else if (item.type === 'spacer') {
-        y += 2.5;
+        y += item.height;
       }
     }
   }
   return y;
+}
+
+interface PackedPdfPage {
+  col1: SongBlock[];
+  col2: SongBlock[];
+  h1: number;
+  h2: number;
+  lines1: number;
+  lines2: number;
+}
+
+function measureBlocksHeight(blocks: SongBlock[], blockGap: number): number {
+  let total = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    total += blocks[i].height + (i > 0 ? blockGap : 0);
+  }
+  return total;
+}
+
+function sumBlockLines(blocks: SongBlock[]): number {
+  let total = 0;
+  for (const b of blocks) {
+    total += b.lineUnits;
+  }
+  return total;
+}
+
+function findBalancedTwoColSplit(
+  remainingBlocks: SongBlock[],
+  availColHeight: number,
+  blockGap: number
+): number | null {
+  if (remainingBlocks.length === 0) return 0;
+  if (remainingBlocks.length === 1) {
+    return remainingBlocks[0].height <= availColHeight ? 1 : null;
+  }
+
+  let bestSplit: number | null = null;
+  let minDiff = Infinity;
+  let curH1 = 0;
+
+  for (let i = 0; i < remainingBlocks.length - 1; i++) {
+    curH1 += remainingBlocks[i].height + (i > 0 ? blockGap : 0);
+    if (curH1 > availColHeight) break;
+
+    let curH2 = 0;
+    let validH2 = true;
+    for (let j = i + 1; j < remainingBlocks.length; j++) {
+      curH2 += remainingBlocks[j].height + (j > i + 1 ? blockGap : 0);
+      if (curH2 > availColHeight) {
+        validH2 = false;
+        break;
+      }
+    }
+
+    if (validH2) {
+      const diff = Math.abs(curH1 - curH2);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestSplit = i + 1;
+      }
+    }
+  }
+
+  return bestSplit;
+}
+
+function packSongPages(
+  blocks: SongBlock[],
+  firstPageAvailH: number,
+  contPageAvailH: number,
+  blockGap: number
+): PackedPdfPage[] {
+  const pages: PackedPdfPage[] = [];
+  let curBlockIdx = 0;
+  let isFirstPage = true;
+
+  while (curBlockIdx < blocks.length) {
+    const availColHeight = isFirstPage ? firstPageAvailH : contPageAvailH;
+    const remainingBlocks = blocks.slice(curBlockIdx);
+    const balancedSplit = findBalancedTwoColSplit(remainingBlocks, availColHeight, blockGap);
+
+    if (balancedSplit !== null) {
+      const col1 = remainingBlocks.slice(0, balancedSplit);
+      const col2 = remainingBlocks.slice(balancedSplit);
+      pages.push({
+        col1,
+        col2,
+        h1: measureBlocksHeight(col1, blockGap),
+        h2: measureBlocksHeight(col2, blockGap),
+        lines1: sumBlockLines(col1),
+        lines2: sumBlockLines(col2)
+      });
+      break;
+    }
+
+    let col1H = 0;
+    let col1EndIdx = 0;
+    while (
+      curBlockIdx + col1EndIdx < blocks.length &&
+      col1H + blocks[curBlockIdx + col1EndIdx].height + (col1EndIdx > 0 ? blockGap : 0) <= availColHeight
+    ) {
+      col1H += blocks[curBlockIdx + col1EndIdx].height + (col1EndIdx > 0 ? blockGap : 0);
+      col1EndIdx++;
+    }
+    if (col1EndIdx === 0) col1EndIdx = 1;
+
+    const col1 = blocks.slice(curBlockIdx, curBlockIdx + col1EndIdx);
+    curBlockIdx += col1EndIdx;
+
+    let col2H = 0;
+    let col2EndIdx = 0;
+    while (
+      curBlockIdx + col2EndIdx < blocks.length &&
+      col2H + blocks[curBlockIdx + col2EndIdx].height + (col2EndIdx > 0 ? blockGap : 0) <= availColHeight
+    ) {
+      col2H += blocks[curBlockIdx + col2EndIdx].height + (col2EndIdx > 0 ? blockGap : 0);
+      col2EndIdx++;
+    }
+
+    const col2 = blocks.slice(curBlockIdx, curBlockIdx + col2EndIdx);
+    curBlockIdx += col2EndIdx;
+
+    pages.push({
+      col1,
+      col2,
+      h1: measureBlocksHeight(col1, blockGap),
+      h2: measureBlocksHeight(col2, blockGap),
+      lines1: sumBlockLines(col1),
+      lines2: sumBlockLines(col2)
+    });
+
+    isFirstPage = false;
+  }
+
+  return pages;
 }
 
 export interface RenderSongPdfOptions {
@@ -1412,12 +2314,11 @@ export interface RenderSongPdfOptions {
 }
 
 /**
- * Renderiza uma música completa no PDF com distribuição proporcional das seções e dinâmicas
- * em duas colunas, exatamente como na visualização direta do aplicativo:
+ * Renderiza uma música completa no PDF com algoritmo "Smart Fit" anti-órfãos e distribuição proporcional em 2 colunas:
  * - Seções e dinâmicas são convertidas em badges elegantes e compactos.
- * - Os blocos (estrofes/refrões) são distribuídos de forma equilibrada entre as Colunas 1 e 2.
+ * - Músicas com sobra pequena que gerariam página extra quase vazia ("Continuação" órfã) são compactadas automaticamente em 1 página.
  * - Pares de acorde/letra nunca são quebrados através de colunas ou páginas.
- * - Cada coluna respeita estritamente sua largura máxima, evitando qualquer invasão da outra coluna.
+ * - Cada página mantém 2 colunas balanceadas (50% / 50%) respeitando a largura máxima da coluna.
  */
 export function renderSongToPdfFlow(doc: jsPDF, opt: RenderSongPdfOptions): void {
   const pageWidth = 210;
@@ -1477,132 +2378,78 @@ export function renderSongToPdfFlow(doc: jsPDF, opt: RenderSongPdfOptions): void
     return;
   }
 
-  const blocks = buildSongBlocks(rawContent);
-  if (blocks.length === 0) return;
+  const firstPageStartY = 43;
+  const contPageStartY = 22;
+  const firstPageAvailH = bottomMargin - firstPageStartY;
+  const contPageAvailH = bottomMargin - contPageStartY;
 
-  const pagesWithCol2 = new Set<number>();
-  let curBlockIdx = 0;
-  let isFirstPageOfSong = true;
+  const normalBlocks = buildSongBlocks(rawContent, PDF_DENSITY_NORMAL);
+  if (normalBlocks.length === 0) return;
 
-  while (curBlockIdx < blocks.length) {
-    const pageStartY = isFirstPageOfSong ? 43 : 22;
-    const availColHeight = bottomMargin - pageStartY;
-    const remainingBlocks = blocks.slice(curBlockIdx);
+  const normalPages = packSongPages(normalBlocks, firstPageAvailH, contPageAvailH, PDF_DENSITY_NORMAL.blockGap);
 
-    // Calcula altura total dos blocos restantes com espaçamento entre eles
-    let remTotalHeight = 0;
-    for (let b = 0; b < remainingBlocks.length; b++) {
-      remTotalHeight += remainingBlocks[b].height + (b > 0 ? 2.0 : 0);
-    }
+  let selectedDensity: PdfDensityProfile = PDF_DENSITY_NORMAL;
+  let selectedPages: PackedPdfPage[] = normalPages;
 
-    if (remTotalHeight <= 2 * availColHeight) {
-      // TODOS os blocos restantes cabem NESTA página!
-      // Encontra a divisão balanceada e proporcional entre Coluna 1 e Coluna 2
-      let bestSplit = remainingBlocks.length;
-      let minDiff = Infinity;
-      let curH1 = 0;
+  // Smart Fit: Detecta sobra pequena na última página (até ~15 linhas ou < 25% da página) para eliminar páginas órfãs
+  if (normalPages.length > 1) {
+    const normalLast = normalPages[normalPages.length - 1];
+    const normalLastLines = normalLast.lines1 + normalLast.lines2;
+    const normalLastHeight = normalLast.h1 + normalLast.h2;
+    const refPageCapacity = 2 * (normalPages.length === 2 ? firstPageAvailH : contPageAvailH);
+    const normalLastRatio = normalLastHeight / refPageCapacity;
 
-      // Se houver 2 ou mais blocos, prioriza OBRIGATORIAMENTE a distribuição em 2 colunas,
-      // evitando que a Coluna 2 fique vazia e garantindo equilíbrio visual
-      const canSplitTwoCols = remainingBlocks.length >= 2;
-      const maxSplitIndex = canSplitTwoCols ? remainingBlocks.length - 1 : remainingBlocks.length;
-      let foundValidTwoColSplit = false;
+    const isSmallOverflow = normalLastLines <= 15 || normalLastRatio < 0.25;
 
-      for (let i = 0; i < maxSplitIndex; i++) {
-        curH1 += remainingBlocks[i].height + (i > 0 ? 2.0 : 0);
-        if (curH1 > availColHeight) break;
+    if (isSmallOverflow) {
+      const compactBlocks = buildSongBlocks(rawContent, PDF_DENSITY_COMPACT);
+      const compactPages = packSongPages(compactBlocks, firstPageAvailH, contPageAvailH, PDF_DENSITY_COMPACT.blockGap);
 
-        let curH2 = 0;
-        let validH2 = true;
-        for (let j = i + 1; j < remainingBlocks.length; j++) {
-          curH2 += remainingBlocks[j].height + (j > i + 1 ? 2.0 : 0);
-          if (curH2 > availColHeight) {
-            validH2 = false;
-            break;
+      if (compactPages.length < normalPages.length) {
+        selectedDensity = PDF_DENSITY_COMPACT;
+        selectedPages = compactPages;
+      } else {
+        const compactLast = compactPages[compactPages.length - 1];
+        const compactLastLines = compactLast.lines1 + compactLast.lines2;
+        const compactLastRatio = (compactLast.h1 + compactLast.h2) / refPageCapacity;
+
+        // Se o modo compacto ainda deixou sobra pequena, aplica o ajuste fino (tight) para absorver na folha anterior
+        if (compactLastLines <= 15 || compactLastRatio < 0.25) {
+          const tightBlocks = buildSongBlocks(rawContent, PDF_DENSITY_TIGHT);
+          const tightPages = packSongPages(tightBlocks, firstPageAvailH, contPageAvailH, PDF_DENSITY_TIGHT.blockGap);
+          if (tightPages.length < normalPages.length) {
+            selectedDensity = PDF_DENSITY_TIGHT;
+            selectedPages = tightPages;
           }
         }
-
-        if (validH2) {
-          const diff = Math.abs(curH1 - curH2);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestSplit = i + 1;
-            foundValidTwoColSplit = true;
-          }
-        }
-      }
-
-      // Se havia múltiplos blocos mas nenhuma combinação coube estritamente, usa ponto médio
-      if (canSplitTwoCols && !foundValidTwoColSplit) {
-        bestSplit = Math.max(1, Math.floor(remainingBlocks.length / 2));
-      }
-
-      const col1Blocks = remainingBlocks.slice(0, bestSplit);
-      const col2Blocks = remainingBlocks.slice(bestSplit);
-
-      renderBlocksToColumn(doc, col1Blocks, col1X, pageStartY, colWidth);
-      if (col2Blocks.length > 0) {
-        renderBlocksToColumn(doc, col2Blocks, col2X, pageStartY, colWidth);
-        pagesWithCol2.add(currentSongPage);
-      }
-
-      curBlockIdx += remainingBlocks.length;
-      break;
-    } else {
-      // Os blocos restantes excedem a página atual.
-      // Preenche a Coluna 1 até o limite da página, e a Coluna 2 até o limite,
-      // avançando para uma nova página para o restante dos blocos.
-      let col1H = 0;
-      let col1EndIdx = 0;
-      while (
-        curBlockIdx + col1EndIdx < blocks.length &&
-        col1H + blocks[curBlockIdx + col1EndIdx].height + (col1EndIdx > 0 ? 2.0 : 0) <= availColHeight
-      ) {
-        col1H += blocks[curBlockIdx + col1EndIdx].height + (col1EndIdx > 0 ? 2.0 : 0);
-        col1EndIdx++;
-      }
-
-      if (col1EndIdx === 0) {
-        col1EndIdx = 1;
-      }
-
-      const col1Blocks = blocks.slice(curBlockIdx, curBlockIdx + col1EndIdx);
-      renderBlocksToColumn(doc, col1Blocks, col1X, pageStartY, colWidth);
-      curBlockIdx += col1EndIdx;
-
-      let col2H = 0;
-      let col2EndIdx = 0;
-      while (
-        curBlockIdx + col2EndIdx < blocks.length &&
-        col2H + blocks[curBlockIdx + col2EndIdx].height + (col2EndIdx > 0 ? 2.0 : 0) <= availColHeight
-      ) {
-        col2H += blocks[curBlockIdx + col2EndIdx].height + (col2EndIdx > 0 ? 2.0 : 0);
-        col2EndIdx++;
-      }
-
-      if (col2EndIdx > 0) {
-        const col2Blocks = blocks.slice(curBlockIdx, curBlockIdx + col2EndIdx);
-        renderBlocksToColumn(doc, col2Blocks, col2X, pageStartY, colWidth);
-        pagesWithCol2.add(currentSongPage);
-        curBlockIdx += col2EndIdx;
-      }
-
-      if (curBlockIdx < blocks.length) {
-        doc.addPage();
-        currentSongPage++;
-        isFirstPageOfSong = false;
-
-        // Cabeçalho de continuação
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`${titlePrefix}${opt.song.title} (Continuação)`, margin, 13);
-        doc.setDrawColor(220, 225, 230);
-        doc.setLineWidth(0.25);
-        doc.line(margin, 15.5, pageWidth - margin, 15.5);
       }
     }
   }
+
+  const pagesWithCol2 = new Set<number>();
+
+  selectedPages.forEach((pagePlan, pageIndex) => {
+    if (pageIndex > 0) {
+      doc.addPage();
+      currentSongPage++;
+
+      // Cabeçalho de continuação apenas quando houver conteúdo substancial na página extra
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${titlePrefix}${opt.song.title} (Continuação)`, margin, 13);
+      doc.setDrawColor(220, 225, 230);
+      doc.setLineWidth(0.25);
+      doc.line(margin, 15.5, pageWidth - margin, 15.5);
+    }
+
+    const pageStartY = pageIndex === 0 ? firstPageStartY : contPageStartY;
+    renderBlocksToColumn(doc, pagePlan.col1, col1X, pageStartY, colWidth, selectedDensity);
+    if (pagePlan.col2.length > 0) {
+      renderBlocksToColumn(doc, pagePlan.col2, col2X, pageStartY, colWidth, selectedDensity);
+      pagesWithCol2.add(currentSongPage);
+    }
+  });
 
   // Desenha as divisórias centrais nas páginas que utilizaram Coluna 2
   for (let p = songStartPage; p <= currentSongPage; p++) {

@@ -408,8 +408,8 @@ service cloud.firestore {
 
     match /churches/{churchId}/songs/{songId} {
       allow get, list: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
-      allow create, update: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
-      allow delete: if isMasterDeveloper() || isChurchAdminFor(churchId);
+      allow create, update: if isMasterDeveloper() || (churchId != 'semente' && isSignedIn() && userChurchId() == churchId);
+      allow delete: if isMasterDeveloper() || (churchId != 'semente' && isChurchAdminFor(churchId));
     }
 
     // Service Rules (Strict Multi-Tenant Isolation - Semente Completely Confidential)
@@ -482,12 +482,6 @@ service cloud.firestore {
                     && (
                       isMasterDeveloper() ||
                       (
-                        churchId == 'semente'
-                        && isChurchAdminFor('semente')
-                        && incoming().diff(existing()).affectedKeys().hasOnly(['teamDriveUrl', 'leaderWhatsapp', 'updatedAt'])
-                        && incoming().get('name', existing().get('name', 'Graça Soberana')) == existing().get('name', 'Graça Soberana')
-                      ) ||
-                      (
                         churchId != 'semente'
                         && isChurchAdminFor(churchId)
                         && incoming().get('isSeedChurch', false) == false
@@ -498,6 +492,11 @@ service cloud.firestore {
                       )
                     );
       allow delete: if isValidId(churchId) && isMasterDeveloper();
+
+      match /{subcollection}/{subdoc=**} {
+        allow get, list: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
+        allow create, update, delete: if isMasterDeveloper() || (churchId != 'semente' && isChurchAdminFor(churchId));
+      }
     }
 
     // Kiwify Webhook Log Rules

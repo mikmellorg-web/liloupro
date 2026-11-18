@@ -172,12 +172,7 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
   const [loadingLogs, setLoadingLogs] = useState(false);
 
   // WhatsApp Share / Prospecting States
-  const appInviteLink = useMemo(() => {
-    if (typeof window !== 'undefined' && !window.location.hostname.includes('liloupro.com.br')) {
-      return `${window.location.origin}/?landing=true`;
-    }
-    return 'https://www.liloupro.com.br/?landing=true';
-  }, []);
+  const appInviteLink = 'https://www.liloupro.com.br/?landing=true';
 
   const DEFAULT_WA_MESSAGES = useMemo(() => ({
     vip: `🙌 *Olá, Músico e Líder de Louvor!* 
@@ -471,9 +466,9 @@ Conte conosco para servir seu ministério com excelência!`
           }).catch(() => {});
         }
 
-        if (isSeedDoc && d.name !== 'Graça Soberana') {
+        if (isSeedDoc && (d.isSeedChurch !== true || d.isVitalicio !== true || d.planStatus !== 'active' || d.planName !== 'PRO (Vitalício)' || d.planExpiresAt !== null)) {
           updateDoc(doc(db, 'churches', 'semente'), {
-            name: 'Graça Soberana',
+            ...(!d.name ? { name: 'Graça Soberana' } : {}),
             isSeedChurch: true,
             isVitalicio: true,
             planStatus: 'active',
@@ -483,7 +478,7 @@ Conte conosco para servir seu ministério com excelência!`
         }
         return {
           id: docSnap.id,
-          name: isSeedDoc ? 'Graça Soberana' : (d.name || 'Igreja sem nome'),
+          name: d.name || (isSeedDoc ? 'Graça Soberana' : 'Igreja sem nome'),
           inviteCode: d.inviteCode || docSnap.id.toUpperCase(),
           createdAt: createdAtIso,
           createdBy: d.createdBy || 'Sistema',

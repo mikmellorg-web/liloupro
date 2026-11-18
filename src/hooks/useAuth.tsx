@@ -429,7 +429,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSeed &&
           isMasterUser &&
           (
-            data.name !== 'Graça Soberana' ||
             data.isSeedChurch !== true ||
             data.isVitalicio !== true ||
             data.planStatus !== 'active' ||
@@ -439,7 +438,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ) {
           try {
             await setDoc(churchRef, {
-              name: 'Graça Soberana',
+              ...(!data.name ? { name: 'Graça Soberana' } : {}),
               isSeedChurch: true,
               isVitalicio: true,
               planStatus: 'active',
@@ -447,13 +446,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               planExpiresAt: null
             }, { merge: true });
           } catch (restoreErr) {
-            console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja Graça Soberana:", restoreErr);
+            console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja semente:", restoreErr);
           }
         }
         setChurchData({
           id: churchSnap.id,
           ...data,
-          name: isSeed ? 'Graça Soberana' : data.name,
+          name: data.name || (isSeed ? 'Graça Soberana' : ''),
           isSeedChurch: isSeed,
           isVitalicio: isSeed ? true : data.isVitalicio
         });

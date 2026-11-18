@@ -18845,6 +18845,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [leaderWhatsappInput, setLeaderWhatsappInput] = useState(churchData?.leaderWhatsapp || '');
   const [isSavingLeaderWhatsapp, setIsSavingLeaderWhatsapp] = useState(false);
   const [leaderWhatsappSaved, setLeaderWhatsappSaved] = useState(false);
+  const [showEditChurchNameModal, setShowEditChurchNameModal] = useState(false);
+  const [editChurchNameInput, setEditChurchNameInput] = useState('');
+  const [editChurchNameError, setEditChurchNameError] = useState<string | null>(null);
+  const [isSavingChurchName, setIsSavingChurchName] = useState(false);
   const [section, setSection] = useState<'general' | 'reports'>('general');
 
   useEffect(() => {
@@ -19525,18 +19529,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                       <p className="text-sm font-black text-brand tracking-tight">{churchData.name}</p>
                       {(isMasterDeveloper || (isAdmin && churchData.id !== 'semente')) && (
                         <Button 
-                          onClick={async () => {
-                            const newName = window.prompt("Digite o novo nome para a sua igreja:", churchData.name);
-                            if (newName && newName.trim()) {
-                              try {
-                                await updateDoc(doc(db, 'churches', churchData.id), {
-                                  name: newName.trim()
-                                });
-                              } catch (err) {
-                                console.error("Erro ao atualizar nome da congregação:", err);
-                                alert("Não foi possível alterar o nome.");
-                              }
-                            }
+                          onClick={() => {
+                            setEditChurchNameInput(churchData.name || '');
+                            setEditChurchNameError(null);
+                            setShowEditChurchNameModal(true);
                           }}
                           variant="ghost" 
                           className="h-7 text-[10px] text-text-muted hover:text-brand font-bold uppercase tracking-wider px-2"
@@ -21268,6 +21264,115 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         onClose={() => setShowSettingsInstallModal(false)}
         userName={memberData?.name ? memberData.name.split(' ')[0] : 'Ministro'}
       />
+
+      {/* Modal Customizado para Alterar Nome da Igreja */}
+      {showEditChurchNameModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isSavingChurchName) setShowEditChurchNameModal(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 space-y-5 text-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand shrink-0">
+                  <Home size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                    Alterar Nome da Igreja
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Atualize o nome exibido para toda a sua equipe.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isSavingChurchName && setShowEditChurchNameModal(false)}
+                className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!churchData?.id) return;
+                const trimmed = editChurchNameInput.trim();
+                if (!trimmed) {
+                  setEditChurchNameError('Informe um nome válido para a sua igreja.');
+                  return;
+                }
+                setIsSavingChurchName(true);
+                setEditChurchNameError(null);
+                try {
+                  await updateDoc(doc(db, 'churches', churchData.id), {
+                    name: trimmed,
+                    updatedAt: new Date().toISOString()
+                  });
+                  setShowEditChurchNameModal(false);
+                } catch (err) {
+                  console.error("Erro ao atualizar nome da congregação:", err);
+                  setEditChurchNameError("Não foi possível alterar o nome. Verifique sua permissão.");
+                } finally {
+                  setIsSavingChurchName(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-300 block">
+                  Novo Nome da Igreja *
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  maxLength={500}
+                  value={editChurchNameInput}
+                  onChange={(e) => {
+                    setEditChurchNameInput(e.target.value);
+                    if (editChurchNameError) setEditChurchNameError(null);
+                  }}
+                  placeholder="Digite o novo nome para a sua igreja"
+                  className="w-full min-h-[44px] px-3.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-brand focus:outline-none text-sm font-semibold text-white placeholder:text-slate-500"
+                />
+              </div>
+
+              {editChurchNameError && (
+                <p className="text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5">
+                  {editChurchNameError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={isSavingChurchName}
+                  onClick={() => setShowEditChurchNameModal(false)}
+                  className="min-h-[44px] px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingChurchName || !editChurchNameInput.trim()}
+                  className="min-h-[44px] px-5 rounded-xl bg-brand hover:brightness-110 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-brand/25 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSavingChurchName ? <RefreshCcw size={14} className="animate-spin" /> : null}
+                  {isSavingChurchName ? 'Salvando...' : 'Salvar Nome'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
