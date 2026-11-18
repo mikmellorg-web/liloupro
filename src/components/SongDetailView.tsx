@@ -204,6 +204,45 @@ export function SongDetailView({
     lastMidY: number;
   } | null>(null);
   const focusContainerRef = useRef<HTMLDivElement | null>(null);
+  const focusHeaderRef = useRef<HTMLDivElement | null>(null);
+  const focusRightControlsRef = useRef<HTMLDivElement | null>(null);
+  const [isFocusSingleRow, setIsFocusSingleRow] = useState<boolean>(() => (
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  ));
+
+  useEffect(() => {
+    if (!isFocusMode) return;
+    const evaluateSpace = () => {
+      const headerEl = focusHeaderRef.current;
+      const rightEl = focusRightControlsRef.current;
+      const headerWidth = headerEl ? headerEl.clientWidth : window.innerWidth;
+
+      // Celular (< 768px): sempre na 2ª barra abaixo para não espremer comandos
+      if (headerWidth < 768) {
+        setIsFocusSingleRow(false);
+        return;
+      }
+
+      const rightWidth = rightEl ? rightEl.offsetWidth : 500;
+      const inlineControlsReserve = 295;
+      const leftInfoReserve = headerWidth >= 1024 ? 220 : 185;
+      const paddingAndGaps = 44;
+      setIsFocusSingleRow(headerWidth >= rightWidth + inlineControlsReserve + leftInfoReserve + paddingAndGaps);
+    };
+
+    evaluateSpace();
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(evaluateSpace);
+      if (focusHeaderRef.current) ro.observe(focusHeaderRef.current);
+      if (focusRightControlsRef.current) ro.observe(focusRightControlsRef.current);
+    }
+    window.addEventListener('resize', evaluateSpace);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', evaluateSpace);
+    };
+  }, [isFocusMode]);
 
   // R3: Garantir que ao abrir o Modo Foco ou trocar de música, o tamanho sempre retorne ao padrão 18
   useEffect(() => {
@@ -2863,10 +2902,13 @@ export function SongDetailView({
         </AnimatePresence>
 
         {/* Header / Bar de Controles Unificada do Modo Foco */}
-        <div className={cn(
-          "flex items-center justify-between gap-2 px-3 sm:px-5 py-2 border-b select-none z-[110] shrink-0 min-h-[48px] relative opacity-100 shadow-md",
-          isStageMode ? "bg-black border-amber-500/30 text-white" : "bg-card dark:bg-zinc-900 border-border text-text-main"
-        )}>
+        <div
+          ref={focusHeaderRef}
+          className={cn(
+            "flex items-center justify-between gap-2 px-3 sm:px-5 py-2 border-b select-none z-[110] shrink-0 min-h-[48px] relative opacity-100 shadow-md",
+            isStageMode ? "bg-black border-amber-500/30 text-white" : "bg-card dark:bg-zinc-900 border-border text-text-main"
+          )}
+        >
           {/* Informações da Música */}
           <div className="min-w-0 flex items-center gap-2 shrink truncate">
             <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-brand/10 text-brand px-1.5 py-0.5 rounded border border-brand/20 uppercase shrink-0">MODO CULTO</span>
@@ -2876,8 +2918,102 @@ export function SongDetailView({
             </span>
           </div>
 
+          {/* Controles Rápidos Inline (exibidos na 1ª barra em PC e tablets com espaço suficiente) */}
+          {isFocusSingleRow && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* 1. Seletor CIFRA | LETRA */}
+              <div className={cn("flex items-center rounded-lg p-0.5 border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('chords')}
+                  className={cn(
+                    "h-7 px-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                    detailTab === 'chords'
+                      ? "bg-brand text-white shadow-xs"
+                      : (isStageMode ? "text-zinc-300 hover:text-white hover:bg-zinc-800" : "text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/10")
+                  )}
+                  title="Visualizar Cifra com acordes"
+                >
+                  CIFRA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('lyrics')}
+                  className={cn(
+                    "h-7 px-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                    detailTab === 'lyrics'
+                      ? "bg-brand text-white shadow-xs"
+                      : (isStageMode ? "text-zinc-300 hover:text-white hover:bg-zinc-800" : "text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/10")
+                  )}
+                  title="Visualizar apenas Letra limpa"
+                >
+                  LETRA
+                </button>
+              </div>
+
+              {/* 2. Botão do Player LiLouPro */}
+              <button
+                type="button"
+                onClick={handleToggleLilouPlayer}
+                className={cn(
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
+                  isLilouPlayerActive
+                    ? "border-amber-400 bg-amber-500/20 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
+                    : (isStageMode ? "bg-zinc-900 border-amber-500/30 text-white hover:bg-zinc-800" : "bg-black/5 dark:bg-white/10 hover:bg-amber-500/10 border-border text-text-main hover:border-amber-400/60")
+                )}
+                title={isLilouPlayerActive ? "Fechar LiLouPro Player" : "Abrir LiLouPro Player"}
+              >
+                <img
+                  src={luxuryAppIcon}
+                  alt="LiLouPro Player"
+                  className={cn(
+                    "w-4 h-4 rounded object-cover shrink-0",
+                    isLilouPlayerActive && "ring-1 ring-amber-400"
+                  )}
+                />
+                <span className="text-[10px] font-black tracking-tight whitespace-nowrap">
+                  LiLouPro
+                </span>
+              </button>
+
+              {/* 3. Botão Alternador Harmônico (ACORDES / GRAUS / FUNÇÕES) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setHarmonicDisplayMode(prev => {
+                    if (prev === 'chords') return 'roman';
+                    if (prev === 'roman') return 'functions';
+                    return 'chords';
+                  });
+                }}
+                className={cn(
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
+                  harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/40 hover:bg-brand/25",
+                  harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
+                  harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
+                )}
+                title={`Visão Harmônica: ${harmonicDisplayMode === 'chords' ? 'Cifra Tradicional' : harmonicDisplayMode === 'roman' ? 'Graus do Campo Harmônico' : 'Funções Harmônicas'} • Toque para alternar (Acordes ➔ Graus ➔ Funções)`}
+              >
+                <span className={cn(
+                  "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
+                  harmonicDisplayMode === 'chords' && "bg-brand text-white",
+                  harmonicDisplayMode === 'roman' && "bg-amber-500 text-black",
+                  harmonicDisplayMode === 'functions' && "bg-cyan-500 text-white"
+                )}>
+                  <Music2 size={10} className="fill-current" />
+                </span>
+                <span>
+                  {harmonicDisplayMode === 'chords' && "Acordes:"}
+                  {harmonicDisplayMode === 'roman' && "Graus:"}
+                  {harmonicDisplayMode === 'functions' && "Funções:"}
+                </span>
+                <RefreshCcw size={10} className="opacity-75 shrink-0" />
+              </button>
+            </div>
+          )}
+
           {/* Botões de Ação e Visualização Alinhados numa Única Linha */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div ref={focusRightControlsRef} className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Ajuste de Fonte */}
             <div className={cn("flex items-center gap-0.5 p-0.5 rounded-lg border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
               <button
@@ -3055,6 +3191,100 @@ export function SongDetailView({
             </button>
           </div>
         </div>
+
+        {/* Sub-barra Compacta Mobile-First do Modo Foco (2ª linha em celular e tablets/telas sem espaço lateral suficiente) */}
+        {!isFocusSingleRow && (
+          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 px-3 sm:px-5 py-1.5 bg-[#0F172A]/95 border-b border-slate-800/80 overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] select-none z-[109] shrink-0">
+            {/* 1. Seletor CIFRA | LETRA */}
+            <div className="flex items-center rounded-lg bg-slate-900/90 border border-slate-700/80 p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setDetailTab('chords')}
+                className={cn(
+                  "min-h-[38px] px-3 rounded-md text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                  detailTab === 'chords'
+                    ? "bg-brand text-white shadow-xs"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                )}
+                title="Visualizar Cifra com acordes"
+              >
+                CIFRA
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab('lyrics')}
+                className={cn(
+                  "min-h-[38px] px-3 rounded-md text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                  detailTab === 'lyrics'
+                    ? "bg-brand text-white shadow-xs"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                )}
+                title="Visualizar apenas Letra limpa"
+              >
+                LETRA
+              </button>
+            </div>
+
+            {/* 2. Botão do Player LiLouPro */}
+            <button
+              type="button"
+              onClick={handleToggleLilouPlayer}
+              className={cn(
+                "min-h-[38px] px-3 rounded-lg border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
+                isLilouPlayerActive
+                  ? "border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
+                  : "border-slate-700/80 bg-slate-900/90 hover:border-amber-400/60 hover:bg-amber-500/10 text-slate-100"
+              )}
+              title={isLilouPlayerActive ? "Fechar LiLouPro Player" : "Abrir LiLouPro Player"}
+            >
+              <img
+                src={luxuryAppIcon}
+                alt="LiLouPro Player"
+                className={cn(
+                  "w-5 h-5 rounded-md object-cover shrink-0",
+                  isLilouPlayerActive && "ring-1 ring-amber-400"
+                )}
+              />
+              <span className="text-[11px] font-black tracking-tight whitespace-nowrap">
+                LiLouPro
+              </span>
+            </button>
+
+            {/* 3. Botão Alternador Harmônico (ACORDES / GRAUS / FUNÇÕES) */}
+            <button
+              type="button"
+              onClick={() => {
+                setHarmonicDisplayMode(prev => {
+                  if (prev === 'chords') return 'roman';
+                  if (prev === 'roman') return 'functions';
+                  return 'chords';
+                });
+              }}
+              className={cn(
+                "min-h-[38px] px-2.5 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
+                harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/40 hover:bg-brand/25",
+                harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
+                harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
+              )}
+              title={`Visão Harmônica: ${harmonicDisplayMode === 'chords' ? 'Cifra Tradicional' : harmonicDisplayMode === 'roman' ? 'Graus do Campo Harmônico' : 'Funções Harmônicas'} • Toque para alternar (Acordes ➔ Graus ➔ Funções)`}
+            >
+              <span className={cn(
+                "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
+                harmonicDisplayMode === 'chords' && "bg-brand text-white",
+                harmonicDisplayMode === 'roman' && "bg-amber-500 text-black",
+                harmonicDisplayMode === 'functions' && "bg-cyan-500 text-white"
+              )}>
+                <Music2 size={10} className="fill-current" />
+              </span>
+              <span>
+                {harmonicDisplayMode === 'chords' && "Acordes:"}
+                {harmonicDisplayMode === 'roman' && "Graus:"}
+                {harmonicDisplayMode === 'functions' && "Funções:"}
+              </span>
+              <RefreshCcw size={10} className="opacity-75 shrink-0" />
+            </button>
+          </div>
+        )}
 
         {/* Conteúdo Principal (Cifra ou Letra) */}
         <div 

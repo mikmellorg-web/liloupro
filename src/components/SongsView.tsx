@@ -4,7 +4,7 @@ import {
   Search, Plus, Music, Star, ChevronRight, Zap, Settings, Mic, X, 
   ExternalLink, Sparkles, FolderOpen, Save, Play, FileText, Youtube,
   ChevronUp, ChevronDown, Trash2, Calendar, Clock, ArrowUpDown,
-  Globe, Download, Check, Headphones
+  Globe, Download, Check, Headphones, Send
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { 
@@ -280,50 +280,73 @@ export function SongsView({
   // Modal de Adicionar Música Diretamente ao Culto Atual
   const [isAddToServiceModalOpen, setIsAddToServiceModalOpen] = useState(false);
 
-  // Minha Playlist (Personalizada pelo usuário para reprodução contínua)
+  // Minha Playlist (Personalizada pelo usuário para reprodução contínua — preserva ordem exata de seleção)
   const [isMyPlaylistModalOpen, setIsMyPlaylistModalOpen] = useState(false);
-  const [myPlaylistIds, setMyPlaylistIds] = useState<Set<string>>(() => {
+  const [myPlaylistIds, setMyPlaylistIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('liloupro_my_playlist_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)));
+      }
+      return [];
     } catch {
-      return new Set();
+      return [];
     }
   });
 
+  const persistMyPlaylist = (nextIds: string[]) => {
+    try {
+      localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify(nextIds));
+    } catch {}
+  };
+
+  const myPlaylistIdSet = useMemo(() => new Set(myPlaylistIds), [myPlaylistIds]);
+
   const toggleMyPlaylist = (songId: string) => {
     setMyPlaylistIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(songId)) {
-        next.delete(songId);
-      } else {
-        next.add(songId);
-      }
-      try {
-        localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify(Array.from(next)));
-      } catch {}
+      const next = prev.includes(songId)
+        ? prev.filter((id) => id !== songId)
+        : [...prev, songId];
+      persistMyPlaylist(next);
       return next;
     });
   };
 
   const addAllToMyPlaylist = () => {
-    const allIds = songs.map(s => s.id);
-    const next = new Set(allIds);
-    setMyPlaylistIds(next);
-    try {
-      localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify(Array.from(next)));
-    } catch {}
+    const allIds = songs.map(s => s.id).filter(Boolean);
+    setMyPlaylistIds(allIds);
+    persistMyPlaylist(allIds);
   };
 
   const clearMyPlaylist = () => {
-    setMyPlaylistIds(new Set());
-    try {
-      localStorage.setItem('liloupro_my_playlist_ids', JSON.stringify([]));
-    } catch {}
+    setMyPlaylistIds([]);
+    persistMyPlaylist([]);
+  };
+
+  const moveMyPlaylistItem = (index: number, direction: 'up' | 'down') => {
+    setMyPlaylistIds((prev) => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (index < 0 || targetIndex < 0 || index >= prev.length || targetIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      persistMyPlaylist(next);
+      return next;
+    });
   };
 
   const myPlaylistSongs = useMemo(() => {
-    return songs.filter(song => myPlaylistIds.has(song.id));
+    const songMap = new Map<string, any>();
+    songs.forEach((s) => {
+      if (s?.id) songMap.set(s.id, s);
+    });
+    return myPlaylistIds
+      .map((id) => songMap.get(id))
+      .filter(Boolean);
   }, [songs, myPlaylistIds]);
 
   const handleStartMyPlaylist = () => {
@@ -331,6 +354,302 @@ export function SongsView({
     if (onStartPlaylist) {
       onStartPlaylist(myPlaylistSongs);
       setIsMyPlaylistModalOpen(false);
+    }
+  };
+
+  // Estados para enviar a Minha Playlist diretamente para um Culto (somente Admin)
+  const [isSendToServicePanelOpen, setIsSendToServicePanelOpen] = useState(false);
+  const [sendTargetMode, setSendTargetMode] = useState<'existing' | 'new'>('existing');
+  const [selectedTargetServiceId, setSelectedTargetServiceId] = useState<string>('');
+  const [sendMergeMode, setSendMergeMode] = useState<'replace' | 'append'>('replace');
+  const [quickServiceTitle, setQuickServiceTitle] = useState('Culto de Celebração');
+  const [quickServiceDate, setQuickServiceDate] = useState(() => {
+    const now = new Date();
+    const daysUntilNextSunday = (7 - now.getDay()) % 7 || 7;
+    const nextSunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilNextSunday, 19, 0);
+    const yyyy = nextSunday.getFullYear();
+    const mm = String(nextSunday.getMonth() + 1).padStart(2, '0');
+    const dd = String(nextSunday.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T19:00`;
+  });
+  const [notifyTeamOnSend, setNotifyTeamOnSend] = useState(true);
+  const [clearPlaylistAfterSend, setClearPlaylistAfterSend] = useState(false);
+  const [sendingToService, setSendingToService] = useState(false);
+  const [sendToServiceError, setSendToServiceError] = useState<string | null>(null);
+  const [sendToServiceSuccess, setSendToServiceSuccess] = useState<{ serviceTitle: string; count: number } | null>(null);
+
+  const isNonSongLiturgyItem = (item: any): boolean => {
+    if (!item || typeof item === 'string') return false;
+    const type = String(item.type || '').toLowerCase();
+    if (['reading', 'speech', 'prayer', 'announcements', 'announcement', 'offering', 'moment', 'other'].includes(type)) {
+      return true;
+    }
+    const titleLower = String(item.title || item.songTitle || '').toLowerCase().trim();
+    const artistLower = String(item.artist || item.songArtist || '').toLowerCase().trim();
+    return titleLower.startsWith('leitura') || artistLower.startsWith('leitura');
+  };
+
+  const getServiceExistingSongsCount = (service: any): number => {
+    if (!service) return 0;
+    const liturgy = Array.isArray(service.liturgy) ? service.liturgy : [];
+    const liturgySongCount = liturgy.filter((item: any) => {
+      if (!item || isNonSongLiturgyItem(item)) return false;
+      const type = String(item.type || '').toLowerCase();
+      if (type === 'song' || item.songId) return true;
+      const titleLower = String(item.title || item.songTitle || '').toLowerCase().trim();
+      return songs.some(s => s.id === item.id || s.title?.toLowerCase().trim() === titleLower);
+    }).length;
+    if (liturgySongCount > 0) return liturgySongCount;
+    return Array.isArray(service.setlist) ? service.setlist.length : 0;
+  };
+
+  const formatTargetServiceOptionLabel = (service: any): string => {
+    const title = service?.title || service?.name || 'Culto';
+    let d: Date | null = null;
+    if (service?.date?.toDate) d = service.date.toDate();
+    else if (service?.date instanceof Date) d = service.date;
+    else if (typeof service?.date === 'string' && service.date) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(service.date)) {
+        const [y, m, day] = service.date.split('-').map(Number);
+        d = new Date(y, m - 1, day);
+      } else {
+        const parsed = new Date(service.date);
+        if (!isNaN(parsed.getTime())) d = parsed;
+      }
+    }
+    const dateLabel = d && !isNaN(d.getTime())
+      ? d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '';
+    const timeLabel = service?.time || (typeof service?.date === 'string' && service.date.includes('T') ? service.date.split('T')[1].slice(0, 5) : '');
+    const songsCount = getServiceExistingSongsCount(service);
+    const parts = [title, dateLabel + (timeLabel ? ` ${timeLabel}` : '')].filter(Boolean);
+    return `${parts.join(' • ')}${songsCount > 0 ? ` (${songsCount} ${songsCount === 1 ? 'música' : 'músicas'})` : ' (sem músicas)'}`;
+  };
+
+  const availableTargetServices = useMemo(() => {
+    const raw = (propAllServices || []).filter(
+      (s: any) => s && s.id && !String(s.id).startsWith('default_') && !String(s.id).startsWith('upcoming_')
+    );
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const getTs = (s: any) => {
+      if (s?.date?.toDate) return s.date.toDate().getTime();
+      if (s?.date instanceof Date) return s.date.getTime();
+      if (typeof s?.date === 'string' && s.date) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s.date)) {
+          const [y, m, day] = s.date.split('-').map(Number);
+          return new Date(y, m - 1, day).getTime();
+        }
+        const parsed = new Date(s.date).getTime();
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    const upcoming = raw.filter(s => getTs(s) >= startOfToday).sort((a, b) => getTs(a) - getTs(b));
+    const past = raw.filter(s => getTs(s) < startOfToday).sort((a, b) => getTs(b) - getTs(a));
+    return [...upcoming, ...past];
+  }, [propAllServices]);
+
+  const selectedTargetService = useMemo(() => {
+    return availableTargetServices.find(s => s.id === selectedTargetServiceId) || null;
+  }, [availableTargetServices, selectedTargetServiceId]);
+
+  const selectedTargetExistingSongsCount = useMemo(() => {
+    return getServiceExistingSongsCount(selectedTargetService);
+  }, [selectedTargetService, songs]);
+
+  const openSendToServicePanel = () => {
+    setSendToServiceError(null);
+    setSendToServiceSuccess(null);
+    if (availableTargetServices.length > 0) {
+      const preferredId = (propActiveLiturgyService?.id && availableTargetServices.some(s => s.id === propActiveLiturgyService.id))
+        ? propActiveLiturgyService.id
+        : availableTargetServices[0].id;
+      setSelectedTargetServiceId(preferredId);
+      setSendTargetMode('existing');
+    } else {
+      setSelectedTargetServiceId('');
+      setSendTargetMode('new');
+    }
+    setSendMergeMode('replace');
+    setIsSendToServicePanelOpen(true);
+  };
+
+  const handleSendMyPlaylistToService = async () => {
+    if (!isAdmin || myPlaylistSongs.length === 0) return;
+    if (!db || !churchId) {
+      setSendToServiceError('Banco de dados indisponível no momento.');
+      return;
+    }
+
+    setSendingToService(true);
+    setSendToServiceError(null);
+
+    try {
+      const buildSongLiturgyItem = (s: any, idx: number) => ({
+        id: `lit_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 7)}`,
+        type: 'song',
+        songId: s.id,
+        title: s.title,
+        artist: s.artist || '',
+        tone: s.tone || s.key || 'C',
+        order: idx + 1
+      });
+
+      let targetTitle = '';
+
+      if (sendTargetMode === 'new') {
+        const cleanTitle = quickServiceTitle.trim();
+        if (!cleanTitle || !quickServiceDate) {
+          setSendToServiceError('Informe o título e a data/horário do novo culto.');
+          setSendingToService(false);
+          return;
+        }
+
+        const limitCheck = checkResourceLimit(churchData, 'services', (propAllServices || []).length);
+        if (!limitCheck.allowed) {
+          setIsMyPlaylistModalOpen(false);
+          setIsSendToServicePanelOpen(false);
+          onOpenUpgradeModal?.(limitCheck);
+          setSendingToService(false);
+          return;
+        }
+
+        const newLiturgy = myPlaylistSongs.map((s, idx) => buildSongLiturgyItem(s, idx));
+        const songIds = myPlaylistSongs.map(s => s.id).filter(Boolean);
+
+        await addDoc(collection(db, 'services'), {
+          title: cleanTitle,
+          date: quickServiceDate,
+          scales: {},
+          availability: {},
+          setlist: songIds,
+          liturgy: newLiturgy,
+          playlistUrl: '',
+          theme: 'normal',
+          createdAt: serverTimestamp(),
+          churchId
+        });
+
+        targetTitle = cleanTitle;
+      } else {
+        if (!selectedTargetService?.id) {
+          setSendToServiceError('Selecione um culto de destino.');
+          setSendingToService(false);
+          return;
+        }
+
+        const existingLiturgy = Array.isArray(selectedTargetService.liturgy) ? selectedTargetService.liturgy : [];
+        const existingSetlist = Array.isArray(selectedTargetService.setlist) ? selectedTargetService.setlist : [];
+        let updatedLiturgy: any[] = [];
+        let updatedSetlist: string[] = [];
+
+        if (sendMergeMode === 'replace') {
+          const newItems = myPlaylistSongs.map((s, idx) => buildSongLiturgyItem(s, idx));
+          if (existingLiturgy.length === 0) {
+            updatedLiturgy = newItems;
+          } else {
+            // Preserva integralmente itens não-musicais (orações, leituras bíblicas, pregação, avisos)
+            const firstSongIdx = existingLiturgy.findIndex((item: any) => item && !isNonSongLiturgyItem(item));
+            const speechIdx = existingLiturgy.findIndex((item: any) => {
+              const t = String(item?.type || '').toLowerCase();
+              return t === 'speech';
+            });
+            const nonSongItems = existingLiturgy.filter((item: any) => item && isNonSongLiturgyItem(item));
+
+            if (nonSongItems.length === 0) {
+              updatedLiturgy = newItems;
+            } else {
+              // Insere o novo bloco de músicas na posição original da primeira música (ou antes da pregação)
+              const insertAnchorIdx = firstSongIdx !== -1
+                ? existingLiturgy.slice(0, firstSongIdx).filter((item: any) => item && isNonSongLiturgyItem(item)).length
+                : (speechIdx !== -1
+                    ? existingLiturgy.slice(0, speechIdx).filter((item: any) => item && isNonSongLiturgyItem(item)).length
+                    : 0);
+
+              updatedLiturgy = [
+                ...nonSongItems.slice(0, insertAnchorIdx),
+                ...newItems,
+                ...nonSongItems.slice(insertAnchorIdx)
+              ].map((item, idx) => ({ ...item, order: idx + 1 }));
+            }
+          }
+          updatedSetlist = myPlaylistSongs.map(s => s.id).filter(Boolean);
+        } else {
+          // Modo 'append': mantém 100% da liturgia atual e adiciona as novas músicas sem duplicar
+          const existingSongIds = new Set<string>();
+          existingLiturgy.forEach((item: any) => {
+            if (item && !isNonSongLiturgyItem(item)) {
+              const sId = item.songId || item.id;
+              if (sId) existingSongIds.add(sId);
+            }
+          });
+          existingSetlist.forEach((entry: any) => {
+            const sId = typeof entry === 'string' ? entry : (entry?.songId || entry?.id);
+            if (sId) existingSongIds.add(sId);
+          });
+
+          const songsToAppend = myPlaylistSongs.filter(s => s?.id && !existingSongIds.has(s.id));
+          const appendedItems = songsToAppend.map((s, idx) =>
+            buildSongLiturgyItem(s, existingLiturgy.length + idx)
+          );
+
+          // Se o culto tinha só setlist legado e nenhuma música na liturgia, garante sincronia
+          const hasLiturgySongs = existingLiturgy.some((item: any) => item && !isNonSongLiturgyItem(item));
+          if (!hasLiturgySongs && existingSetlist.length > 0) {
+            const legacySongs = existingSetlist
+              .map((entry: any, idx: number) => {
+                const sId = typeof entry === 'string' ? entry : (entry?.songId || entry?.id);
+                const found = songs.find(s => s.id === sId);
+                return found ? buildSongLiturgyItem(found, idx) : null;
+              })
+              .filter(Boolean);
+            updatedLiturgy = [...existingLiturgy, ...legacySongs, ...appendedItems].map((item, idx) => ({ ...item, order: idx + 1 }));
+          } else {
+            updatedLiturgy = [...existingLiturgy, ...appendedItems].map((item, idx) => ({ ...item, order: idx + 1 }));
+          }
+
+          const existingOrderIds = existingSetlist
+            .map((entry: any) => (typeof entry === 'string' ? entry : (entry?.songId || entry?.id)))
+            .filter(Boolean);
+          const mergedIds = Array.from(new Set([...existingOrderIds, ...myPlaylistSongs.map(s => s.id).filter(Boolean)]));
+          updatedSetlist = mergedIds;
+        }
+
+        const serviceRef = doc(db, 'services', selectedTargetService.id);
+        await updateDoc(serviceRef, {
+          liturgy: updatedLiturgy,
+          setlist: updatedSetlist
+        });
+
+        targetTitle = selectedTargetService.title || selectedTargetService.name || 'Culto';
+      }
+
+      if (notifyTeamOnSend && createNotifications) {
+        try {
+          await createNotifications(
+            'Músicas do Culto Definidas',
+            `${targetTitle} — ${myPlaylistSongs.length} ${myPlaylistSongs.length === 1 ? 'música enviada' : 'músicas enviadas'} pelo Repertório.`,
+            'service',
+            user?.uid,
+            'notifyNewLiturgy'
+          );
+        } catch (notifErr) {
+          console.warn('Falha não crítica ao notificar equipe:', notifErr);
+        }
+      }
+
+      const sentCount = myPlaylistSongs.length;
+      if (clearPlaylistAfterSend) {
+        clearMyPlaylist();
+      }
+      setIsSendToServicePanelOpen(false);
+      setSendToServiceSuccess({ serviceTitle: targetTitle, count: sentCount });
+    } catch (err: any) {
+      console.error('Erro ao enviar playlist para o culto:', err);
+      setSendToServiceError(err?.message || 'Não foi possível enviar as músicas para o culto.');
+    } finally {
+      setSendingToService(false);
     }
   };
 
@@ -1800,7 +2119,7 @@ export function SongsView({
             ) : (
               filteredAllSongs.map((song) => {
                 const isFav = favoriteIds.has(song.id);
-                const isInMyPlaylist = myPlaylistIds.has(song.id);
+                const isInMyPlaylist = myPlaylistIdSet.has(song.id);
                 const categoryBadge = getSongCategory(song);
                 const songIndexInRepertoire = songs.findIndex((s) => s.id === song.id);
                 const isLockedByFreeLimit = isExpiredFreePlan && songIndexInRepertoire >= 15;
@@ -2434,7 +2753,12 @@ export function SongsView({
               </div>
               <button
                 type="button"
-                onClick={() => setIsMyPlaylistModalOpen(false)}
+                onClick={() => {
+                  setIsMyPlaylistModalOpen(false);
+                  setIsSendToServicePanelOpen(false);
+                  setSendToServiceError(null);
+                  setSendToServiceSuccess(null);
+                }}
                 className={`p-1.5 rounded-lg ${isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'} transition cursor-pointer`}
                 title="Fechar"
               >
@@ -2444,20 +2768,47 @@ export function SongsView({
 
             {/* Barra de Ações do Modal */}
             <div className={`flex flex-wrap items-center justify-between gap-2 py-2.5 px-2 rounded-xl my-2 border ${isLight ? 'border-slate-200/80 bg-slate-50' : 'border-slate-800/80 bg-slate-900/40'}`}>
-              <button
-                type="button"
-                onClick={handleStartMyPlaylist}
-                disabled={myPlaylistSongs.length === 0}
-                className={`px-3 sm:px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer ${
-                  myPlaylistSongs.length > 0
-                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
-                    : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
-                }`}
-                title={myPlaylistSongs.length === 0 ? "Adicione músicas para tocar a playlist" : "Tocar playlist no player"}
-              >
-                <Play size={13} className={myPlaylistSongs.length > 0 ? "fill-white shrink-0" : "fill-transparent shrink-0"} />
-                <span>Tocar Playlist ({myPlaylistSongs.length})</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleStartMyPlaylist}
+                  disabled={myPlaylistSongs.length === 0}
+                  className={`px-3 sm:px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer ${
+                    myPlaylistSongs.length > 0
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                      : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
+                  }`}
+                  title={myPlaylistSongs.length === 0 ? "Adicione músicas para tocar a playlist" : "Tocar playlist no player"}
+                >
+                  <Play size={13} className={myPlaylistSongs.length > 0 ? "fill-white shrink-0" : "fill-transparent shrink-0"} />
+                  <span>Tocar Playlist ({myPlaylistSongs.length})</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSendToServicePanelOpen) {
+                        setIsSendToServicePanelOpen(false);
+                      } else {
+                        openSendToServicePanel();
+                      }
+                    }}
+                    disabled={myPlaylistSongs.length === 0}
+                    className={`px-3 sm:px-3.5 py-2 rounded-xl font-bold text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer ${
+                      myPlaylistSongs.length > 0
+                        ? (isSendToServicePanelOpen
+                            ? 'bg-emerald-700 text-white ring-2 ring-emerald-400/50'
+                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30')
+                        : (isLight ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60')
+                    }`}
+                    title={myPlaylistSongs.length === 0 ? "Selecione ao menos uma música antes de enviar para o culto" : "Definir estas músicas como repertório de um culto"}
+                  >
+                    <Send size={13} className="shrink-0" />
+                    <span>Enviar para o Culto</span>
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-1.5">
                 <button
@@ -2490,6 +2841,224 @@ export function SongsView({
               </div>
             </div>
 
+            {/* Banner de Sucesso após enviar para o culto */}
+            {sendToServiceSuccess && (
+              <div className={`mb-2 p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in duration-150 ${
+                isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-100'
+              }`}>
+                <div className="flex items-start gap-2 min-w-0">
+                  <Check size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <span className="font-bold">
+                      {sendToServiceSuccess.count} {sendToServiceSuccess.count === 1 ? 'música enviada' : 'músicas enviadas'}
+                    </span>{' '}
+                    para <span className="font-bold">{sendToServiceSuccess.serviceTitle}</span>!
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {propSetShowLiturgySongs && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMyPlaylistModalOpen(false);
+                        setSendToServiceSuccess(null);
+                        propSetShowLiturgySongs(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition active:scale-95 cursor-pointer"
+                    >
+                      Ver em Músicas do Culto
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Painel Admin: Enviar Playlist Diretamente para o Culto */}
+            {isAdmin && isSendToServicePanelOpen && (
+              <div className={`mb-2 p-3.5 rounded-xl border space-y-3 animate-in fade-in duration-150 ${
+                isLight ? 'bg-blue-50/70 border-blue-200 text-slate-900' : 'bg-[#0b1328] border-blue-500/30 text-slate-100'
+              }`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={15} className="text-blue-500 shrink-0" />
+                    <span className="text-xs font-extrabold uppercase tracking-wide">
+                      Enviar {myPlaylistSongs.length} {myPlaylistSongs.length === 1 ? 'música' : 'músicas'} para o Culto
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-lg p-0.5 border border-slate-700/40 bg-black/10">
+                    <button
+                      type="button"
+                      onClick={() => setSendTargetMode('existing')}
+                      disabled={availableTargetServices.length === 0}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                        sendTargetMode === 'existing'
+                          ? 'bg-blue-600 text-white'
+                          : (availableTargetServices.length === 0 ? 'opacity-40 cursor-not-allowed text-slate-400' : (isLight ? 'text-slate-600 hover:bg-white' : 'text-slate-300 hover:bg-slate-800'))
+                      }`}
+                    >
+                      Culto Existente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSendTargetMode('new')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                        sendTargetMode === 'new'
+                          ? 'bg-blue-600 text-white'
+                          : (isLight ? 'text-slate-600 hover:bg-white' : 'text-slate-300 hover:bg-slate-800')
+                      }`}
+                    >
+                      + Criar Culto Rápido
+                    </button>
+                  </div>
+                </div>
+
+                {sendTargetMode === 'existing' ? (
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className={`block text-[11px] font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Selecione o culto de destino:
+                      </label>
+                      <select
+                        value={selectedTargetServiceId}
+                        onChange={(e) => setSelectedTargetServiceId(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none focus:border-blue-500 ${
+                          isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      >
+                        {availableTargetServices.map((srv) => (
+                          <option key={srv.id} value={srv.id}>
+                            {formatTargetServiceOptionLabel(srv)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedTargetExistingSongsCount > 0 && (
+                      <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                        isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+                      }`}>
+                        <p className="text-[11px] font-semibold">
+                          Este culto já possui {selectedTargetExistingSongsCount} {selectedTargetExistingSongsCount === 1 ? 'música' : 'músicas'}. Orações, leituras e pregação do Pastor serão preservadas intactas.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSendMergeMode('replace')}
+                            className={`px-2.5 py-2 rounded-lg text-[11px] font-bold border text-left transition cursor-pointer ${
+                              sendMergeMode === 'replace'
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : (isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-700 text-slate-300')
+                            }`}
+                          >
+                            Substituir músicas do culto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSendMergeMode('append')}
+                            className={`px-2.5 py-2 rounded-lg text-[11px] font-bold border text-left transition cursor-pointer ${
+                              sendMergeMode === 'append'
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : (isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-700 text-slate-300')
+                            }`}
+                          >
+                            Adicionar às já existentes
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className={`block text-[11px] font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Nome do Culto
+                      </label>
+                      <input
+                        type="text"
+                        value={quickServiceTitle}
+                        onChange={(e) => setQuickServiceTitle(e.target.value)}
+                        placeholder="Ex: Culto de Domingo"
+                        className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none focus:border-blue-500 ${
+                          isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[11px] font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Data e Horário
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={quickServiceDate}
+                        onChange={(e) => setQuickServiceDate(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none focus:border-blue-500 ${
+                          isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-[11px]">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={notifyTeamOnSend}
+                      onChange={(e) => setNotifyTeamOnSend(e.target.checked)}
+                      className="rounded border-slate-500 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>Notificar equipe sobre as músicas</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={clearPlaylistAfterSend}
+                      onChange={(e) => setClearPlaylistAfterSend(e.target.checked)}
+                      className="rounded border-slate-500 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>Limpar seleção após enviar</span>
+                  </label>
+                </div>
+
+                {sendToServiceError && (
+                  <p className="text-[11px] font-semibold text-red-400">
+                    ⚠️ {sendToServiceError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsSendToServicePanelOpen(false)}
+                    disabled={sendingToService}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer min-h-[44px] ${
+                      isLight ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendMyPlaylistToService}
+                    disabled={sendingToService || myPlaylistSongs.length === 0}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50 min-h-[44px]"
+                  >
+                    {sendingToService ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                        <span>Enviando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={13} className="shrink-0" />
+                        <span>Confirmar Envio ({myPlaylistSongs.length})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Lista de Músicas na Playlist */}
             <div className="flex-1 overflow-y-auto py-2 space-y-2 pr-1 min-h-[180px] max-h-[50vh]">
               {myPlaylistSongs.length === 0 ? (
@@ -2515,11 +3084,11 @@ export function SongsView({
                 myPlaylistSongs.map((song, idx) => (
                   <div
                     key={song.id}
-                    className={`flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl border transition ${
+                    className={`flex items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border transition ${
                       isLight ? 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70' : 'bg-slate-900/60 border-slate-800 hover:bg-slate-800/60'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <span className={`text-[11px] font-mono font-bold w-5 text-center shrink-0 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                         {idx + 1}ª
                       </span>
@@ -2540,7 +3109,33 @@ export function SongsView({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveMyPlaylistItem(idx, 'up')}
+                        disabled={idx === 0}
+                        className={`p-1.5 rounded-lg transition active:scale-90 ${
+                          idx === 0
+                            ? 'opacity-30 cursor-not-allowed text-slate-500'
+                            : (isLight ? 'text-slate-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer' : 'text-slate-400 hover:text-blue-400 hover:bg-slate-800 cursor-pointer')
+                        }`}
+                        title="Subir na ordem"
+                      >
+                        <ChevronUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveMyPlaylistItem(idx, 'down')}
+                        disabled={idx === myPlaylistSongs.length - 1}
+                        className={`p-1.5 rounded-lg transition active:scale-90 ${
+                          idx === myPlaylistSongs.length - 1
+                            ? 'opacity-30 cursor-not-allowed text-slate-500'
+                            : (isLight ? 'text-slate-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer' : 'text-slate-400 hover:text-blue-400 hover:bg-slate-800 cursor-pointer')
+                        }`}
+                        title="Descer na ordem"
+                      >
+                        <ChevronDown size={15} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
