@@ -1110,6 +1110,13 @@ export function SongDetailView({
     return transposeChord(currentKey, -activeCapoFret);
   }, [currentKey, activeCapoFret]);
 
+  const harmonicReferenceKey = useMemo(() => {
+    if (isCapoEnabled && activeCapoFret > 0 && shapeKey) {
+      return shapeKey;
+    }
+    return currentKey;
+  }, [isCapoEnabled, activeCapoFret, shapeKey, currentKey]);
+
   const setActiveChordInDict = useCallback((chord: string, openPopover = true) => {
     if (!chord) {
       setActiveChordInDictRaw(undefined);
@@ -1117,13 +1124,13 @@ export function SongDetailView({
       return;
     }
     const clean = getCleanChordName(chord);
-    const keyToUse = currentKey || detectKey(editedSong.chords || '') || 'C';
+    const keyToUse = harmonicReferenceKey || detectKey(editedSong.chords || '') || 'C';
     const realChord = convertHarmonicToChordName(clean, keyToUse);
     setActiveChordInDictRaw(realChord);
     if (openPopover) {
       setPopoverChord(realChord);
     }
-  }, [currentKey, editedSong.chords]);
+  }, [harmonicReferenceKey, editedSong.chords]);
 
   const effectiveLyrics = useMemo(() => {
     return cleanCifraHtml(getEffectiveLyrics(editedSong.lyrics, editedSong.chords));
@@ -1139,10 +1146,10 @@ export function SongDetailView({
       : transposeLyricsAndChords(cleanChords, netTranspose);
 
     if (harmonicDisplayMode !== 'chords') {
-      return convertLyricsAndChordsToHarmonicMode(transposedText, currentKey, harmonicDisplayMode);
+      return convertLyricsAndChordsToHarmonicMode(transposedText, harmonicReferenceKey, harmonicDisplayMode);
     }
     return transposedText;
-  }, [detailTab, effectiveLyrics, editedSong.chords, netTranspose, harmonicDisplayMode, currentKey]);
+  }, [detailTab, effectiveLyrics, editedSong.chords, netTranspose, harmonicDisplayMode, harmonicReferenceKey]);
 
   const availableChordsInSong = useMemo(() => {
     const rawChords = detailTab === 'lyrics' 
@@ -3805,7 +3812,7 @@ export function SongDetailView({
           onClose={() => setPopoverChord(null)}
           availableChords={availableChordsInSong}
           onSelectChord={(chord) => setActiveChordInDict(chord, true)}
-          songKey={currentKey}
+          songKey={harmonicReferenceKey}
           songTitle={editedSong.title}
         />
 
@@ -5178,7 +5185,7 @@ export function SongDetailView({
                         </button>
                         <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar py-0.5">
                           {availableChordsInSong.map(chord => {
-                            const converted = convertSingleChordToHarmonicMode(chord, currentKey, harmonicDisplayMode);
+                            const converted = convertSingleChordToHarmonicMode(chord, harmonicReferenceKey, harmonicDisplayMode);
                             const isConvertedDifferent = harmonicDisplayMode !== 'chords' && converted !== chord;
 
                             return (
@@ -5945,7 +5952,7 @@ export function SongDetailView({
                 activeChord={activeChordInDict}
                 setActiveChord={(chord) => setActiveChordInDict(chord, false)}
                 availableChords={availableChordsInSong}
-                songKey={currentKey}
+                songKey={harmonicReferenceKey}
               />
             </div>
           )}
@@ -7539,7 +7546,7 @@ export function SongDetailView({
         onClose={() => setPopoverChord(null)}
         availableChords={availableChordsInSong}
         onSelectChord={(chord) => setActiveChordInDict(chord, true)}
-        songKey={currentKey}
+        songKey={harmonicReferenceKey}
         songTitle={editedSong.title}
       />
 

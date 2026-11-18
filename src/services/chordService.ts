@@ -28,31 +28,31 @@ export function getNoteDegreeInfo(note: string, keyRoot: string) {
 
   switch (semitones) {
     case 0:
-      return { num: '1', roman: 'I', func: 'Tôn', bassNum: '1', bassRoman: '1', bassFunc: '1ª' };
+      return { semitones: 0, num: '1', roman: 'I', bassRoman: 'I', func: 'T', bassNum: '1', bassFunc: '1ª' };
     case 1:
-      return { num: 'b2', roman: 'bII', func: 'b2', bassNum: 'b2', bassRoman: 'b2', bassFunc: 'b2ª' };
+      return { semitones: 1, num: 'b2', roman: 'bII', bassRoman: 'bII', func: 'SDm', bassNum: 'b2', bassFunc: 'b2ª' };
     case 2:
-      return { num: '2', roman: 'II', func: 'SubR', bassNum: '2', bassRoman: '2', bassFunc: '2ª' };
+      return { semitones: 2, num: '2', roman: 'II', bassRoman: 'II', func: 'SDr', bassNum: '2', bassFunc: '2ª' };
     case 3:
-      return { num: 'b3', roman: 'bIII', func: 'b3', bassNum: 'b3', bassRoman: 'b3', bassFunc: 'b3ª' };
+      return { semitones: 3, num: 'b3', roman: 'bIII', bassRoman: 'bIII', func: 'SDm', bassNum: 'b3', bassFunc: 'b3ª' };
     case 4:
-      return { num: '3', roman: 'III', func: 'Med', bassNum: '3', bassRoman: '3', bassFunc: '3ª' };
+      return { semitones: 4, num: '3', roman: 'III', bassRoman: 'III', func: 'Ta', bassNum: '3', bassFunc: '3ª' };
     case 5:
-      return { num: '4', roman: 'IV', func: 'Subd', bassNum: '4', bassRoman: '4', bassFunc: '4ª' };
+      return { semitones: 5, num: '4', roman: 'IV', bassRoman: 'IV', func: 'SD', bassNum: '4', bassFunc: '4ª' };
     case 6:
-      return { num: 'b5', roman: 'bV', func: '#4', bassNum: 'b5', bassRoman: 'b5', bassFunc: '#4' };
+      return { semitones: 6, num: 'b5', roman: 'bV', bassRoman: '#IV', func: 'Dsec', bassNum: 'b5', bassFunc: '#4' };
     case 7:
-      return { num: '5', roman: 'V', func: 'Dom', bassNum: '5', bassRoman: '5', bassFunc: '5ª' };
+      return { semitones: 7, num: '5', roman: 'V', bassRoman: 'V', func: 'D', bassNum: '5', bassFunc: '5ª' };
     case 8:
-      return { num: 'b6', roman: 'bVI', func: 'b6', bassNum: 'b6', bassRoman: 'b6', bassFunc: 'b6ª' };
+      return { semitones: 8, num: 'b6', roman: 'bVI', bassRoman: 'bVI', func: 'SDm', bassNum: 'b6', bassFunc: 'b6ª' };
     case 9:
-      return { num: '6', roman: 'VI', func: 'Rel', bassNum: '6', bassRoman: '6', bassFunc: '6ª' };
+      return { semitones: 9, num: '6', roman: 'VI', bassRoman: 'VI', func: 'Tr', bassNum: '6', bassFunc: '6ª' };
     case 10:
-      return { num: 'b7', roman: 'bVII', func: 'SubT', bassNum: 'b7', bassRoman: 'b7', bassFunc: 'b7ª' };
+      return { semitones: 10, num: 'b7', roman: 'bVII', bassRoman: 'bVII', func: 'SDm', bassNum: 'b7', bassFunc: 'b7ª' };
     case 11:
-      return { num: '7', roman: 'VII', func: 'Sens', bassNum: '7', bassRoman: '7', bassFunc: '7ª' };
+      return { semitones: 11, num: '7', roman: 'VII', bassRoman: 'VII', func: 'D', bassNum: '7', bassFunc: '7ª' };
     default:
-      return { num: '1', roman: 'I', func: 'Tôn', bassNum: '1', bassRoman: '1', bassFunc: '1ª' };
+      return { semitones: 0, num: '1', roman: 'I', bassRoman: 'I', func: 'T', bassNum: '1', bassFunc: '1ª' };
   }
 }
 
@@ -63,7 +63,7 @@ export function getChordBassIntervalInfo(bassNote: string, chordRoot: string) {
   let cleanRoot = chordRoot;
   if (FLATS[cleanRoot]) cleanRoot = FLATS[cleanRoot];
 
-  const bassIdx = NOTES.indexOf(cleanBass);
+  const bassIdx = NOTES.indexOf(cleanRoot) !== -1 ? NOTES.indexOf(cleanBass) : -1;
   const rootIdx = NOTES.indexOf(cleanRoot);
   if (bassIdx === -1 || rootIdx === -1) return null;
 
@@ -105,7 +105,9 @@ export function convertSingleChordToHarmonicMode(chord: string, songKey: string,
   const cleanChordName = getCleanChordName(chord);
   if (!cleanChordName) return chord;
 
-  const keyRoot = songKey.match(/^([A-G][#b]?)/)?.[1] || 'C';
+  const keyMatch = songKey.trim().match(/^([A-G][#b]?)(m(?:in|enor)?)?/i);
+  const keyRoot = keyMatch?.[1] || 'C';
+  const isMinorKey = Boolean(keyMatch?.[2]) && !/maj|7M/i.test(songKey);
 
   let prePart = cleanChordName;
   let bassPart = '';
@@ -124,55 +126,123 @@ export function convertSingleChordToHarmonicMode(chord: string, songKey: string,
   const degInfo = getNoteDegreeInfo(rootNote, keyRoot);
   if (!degInfo) return chord;
 
+  const isHalfDim = /^(?:m7\(?b5\)?|ø)/i.test(suffix);
+  const isDim = !isHalfDim && /^(?:dim|°|º)/i.test(suffix);
+  const isAug = /^(?:aug|\+)/i.test(suffix);
+  const isMinorChord = !isHalfDim && !isDim && /^m(?!aj)/i.test(suffix);
+  const isDom7 = !isMinorChord && !isDim && !isHalfDim && /^7(?![M+])/.test(suffix);
+  const isMajorLike = !isMinorChord && !isDim && !isHalfDim;
+
+  const bassNoteMatch = bassPart ? bassPart.match(/^([A-G][#b]?)/) : null;
+  const bassDegInfo = bassNoteMatch ? getNoteDegreeInfo(bassNoteMatch[1], keyRoot) : null;
+
   let formattedPre = '';
 
   if (mode === 'numbers') {
-    const isMinor = suffix.startsWith('m') && !suffix.startsWith('maj');
-    if (isMinor && degInfo.num.startsWith('b')) {
+    if (isMinorChord && degInfo.num.startsWith('b')) {
       formattedPre = `${degInfo.num}${suffix.substring(1)}`;
     } else {
       formattedPre = `${degInfo.num}${suffix}`;
     }
   } else if (mode === 'roman') {
-    const isMinor = suffix.startsWith('m') && !suffix.startsWith('maj');
-    if (isMinor) {
-      formattedPre = `${degInfo.roman}m${suffix.substring(1)}`;
+    let romanBase = degInfo.roman;
+
+    if (degInfo.semitones === 6) {
+      romanBase = (isDim || isHalfDim) ? '#IV' : 'bV';
+    }
+
+    if (isHalfDim) {
+      const rest = suffix.replace(/^(?:m7\(?b5\)?|ø)/i, '');
+      formattedPre = `${romanBase}m(b5)${rest}`;
+    } else if (isDim) {
+      const rest = suffix.replace(/^(?:dim|°|º)/i, '');
+      formattedPre = `${romanBase}°${rest}`;
+    } else if (isMinorChord) {
+      const rest = suffix.substring(1);
+      formattedPre = `${romanBase}m${rest}`;
+    } else if (isAug) {
+      const rest = suffix.replace(/^(?:aug|\+)/i, '');
+      formattedPre = `${romanBase}+${rest}`;
     } else {
-      formattedPre = `${degInfo.roman}${suffix}`;
+      formattedPre = `${romanBase}${suffix}`;
     }
   } else if (mode === 'functions') {
-    const isMinor = suffix.startsWith('m') && !suffix.startsWith('maj');
-    const isNaturallyMinorDegree = ['SubR', 'Med', 'Rel', 'Sens', 'Cad'].includes(degInfo.func);
+    if ((degInfo.semitones === 5 || degInfo.semitones === 2) && bassDegInfo?.semitones === 7) {
+      return 'D';
+    }
 
-    if (isNaturallyMinorDegree) {
-      if (isMinor) {
-        // Dm -> SubR, Am -> Rel, Em -> Med (strip 'm' as function name implies minor)
-        const extra = suffix.substring(1);
-        formattedPre = `${degInfo.func}${extra}`;
-      } else {
-        // D -> SubRM, A -> RelM, E -> MedM (explicit 'M' indicates Major / Dominant)
-        formattedPre = `${degInfo.func}M${suffix}`;
+    if (!isMinorKey) {
+      switch (degInfo.semitones) {
+        case 0:
+          return isDom7 ? 'Dsec' : 'T';
+        case 1:
+          return isDom7 ? 'Dsec' : 'SDm';
+        case 2:
+          return isMajorLike ? 'Dsec' : 'SDr';
+        case 3:
+          return (isDim || isHalfDim) ? 'Dsec' : 'SDm';
+        case 4:
+          return isMajorLike ? 'Dsec' : 'Ta';
+        case 5:
+          return (isMinorChord || isDim) ? 'SDm' : 'SD';
+        case 6:
+          return 'Dsec';
+        case 7:
+          return isMinorChord ? 'SDm' : 'D';
+        case 8:
+          return 'SDm';
+        case 9:
+          return isMajorLike ? 'Dsec' : 'Tr';
+        case 10:
+          return 'SDm';
+        case 11:
+          return isMajorLike ? 'Dsec' : 'D';
+        default:
+          return 'T';
       }
     } else {
-      // Naturally Major degrees: Tôn, Subd, Dom, SubT
-      formattedPre = `${degInfo.func}${suffix}`;
+      switch (degInfo.semitones) {
+        case 0:
+          return isDom7 ? 'Dsec' : 'T';
+        case 1:
+          return isDom7 ? 'Dsec' : 'SDm';
+        case 2:
+          return isMajorLike ? 'Dsec' : 'SDr';
+        case 3:
+          return isDom7 ? 'Dsec' : 'Tr';
+        case 4:
+          return isMajorLike ? 'Dsec' : 'Ta';
+        case 5:
+          return isMinorChord ? 'SDm' : 'SD';
+        case 6:
+          return 'Dsec';
+        case 7:
+          return 'D';
+        case 8:
+          return 'SDm';
+        case 9:
+          return isMajorLike ? 'Dsec' : 'Tr';
+        case 10:
+          return 'SDm';
+        case 11:
+          return isMajorLike ? 'Dsec' : 'D';
+        default:
+          return 'T';
+      }
     }
   }
 
   let formattedBass = '';
-  if (bassPart) {
-    const bassMatch = bassPart.match(/^([A-G][#b]?)/);
-    if (bassMatch) {
-      const bassNote = bassMatch[1];
+  if (bassPart && bassNoteMatch) {
+    const bassNote = bassNoteMatch[1];
+    if (mode === 'roman') {
+      if (bassDegInfo) {
+        formattedBass = `/${bassDegInfo.bassRoman}`;
+      }
+    } else if (mode === 'numbers') {
       const bassInfo = getChordBassIntervalInfo(bassNote, rootNote);
       if (bassInfo) {
-        if (mode === 'numbers') {
-          formattedBass = `/${bassInfo.num}`;
-        } else if (mode === 'roman') {
-          formattedBass = `/${bassInfo.roman}`;
-        } else if (mode === 'functions') {
-          formattedBass = `/${bassInfo.func}`;
-        }
+        formattedBass = `/${bassInfo.num}`;
       }
     }
   }
@@ -583,16 +653,19 @@ export function isChordWord(word: string): boolean {
     }
   }
 
-  // 2. Roman Numerals / Degrees (e.g. I, V/3, VIm, Vm7/7, bVII, 1, 5/3, 1ª, 3ª, 5ª)
+  // 2. Roman Numerals / Degrees (e.g. I, V/VII, VIm, I/III, II/#IV, bVII, 1, 5/3, 1ª, 3ª, 5ª)
   const degBaseMatch = cleanWord.match(/^(b|#)?(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i|[1-7])/i);
   if (degBaseMatch) {
     const suffix = cleanWord.slice(degBaseMatch[0].length);
     if (suffix === '') return true;
-    const degSuffixPattern = /^(m|maj|min|dim|aug|sus|add|alt|omit|no|M|[0-9]|\(|\)|\+|\-|\#|b|Δ|ø|°|º|ª|(\/(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i|[1-7]|[a-gA-G][#b]?|1ª|2ª|3ª|4ª|5ª|6ª|7ª)))+$/i;
+    const degSuffixPattern = /^(m|maj|min|dim|aug|sus|add|alt|omit|no|M|[0-9]|\(|\)|\+|\-|\#|b|Δ|ø|°|º|ª|(\/((b|#)?(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)|[1-7]|[a-gA-G][#b]?|1ª|2ª|3ª|4ª|5ª|6ª|7ª)))+$/i;
     if (degSuffixPattern.test(suffix)) return true;
   }
 
-  // 3. Harmonic Functions (e.g. Tôn, Dom, Rel, Subd, SubR, Med, Sens, Cad, SubT)
+  // 3. Harmonic Functions (strict functional tags + legacy names)
+  if (/^(Dsec|SDr|SDm|SD|Tr|Ta|T)(\/(Dsec|SDr|SDm|SD|Tr|Ta|T|D))?$/.test(cleanWord)) {
+    return true;
+  }
   const funcBaseMatch = cleanWord.match(/^(Tôn|Dom|Rel|Subd|SubR|Med|Sens|Cad|SubT|Tonic|Domin|b2|b3|b5|#4|b6|b7)/i);
   if (funcBaseMatch) {
     const suffix = cleanWord.slice(funcBaseMatch[0].length);
@@ -619,7 +692,8 @@ export function convertHarmonicToChordName(chord: string, songKey: string): stri
   }
 
   // Check if prePart is a harmonic function name or roman numeral / degree FIRST!
-  const isHarmonicFunc = /^(Tôn|Dom|Rel|Subd|SubR|Med|Sens|Cad|SubT|Tonic|Domin)/i.test(prePart);
+  const isStrictFunc = /^(Dsec|SDr|SDm|SD|Tr|Ta|T)$/.test(prePart);
+  const isHarmonicFunc = isStrictFunc || /^(Tôn|Dom|Rel|Subd|SubR|Med|Sens|Cad|SubT|Tonic|Domin)/i.test(prePart);
   const isDegree = /^(b|#)?(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i|[1-7])/i.test(prePart);
 
   // If it's NOT a harmonic function or degree, and it starts with a standard note cipher A-G, return it directly
@@ -638,7 +712,25 @@ export function convertHarmonicToChordName(chord: string, songKey: string): stri
   let suffix = '';
   let defaultMinor = false;
 
-  if (/^Tôn/i.test(prePart)) {
+  if (prePart === 'T') {
+    semitones = 0;
+  } else if (prePart === 'Tr') {
+    semitones = 9;
+    defaultMinor = true;
+  } else if (prePart === 'Ta') {
+    semitones = 4;
+    defaultMinor = true;
+  } else if (prePart === 'SD') {
+    semitones = 5;
+  } else if (prePart === 'SDr') {
+    semitones = 2;
+    defaultMinor = true;
+  } else if (prePart === 'SDm') {
+    semitones = 5;
+    defaultMinor = true;
+  } else if (prePart === 'Dsec') {
+    semitones = 2;
+  } else if (/^Tôn/i.test(prePart)) {
     semitones = 0;
     suffix = prePart.replace(/^Tôn(ic)?/i, '');
   } else if (/^Dom/i.test(prePart)) {
