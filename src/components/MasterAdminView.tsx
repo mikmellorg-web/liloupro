@@ -149,11 +149,36 @@ export default function MasterAdminView({
   const getRemoteSupportExpiresMs = (rs: any): number => {
     if (!rs) return 0;
     const rawExp = rs.expiresAt;
-    if (rawExp && typeof rawExp.toMillis === 'function') return rawExp.toMillis();
-    if (rawExp && typeof rawExp.seconds === 'number') return rawExp.seconds * 1000;
+    if (rawExp) {
+      if (typeof rawExp.toDate === 'function') {
+        const ms = rawExp.toDate().getTime();
+        if (!Number.isNaN(ms)) return ms;
+      }
+      if (typeof rawExp.toMillis === 'function') {
+        const ms = rawExp.toMillis();
+        if (!Number.isNaN(ms)) return ms;
+      }
+      if (typeof rawExp.seconds === 'number') {
+        return rawExp.seconds * 1000;
+      }
+      if (typeof rawExp._seconds === 'number') {
+        return rawExp._seconds * 1000;
+      }
+      if (rawExp instanceof Date) {
+        const ms = rawExp.getTime();
+        if (!Number.isNaN(ms)) return ms;
+      }
+      if (typeof rawExp === 'number' && !Number.isNaN(rawExp)) {
+        return rawExp;
+      }
+      if (typeof rawExp === 'string') {
+        const parsed = Date.parse(rawExp);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+    }
     if (typeof rs.expiresAtIso === 'string') {
       const parsed = Date.parse(rs.expiresAtIso);
-      return Number.isNaN(parsed) ? 0 : parsed;
+      if (!Number.isNaN(parsed)) return parsed;
     }
     return 0;
   };
@@ -654,7 +679,8 @@ Conte conosco para servir seu ministério com excelência!`
           maxMembers: d.maxMembers || 9999,
           contactEmail: d.contactEmail || '',
           contactPhone: d.contactPhone || '',
-          leaderWhatsapp: d.leaderWhatsapp || ''
+          leaderWhatsapp: d.leaderWhatsapp || '',
+          remoteSupport: d.remoteSupport || null
         };
       });
 
@@ -3507,7 +3533,7 @@ Conte conosco para servir seu ministério com excelência!`
                                       className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed shadow-md shadow-amber-600/20"
                                     >
                                       <ShieldCheck size={14} />
-                                      {isEnteringSupportId === church.id ? 'Validando PIN...' : 'Entrar em Modo Suporte'}
+                                      {isEnteringSupportId === church.id ? 'Validando PIN...' : 'Acessar em Modo Suporte'}
                                     </button>
                                   </div>
                                   {pinErrors[church.id] && (
