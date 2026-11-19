@@ -3173,21 +3173,21 @@ export function SongDetailView({
           <div className="min-w-0 flex items-center gap-2 shrink truncate">
             <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-brand/10 text-brand px-1.5 py-0.5 rounded border border-brand/20 uppercase shrink-0">MODO CULTO</span>
             <h2 className={cn("text-xs sm:text-sm font-black truncate max-w-[120px] sm:max-w-[200px]", isStageMode ? "text-white" : "text-text-main")} title={editedSong.title}>{editedSong.title}</h2>
-            <span className={cn("text-[10px] hidden lg:inline truncate", isStageMode ? "text-amber-300 font-bold" : "text-text-muted")}>
+            <span className={cn("text-[10px] hidden xl:inline truncate", isStageMode ? "text-amber-300 font-bold" : "text-text-muted")}>
               • Tom: <span className="font-bold text-brand">{currentKey}{isCapoEnabled && shapeKey && shapeKey !== currentKey ? ` (${shapeKey})` : ''}</span> • BPM: {editedSong.bpm || 'Orig'}
             </span>
           </div>
 
-          {/* Controles Rápidos Inline (exibidos na 1ª barra em PC e tablets com espaço suficiente) */}
+          {/* Controles Rápidos Inline (exibidos na 1ª barra única em Tablet e PC quando há espaço horizontal) */}
           {isFocusSingleRow && (
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className={cn("flex items-center gap-1.5 shrink-0 pr-2.5 mr-0.5 border-r", isStageMode ? "border-amber-500/30" : "border-border/60")}>
               {/* 1. Seletor CIFRA | LETRA */}
-              <div className={cn("flex items-center rounded-lg p-0.5 border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
+              <div className={cn("flex items-center h-8 rounded-lg p-0.5 border shrink-0", isStageMode ? "bg-zinc-900 border-amber-500/30" : "bg-black/5 dark:bg-white/10 border-border/60")}>
                 <button
                   type="button"
                   onClick={() => setDetailTab('chords')}
                   className={cn(
-                    "h-7 px-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                    "h-full px-2.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
                     detailTab === 'chords'
                       ? "bg-brand text-white shadow-xs"
                       : (isStageMode ? "text-zinc-300 hover:text-white hover:bg-zinc-800" : "text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/10")
@@ -3200,7 +3200,7 @@ export function SongDetailView({
                   type="button"
                   onClick={() => setDetailTab('lyrics')}
                   className={cn(
-                    "h-7 px-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95",
+                    "h-full px-2.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
                     detailTab === 'lyrics'
                       ? "bg-brand text-white shadow-xs"
                       : (isStageMode ? "text-zinc-300 hover:text-white hover:bg-zinc-800" : "text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/10")
@@ -3211,12 +3211,44 @@ export function SongDetailView({
                 </button>
               </div>
 
-              {/* 2. Botão do Player LiLouPro */}
+              {/* 2. Botão de TOM */}
+              <button
+                type="button"
+                onClick={() => setShowKeyMenu(prev => !prev)}
+                className={cn(
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs notranslate",
+                  isStageMode
+                    ? "bg-zinc-900 border-amber-500/40 text-white hover:bg-zinc-800"
+                    : "bg-brand/15 hover:bg-brand/25 border-brand/50 text-text-main"
+                )}
+                translate="no"
+                title={isCapoEnabled && shapeKey && shapeKey !== currentKey ? `Tom Real: ${currentKey} | Shape: ${shapeKey} • Toque para alterar` : `Tom: ${currentKey} • Toque para alterar`}
+              >
+                <span className={cn("opacity-75 font-bold", isStageMode ? "text-zinc-300" : "text-text-muted")}>TOM:</span>
+                <span className="font-black text-brand">{currentKey}</span>
+              </button>
+
+              {/* 3. Botão de CAPOTRASTE */}
+              <button
+                type="button"
+                onClick={() => setShowCapoMenu(prev => !prev)}
+                className={cn(
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs",
+                  isCapoEnabled && activeCapoFret > 0
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500/30"
+                    : (isStageMode ? "bg-zinc-900 border-amber-500/30 text-zinc-200 hover:bg-zinc-800" : "bg-black/5 dark:bg-white/10 text-text-muted border-border hover:text-text-main")
+                )}
+                title="Abrir Posições do Capotraste (1ª a 12ª Casa)"
+              >
+                {isCapoEnabled && activeCapoFret > 0 ? `CAPO ${activeCapoFret}` : 'CAPO'}
+              </button>
+
+              {/* 4. Botão do Player PLAY */}
               <button
                 type="button"
                 onClick={handleToggleLilouPlayer}
                 className={cn(
-                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
                   isLilouPlayerActive
                     ? "border-amber-400 bg-amber-500/20 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
                     : (isStageMode ? "bg-zinc-900 border-amber-500/30 text-white hover:bg-zinc-800" : "bg-black/5 dark:bg-white/10 hover:bg-amber-500/10 border-border text-text-main hover:border-amber-400/60")
@@ -3231,12 +3263,12 @@ export function SongDetailView({
                     isLilouPlayerActive && "ring-1 ring-amber-400"
                   )}
                 />
-                <span className="text-[10px] font-black tracking-tight whitespace-nowrap">
-                  LiLouPro
+                <span className="text-[11px] font-black uppercase tracking-tight whitespace-nowrap">
+                  PLAY
                 </span>
               </button>
 
-              {/* 3. Botão Alternador Harmônico (ACORDES / GRAUS / FUNÇÕES) */}
+              {/* 5. Botão Alternador Harmônico (ACO / GRA / FUN) */}
               <button
                 type="button"
                 onClick={() => {
@@ -3247,7 +3279,7 @@ export function SongDetailView({
                   });
                 }}
                 className={cn(
-                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
+                  "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
                   harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/40 hover:bg-brand/25",
                   harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
                   harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
@@ -3255,17 +3287,17 @@ export function SongDetailView({
                 title={`Visão Harmônica: ${harmonicDisplayMode === 'chords' ? 'Cifra Tradicional' : harmonicDisplayMode === 'roman' ? 'Graus do Campo Harmônico' : 'Funções Harmônicas'} • Toque para alternar (Acordes ➔ Graus ➔ Funções)`}
               >
                 <span className={cn(
-                  "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
+                  "w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
                   harmonicDisplayMode === 'chords' && "bg-brand text-white",
                   harmonicDisplayMode === 'roman' && "bg-amber-500 text-black",
                   harmonicDisplayMode === 'functions' && "bg-cyan-500 text-white"
                 )}>
-                  <Music2 size={10} className="fill-current" />
+                  <Music2 size={9} className="fill-current" />
                 </span>
                 <span>
-                  {harmonicDisplayMode === 'chords' && "Acordes:"}
-                  {harmonicDisplayMode === 'roman' && "Graus:"}
-                  {harmonicDisplayMode === 'functions' && "Funções:"}
+                  {harmonicDisplayMode === 'chords' && "ACO"}
+                  {harmonicDisplayMode === 'roman' && "GRA"}
+                  {harmonicDisplayMode === 'functions' && "FUN"}
                 </span>
                 <RefreshCcw size={10} className="opacity-75 shrink-0" />
               </button>
@@ -3452,20 +3484,20 @@ export function SongDetailView({
           </div>
         </div>
 
-        {/* Sub-barra Compacta Mobile-First do Modo Foco (2ª linha em celular e tablets/telas sem espaço lateral suficiente) */}
+        {/* Sub-barra Compacta Mobile-First do Modo Foco (2ª linha centralizada no celular e telas estreitas) */}
         {!isFocusSingleRow && (
           <div
             onTouchStart={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
-            className="w-full max-w-full flex items-center justify-between gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 bg-[#0F172A]/95 border-b border-slate-800/80 overflow-hidden select-none z-[109] shrink-0"
+            className="w-full max-w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-[#0F172A]/95 border-b border-slate-800/80 overflow-hidden select-none z-[109] shrink-0"
           >
             {/* 1. Seletor CIFRA | LETRA */}
-            <div className="flex items-center h-9 rounded-lg bg-slate-900/90 border border-slate-700/80 p-0.5 shrink-0">
+            <div className="flex items-center h-8 rounded-lg bg-slate-900/90 border border-slate-700/80 p-0.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setDetailTab('chords')}
                 className={cn(
-                  "h-full px-1.5 sm:px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
+                  "h-full px-2 sm:px-2.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
                   detailTab === 'chords'
                     ? "bg-brand text-white shadow-xs"
                     : "text-slate-300 hover:text-white hover:bg-white/5"
@@ -3478,7 +3510,7 @@ export function SongDetailView({
                 type="button"
                 onClick={() => setDetailTab('lyrics')}
                 className={cn(
-                  "h-full px-1.5 sm:px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
+                  "h-full px-2 sm:px-2.5 rounded-md text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer shrink-0 whitespace-nowrap active:scale-95 flex items-center justify-center",
                   detailTab === 'lyrics'
                     ? "bg-brand text-white shadow-xs"
                     : "text-slate-300 hover:text-white hover:bg-white/5"
@@ -3493,12 +3525,12 @@ export function SongDetailView({
             <button
               type="button"
               onClick={() => setShowKeyMenu(prev => !prev)}
-              className="h-9 px-2 sm:px-2.5 rounded-lg bg-brand/20 hover:bg-brand/30 border border-brand/50 text-white flex items-center justify-center gap-1 shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs notranslate"
+              className="h-8 px-2.5 rounded-lg bg-brand/20 hover:bg-brand/30 border border-brand/50 text-white flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs notranslate"
               translate="no"
               title={isCapoEnabled && shapeKey && shapeKey !== currentKey ? `Tom Real: ${currentKey} | Shape: ${shapeKey} • Toque para alterar` : `Tom: ${currentKey} • Toque para alterar`}
             >
-              <span className="text-[9px] font-bold uppercase text-slate-300 hidden min-[440px]:inline">Tom</span>
-              <span className="text-[11px] sm:text-xs font-black text-brand">{currentKey}</span>
+              <span className="font-bold text-slate-300">TOM:</span>
+              <span className="font-black text-brand">{currentKey}</span>
             </button>
 
             {/* 3. Botão de CAPOTRASTE */}
@@ -3506,14 +3538,14 @@ export function SongDetailView({
               type="button"
               onClick={() => setShowCapoMenu(prev => !prev)}
               className={cn(
-                "h-9 px-2 sm:px-2.5 rounded-lg border flex items-center justify-center text-[10px] sm:text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs",
+                "h-8 px-2.5 rounded-lg border flex items-center justify-center text-[11px] font-black uppercase tracking-tight shrink-0 whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs",
                 isCapoEnabled && activeCapoFret > 0
                   ? "bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30"
                   : "bg-slate-900/90 text-slate-300 border-slate-700/80 hover:text-white hover:bg-white/5"
               )}
               title="Abrir Posições do Capotraste (1ª a 12ª Casa)"
             >
-              {isCapoEnabled && activeCapoFret > 0 ? `Capo ${activeCapoFret}` : 'Capo'}
+              {isCapoEnabled && activeCapoFret > 0 ? `CAPO ${activeCapoFret}` : 'CAPO'}
             </button>
 
             {/* 4. Botão do Player PLAY */}
@@ -3521,7 +3553,7 @@ export function SongDetailView({
               type="button"
               onClick={handleToggleLilouPlayer}
               className={cn(
-                "h-9 px-2 sm:px-2.5 rounded-lg border flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
+                "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer shrink-0 whitespace-nowrap shadow-xs",
                 isLilouPlayerActive
                   ? "border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/30"
                   : "border-slate-700/80 bg-slate-900/90 hover:border-amber-400/60 hover:bg-amber-500/10 text-slate-100"
@@ -3532,11 +3564,11 @@ export function SongDetailView({
                 src={luxuryAppIcon}
                 alt="LiLouPro Player"
                 className={cn(
-                  "w-4 h-4 sm:w-5 sm:h-5 rounded object-cover shrink-0",
+                  "w-3.5 h-3.5 rounded object-cover shrink-0",
                   isLilouPlayerActive && "ring-1 ring-amber-400"
                 )}
               />
-              <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-tight whitespace-nowrap">
+              <span className="text-[11px] font-black uppercase tracking-tight whitespace-nowrap">
                 PLAY
               </span>
             </button>
@@ -3552,7 +3584,7 @@ export function SongDetailView({
                 });
               }}
               className={cn(
-                "h-9 px-2 sm:px-2.5 rounded-lg border flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-tight sm:tracking-wider transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
+                "h-8 px-2.5 rounded-lg border flex items-center justify-center gap-1 text-[11px] font-black uppercase tracking-tight transition-all cursor-pointer active:scale-95 select-none shadow-xs shrink-0 whitespace-nowrap",
                 harmonicDisplayMode === 'chords' && "bg-brand/15 text-brand border-brand/40 hover:bg-brand/25",
                 harmonicDisplayMode === 'roman' && "bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30",
                 harmonicDisplayMode === 'functions' && "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30"
@@ -3560,12 +3592,12 @@ export function SongDetailView({
               title={`Visão Harmônica: ${harmonicDisplayMode === 'chords' ? 'Cifra Tradicional' : harmonicDisplayMode === 'roman' ? 'Graus do Campo Harmônico' : 'Funções Harmônicas'} • Toque para alternar (Acordes ➔ Graus ➔ Funções)`}
             >
               <span className={cn(
-                "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
+                "w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 transition-colors shadow-xs",
                 harmonicDisplayMode === 'chords' && "bg-brand text-white",
                 harmonicDisplayMode === 'roman' && "bg-amber-500 text-black",
                 harmonicDisplayMode === 'functions' && "bg-cyan-500 text-white"
               )}>
-                <Music2 size={10} className="fill-current" />
+                <Music2 size={9} className="fill-current" />
               </span>
               <span>
                 {harmonicDisplayMode === 'chords' && "ACO"}

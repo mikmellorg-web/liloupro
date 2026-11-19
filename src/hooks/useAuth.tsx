@@ -268,10 +268,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const { collection: col, query: qQuery, where: wWhere, getDocs: gDocs } = await import('firebase/firestore');
                   const snap = await gDocs(qQuery(col(db, 'churches'), wWhere('inviteCode', '==', pendingInvite.trim().toUpperCase())));
                   if (!snap.empty) {
-                    targetChurchId = snap.docs[0].id;
-                    resolvedChurchDocData = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                    isUserAdmin = false;
-                    initialRoles = [];
+                    const candidateData = snap.docs[0].data() as any;
+                    const candidateStatus = String(candidateData?.planStatus || '').toLowerCase().trim();
+                    const isCandidateBlocked =
+                      candidateData?.deleted === true ||
+                      candidateStatus === 'deleted' ||
+                      candidateStatus === 'suspended' ||
+                      candidateStatus === 'cancelled';
+                    if (!isCandidateBlocked) {
+                      targetChurchId = snap.docs[0].id;
+                      resolvedChurchDocData = { id: snap.docs[0].id, ...candidateData };
+                      isUserAdmin = false;
+                      initialRoles = [];
+                    }
                     localStorage.removeItem('pending_invite_code');
                   }
                 } catch (inviteErr) {
@@ -285,7 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
               currentMember = {
                 uid: currentUser.uid,
-                name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Líder',
+                name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Membro',
                 email: currentUser.email || '',
                 photoUrl: currentUser.photoURL || '',
                 roles: initialRoles,
@@ -368,9 +377,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const adminRef = doc(db, 'admins', currentUser.uid);
             const adminSnap = await getDoc(adminRef);
+            const adminData = adminSnap.exists() ? adminSnap.data() : null;
+            const memberCid = typeof currentMember.churchId === 'string' ? currentMember.churchId.trim() : '';
+            const adminMatchesChurch = Boolean(
+              adminSnap.exists() &&
+              memberCid &&
+              (
+                adminData?.churchId === memberCid ||
+                (memberCid === 'semente' && !adminData?.churchId)
+              )
+            );
             setRawIsAdmin(
               isMaster ||
-              adminSnap.exists() ||
+              adminMatchesChurch ||
               !!currentMember.isAdmin ||
               hasLeaderRole
             );

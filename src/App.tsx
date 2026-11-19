@@ -1765,11 +1765,18 @@ function PendingChurchSetupView({
       const sanitizedRoles = existingRoles.filter(
         (r) => r !== 'Coordenador/Líder' && r !== 'Líder' && r !== 'Pastor/Ministro'
       );
-      await updateDoc(doc(db, 'members', user.uid), {
+      await setDoc(doc(db, 'members', user.uid), {
+        uid: user.uid,
+        name: memberData?.name || user?.displayName || user?.email?.split('@')[0] || 'Membro',
+        email: (memberData?.email || user?.email || '').toLowerCase(),
+        photoUrl: memberData?.photoUrl || user?.photoURL || '',
         churchId: churchDoc.id,
         isAdmin: false,
-        roles: sanitizedRoles
-      });
+        roles: sanitizedRoles,
+        availability: memberData?.availability || {},
+        defaultBibleVersion: memberData?.defaultBibleVersion || 'BLIVRE',
+        dismissedOnboarding: true
+      }, { merge: true });
       try {
         localStorage.removeItem('pending_invite_code');
         localStorage.setItem('lilo_active_church_id', churchDoc.id);
@@ -2761,23 +2768,34 @@ function MainContent() {
           const querySnap = await getDocs(q);
           if (!querySnap.empty) {
             const churchDoc = querySnap.docs[0];
+            const churchDocData = churchDoc.data() as any;
+            const targetStatus = String(churchDocData?.planStatus || '').toLowerCase().trim();
+            const isTargetBlocked =
+              churchDocData?.deleted === true ||
+              targetStatus === 'deleted' ||
+              targetStatus === 'suspended' ||
+              targetStatus === 'cancelled';
             const churchId = churchDoc.id;
-            const churchName = churchDoc.data().name;
 
-            if (memberData.churchId !== churchId) {
+            if (!isTargetBlocked && memberData.churchId !== churchId) {
               const isFirstJoin = !memberData.churchId;
+              const existingRoles: string[] = Array.isArray(memberData?.roles) ? memberData.roles : [];
+              const sanitizedRoles = existingRoles.filter(
+                (r) => r !== 'Coordenador/Líder' && r !== 'Líder' && r !== 'Pastor/Ministro'
+              );
               const memberRef = doc(db, 'members', user.uid);
-              await updateDoc(memberRef, {
+              await setDoc(memberRef, {
                 churchId: churchId,
-                isAdmin: false // Joined musicians are standard members initially
-              });
+                isAdmin: false, // Joined musicians are standard members initially
+                roles: sanitizedRoles
+              }, { merge: true });
               if (isFirstJoin) {
                 notifyChurchLeadersOfNewMember({
                   memberUid: user.uid,
                   memberName: memberData?.name || user?.displayName || user?.email?.split('@')[0] || 'Novo Membro',
                   memberEmail: user?.email || '',
                   churchId,
-                  churchData: { id: churchDoc.id, ...churchDoc.data() }
+                  churchData: { id: churchDoc.id, ...churchDocData }
                 }).catch(() => {});
               }
             }
@@ -3957,8 +3975,8 @@ function MainContent() {
   const isGhostOrBlockedChurch = Boolean(
     user &&
     !isMasterDeveloper &&
-    memberData &&
     (
+      !memberData ||
       !memberData.churchId ||
       !churchData ||
       churchResolutionState === 'missing' ||
@@ -3981,9 +3999,9 @@ function MainContent() {
   return (
     <div 
       className={cn(
-        "min-h-screen bg-surface transition-all duration-300",
+        "w-full min-h-screen bg-surface transition-all duration-300",
         isSongFocusMode ? "p-0" : (isBottomBarCollapsed ? "pb-6 md:pb-0" : "pb-24 md:pb-0"),
-        isSongFocusMode ? "md:pl-0" : (isSidebarCollapsed ? "md:pl-20" : "md:pl-64"),
+        isSongFocusMode ? "md:pl-0" : (isSidebarCollapsed ? "md:pl-20 lg:pl-0" : "md:pl-64 lg:pl-0"),
         !isHomeScreen && "overscroll-y-none"
       )}
       style={{
@@ -4120,9 +4138,10 @@ function MainContent() {
         )}
       </AnimatePresence>
 
+      <div className={cn(isSongFocusMode ? "w-full min-h-screen" : "w-full max-w-[1440px] mx-auto flex min-h-screen")}>
       <nav 
         className={cn(
-          "fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 bg-surface text-text-main border-t border-border md:border-t-0 md:border-r z-50 flex md:flex-col items-stretch justify-around md:justify-start py-1 md:py-0 transition-all duration-300 shadow-xl notranslate",
+          "fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 lg:sticky lg:top-0 lg:bottom-auto lg:left-auto lg:right-auto lg:h-screen shrink-0 bg-surface text-text-main border-t border-border md:border-t-0 md:border-r z-50 flex md:flex-col items-stretch justify-around md:justify-start py-1 md:py-0 transition-all duration-300 shadow-xl notranslate",
           isSidebarCollapsed ? "md:w-20" : "md:w-64",
           isBottomBarCollapsed ? "translate-y-full md:translate-y-0 opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto" : "translate-y-0 opacity-100 pointer-events-auto",
           isSongFocusMode && "hidden pointer-events-none opacity-0 translate-y-full md:translate-x-[-100%]"
@@ -4420,7 +4439,7 @@ function MainContent() {
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto p-4 md:p-10">
+      <main className={cn("flex-1 min-w-0", isSongFocusMode ? "p-0" : "px-4 py-4 md:px-6 md:py-8")}>
         <AnimatePresence mode="wait">
           {activeTab === 'home' && (
             <Suspense fallback={null}>
@@ -4547,6 +4566,7 @@ function MainContent() {
           )}
         </AnimatePresence>
       </main>
+      </div>
 
       {isMasterDeveloper && isSandboxMode && (
         <SandboxRecordingControls

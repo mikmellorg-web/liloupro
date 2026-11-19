@@ -55,7 +55,8 @@ interface ChurchItem {
   inviteCode: string;
   createdAt?: string;
   createdBy?: string;
-  planStatus?: 'active' | 'trial' | 'suspended' | 'cancelled';
+  planStatus?: 'active' | 'trial' | 'suspended' | 'cancelled' | 'deleted';
+  deleted?: boolean;
   planName?: string;
   planExpiresAt?: string | null;
   expiresAt?: string | null;
@@ -172,6 +173,22 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
   const [orphanReassignTargets, setOrphanReassignTargets] = useState<Record<string, string>>({});
   const [confirmDeleteOrphanId, setConfirmDeleteOrphanId] = useState<string | null>(null);
   const [orphanBusyId, setOrphanBusyId] = useState<string | null>(null);
+
+  // Residue Scanner & Integrity Diagnostics Modal States (Master-Only)
+  const [showIntegrityModal, setShowIntegrityModal] = useState(false);
+  const [integritySearch, setIntegritySearch] = useState('');
+  const [isScanningResidues, setIsScanningResidues] = useState(false);
+  const [isCleaningResidues, setIsCleaningResidues] = useState(false);
+  const [residueScanResult, setResidueScanResult] = useState<{
+    scannedAt: string;
+    totalAdminsDocs: number;
+    totalPresenceDocs: number;
+    totalFcmTokensDocs: number;
+    allAdminIds: string[];
+    orphanAdmins: Array<{ id: string; email?: string; churchId?: string; reason: string }>;
+    orphanPresence: Array<{ id: string; name?: string; churchId?: string; reason: string }>;
+    orphanFcmTokens: Array<{ id: string; uid?: string; churchId?: string; reason: string }>;
+  } | null>(null);
 
   // Active Tab & Kiwify Webhook States
   const [activeTab, setActiveTab] = useState<'churches' | 'orphans' | 'kiwify' | 'whatsapp'>('churches');
@@ -546,32 +563,42 @@ Conte conosco para servir seu ministério com excelência!`
     };
   }, [isAuthorized]);
 
-  // Real Churches & Orphan Members (users whose churchId is empty/null or points to a deleted church)
+  // Real Churches & Orphan Members (100% coverage: empty "", null, undefined, or non-existent/deleted churchId)
   const realChurches = useMemo(() => {
     return churches.filter(c => c.id !== 'demo_sandbox');
   }, [churches]);
 
+  const validActiveChurchIds = useMemo(() => {
+    return new Set(
+      realChurches
+        .filter(c => !c.deleted && String(c.planStatus || '').toLowerCase().trim() !== 'deleted')
+        .map(c => c.id)
+    );
+  }, [realChurches]);
+
   const orphanMembers = useMemo(() => {
-    const validChurchIds = new Set(realChurches.map(c => c.id));
     return members.filter(m => {
       if (m.churchId === 'demo_sandbox') return false;
       if ((m.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com') return false;
-      // Legacy members with undefined churchId belong to 'semente'
-      if (m.churchId === undefined && validChurchIds.has('semente')) return false;
       const cid = typeof m.churchId === 'string' ? m.churchId.trim() : '';
-      return !cid || !validChurchIds.has(cid);
+      return !cid || !validActiveChurchIds.has(cid);
     });
-  }, [realChurches, members]);
+  }, [validActiveChurchIds, members]);
 
   // Compute Stats (excluding sandbox demo church & fake members)
   const stats = useMemo(() => {
     const realMembers = members.filter(m => m.churchId !== 'demo_sandbox');
+    const sandboxMembers = members.filter(m => m.churchId === 'demo_sandbox').length;
     const totalChurches = realChurches.length;
     const activeChurches = realChurches.filter(c => c.planStatus === 'active' || !c.planStatus).length;
     const trialChurches = realChurches.filter(c => c.planStatus === 'trial').length;
     const suspendedChurches = realChurches.filter(c => c.planStatus === 'suspended' || c.planStatus === 'cancelled').length;
     const totalMembers = realMembers.length;
     const orphanCount = orphanMembers.length;
+    const churchMemberSum = realChurches.reduce((acc, church) => {
+      const count = members.filter(m => (typeof m.churchId === 'string' ? m.churchId.trim() : '') === church.id).length;
+      return acc + count;
+    }, 0);
     const linkedMembers = Math.max(0, totalMembers - orphanCount);
     const avgMembersPerChurch = totalChurches > 0 ? (linkedMembers / totalChurches).toFixed(1) : '0';
 
@@ -581,6 +608,8 @@ Conte conosco para servir seu ministério com excelência!`
       trialChurches,
       suspendedChurches,
       totalMembers,
+      sandboxMembers,
+      churchMemberSum,
       linkedMembers,
       orphanCount,
       avgMembersPerChurch
@@ -876,6 +905,12 @@ Conte conosco para servir seu ministério com excelência!`
       try {
         await deleteDoc(doc(db, 'presence', member.id));
       } catch {}
+      try {
+        const tokenSnap = await getDocs(query(collection(db, 'fcm_tokens'), where('uid', '==', member.id)));
+        for (const tDoc of tokenSnap.docs) {
+          await deleteDoc(tDoc.ref);
+        }
+      } catch {}
       setConfirmDeleteOrphanId(null);
       showToast(`Conta órfã "${member.name || member.email || member.id}" excluída definitivamente!`, 'success');
     } catch (err) {
@@ -884,6 +919,229 @@ Conte conosco para servir seu ministério com excelência!`
       showToast('Não foi possível excluir a conta órfã.', 'error');
     } finally {
       setOrphanBusyId(null);
+    }
+  };
+
+  // Full Residue Scan: audits admins, presence, and fcm_tokens for orphaned / invalid tenant entries
+  const runResidueScan = async (silent = false) => {
+    if (!isAuthorized) return;
+    setIsScanningResidues(true);
+    try {
+      const [adminsSnap, presenceSnap, fcmSnap] = await Promise.all([
+        getDocs(collection(db, 'admins')),
+        getDocs(collection(db, 'presence')),
+        getDocs(collection(db, 'fcm_tokens'))
+      ]);
+
+      const memberById = new Map<string, MemberItem>();
+      members.forEach((m) => {
+        memberById.set(m.id, m);
+      });
+
+      const orphanAdmins: Array<{ id: string; email?: string; churchId?: string; reason: string }> = [];
+      const allAdminIds: string[] = [];
+
+      adminsSnap.docs.forEach((d) => {
+        const data = d.data() as any;
+        const emailLower = String(data?.email || '').toLowerCase().trim();
+        allAdminIds.push(d.id);
+        if (emailLower === 'mikmellorg@gmail.com') return;
+
+        const adminCid = typeof data?.churchId === 'string' ? data.churchId.trim() : '';
+        const memberDoc = memberById.get(d.id);
+        const memberCid = typeof memberDoc?.churchId === 'string' ? memberDoc.churchId.trim() : '';
+        const memberHasLeaderRole = Array.isArray(memberDoc?.roles) && (
+          memberDoc.roles.includes('Coordenador/Líder') ||
+          memberDoc.roles.includes('Líder') ||
+          memberDoc.roles.includes('Pastor/Ministro')
+        );
+
+        if (!memberDoc) {
+          orphanAdmins.push({
+            id: d.id,
+            email: data?.email || '',
+            churchId: adminCid || '(vazio)',
+            reason: 'Documento correspondente em members não existe (conta excluída ou órfã)'
+          });
+          return;
+        }
+
+        if (memberCid === 'demo_sandbox' || adminCid === 'demo_sandbox') return;
+
+        if (!memberCid || !validActiveChurchIds.has(memberCid)) {
+          orphanAdmins.push({
+            id: d.id,
+            email: data?.email || memberDoc.email || '',
+            churchId: memberCid || adminCid || '(vazio)',
+            reason: `Membro vinculado a igreja inexistente/excluída (${memberCid || 'vazio'})`
+          });
+          return;
+        }
+
+        if (adminCid && !validActiveChurchIds.has(adminCid)) {
+          orphanAdmins.push({
+            id: d.id,
+            email: data?.email || memberDoc.email || '',
+            churchId: adminCid,
+            reason: `Permissão ADM apontando para igreja excluída (${adminCid})`
+          });
+          return;
+        }
+
+        if (adminCid && memberCid && adminCid !== memberCid) {
+          orphanAdmins.push({
+            id: d.id,
+            email: data?.email || memberDoc.email || '',
+            churchId: adminCid,
+            reason: `Conflito de igreja: admins (${adminCid}) ≠ members (${memberCid})`
+          });
+          return;
+        }
+
+        if (!memberDoc.isAdmin && !memberHasLeaderRole) {
+          orphanAdmins.push({
+            id: d.id,
+            email: data?.email || memberDoc.email || '',
+            churchId: adminCid || memberCid,
+            reason: 'Permissão residual em admins, mas usuário é membro comum (isAdmin: false)'
+          });
+        }
+      });
+
+      const orphanPresence: Array<{ id: string; name?: string; churchId?: string; reason: string }> = [];
+      presenceSnap.docs.forEach((d) => {
+        const data = d.data() as any;
+        const cid = typeof data?.churchId === 'string' ? data.churchId.trim() : '';
+        if (cid === 'demo_sandbox') return;
+        const memberDoc = memberById.get(d.id);
+        if ((memberDoc?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com') return;
+
+        if (!memberDoc) {
+          orphanPresence.push({
+            id: d.id,
+            name: data?.name || data?.displayName || '',
+            churchId: cid || '(vazio)',
+            reason: 'Presença residual de usuário sem documento em members'
+          });
+        } else if (!cid || !validActiveChurchIds.has(cid)) {
+          orphanPresence.push({
+            id: d.id,
+            name: data?.name || memberDoc.name || '',
+            churchId: cid || '(vazio)',
+            reason: `Presença com igreja inválida/excluída (${cid || 'vazio'})`
+          });
+        }
+      });
+
+      const orphanFcmTokens: Array<{ id: string; uid?: string; churchId?: string; reason: string }> = [];
+      fcmSnap.docs.forEach((d) => {
+        const data = d.data() as any;
+        const uid = typeof data?.uid === 'string' ? data.uid.trim() : '';
+        const cid = typeof data?.churchId === 'string' ? data.churchId.trim() : '';
+        if (cid === 'demo_sandbox') return;
+        const memberDoc = uid ? memberById.get(uid) : undefined;
+        if ((memberDoc?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com') return;
+
+        if (!uid || !memberDoc) {
+          orphanFcmTokens.push({
+            id: d.id,
+            uid: uid || '(sem uid)',
+            churchId: cid || '(vazio)',
+            reason: 'Token push de usuário excluído ou sem documento em members'
+          });
+        } else if (!cid || !validActiveChurchIds.has(cid)) {
+          orphanFcmTokens.push({
+            id: d.id,
+            uid,
+            churchId: cid || '(vazio)',
+            reason: `Token push com igreja inválida/excluída (${cid || 'vazio'})`
+          });
+        }
+      });
+
+      const totalFound = orphanAdmins.length + orphanPresence.length + orphanFcmTokens.length;
+      setResidueScanResult({
+        scannedAt: new Date().toLocaleTimeString('pt-BR'),
+        totalAdminsDocs: adminsSnap.size,
+        totalPresenceDocs: presenceSnap.size,
+        totalFcmTokensDocs: fcmSnap.size,
+        allAdminIds,
+        orphanAdmins,
+        orphanPresence,
+        orphanFcmTokens
+      });
+
+      if (!silent) {
+        if (totalFound === 0) {
+          showToast('Varredura concluída: 0 resíduos encontrados em admins, presence e fcm_tokens!', 'success');
+        } else {
+          showToast(`Varredura encontrou ${totalFound} resíduo(s) em admins/presence/fcm_tokens.`, 'error');
+        }
+      }
+    } catch (err) {
+      console.error('Erro na varredura de resíduos:', err);
+      handleFirestoreError(err, OperationType.GET, 'admins/presence/fcm_tokens');
+      if (!silent) {
+        showToast('Erro ao executar varredura de resíduos no Firestore.', 'error');
+      }
+    } finally {
+      setIsScanningResidues(false);
+    }
+  };
+
+  // Clean up all detected residues in 1 click
+  const handleCleanupAllResidues = async () => {
+    if (!residueScanResult) return;
+    setIsCleaningResidues(true);
+    let deletedCount = 0;
+    try {
+      for (const item of residueScanResult.orphanAdmins) {
+        try {
+          await deleteDoc(doc(db, 'admins', item.id));
+          deletedCount++;
+        } catch (err) {
+          console.warn(`Falha ao excluir admins/${item.id}:`, err);
+        }
+      }
+      for (const item of residueScanResult.orphanPresence) {
+        try {
+          await deleteDoc(doc(db, 'presence', item.id));
+          deletedCount++;
+        } catch (err) {
+          console.warn(`Falha ao excluir presence/${item.id}:`, err);
+        }
+      }
+      for (const item of residueScanResult.orphanFcmTokens) {
+        try {
+          await deleteDoc(doc(db, 'fcm_tokens', item.id));
+          deletedCount++;
+        } catch (err) {
+          console.warn(`Falha ao excluir fcm_tokens/${item.id}:`, err);
+        }
+      }
+      showToast(`Limpeza concluída! ${deletedCount} resíduo(s) removido(s) definitivamente.`, 'success');
+      await runResidueScan(true);
+    } catch (err) {
+      console.error('Erro ao limpar resíduos:', err);
+      handleFirestoreError(err, OperationType.DELETE, 'residues');
+      showToast('Erro durante a limpeza de resíduos.', 'error');
+    } finally {
+      setIsCleaningResidues(false);
+    }
+  };
+
+  const handleDeleteSingleResidue = async (colName: 'admins' | 'presence' | 'fcm_tokens', docId: string) => {
+    setIsCleaningResidues(true);
+    try {
+      await deleteDoc(doc(db, colName, docId));
+      showToast(`Registro residual removido de ${colName}/${docId}.`, 'success');
+      await runResidueScan(true);
+    } catch (err) {
+      console.error(`Erro ao excluir ${colName}/${docId}:`, err);
+      handleFirestoreError(err, OperationType.DELETE, `${colName}/${docId}`);
+      showToast(`Não foi possível excluir ${colName}/${docId}.`, 'error');
+    } finally {
+      setIsCleaningResidues(false);
     }
   };
 
@@ -1043,24 +1301,35 @@ Conte conosco para servir seu ministério com excelência!`
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-black uppercase tracking-wider">
-              <Crown size={14} className="text-amber-400 animate-bounce" /> Painel Master SaaS • Controle Central
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex-1 min-w-[280px] space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-black uppercase tracking-wider whitespace-nowrap">
+              <Crown size={14} className="text-amber-400 animate-bounce shrink-0" /> Painel Master SaaS • Controle Central
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl xl:text-4xl font-black text-white tracking-tight leading-tight">
               Gestão de Igrejas & Licenças LiLouPro
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               Monitore igrejas ativas, controle planos, gerencie validades de assinaturas e acompanhe o crescimento de usuários em tempo real.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 lg:justify-end lg:max-w-[440px] xl:max-w-[560px] shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setShowIntegrityModal(true);
+                runResidueScan(true);
+              }}
+              className="px-3.5 py-2.5 rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 font-black text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/10 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer min-h-[44px] whitespace-nowrap"
+              title="Auditar integridade do banco, buscar membros globalmente e listar admins órfãos"
+            >
+              <ShieldCheck size={15} className="text-cyan-300 shrink-0" /> Diagnóstico de Integridade
+            </button>
             <button
               type="button"
               onClick={() => switchChurchContext(isSandboxMode ? 'semente' : 'demo_sandbox')}
-              className={`px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer border ${
+              className={`px-3.5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer border min-h-[44px] whitespace-nowrap ${
                 isSandboxMode
                   ? 'bg-emerald-600/90 hover:bg-emerald-500 border-emerald-400/40 text-white shadow-emerald-500/20'
                   : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/40 text-amber-200 shadow-amber-500/10'
@@ -1070,30 +1339,30 @@ Conte conosco para servir seu ministério com excelência!`
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-brand to-indigo-600 hover:from-brand-hover hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-brand to-indigo-600 hover:from-brand-hover hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer min-h-[44px] whitespace-nowrap"
             >
-              <Plus size={16} strokeWidth={3} /> Cadastrar Nova Igreja
+              <Plus size={15} strokeWidth={3} className="shrink-0" /> Cadastrar Nova Igreja
             </button>
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-3 border-b border-border/80 pb-3 overflow-x-auto custom-scrollbar">
+      <div className="flex items-center gap-2 border-b border-border/80 pb-3 overflow-x-auto no-scrollbar md:flex-wrap md:overflow-visible">
         <button
           onClick={() => setActiveTab('churches')}
-          className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+          className={`px-3.5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
             activeTab === 'churches'
               ? 'bg-brand text-white shadow-lg shadow-brand/20'
               : 'bg-black/5 dark:bg-white/5 text-text-muted hover:text-text-main'
           }`}
         >
-          <Building2 size={16} /> Gestão de Igrejas ({stats.totalChurches})
+          <Building2 size={15} className="shrink-0" /> Gestão de Igrejas ({stats.totalChurches})
         </button>
 
         <button
           onClick={() => setActiveTab('orphans')}
-          className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer border ${
+          className={`px-3.5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer border ${
             activeTab === 'orphans'
               ? 'bg-gradient-to-r from-amber-600 to-red-600 text-white border-amber-400/50 shadow-lg shadow-amber-500/20'
               : stats.orphanCount > 0
@@ -1101,47 +1370,215 @@ Conte conosco para servir seu ministério com excelência!`
               : 'bg-black/5 dark:bg-white/5 border-transparent text-text-muted hover:text-text-main'
           }`}
         >
-          <AlertTriangle size={16} className={stats.orphanCount > 0 ? 'text-amber-300' : ''} />
+          <AlertTriangle size={15} className={`shrink-0 ${stats.orphanCount > 0 ? 'text-amber-300' : ''}`} />
           Usuários Órfãos / Sem Igreja ({stats.orphanCount})
         </button>
 
         <button
           onClick={() => setActiveTab('whatsapp')}
-          className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+          className={`px-3.5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
             activeTab === 'whatsapp'
               ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 text-white shadow-lg shadow-emerald-500/20'
               : 'bg-black/5 dark:bg-white/5 text-text-muted hover:text-text-main'
           }`}
         >
-          <MessageCircle size={16} className="text-emerald-400" /> 🟢 Divulgação WhatsApp (30 Dias Grátis)
+          <MessageCircle size={15} className="text-emerald-400 shrink-0" /> 🟢 Divulgação WhatsApp (30 Dias Grátis)
         </button>
 
         <button
           onClick={() => setActiveTab('kiwify')}
-          className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+          className={`px-3.5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
             activeTab === 'kiwify'
               ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-lg shadow-emerald-500/20'
               : 'bg-black/5 dark:bg-white/5 text-text-muted hover:text-text-main'
           }`}
         >
-          <Sparkles size={16} className="text-amber-300" /> ⚡ Automação Kiwify (Opção B Webhook)
+          <Sparkles size={15} className="text-amber-300 shrink-0" /> ⚡ Automação Kiwify (Opção B Webhook)
         </button>
       </div>
 
       {activeTab === 'orphans' ? (
         /* --- ORPHAN / UNLINKED USERS AUDIT & CLEANUP TAB --- */
         <div className="space-y-6 animate-fade-in">
-          <div className="bg-gradient-to-br from-amber-950/80 via-slate-900 to-black border border-amber-500/40 rounded-3xl p-6 sm:p-7 space-y-3 shadow-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
-              <AlertTriangle size={13} /> Auditoria Multi-Tenant • Contas Sem Igreja Válida
+          <div className="bg-gradient-to-br from-amber-950/80 via-slate-900 to-black border border-amber-500/40 rounded-3xl p-6 sm:p-7 space-y-4 shadow-2xl">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                  <AlertTriangle size={13} /> Auditoria Multi-Tenant • Contas Sem Igreja Válida & Resíduos
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Usuários Órfãos / Sem Igreja ({orphanMembers.length})
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
+                  Captura 100% dos documentos em <code className="font-mono text-amber-300">members</code> com <code className="font-mono text-amber-300">churchId</code> vazio, <code className="font-mono text-amber-300">null</code>, <code className="font-mono text-amber-300">undefined</code> ou apontando para uma igreja excluída. Use também a varredura de resíduos para detectar e limpar registros fantasmas em <code className="font-mono text-amber-300">admins</code>, <code className="font-mono text-amber-300">presence</code> e <code className="font-mono text-amber-300">fcm_tokens</code>.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={isScanningResidues}
+                  onClick={() => runResidueScan(false)}
+                  className="px-4 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer min-h-[44px] shadow-lg shadow-amber-500/20"
+                >
+                  <RefreshCw size={15} className={isScanningResidues ? 'animate-spin' : ''} />
+                  {isScanningResidues ? 'Varrendo Banco...' : 'Executar Varredura de Resíduos'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIntegrityModal(true);
+                    runResidueScan(true);
+                  }}
+                  className="px-4 py-3 rounded-2xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
+                >
+                  <Search size={15} /> Busca Global / Diagnóstico
+                </button>
+              </div>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Usuários Órfãos / Sem Igreja ({orphanMembers.length})
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Aqui aparecem todos os usuários cadastrados em <code className="font-mono text-amber-300">members</code> cujo <code className="font-mono text-amber-300">churchId</code> está vazio ou aponta para uma igreja que já foi excluída. Você pode reatribuí-los imediatamente para uma igreja existente (como membro comum, sem ADM) ou excluir a conta definitivamente.
-            </p>
           </div>
+
+          {/* Residue Scan Results Panel (admins, presence, fcm_tokens) */}
+          {residueScanResult && (() => {
+            const totalResidues =
+              residueScanResult.orphanAdmins.length +
+              residueScanResult.orphanPresence.length +
+              residueScanResult.orphanFcmTokens.length;
+            return (
+              <div className={`rounded-3xl p-5 sm:p-6 border space-y-4 ${
+                totalResidues > 0
+                  ? 'bg-red-950/30 border-red-500/40'
+                  : 'bg-emerald-950/25 border-emerald-500/35'
+              }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-text-main flex items-center gap-2">
+                      {totalResidues > 0 ? (
+                        <AlertTriangle size={18} className="text-red-400" />
+                      ) : (
+                        <CheckCircle2 size={18} className="text-emerald-400" />
+                      )}
+                      Resultado da Varredura de Resíduos ({totalResidues} encontrado(s))
+                    </h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">
+                      Verificados às {residueScanResult.scannedAt}: {residueScanResult.totalAdminsDocs} em <code className="font-mono">admins</code> • {residueScanResult.totalPresenceDocs} em <code className="font-mono">presence</code> • {residueScanResult.totalFcmTokensDocs} em <code className="font-mono">fcm_tokens</code>
+                    </p>
+                  </div>
+
+                  {totalResidues > 0 && (
+                    <button
+                      type="button"
+                      disabled={isCleaningResidues}
+                      onClick={handleCleanupAllResidues}
+                      className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer min-h-[44px] shadow-lg shadow-red-600/25 shrink-0"
+                    >
+                      {isCleaningResidues ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      {isCleaningResidues ? 'Limpando...' : `Limpar Todos os ${totalResidues} Resíduos (1 Clique)`}
+                    </button>
+                  )}
+                </div>
+
+                {totalResidues === 0 ? (
+                  <p className="text-xs text-emerald-300 font-semibold">
+                    Nenhum documento residual encontrado nas coleções <code className="font-mono">admins</code>, <code className="font-mono">presence</code> ou <code className="font-mono">fcm_tokens</code>.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Orphan Admins */}
+                    <div className="bg-black/25 border border-red-500/25 rounded-2xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-red-300">
+                          admins órfãos ({residueScanResult.orphanAdmins.length})
+                        </span>
+                      </div>
+                      {residueScanResult.orphanAdmins.length === 0 ? (
+                        <p className="text-[11px] text-emerald-400">Limpo (0)</p>
+                      ) : (
+                        <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                          {residueScanResult.orphanAdmins.map((item) => (
+                            <div key={item.id} className="p-2.5 rounded-xl bg-black/35 border border-white/10 text-[11px] space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono font-bold text-red-200 truncate">{item.id}</span>
+                                <button
+                                  type="button"
+                                  disabled={isCleaningResidues}
+                                  onClick={() => handleDeleteSingleResidue('admins', item.id)}
+                                  className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-300 text-[10px] font-black uppercase cursor-pointer shrink-0"
+                                >
+                                  Limpar
+                                </button>
+                              </div>
+                              {item.email && <p className="text-slate-300 truncate">{item.email}</p>}
+                              <p className="text-[10px] text-amber-300/90">{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Orphan Presence */}
+                    <div className="bg-black/25 border border-amber-500/25 rounded-2xl p-4 space-y-2.5">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
+                        presence residuais ({residueScanResult.orphanPresence.length})
+                      </span>
+                      {residueScanResult.orphanPresence.length === 0 ? (
+                        <p className="text-[11px] text-emerald-400">Limpo (0)</p>
+                      ) : (
+                        <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                          {residueScanResult.orphanPresence.map((item) => (
+                            <div key={item.id} className="p-2.5 rounded-xl bg-black/35 border border-white/10 text-[11px] space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono font-bold text-amber-200 truncate">{item.name || item.id}</span>
+                                <button
+                                  type="button"
+                                  disabled={isCleaningResidues}
+                                  onClick={() => handleDeleteSingleResidue('presence', item.id)}
+                                  className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-300 text-[10px] font-black uppercase cursor-pointer shrink-0"
+                                >
+                                  Limpar
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono truncate">UID: {item.id}</p>
+                              <p className="text-[10px] text-amber-300/90">{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Orphan FCM Tokens */}
+                    <div className="bg-black/25 border border-indigo-500/25 rounded-2xl p-4 space-y-2.5">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-indigo-300">
+                        fcm_tokens residuais ({residueScanResult.orphanFcmTokens.length})
+                      </span>
+                      {residueScanResult.orphanFcmTokens.length === 0 ? (
+                        <p className="text-[11px] text-emerald-400">Limpo (0)</p>
+                      ) : (
+                        <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                          {residueScanResult.orphanFcmTokens.map((item) => (
+                            <div key={item.id} className="p-2.5 rounded-xl bg-black/35 border border-white/10 text-[11px] space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono font-bold text-indigo-200 truncate">{item.id}</span>
+                                <button
+                                  type="button"
+                                  disabled={isCleaningResidues}
+                                  onClick={() => handleDeleteSingleResidue('fcm_tokens', item.id)}
+                                  className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-300 text-[10px] font-black uppercase cursor-pointer shrink-0"
+                                >
+                                  Limpar
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono truncate">UID: {item.uid}</p>
+                              <p className="text-[10px] text-amber-300/90">{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {orphanMembers.length === 0 ? (
             <div className="p-12 text-center bg-black/5 dark:bg-white/5 border border-emerald-500/30 rounded-3xl space-y-3">
@@ -2467,7 +2904,7 @@ Conte conosco para servir seu ministério com excelência!`
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {filteredChurches.map((church) => {
-              const churchMembers = members.filter(m => m.churchId === church.id || (church.id === 'semente' && m.churchId === undefined));
+              const churchMembers = members.filter(m => (typeof m.churchId === 'string' ? m.churchId.trim() : '') === church.id);
               const isExpanded = expandedChurchId === church.id;
               const isExtending = quickExtendChurchId === church.id;
 
@@ -3213,6 +3650,271 @@ Conte conosco para servir seu ministério com excelência!`
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Modal: Diagnóstico de Integridade & Busca Global de Membros (Exclusivo Master) */}
+      <AnimatePresence>
+        {showIntegrityModal && isAuthorized && (() => {
+          const churchMap = new Map(realChurches.map(c => [c.id, c]));
+          const q = integritySearch.trim().toLowerCase();
+          const globalSearchResults = members
+            .filter((m) => {
+              if (!q) return true;
+              const name = (m.name || '').toLowerCase();
+              const email = (m.email || '').toLowerCase();
+              const cid = (typeof m.churchId === 'string' ? m.churchId : '').toLowerCase();
+              const id = (m.id || '').toLowerCase();
+              return name.includes(q) || email.includes(q) || cid.includes(q) || id.includes(q);
+            })
+            .slice(0, 80);
+
+          const adminIdSet = new Set(residueScanResult?.allAdminIds || []);
+          const memberDiff = stats.totalMembers - stats.churchMemberSum;
+
+          return (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.94, opacity: 0 }}
+                className="bg-slate-900 border border-cyan-500/40 text-white rounded-3xl p-5 sm:p-7 max-w-4xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+              >
+                <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0">
+                      <ShieldCheck size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                        Diagnóstico de Integridade Multi-Tenant
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Auditoria direta em tempo real sobre <code className="font-mono text-cyan-300">members</code>, <code className="font-mono text-cyan-300">churches</code>, <code className="font-mono text-cyan-300">admins</code>, <code className="font-mono text-cyan-300">presence</code> e <code className="font-mono text-cyan-300">fcm_tokens</code>.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowIntegrityModal(false)}
+                    className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* 1. Reconciliação Numérica de members vs igrejas ativas */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total em members (real)</span>
+                    <div className="text-2xl font-black text-white mt-1">{stats.totalMembers}</div>
+                    {stats.sandboxMembers > 0 && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">+ {stats.sandboxMembers} em demo_sandbox</p>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Soma das Igrejas Ativas</span>
+                    <div className="text-2xl font-black text-emerald-400 mt-1">{stats.churchMemberSum}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                      {realChurches.map(c => `${c.name}: ${members.filter(m => (typeof m.churchId === 'string' ? m.churchId.trim() : '') === c.id).length}`).join(' • ')}
+                    </p>
+                  </div>
+
+                  <div className={`border rounded-2xl p-4 ${
+                    memberDiff > 0 || stats.orphanCount > 0
+                      ? 'bg-amber-950/40 border-amber-500/40'
+                      : 'bg-emerald-950/30 border-emerald-500/35'
+                  }`}>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">Divergência / Órfãos</span>
+                    <div className={`text-2xl font-black mt-1 ${
+                      memberDiff > 0 || stats.orphanCount > 0 ? 'text-amber-300' : 'text-emerald-400'
+                    }`}>
+                      {stats.orphanCount} {memberDiff !== stats.orphanCount ? `(Δ ${memberDiff})` : ''}
+                    </div>
+                    <p className="text-[10px] text-slate-300 mt-0.5">
+                      {stats.orphanCount === 0 && memberDiff === 0
+                        ? '100% reconciliado — nenhum membro órfão.'
+                        : 'Há registros fora de igrejas ativas.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Lista de UIDs em admins sem igreja válida */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                      <Shield size={14} /> Auditoria da Coleção <code className="font-mono">admins</code> ({residueScanResult ? `${residueScanResult.orphanAdmins.length} órfão(s) de ${residueScanResult.totalAdminsDocs}` : 'carregando...'})
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isScanningResidues}
+                        onClick={() => runResidueScan(false)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-200 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw size={12} className={isScanningResidues ? 'animate-spin' : ''} /> Re-escanear
+                      </button>
+                      {residueScanResult && (residueScanResult.orphanAdmins.length + residueScanResult.orphanPresence.length + residueScanResult.orphanFcmTokens.length) > 0 && (
+                        <button
+                          type="button"
+                          disabled={isCleaningResidues}
+                          onClick={handleCleanupAllResidues}
+                          className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-black uppercase flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Trash2 size={12} /> Limpar Tudo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!residueScanResult ? (
+                    <p className="text-xs text-slate-400">Escaneando coleções <code className="font-mono">admins</code>, <code className="font-mono">presence</code> e <code className="font-mono">fcm_tokens</code>...</p>
+                  ) : residueScanResult.orphanAdmins.length === 0 ? (
+                    <p className="text-xs text-emerald-400 font-semibold">
+                      Nenhum documento em <code className="font-mono">admins</code> está órfão ou desvinculado de uma igreja ativa.
+                      {residueScanResult.orphanPresence.length + residueScanResult.orphanFcmTokens.length > 0 && (
+                        <span className="text-amber-300 ml-2">
+                          (Atenção: {residueScanResult.orphanPresence.length} em presence e {residueScanResult.orphanFcmTokens.length} em fcm_tokens aguardando limpeza).
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                      {residueScanResult.orphanAdmins.map((adm) => (
+                        <div key={adm.id} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-mono font-bold text-red-200 truncate">
+                              UID: {adm.id} {adm.email ? `• ${adm.email}` : ''}
+                            </p>
+                            <p className="text-[11px] text-amber-200/90">{adm.reason}</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isCleaningResidues}
+                            onClick={() => handleDeleteSingleResidue('admins', adm.id)}
+                            className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-black uppercase cursor-pointer shrink-0"
+                          >
+                            Revogar/Limpar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Busca Global Instantânea em TODA a coleção members */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                      <Search size={14} className="text-cyan-400" /> Busca Global em Toda a Coleção <code className="font-mono text-cyan-300">members</code> ({members.length} docs)
+                    </h4>
+                    <span className="text-[11px] text-slate-400">
+                      Mostrando {globalSearchResults.length} resultado(s)
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={integritySearch}
+                      onChange={(e) => setIntegritySearch(e.target.value)}
+                      placeholder="Digite nome, e-mail, UID ou churchId (ex.: Michele, Lucena, semente)..."
+                      className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-cyan-400"
+                    />
+                    {integritySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setIntegritySearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto custom-scrollbar divide-y divide-slate-800/80 border border-slate-800 rounded-xl">
+                    {globalSearchResults.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        Nenhum registro encontrado em <code className="font-mono">members</code> para &ldquo;{integritySearch}&rdquo;.
+                      </div>
+                    ) : (
+                      globalSearchResults.map((m) => {
+                        const cid = typeof m.churchId === 'string' ? m.churchId.trim() : '';
+                        const linkedChurch = cid ? churchMap.get(cid) : undefined;
+                        const isOrphanDoc =
+                          cid !== 'demo_sandbox' &&
+                          (m.email || '').toLowerCase().trim() !== 'mikmellorg@gmail.com' &&
+                          (!cid || !validActiveChurchIds.has(cid));
+                        const hasAdminDoc = adminIdSet.has(m.id);
+
+                        return (
+                          <div key={m.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-white/[0.02]">
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-white truncate">{m.name || '(Sem nome)'}</span>
+                                {isOrphanDoc ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase">
+                                    ÓRFÃO ({cid || (m.churchId === undefined ? 'undefined' : 'vazio')})
+                                  </span>
+                                ) : cid === 'demo_sandbox' ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px] font-black uppercase">
+                                    Sandbox
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                                    {linkedChurch?.name || cid} ({linkedChurch?.inviteCode || cid})
+                                  </span>
+                                )}
+                                {m.isAdmin && (
+                                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 text-[10px] font-black uppercase">
+                                    isAdmin: true
+                                  </span>
+                                )}
+                                {hasAdminDoc && (
+                                  <span className="px-2 py-0.5 rounded-full bg-red-500/20 border border-red-400/40 text-red-200 text-[10px] font-black uppercase">
+                                    doc em admins/
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-400 flex items-center gap-3 flex-wrap">
+                                <span>{m.email || '(sem e-mail)'}</span>
+                                <span className="font-mono text-[10px] text-slate-500">UID: {m.id}</span>
+                              </div>
+                            </div>
+
+                            {isOrphanDoc && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowIntegrityModal(false);
+                                  setActiveTab('orphans');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 text-[11px] font-black uppercase cursor-pointer shrink-0"
+                              >
+                                Gerenciar Órfão →
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowIntegrityModal(false)}
+                    className="px-6 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase cursor-pointer min-h-[44px]"
+                  >
+                    Fechar Diagnóstico
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

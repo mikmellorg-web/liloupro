@@ -2114,7 +2114,7 @@ export default function DashboardView({
           >
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
             
-            <div className="absolute top-14 right-6 sm:top-24 sm:right-8 pointer-events-none select-none">
+            <div className="absolute top-14 right-6 sm:top-24 sm:right-8 pointer-events-none select-none opacity-15 z-0">
                <div className="flex flex-col items-end">
                  <p className="text-sm sm:text-2xl font-black uppercase tracking-[0.2em] leading-tight mb-0.5">
                    <span className="text-white">Li</span><span className="text-white/60 -ml-[0.2em]">turgia</span>
@@ -2183,7 +2183,7 @@ export default function DashboardView({
 
                 </div>
               ) : (
-                <div className="py-10 text-center">
+                <div className="py-10 relative z-10 text-center md:text-left md:max-w-[70%]">
                   <p className="text-white font-bold italic text-lg shadow-sm">Nenhum culto agendado para os próximos dias.</p>
                   {isAdmin && <Button onClick={() => onNavigate('calendar')} className="mt-4 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border-border">Agendar Agora</Button>}
                 </div>
