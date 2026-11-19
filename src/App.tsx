@@ -1315,16 +1315,18 @@ function LogoutConfirmModal({
 
 function AuthView({ 
   defaultMode = 'login', 
+  defaultSignupIntent = 'member_join',
   onBackToLanding 
 }: { 
   defaultMode?: 'login' | 'signup', 
+  defaultSignupIntent?: 'church_trial' | 'member_join',
   onBackToLanding?: () => void 
 }) {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(defaultMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>('member_join');
+  const [signupIntent, setSignupIntent] = useState<'church_trial' | 'member_join'>(defaultSignupIntent);
   const [churchNameInput, setChurchNameInput] = useState('');
   const [memberInviteCode, setMemberInviteCode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1362,7 +1364,7 @@ function AuthView({
       const existingMemberSnap = await getDoc(doc(db, 'members', auth.currentUser.uid));
       const existingCid = existingMemberSnap.exists() ? (existingMemberSnap.data()?.churchId || '') : '';
       if (existingCid) {
-        let existingChurchName = 'sua igreja cadastrada';
+        let existingChurchName: string | undefined;
         try {
           const cSnap = await getDoc(doc(db, 'churches', existingCid));
           if (cSnap.exists() && cSnap.data()?.name) {
@@ -1394,7 +1396,7 @@ function AuthView({
               const existingMemberSnap = await getDoc(doc(db, 'members', auth.currentUser.uid));
               const existingCid = existingMemberSnap.exists() ? (existingMemberSnap.data()?.churchId || '') : '';
               if (existingCid) {
-                let existingChurchName = 'sua igreja cadastrada';
+                let existingChurchName: string | undefined;
                 try {
                   const cSnap = await getDoc(doc(db, 'churches', existingCid));
                   if (cSnap.exists() && cSnap.data()?.name) {
@@ -1474,10 +1476,14 @@ function AuthView({
       
       if (err.code === 'auth/email-already-in-use') {
         setExistingMembershipAlert({
-          churchName: 'sua igreja cadastrada',
           email: email.trim().toLowerCase()
         });
         setError(null);
+        setLoading(false);
+        return;
+      }
+      if (err.code === 'auth/invalid-credential') {
+        setError("E-mail ou senha incorretos. Se você criou sua conta com o Google, clique em 'Entrar com Google'.");
         setLoading(false);
         return;
       }
@@ -1638,7 +1644,10 @@ function AuthView({
             <div className="flex items-start gap-2.5">
               <AlertTriangle size={18} className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
               <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-amber-100 leading-relaxed">
-                Você já faz parte da igreja {existingMembershipAlert.churchName || 'sua igreja cadastrada'}! Não é necessário criar uma nova igreja. Volte para a tela de login para entrar na sua conta.
+                {existingMembershipAlert.churchName
+                  ? `Você já faz parte da igreja ${existingMembershipAlert.churchName}!`
+                  : 'Você já faz parte de uma igreja cadastrada!'}{' '}
+                Não é necessário criar uma nova igreja. Volte para a tela de login para entrar na sua conta.
               </p>
             </div>
             <button
@@ -4182,7 +4191,7 @@ function MainContent() {
       return <AuthView defaultMode="login" onBackToLanding={() => { setLandingMode('landing'); }} />;
     }
     if (landingMode === 'signup' && !user) {
-      return <AuthView defaultMode="signup" onBackToLanding={() => { setLandingMode('landing'); }} />;
+      return <AuthView defaultMode="signup" defaultSignupIntent="church_trial" onBackToLanding={() => { setLandingMode('landing'); }} />;
     }
     return (
       <div className="relative">
