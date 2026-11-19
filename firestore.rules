@@ -53,7 +53,8 @@ service cloud.firestore {
       return isSignedIn() && (
         isMasterAdmin() ||
         (
-          churchId != '' &&
+          isValidId(churchId) &&
+          exists(/databases/$(database)/documents/churches/$(churchId)) &&
           hasMemberDoc() &&
           get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('churchId', '') == churchId &&
           get(/databases/$(database)/documents/members/$(request.auth.uid)).data.get('isAdmin', false) == true
@@ -372,7 +373,21 @@ service cloud.firestore {
                           )
                         ) &&
                         (
-                          existing().get('churchId', '') == '' ||
+                          (
+                            (
+                              existing().get('churchId', '') == '' ||
+                              !isValidId(existing().get('churchId', '')) ||
+                              !exists(/databases/$(database)/documents/churches/$(existing().get('churchId', '')))
+                            ) &&
+                            incoming().get('isAdmin', false) == false &&
+                            (
+                              incoming().get('churchId', '') == '' ||
+                              (
+                                isValidId(incoming().get('churchId', '')) &&
+                                exists(/databases/$(database)/documents/churches/$(incoming().get('churchId', '')))
+                              )
+                            )
+                          ) ||
                           incoming().get('churchId', existing().get('churchId', '')) == existing().get('churchId', '')
                         ) &&
                         (incoming().get('isAdmin', existing().get('isAdmin', false)) == existing().get('isAdmin', false) || incoming().get('isAdmin', false) == false)
@@ -466,7 +481,7 @@ service cloud.firestore {
       allow list: if isMasterDeveloper() || isSementeUser() || (isSignedIn() && userChurchId() != '' && resource.data.churchId == userChurchId());
       allow create, update: if isSignedIn() && request.auth.uid == userId && isValidPresence(incoming())
                             && (isMasterDeveloper() || (userChurchId() != '' && incoming().get('churchId', '') == userChurchId()));
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isMasterDeveloper() || (isSignedIn() && request.auth.uid == userId);
     }
 
     // Church Rules

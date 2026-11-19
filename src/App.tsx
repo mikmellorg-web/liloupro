@@ -1710,10 +1710,14 @@ function AuthView({
 
 function PendingChurchSetupView({
   user,
-  memberData
+  memberData,
+  blockReason,
+  staleChurchId
 }: {
   user: any;
   memberData: any;
+  blockReason?: 'missing' | 'deleted' | 'suspended' | 'cancelled' | null;
+  staleChurchId?: string;
 }) {
   const [tab, setTab] = useState<'join' | 'create'>('join');
   const [inviteCode, setInviteCode] = useState(() => {
@@ -1744,15 +1748,27 @@ function PendingChurchSetupView({
         return;
       }
       const churchDoc = snap.docs[0];
-      const limitCheck = checkResourceLimit({ id: churchDoc.id, ...churchDoc.data() }, 'members', 999);
+      const churchDocData = churchDoc.data() as any;
+      const targetStatus = String(churchDocData?.planStatus || '').toLowerCase().trim();
+      if (churchDocData?.deleted === true || targetStatus === 'suspended' || targetStatus === 'cancelled' || targetStatus === 'deleted') {
+        setError('Este ambiente de igreja está suspenso ou desativado. Fale com o líder da sua igreja.');
+        setIsSubmitting(false);
+        return;
+      }
+      const limitCheck = checkResourceLimit({ id: churchDoc.id, ...churchDocData }, 'members', 999);
       if (!limitCheck.allowed) {
         setError('O período de avaliação desta igreja encerrou. Peça ao líder para ativar o plano para liberar novos membros.');
         setIsSubmitting(false);
         return;
       }
+      const existingRoles: string[] = Array.isArray(memberData?.roles) ? memberData.roles : [];
+      const sanitizedRoles = existingRoles.filter(
+        (r) => r !== 'Coordenador/Líder' && r !== 'Líder' && r !== 'Pastor/Ministro'
+      );
       await updateDoc(doc(db, 'members', user.uid), {
         churchId: churchDoc.id,
-        isAdmin: false
+        isAdmin: false,
+        roles: sanitizedRoles
       });
       try {
         localStorage.removeItem('pending_invite_code');
@@ -1764,17 +1780,26 @@ function PendingChurchSetupView({
         memberName: memberData?.name || user?.displayName || user?.email?.split('@')[0] || 'Novo Membro',
         memberEmail: user?.email || '',
         churchId: churchDoc.id,
-        churchData: { id: churchDoc.id, ...churchDoc.data() }
+        churchData: { id: churchDoc.id, ...churchDocData }
       }).catch(() => {});
     } catch (err) {
       console.error('Erro ao ingressar na igreja:', err);
-      setError('Não foi possível validar o código agora. Tente novamente.');
+      setError('Não foi possível validar o código agora. Tente novamente ou peça ao administrador para revincular sua conta.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const firstName = (memberData?.name || user?.displayName || 'Ministro').split(' ')[0];
+
+  const blockMessage =
+    blockReason === 'suspended'
+      ? 'O ambiente da sua igreja anterior está temporariamente suspenso.'
+      : blockReason === 'cancelled'
+      ? 'O ambiente da sua igreja anterior foi cancelado.'
+      : blockReason === 'missing' || blockReason === 'deleted'
+      ? 'O ambiente de igreja ao qual sua conta estava vinculada não existe mais ou foi excluído.'
+      : null;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6">
@@ -1786,12 +1811,29 @@ function PendingChurchSetupView({
             className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg mx-auto"
           />
           <h1 className="text-xl font-black tracking-tight text-white">
-            Olá, {firstName}! Vincule sua conta à igreja
+            {blockMessage ? 'Ambiente Indisponível — Revincule sua Conta' : `Olá, ${firstName}! Vincule sua conta à igreja`}
           </h1>
           <p className="text-xs text-slate-300 leading-relaxed">
             Logado como <span className="font-bold text-brand">{user?.email}</span>. Insira o código de acesso da sua igreja para continuar.
           </p>
         </div>
+
+        {blockMessage && (
+          <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-3.5 text-xs text-amber-200 flex items-start gap-2.5 leading-relaxed">
+            <AlertTriangle size={18} className="shrink-0 text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-100">{blockMessage}</p>
+              <p className="text-[11px] text-amber-200/85">
+                Por segurança, o acesso anterior e o cache local foram encerrados. Digite abaixo o código correto da sua igreja para voltar à equipe.
+              </p>
+              {staleChurchId && (
+                <p className="text-[10px] font-mono text-amber-300/70">
+                  Vínculo anterior encerrado: {staleChurchId}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex rounded-xl bg-white/5 p-1 border border-white/10 text-xs">
           <button
@@ -2150,7 +2192,7 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
 }
 
 function MainContent() {
-  const { user, loading, memberData, isAdmin, churchData, isSandboxMode, switchChurchContext } = useAuth();
+  const { user, loading, memberData, isAdmin, churchData, churchResolutionState, churchAccessBlockReason, isSandboxMode, switchChurchContext } = useAuth();
   const [isCleanRecordingMode, setIsCleanRecordingMode] = useState(false);
   useEffect(() => {
     if (!isSandboxMode && isCleanRecordingMode) {
@@ -3910,8 +3952,30 @@ function MainContent() {
     );
   }
 
-  if (user && !isMasterDeveloper && memberData && !memberData.churchId) {
-    return <PendingChurchSetupView user={user} memberData={memberData} />;
+  // HARD GUARD MULTI-TENANT: Jamais renderizar Dashboard, MODO ADM ou banner de 30 dias
+  // se o usuário não possuir churchId válido ou se a igreja não existir / estiver bloqueada no Firestore
+  const isGhostOrBlockedChurch = Boolean(
+    user &&
+    !isMasterDeveloper &&
+    memberData &&
+    (
+      !memberData.churchId ||
+      !churchData ||
+      churchResolutionState === 'missing' ||
+      churchResolutionState === 'blocked' ||
+      Boolean(churchAccessBlockReason)
+    )
+  );
+
+  if (isGhostOrBlockedChurch) {
+    return (
+      <PendingChurchSetupView
+        user={user}
+        memberData={memberData}
+        blockReason={churchAccessBlockReason || (memberData?.churchId && !churchData ? 'missing' : null)}
+        staleChurchId={memberData?.churchId || undefined}
+      />
+    );
   }
 
   return (
@@ -3929,7 +3993,7 @@ function MainContent() {
       <DynamicThemeStyle churchData={churchData} />
 
       {/* Trial / Subscription Status Banner - Durante os 30 dias exibido apenas para Admin; após expirar, exibe também aviso para membros */}
-      {!isSongFocusMode && (isAdmin || effectivePlan.isExpiredTrial) && !isVitalicio && effectivePlan.planId !== 'vitalicio' && (
+      {!isSongFocusMode && Boolean(churchData) && (isAdmin || effectivePlan.isExpiredTrial) && !isVitalicio && effectivePlan.planId !== 'vitalicio' && effectivePlan.planId !== 'none' && effectivePlan.planId !== 'suspended' && (
         <TrialBanner 
           effectivePlan={effectivePlan} 
           isAdmin={isAdmin}
@@ -15960,6 +16024,53 @@ function NavIcon({
 
 
 
+const DEFAULT_MEMBER_ROLES = [
+  'Vocal Principal',
+  'Backing Vocal',
+  'Violão',
+  'Guitarra',
+  'Baixo',
+  'Bateria',
+  'Teclado',
+  'Percussão',
+  'Operador de áudio',
+  'Mídia',
+  'Projeção',
+  'Professor Kids',
+  'Professor Babies',
+  'Pastor (Pr)',
+  'Pastora (Pra)',
+  'Presbítero',
+  'Obreiro',
+  'Diácono'
+];
+
+function getChurchMemberRoles(churchData: any, includeKidsRoles: boolean = true): string[] {
+  const baseRoles = includeKidsRoles
+    ? DEFAULT_MEMBER_ROLES
+    : DEFAULT_MEMBER_ROLES.filter(r => r !== 'Professor Kids' && r !== 'Professor Babies');
+  const hiddenSet = new Set(
+    (Array.isArray(churchData?.hiddenDefaultMemberRoles) ? churchData.hiddenDefaultMemberRoles : [])
+      .map((r: any) => String(r || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const visibleDefaults = baseRoles.filter(r => !hiddenSet.has(r.trim().toLowerCase()));
+  const customRoles: string[] = Array.isArray(churchData?.customMemberRoles)
+    ? churchData.customMemberRoles.map((r: any) => String(r || '').trim()).filter(Boolean)
+    : [];
+
+  const seen = new Set(visibleDefaults.map(r => r.toLowerCase()));
+  const merged = [...visibleDefaults];
+  for (const cr of customRoles) {
+    const key = cr.toLowerCase();
+    if (!seen.has(key) && !hiddenSet.has(key)) {
+      seen.add(key);
+      merged.push(cr);
+    }
+  }
+  return merged;
+}
+
 function CalendarView({ 
   onOpenSong,
   createNotifications,
@@ -16005,7 +16116,7 @@ function CalendarView({
     });
   }, [user, userChurchId]);
 
-  const roles = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Bateria', 'Baixo', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção'];
+  const roles = useMemo(() => getChurchMemberRoles(churchData, false), [churchData]);
 
   // Quick Edit Floating Popover State
   const [quickEditData, setQuickEditData] = useState<{
@@ -17983,10 +18094,104 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   const [editingMember, setEditingMember] = useState<any>(null);
   const [newMember, setNewMember] = useState({ name: '', email: '', whatsapp: '', roles: [] as string[], photoUrl: '', birthDate: '' });
   const [isMemberCameraActive, setIsMemberCameraActive] = useState(false);
-  const rolesList = ['Vocal Principal', 'Backing Vocal', 'Violão', 'Guitarra', 'Baixo', 'Bateria', 'Teclado', 'Percussão', 'Operador de áudio', 'Mídia', 'Projeção', 'Professor Kids', 'Professor Babies'];
-
   const isMasterMembers = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
   const userChurchId = memberData?.churchId || (isMasterMembers ? 'semente' : '');
+  const activeChurchId = churchData?.id || userChurchId;
+
+  const customMemberRoles = useMemo(() => {
+    return Array.isArray(churchData?.customMemberRoles)
+      ? churchData.customMemberRoles.map((r: any) => String(r || '').trim()).filter(Boolean)
+      : [];
+  }, [churchData?.customMemberRoles]);
+
+  const hiddenDefaultMemberRoles = useMemo(() => {
+    return Array.isArray(churchData?.hiddenDefaultMemberRoles)
+      ? churchData.hiddenDefaultMemberRoles.map((r: any) => String(r || '').trim()).filter(Boolean)
+      : [];
+  }, [churchData?.hiddenDefaultMemberRoles]);
+
+  const rolesList = useMemo(() => getChurchMemberRoles(churchData, true), [churchData]);
+
+  const [isCustomizingRoles, setIsCustomizingRoles] = useState(false);
+  const [customRoleInput, setCustomRoleInput] = useState('');
+  const [isSavingChurchRoles, setIsSavingChurchRoles] = useState(false);
+  const [rolesFeedback, setRolesFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const persistChurchRoles = async (nextCustom: string[], nextHidden: string[], successMessage?: string) => {
+    if (!activeChurchId) return;
+    setIsSavingChurchRoles(true);
+    setRolesFeedback(null);
+    try {
+      await updateDoc(doc(db, 'churches', activeChurchId), {
+        customMemberRoles: nextCustom,
+        hiddenDefaultMemberRoles: nextHidden
+      });
+      if (successMessage) {
+        setRolesFeedback({ type: 'success', text: successMessage });
+      }
+    } catch (error: any) {
+      console.error('Erro ao salvar funções personalizadas da igreja:', error);
+      setRolesFeedback({
+        type: 'error',
+        text: 'Não foi possível salvar as funções agora. Verifique sua permissão de administrador e tente novamente.'
+      });
+    } finally {
+      setIsSavingChurchRoles(false);
+    }
+  };
+
+  const handleAddCustomRole = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleaned = customRoleInput.replace(/\s+/g, ' ').trim();
+    if (!cleaned || cleaned.length < 2) {
+      setRolesFeedback({ type: 'error', text: 'Digite um nome válido para a função (mínimo 2 caracteres).' });
+      return;
+    }
+    if (cleaned.length > 40) {
+      setRolesFeedback({ type: 'error', text: 'O nome da função deve ter no máximo 40 caracteres.' });
+      return;
+    }
+
+    const cleanedLower = cleaned.toLowerCase();
+    const matchingDefault = DEFAULT_MEMBER_ROLES.find(r => r.toLowerCase() === cleanedLower);
+    if (matchingDefault) {
+      const isHidden = hiddenDefaultMemberRoles.some(r => r.toLowerCase() === cleanedLower);
+      if (isHidden) {
+        const nextHidden = hiddenDefaultMemberRoles.filter(r => r.toLowerCase() !== cleanedLower);
+        setCustomRoleInput('');
+        await persistChurchRoles(customMemberRoles, nextHidden, `Função "${matchingDefault}" reativada!`);
+        return;
+      }
+      setRolesFeedback({ type: 'error', text: `A função "${matchingDefault}" já está ativa.` });
+      return;
+    }
+
+    if (customMemberRoles.some(r => r.toLowerCase() === cleanedLower)) {
+      setRolesFeedback({ type: 'error', text: `A função "${cleaned}" já foi adicionada.` });
+      return;
+    }
+
+    const nextCustom = [...customMemberRoles, cleaned];
+    setCustomRoleInput('');
+    await persistChurchRoles(nextCustom, hiddenDefaultMemberRoles, `Função "${cleaned}" adicionada à sua igreja!`);
+  };
+
+  const handleRemoveCustomRole = async (roleToRemove: string) => {
+    const nextCustom = customMemberRoles.filter(r => r.toLowerCase() !== roleToRemove.toLowerCase());
+    await persistChurchRoles(nextCustom, hiddenDefaultMemberRoles, `Função "${roleToRemove}" removida da lista.`);
+  };
+
+  const handleToggleDefaultRole = async (defaultRole: string) => {
+    const isHidden = hiddenDefaultMemberRoles.some(r => r.toLowerCase() === defaultRole.toLowerCase());
+    const nextHidden = isHidden
+      ? hiddenDefaultMemberRoles.filter(r => r.toLowerCase() !== defaultRole.toLowerCase())
+      : [...hiddenDefaultMemberRoles, defaultRole];
+    await persistChurchRoles(customMemberRoles, nextHidden);
+  };
+
+  const handleRestoreDefaultRoles = async () => {
+    await persistChurchRoles(customMemberRoles, [], 'Todas as funções padrão foram reativadas!');
+  };
 
   useEffect(() => {
     if (!user || !userChurchId) {
@@ -18206,18 +18411,30 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
           <p className="text-text-main text-sm font-medium">Gerencie os integrantes e suas funções ministeriais.</p>
         </div>
         {isAdmin && (
-          <Button onClick={() => {
-            const limitCheck = checkResourceLimit(churchData, 'members', members.length);
-            if (!limitCheck.allowed) {
-              onOpenUpgradeModal?.(limitCheck);
-              return;
-            }
-            setIsAdding(true);
-            setEditingMember(null);
-            setNewMember({ name: '', email: '', whatsapp: '', roles: [], photoUrl: '', birthDate: '' });
-          }} className="px-6">
-            <Plus size={18} /> Novo Membro
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button onClick={() => {
+              const limitCheck = checkResourceLimit(churchData, 'members', members.length);
+              if (!limitCheck.allowed) {
+                onOpenUpgradeModal?.(limitCheck);
+                return;
+              }
+              setIsAdding(true);
+              setEditingMember(null);
+              setNewMember({ name: '', email: '', whatsapp: '', roles: [], photoUrl: '', birthDate: '' });
+            }} className="px-6 min-h-[44px]">
+              <Plus size={18} /> Novo Membro
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setRolesFeedback(null);
+                setIsCustomizingRoles(true);
+              }}
+              className="px-5 min-h-[44px] border border-border bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-text-main"
+            >
+              <Settings size={16} /> Personalizar Funções
+            </Button>
+          </div>
         )}
       </div>
       
@@ -18551,7 +18768,21 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                   <EasyBirthDatePicker value={newMember.birthDate || ''} onChange={val => setNewMember({...newMember, birthDate: val})} variant="dark" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1">Instrumento / Vocal</label>
+                  <div className="flex items-center justify-between gap-2 pl-1">
+                    <label className="text-[10px] font-black text-white uppercase tracking-widest">Funções / Instrumento / Vocal</label>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRolesFeedback(null);
+                          setIsCustomizingRoles(true);
+                        }}
+                        className="text-[10px] font-black uppercase tracking-wider text-brand hover:underline flex items-center gap-1 cursor-pointer min-h-[28px] px-1.5"
+                      >
+                        <Plus size={12} /> Personalizar
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {rolesList.map(role => {
                       const isSelected = newMember.roles?.includes(role);
@@ -18585,6 +18816,157 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                 <Button variant="ghost" onClick={() => setIsAdding(false)} className="flex-1 text-white hover:bg-white/5 border border-white/10">Sair</Button>
                 <Button onClick={handleSaveMember} className="flex-1 bg-brand hover:brightness-110 shadow-lg shadow-brand/20">
                   {editingMember ? 'Salvar Edição' : 'Salvar Membro'}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isCustomizingRoles && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[120] flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar"
+            >
+              <div className="flex justify-between items-start gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Personalizar Funções da Igreja</h2>
+                  <p className="text-xs text-white/65 mt-1">
+                    Adapte as funções e ministérios à realidade da {churchData?.name || 'sua igreja'}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomizingRoles(false)}
+                  className="text-white/60 hover:text-white transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl hover:bg-white/5 cursor-pointer"
+                  aria-label="Fechar"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddCustomRole} className="space-y-2">
+                <label className="text-[10px] font-black text-white uppercase tracking-widest pl-1 block">
+                  Adicionar Nova Função Personalizada
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ex: Recepção, Intercessão, Dança, Diaconato..."
+                    value={customRoleInput}
+                    onChange={(e) => setCustomRoleInput(e.target.value)}
+                    disabled={isSavingChurchRoles}
+                    className="bg-white/5 border-white/10 text-white h-11 flex-1"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingChurchRoles || !customRoleInput.trim()}
+                    className="bg-brand hover:brightness-110 disabled:opacity-50 disabled:pointer-events-none text-white px-4 min-h-[44px] shrink-0 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer transition-all shadow-lg shadow-brand/20"
+                  >
+                    {isSavingChurchRoles ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    <span className="ml-1.5">Adicionar</span>
+                  </button>
+                </div>
+              </form>
+
+              {rolesFeedback && (
+                <div
+                  className={cn(
+                    "px-3.5 py-2.5 rounded-xl text-xs font-bold border",
+                    rolesFeedback.type === 'success'
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                      : "bg-red-500/10 border-red-500/30 text-red-300"
+                  )}
+                >
+                  {rolesFeedback.text}
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-black text-white/80 uppercase tracking-widest pl-1">
+                    Funções Personalizadas da Igreja ({customMemberRoles.length})
+                  </h3>
+                </div>
+                {customMemberRoles.length === 0 ? (
+                  <p className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-2xl p-3.5">
+                    Nenhuma função personalizada adicionada ainda. Adicione acima conforme a realidade da sua igreja.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {customMemberRoles.map(role => (
+                      <div
+                        key={role}
+                        className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-brand/20 border border-brand/40 text-white text-[10px] font-black uppercase tracking-tight"
+                      >
+                        <span>{role}</span>
+                        <button
+                          type="button"
+                          disabled={isSavingChurchRoles}
+                          onClick={() => handleRemoveCustomRole(role)}
+                          className="p-1 rounded-full hover:bg-red-500/30 text-white/75 hover:text-white transition-colors cursor-pointer min-h-[28px] min-w-[28px] flex items-center justify-center"
+                          title={`Remover função ${role}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2.5 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[10px] font-black text-white/80 uppercase tracking-widest pl-1">
+                    Funções Padrão (Clique para Ativar ou Ocultar)
+                  </h3>
+                  {hiddenDefaultMemberRoles.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={isSavingChurchRoles}
+                      onClick={handleRestoreDefaultRoles}
+                      className="text-[10px] font-black uppercase text-brand hover:underline cursor-pointer"
+                    >
+                      Restaurar Todas
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {DEFAULT_MEMBER_ROLES.map(defaultRole => {
+                    const isHidden = hiddenDefaultMemberRoles.some(
+                      r => r.toLowerCase() === defaultRole.toLowerCase()
+                    );
+                    return (
+                      <button
+                        key={defaultRole}
+                        type="button"
+                        disabled={isSavingChurchRoles}
+                        onClick={() => handleToggleDefaultRole(defaultRole)}
+                        className={cn(
+                          "px-2.5 py-1.5 rounded-full text-[10px] font-black uppercase transition-all border tracking-tight cursor-pointer active:scale-95 flex items-center gap-1.5 min-h-[34px]",
+                          !isHidden
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25"
+                            : "bg-white/5 border-white/10 text-white/40 line-through hover:text-white/70"
+                        )}
+                        title={isHidden ? `Clique para reativar ${defaultRole}` : `Clique para ocultar ${defaultRole} na sua igreja`}
+                      >
+                        {!isHidden ? <Check size={11} /> : <Plus size={11} />}
+                        <span>{defaultRole}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  onClick={() => setIsCustomizingRoles(false)}
+                  className="w-full bg-brand hover:brightness-110 min-h-[44px]"
+                >
+                  Concluir
                 </Button>
               </div>
             </motion.div>

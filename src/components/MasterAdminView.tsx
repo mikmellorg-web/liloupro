@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -161,12 +161,20 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
     img.src = luxuryAppIcon;
   };
 
-  // Quick License Extension State
+  // Quick License Extension & Cascading Delete States
   const [quickExtendChurchId, setQuickExtendChurchId] = useState<string | null>(null);
   const [deletingChurchId, setDeletingChurchId] = useState<string | null>(null);
+  const [deleteChurchModal, setDeleteChurchModal] = useState<{ church: ChurchItem; memberCount: number } | null>(null);
+  const [deleteMemberMode, setDeleteMemberMode] = useState<'unlink' | 'delete'>('unlink');
+  const [isDeletingCascade, setIsDeletingCascade] = useState(false);
+
+  // Orphan Users Management States
+  const [orphanReassignTargets, setOrphanReassignTargets] = useState<Record<string, string>>({});
+  const [confirmDeleteOrphanId, setConfirmDeleteOrphanId] = useState<string | null>(null);
+  const [orphanBusyId, setOrphanBusyId] = useState<string | null>(null);
 
   // Active Tab & Kiwify Webhook States
-  const [activeTab, setActiveTab] = useState<'churches' | 'kiwify' | 'whatsapp'>('churches');
+  const [activeTab, setActiveTab] = useState<'churches' | 'orphans' | 'kiwify' | 'whatsapp'>('churches');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -538,16 +546,34 @@ Conte conosco para servir seu ministério com excelência!`
     };
   }, [isAuthorized]);
 
+  // Real Churches & Orphan Members (users whose churchId is empty/null or points to a deleted church)
+  const realChurches = useMemo(() => {
+    return churches.filter(c => c.id !== 'demo_sandbox');
+  }, [churches]);
+
+  const orphanMembers = useMemo(() => {
+    const validChurchIds = new Set(realChurches.map(c => c.id));
+    return members.filter(m => {
+      if (m.churchId === 'demo_sandbox') return false;
+      if ((m.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com') return false;
+      // Legacy members with undefined churchId belong to 'semente'
+      if (m.churchId === undefined && validChurchIds.has('semente')) return false;
+      const cid = typeof m.churchId === 'string' ? m.churchId.trim() : '';
+      return !cid || !validChurchIds.has(cid);
+    });
+  }, [realChurches, members]);
+
   // Compute Stats (excluding sandbox demo church & fake members)
   const stats = useMemo(() => {
-    const realChurches = churches.filter(c => c.id !== 'demo_sandbox');
     const realMembers = members.filter(m => m.churchId !== 'demo_sandbox');
     const totalChurches = realChurches.length;
     const activeChurches = realChurches.filter(c => c.planStatus === 'active' || !c.planStatus).length;
     const trialChurches = realChurches.filter(c => c.planStatus === 'trial').length;
     const suspendedChurches = realChurches.filter(c => c.planStatus === 'suspended' || c.planStatus === 'cancelled').length;
     const totalMembers = realMembers.length;
-    const avgMembersPerChurch = totalChurches > 0 ? (totalMembers / totalChurches).toFixed(1) : '0';
+    const orphanCount = orphanMembers.length;
+    const linkedMembers = Math.max(0, totalMembers - orphanCount);
+    const avgMembersPerChurch = totalChurches > 0 ? (linkedMembers / totalChurches).toFixed(1) : '0';
 
     return {
       totalChurches,
@@ -555,9 +581,11 @@ Conte conosco para servir seu ministério com excelência!`
       trialChurches,
       suspendedChurches,
       totalMembers,
+      linkedMembers,
+      orphanCount,
       avgMembersPerChurch
     };
-  }, [churches, members]);
+  }, [realChurches, members, orphanMembers]);
 
   // Filtered Churches (excluding sandbox demo church from commercial client list)
   const filteredChurches = useMemo(() => {
@@ -695,15 +723,167 @@ Conte conosco para servir seu ministério com excelência!`
     }
   };
 
-  // Handle Delete Church
-  const handleDeleteChurch = async (churchId: string, churchName: string) => {
+  const stripAdminRoles = (roles?: string[]) => {
+    if (!Array.isArray(roles)) return [];
+    return roles.filter(r => r !== 'Coordenador/Líder' && r !== 'Líder' && r !== 'Pastor/Ministro');
+  };
+
+  // Handle Cascading Delete Church (cleans subcollections, tenant collections, admins, and unlinks or deletes members)
+  const handleDeleteChurchCascade = async (churchId: string, churchName: string, memberMode: 'unlink' | 'delete') => {
+    if (!churchId || churchId === 'semente') {
+      showToast('A igreja matriz (Graça Soberana) é protegida e não pode ser excluída.', 'error');
+      return;
+    }
+
+    setIsDeletingCascade(true);
     try {
+      let cleanedDocs = 0;
+      let affectedMembers = 0;
+
+      // 1. Delete subcollection churches/{churchId}/songs
+      try {
+        const subSongsSnap = await getDocs(collection(db, 'churches', churchId, 'songs'));
+        for (const subDoc of subSongsSnap.docs) {
+          await deleteDoc(subDoc.ref);
+          cleanedDocs++;
+        }
+      } catch (subErr) {
+        console.warn(`Aviso ao limpar subcoleção songs de ${churchId}:`, subErr);
+      }
+
+      // 2. Delete all tenantized top-level documents linked to churchId
+      const tenantCollections = [
+        'songs',
+        'services',
+        'announcements',
+        'availability',
+        'availability_locks',
+        'mural',
+        'chat',
+        'notifications',
+        'projection_presets',
+        'fcm_tokens',
+        'presence',
+        'admins'
+      ];
+
+      for (const colName of tenantCollections) {
+        try {
+          const qSnap = await getDocs(query(collection(db, colName), where('churchId', '==', churchId)));
+          for (const itemDoc of qSnap.docs) {
+            await deleteDoc(itemDoc.ref);
+            cleanedDocs++;
+          }
+        } catch (colErr) {
+          console.warn(`Aviso ao limpar coleção "${colName}" de ${churchId}:`, colErr);
+        }
+      }
+
+      // 3. Delete direct tenant-keyed documents (projection_sessions & settings)
+      try {
+        await deleteDoc(doc(db, 'projection_sessions', churchId));
+      } catch {}
+      try {
+        await deleteDoc(doc(db, 'settings', `notifications_${churchId}`));
+      } catch {}
+
+      // 4. Locate ALL members linked to this church and unlink or delete them + clean admins/{memberId}
+      const linkedMembersSnap = await getDocs(query(collection(db, 'members'), where('churchId', '==', churchId)));
+      for (const memberDoc of linkedMembersSnap.docs) {
+        const mData = memberDoc.data() as any;
+        const mEmail = (mData?.email || '').toLowerCase().trim();
+        if (mEmail === 'mikmellorg@gmail.com') continue;
+
+        if (memberMode === 'delete') {
+          await deleteDoc(memberDoc.ref);
+        } else {
+          await updateDoc(memberDoc.ref, {
+            churchId: '',
+            isAdmin: false,
+            roles: stripAdminRoles(mData?.roles)
+          });
+        }
+        try {
+          await deleteDoc(doc(db, 'admins', memberDoc.id));
+        } catch {}
+        affectedMembers++;
+      }
+
+      // 5. Finally delete the church document itself
       await deleteDoc(doc(db, 'churches', churchId));
       setDeletingChurchId(null);
-      showToast(`Igreja "${churchName}" excluída com sucesso!`);
+      setDeleteChurchModal(null);
+
+      const memberSummary =
+        affectedMembers > 0
+          ? memberMode === 'delete'
+            ? `${affectedMembers} conta(s) excluída(s)`
+            : `${affectedMembers} membro(s) desvinculado(s) sem ADM`
+          : 'nenhum membro vinculado';
+
+      showToast(
+        `Igreja "${churchName}" excluída em cascata! (${memberSummary}, ${cleanedDocs} registro(s) limpos).`,
+        'success'
+      );
     } catch (err) {
-      console.error("Erro ao excluir igreja:", err);
-      showToast("Falha ao excluir a igreja.", "error");
+      console.error("Erro ao excluir igreja em cascata:", err);
+      handleFirestoreError(err, OperationType.DELETE, `churches/${churchId}`);
+      showToast("Falha ao concluir a exclusão em cascata da igreja.", "error");
+    } finally {
+      setIsDeletingCascade(false);
+    }
+  };
+
+  // Reassign an orphan member to an existing church as a regular member (non-admin)
+  const handleReassignOrphanMember = async (member: MemberItem, targetChurchId: string) => {
+    const targetChurch = realChurches.find(c => c.id === targetChurchId);
+    if (!targetChurch) {
+      showToast('Selecione uma igreja válida para reatribuir este usuário.', 'error');
+      return;
+    }
+
+    setOrphanBusyId(member.id);
+    try {
+      await updateDoc(doc(db, 'members', member.id), {
+        churchId: targetChurch.id,
+        isAdmin: false,
+        roles: stripAdminRoles(member.roles)
+      });
+      try {
+        await deleteDoc(doc(db, 'admins', member.id));
+      } catch {}
+      showToast(
+        `"${member.name || member.email || 'Usuário'}" reatribuído para "${targetChurch.name}" como membro comum!`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Erro ao reatribuir usuário órfão:', err);
+      handleFirestoreError(err, OperationType.UPDATE, `members/${member.id}`);
+      showToast('Não foi possível reatribuir o usuário.', 'error');
+    } finally {
+      setOrphanBusyId(null);
+    }
+  };
+
+  // Permanently delete an orphan member account from Firestore
+  const handleDeleteOrphanMember = async (member: MemberItem) => {
+    setOrphanBusyId(member.id);
+    try {
+      await deleteDoc(doc(db, 'members', member.id));
+      try {
+        await deleteDoc(doc(db, 'admins', member.id));
+      } catch {}
+      try {
+        await deleteDoc(doc(db, 'presence', member.id));
+      } catch {}
+      setConfirmDeleteOrphanId(null);
+      showToast(`Conta órfã "${member.name || member.email || member.id}" excluída definitivamente!`, 'success');
+    } catch (err) {
+      console.error('Erro ao excluir conta órfã:', err);
+      handleFirestoreError(err, OperationType.DELETE, `members/${member.id}`);
+      showToast('Não foi possível excluir a conta órfã.', 'error');
+    } finally {
+      setOrphanBusyId(null);
     }
   };
 
@@ -912,6 +1092,20 @@ Conte conosco para servir seu ministério com excelência!`
         </button>
 
         <button
+          onClick={() => setActiveTab('orphans')}
+          className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer border ${
+            activeTab === 'orphans'
+              ? 'bg-gradient-to-r from-amber-600 to-red-600 text-white border-amber-400/50 shadow-lg shadow-amber-500/20'
+              : stats.orphanCount > 0
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+              : 'bg-black/5 dark:bg-white/5 border-transparent text-text-muted hover:text-text-main'
+          }`}
+        >
+          <AlertTriangle size={16} className={stats.orphanCount > 0 ? 'text-amber-300' : ''} />
+          Usuários Órfãos / Sem Igreja ({stats.orphanCount})
+        </button>
+
+        <button
           onClick={() => setActiveTab('whatsapp')}
           className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'whatsapp'
@@ -934,7 +1128,157 @@ Conte conosco para servir seu ministério com excelência!`
         </button>
       </div>
 
-      {activeTab === 'whatsapp' ? (
+      {activeTab === 'orphans' ? (
+        /* --- ORPHAN / UNLINKED USERS AUDIT & CLEANUP TAB --- */
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-gradient-to-br from-amber-950/80 via-slate-900 to-black border border-amber-500/40 rounded-3xl p-6 sm:p-7 space-y-3 shadow-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+              <AlertTriangle size={13} /> Auditoria Multi-Tenant • Contas Sem Igreja Válida
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Usuários Órfãos / Sem Igreja ({orphanMembers.length})
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
+              Aqui aparecem todos os usuários cadastrados em <code className="font-mono text-amber-300">members</code> cujo <code className="font-mono text-amber-300">churchId</code> está vazio ou aponta para uma igreja que já foi excluída. Você pode reatribuí-los imediatamente para uma igreja existente (como membro comum, sem ADM) ou excluir a conta definitivamente.
+            </p>
+          </div>
+
+          {orphanMembers.length === 0 ? (
+            <div className="p-12 text-center bg-black/5 dark:bg-white/5 border border-emerald-500/30 rounded-3xl space-y-3">
+              <CheckCircle2 size={36} className="text-emerald-400 mx-auto" />
+              <p className="text-base font-black text-text-main">Nenhum usuário órfão encontrado!</p>
+              <p className="text-xs text-text-muted max-w-md mx-auto">
+                Todos os {stats.totalMembers} membro(s) do banco de dados estão corretamente vinculados a igrejas existentes.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {orphanMembers.map((member) => {
+                const defaultTarget = realChurches.find(c => c.id === 'semente')?.id || realChurches[0]?.id || '';
+                const selectedTarget = orphanReassignTargets[member.id] ?? defaultTarget;
+                const hasGhostAdmin = Boolean(
+                  member.isAdmin ||
+                  (Array.isArray(member.roles) && (
+                    member.roles.includes('Coordenador/Líder') ||
+                    member.roles.includes('Líder') ||
+                    member.roles.includes('Pastor/Ministro')
+                  ))
+                );
+                const isBusy = orphanBusyId === member.id;
+                const orphanReason = member.churchId && member.churchId.trim() !== ''
+                  ? `Igreja excluída (${member.churchId})`
+                  : 'Sem igreja vinculada';
+
+                return (
+                  <div
+                    key={member.id}
+                    className="bg-black/5 dark:bg-white/5 border border-amber-500/30 rounded-3xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-md"
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      {member.photoUrl ? (
+                        <img
+                          referrerPolicy="no-referrer"
+                          src={member.photoUrl}
+                          alt={member.name || 'Membro'}
+                          className="w-12 h-12 rounded-full object-cover border border-amber-400/40 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-300 font-black text-base flex items-center justify-center shrink-0 border border-amber-500/30">
+                          {(member.name || member.email || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-black text-text-main truncate">
+                            {member.name || 'Sem nome'}
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase">
+                            {orphanReason}
+                          </span>
+                          {hasGhostAdmin && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[10px] font-black uppercase">
+                              ⚠️ ADM Fantasma
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap text-xs text-text-muted">
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail size={12} className="text-indigo-400 shrink-0" />
+                            {member.email || 'Sem e-mail'}
+                          </span>
+                          <span className="font-mono text-[10px] bg-black/20 dark:bg-white/10 px-2 py-0.5 rounded">
+                            UID: {member.id}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-border/50">
+                      {/* Reassign to Existing Church */}
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedTarget}
+                          disabled={isBusy}
+                          onChange={(e) => setOrphanReassignTargets(prev => ({ ...prev, [member.id]: e.target.value }))}
+                          className="px-3 py-2.5 rounded-xl bg-black/10 dark:bg-slate-900 border border-border/80 text-text-main text-xs font-bold focus:outline-none focus:border-brand cursor-pointer min-h-[44px]"
+                        >
+                          {realChurches.map(c => (
+                            <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                              {c.name} ({c.inviteCode})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={isBusy || !selectedTarget}
+                          onClick={() => handleReassignOrphanMember(member, selectedTarget)}
+                          className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[44px]"
+                          title="Vincular usuário à igreja selecionada como membro comum (sem permissão de ADM)"
+                        >
+                          {isBusy ? <RefreshCw size={14} className="animate-spin" /> : <UserCheck size={15} />}
+                          Reatribuir (Membro)
+                        </button>
+                      </div>
+
+                      {/* Permanent Delete Orphan Account */}
+                      {confirmDeleteOrphanId === member.id ? (
+                        <div className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/40 p-1 rounded-xl">
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleDeleteOrphanMember(member)}
+                            className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase cursor-pointer min-h-[36px]"
+                          >
+                            Sim, Excluir
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => setConfirmDeleteOrphanId(null)}
+                            className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs uppercase cursor-pointer min-h-[36px]"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => setConfirmDeleteOrphanId(member.id)}
+                          className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 min-h-[44px]"
+                          title="Excluir definitivamente esta conta órfã do banco de dados"
+                        >
+                          <Trash2 size={15} /> Excluir Conta
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'whatsapp' ? (
         /* --- WHATSAPP PROSPECTING & INVITATIONS TAB --- */
         <div className="space-y-8 animate-fade-in">
           {/* Header Banner */}
@@ -2037,7 +2381,18 @@ Conte conosco para servir seu ministério com excelência!`
           </div>
           <div>
             <span className="text-3xl sm:text-4xl font-black text-indigo-400 tracking-tight">{stats.totalMembers}</span>
-            <p className="text-[10px] text-text-muted font-bold mt-1">~{stats.avgMembersPerChurch} usuários/igreja</p>
+            <p className="text-[10px] text-text-muted font-bold mt-1">
+              {stats.linkedMembers} vinculados • ~{stats.avgMembersPerChurch}/igreja
+            </p>
+            {stats.orphanCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('orphans')}
+                className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase hover:bg-amber-500/30 transition-colors cursor-pointer"
+              >
+                <AlertTriangle size={11} /> {stats.orphanCount} órfão{stats.orphanCount > 1 ? 's' : ''} / sem igreja
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2241,28 +2596,15 @@ Conte conosco para servir seu ministério com excelência!`
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Detalhes
                       </button>
 
-                      {/* Delete Church Button */}
-                      {deletingChurchId === church.id ? (
-                        <div className="flex items-center gap-1 bg-red-500/10 p-1 rounded-xl border border-red-500/30">
-                          <span className="text-[10px] text-red-400 font-bold px-1 hidden sm:inline">Confirmar?</span>
-                          <button
-                            onClick={() => handleDeleteChurch(church.id, church.name)}
-                            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase transition-all cursor-pointer shadow-md"
-                          >
-                            Sim, Excluir
-                          </button>
-                          <button
-                            onClick={() => setDeletingChurchId(null)}
-                            className="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs uppercase transition-all cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
+                      {/* Delete Church Button (Real Cascading Delete Modal) */}
+                      {church.id !== 'semente' && (
                         <button
-                          onClick={() => setDeletingChurchId(church.id)}
+                          onClick={() => {
+                            setDeleteMemberMode('unlink');
+                            setDeleteChurchModal({ church, memberCount: churchMembers.length });
+                          }}
                           className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 border border-red-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-                          title="Excluir igreja / teste"
+                          title="Excluir igreja em cascata (dados + vínculos de membros)"
                         >
                           <Trash2 size={14} /> Excluir
                         </button>
@@ -2744,6 +3086,128 @@ Conte conosco para servir seu ministério com excelência!`
                   className="px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase cursor-pointer"
                 >
                   Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Exclusão em Cascata de Igreja */}
+      <AnimatePresence>
+        {deleteChurchModal && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              className="bg-slate-900 border border-red-500/40 text-white rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
+                    <Trash2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white tracking-tight">
+                      Excluir Igreja em Cascata
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {deleteChurchModal.church.name} ({deleteChurchModal.church.inviteCode})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeletingCascade}
+                  onClick={() => setDeleteChurchModal(null)}
+                  className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 text-xs text-red-200 space-y-1.5 leading-relaxed">
+                <p className="font-bold text-red-100">
+                  Esta ação apagará permanentemente:
+                </p>
+                <p>
+                  • O documento da igreja, subcoleções (<code className="font-mono">songs</code>) e todos os registros vinculados (cultos, cifras, avisos, chat, mural, projeção e notificações).
+                </p>
+                <p>
+                  • Permissões administrativas (<code className="font-mono">admins</code>) dos usuários desta igreja.
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-300">
+                  O que fazer com os {deleteChurchModal.memberCount} usuário(s) vinculado(s)?
+                </p>
+
+                <label className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  deleteMemberMode === 'unlink'
+                    ? 'bg-amber-500/15 border-amber-400/60 text-white'
+                    : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800'
+                }`}>
+                  <input
+                    type="radio"
+                    name="deleteMemberMode"
+                    checked={deleteMemberMode === 'unlink'}
+                    onChange={() => setDeleteMemberMode('unlink')}
+                    className="mt-1 accent-amber-500"
+                  />
+                  <div className="text-xs space-y-0.5">
+                    <p className="font-black text-white">Desvincular usuários e revogar ADM (Recomendado)</p>
+                    <p className="text-[11px] text-slate-300">
+                      Limpa <code className="font-mono">churchId: ""</code>, define <code className="font-mono">isAdmin: false</code> e bloqueia o acesso até o usuário entrar com um código válido (ou você reatribuí-lo na aba Órfãos).
+                    </p>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  deleteMemberMode === 'delete'
+                    ? 'bg-red-500/15 border-red-400/60 text-white'
+                    : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800'
+                }`}>
+                  <input
+                    type="radio"
+                    name="deleteMemberMode"
+                    checked={deleteMemberMode === 'delete'}
+                    onChange={() => setDeleteMemberMode('delete')}
+                    className="mt-1 accent-red-500"
+                  />
+                  <div className="text-xs space-y-0.5">
+                    <p className="font-black text-red-200">Excluir definitivamente os perfis desses usuários</p>
+                    <p className="text-[11px] text-slate-300">
+                      Apaga os documentos desses usuários na coleção <code className="font-mono">members</code> (ideal para ambientes de teste/contas descartáveis).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  disabled={isDeletingCascade}
+                  onClick={() => setDeleteChurchModal(null)}
+                  className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase cursor-pointer min-h-[44px]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingCascade}
+                  onClick={() =>
+                    handleDeleteChurchCascade(
+                      deleteChurchModal.church.id,
+                      deleteChurchModal.church.name,
+                      deleteMemberMode
+                    )
+                  }
+                  className="px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer min-h-[44px] shadow-lg shadow-red-600/25"
+                >
+                  {isDeletingCascade ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                  {isDeletingCascade ? 'Excluindo em cascata...' : 'Confirmar Exclusão Completa'}
                 </button>
               </div>
             </motion.div>

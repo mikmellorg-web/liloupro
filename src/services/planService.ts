@@ -153,24 +153,24 @@ export function isVitalicioPlan(churchData: any): boolean {
 export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   if (!churchData) {
     return {
-      planId: 'completo',
-      planName: 'Plano Completo (Teste 30 Dias)',
-      plan: { id: 'completo', name: 'Plano Completo' },
-      isTrial: true,
-      trialDaysLeft: 30,
+      planId: 'none',
+      planName: 'Sem Igreja Vinculada',
+      plan: { id: 'none', name: 'Sem Igreja Vinculada' },
+      isTrial: false,
+      trialDaysLeft: 0,
       isExpiredTrial: false,
       isVitalicio: false,
       isPaidActive: false,
-      maxMembers: 50,
-      maxSongs: 9999,
+      maxMembers: 0,
+      maxSongs: 0,
       features: {
-        projection: true,
-        unlimitedSongs: true,
-        aiAssistant: true,
-        fcmPush: true,
-        googleDocsCaderno: true,
-        scalesAndAvailability: true,
-        customThemes: true,
+        projection: false,
+        unlimitedSongs: false,
+        aiAssistant: false,
+        fcmPush: false,
+        googleDocsCaderno: false,
+        scalesAndAvailability: false,
+        customThemes: false,
         multiCampus: false,
         advancedReports: false,
         prioritySupport: false
@@ -234,8 +234,40 @@ export function getChurchEffectivePlan(churchData: any): EffectivePlanResult {
   const elapsed = Math.max(0, Date.now() - createdAtMs);
   const trialDaysLeft = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
   const planStatus = String(churchData.planStatus || '').toLowerCase();
-  const isSuspendedOrCancelled = planStatus === 'suspended' || planStatus === 'cancelled';
-  const isPaidActive = !isSuspendedOrCancelled && Boolean(churchData.subscription?.active || planStatus === 'active');
+  const isSuspendedOrCancelled =
+    planStatus === 'suspended' ||
+    planStatus === 'cancelled' ||
+    planStatus === 'deleted' ||
+    churchData.deleted === true;
+
+  if (isSuspendedOrCancelled) {
+    return {
+      planId: 'suspended',
+      planName: planStatus === 'cancelled' ? 'Assinatura Cancelada' : 'Ambiente Suspenso',
+      plan: { id: 'suspended', name: planStatus === 'cancelled' ? 'Assinatura Cancelada' : 'Ambiente Suspenso' },
+      isTrial: false,
+      trialDaysLeft: 0,
+      isExpiredTrial: false,
+      isVitalicio: false,
+      isPaidActive: false,
+      maxMembers: 0,
+      maxSongs: 0,
+      features: {
+        projection: false,
+        unlimitedSongs: false,
+        aiAssistant: false,
+        fcmPush: false,
+        googleDocsCaderno: false,
+        scalesAndAvailability: false,
+        customThemes: false,
+        multiCampus: false,
+        advancedReports: false,
+        prioritySupport: false
+      }
+    };
+  }
+
+  const isPaidActive = Boolean(churchData.subscription?.active || planStatus === 'active');
   const isExpired = !isPaidActive && elapsed > trialDurationMs;
   const isTrial = !isPaidActive && !isExpired;
   const isPremiumPaid = isPaidActive && rawPlanStr.includes('premium');

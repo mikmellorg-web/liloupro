@@ -6,12 +6,17 @@ import { getChurchEffectivePlan, isVitalicioPlan, EffectivePlanResult } from '..
 import { requestFcmToken, setupForegroundMessageListener } from '../services/fcmService';
 import { notifyChurchLeadersOfNewMember } from '../services/memberJoinNotificationService';
 
+export type ChurchAccessBlockReason = 'missing' | 'deleted' | 'suspended' | 'cancelled' | null;
+export type ChurchResolutionState = 'idle' | 'loading' | 'valid' | 'missing' | 'blocked';
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   memberData: any | null;
   isAdmin: boolean;
   churchData: any | null;
+  churchResolutionState: ChurchResolutionState;
+  churchAccessBlockReason: ChurchAccessBlockReason;
   effectivePlan: EffectivePlanResult | null;
   isVitalicio: boolean;
   isPaidActive: boolean;
@@ -25,6 +30,8 @@ const AuthContext = createContext<AuthContextType>({
   memberData: null,
   isAdmin: false,
   churchData: null,
+  churchResolutionState: 'idle',
+  churchAccessBlockReason: null,
   effectivePlan: null,
   isVitalicio: false,
   isPaidActive: false,
@@ -37,6 +44,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [rawMemberData, setRawMemberData] = useState<any | null>(null);
   const [rawIsAdmin, setRawIsAdmin] = useState(false);
   const [churchData, setChurchData] = useState<any | null>(null);
+  const [churchResolutionState, setChurchResolutionState] = useState<ChurchResolutionState>('idle');
+  const [churchAccessBlockReason, setChurchAccessBlockReason] = useState<ChurchAccessBlockReason>(null);
   const [loading, setLoading] = useState(true);
   const [masterChurchOverride, setMasterChurchOverride] = useState<'semente' | 'demo_sandbox' | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -64,12 +73,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         : rawMemberData)
     : null;
 
-  const isAdmin = isSandboxMode ? true : rawIsAdmin;
+  // HARD GUARD: Non-master users NEVER receive isAdmin ("MODO ADM") unless their church exists and is active/valid
+  const hasValidChurchAccess = Boolean(
+    churchData &&
+    churchResolutionState === 'valid' &&
+    !churchAccessBlockReason
+  );
+  const isAdmin = isMasterUser
+    ? (isSandboxMode ? true : rawIsAdmin)
+    : (hasValidChurchAccess ? rawIsAdmin : false);
 
-  const effectivePlan = churchData ? getChurchEffectivePlan(churchData) : null;
-  const isVitalicio = churchData ? isVitalicioPlan(churchData) : false;
+  const effectivePlan = hasValidChurchAccess && churchData ? getChurchEffectivePlan(churchData) : null;
+  const isVitalicio = hasValidChurchAccess && churchData ? isVitalicioPlan(churchData) : false;
   const isPaidActive = effectivePlan
-    ? (!effectivePlan.isTrial && !effectivePlan.isExpiredTrial && effectivePlan.planId !== 'semeadora')
+    ? (!effectivePlan.isTrial && !effectivePlan.isExpiredTrial && effectivePlan.planId !== 'semeadora' && effectivePlan.planId !== 'none' && effectivePlan.planId !== 'suspended')
     : false;
 
   const purgeCrossTenantLocalCaches = (allowedChurchId?: string) => {
@@ -114,6 +131,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
+      if (!normalizedAllowed) {
+        try {
+          sessionStorage.removeItem('liloupro_pending_join_welcome');
+        } catch {}
+      }
     } catch (e) {
       // Ignore storage access errors in restricted contexts
     }
@@ -185,6 +207,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRawMemberData(null);
         setRawIsAdmin(false);
         setChurchData(null);
+        setChurchResolutionState('idle');
+        setChurchAccessBlockReason(null);
         if (nextUid) {
           setLoading(true);
         } else {
@@ -362,6 +386,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRawMemberData(null);
         setRawIsAdmin(false);
         setChurchData(null);
+        setChurchResolutionState('idle');
+        setChurchAccessBlockReason(null);
         setLoading(false);
       }
     });
@@ -376,6 +402,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user) {
       setChurchData(null);
+      setChurchResolutionState('idle');
+      setChurchAccessBlockReason(null);
       return;
     }
 
@@ -386,15 +414,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!effectiveChurchId) {
       purgeCrossTenantLocalCaches();
       setChurchData(null);
+      setChurchResolutionState('missing');
+      setChurchAccessBlockReason(null);
       setLoading(false);
       return;
     }
 
+    setChurchResolutionState('loading');
+    setChurchAccessBlockReason(null);
     purgeCrossTenantLocalCaches(effectiveChurchId);
     const churchRef = doc(db, 'churches', effectiveChurchId);
 
     const unsubscribeChurch = onSnapshot(churchRef, async (churchSnap) => {
-      if (!churchSnap.exists() && effectiveChurchId === 'semente') {
+      if (!churchSnap.exists() && effectiveChurchId === 'semente' && isMasterUser) {
         const defaultChurch = {
           name: 'Graça Soberana',
           inviteCode: 'SEMENTE123',
@@ -410,21 +442,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await setDoc(churchRef, defaultChurch);
           setChurchData({ id: 'semente', ...defaultChurch });
+          setChurchResolutionState('valid');
+          setChurchAccessBlockReason(null);
         } catch (err) {
           console.error("Erro ao inicializar igreja de semente:", err);
           setChurchData({ id: 'semente', ...defaultChurch });
+          setChurchResolutionState('valid');
+          setChurchAccessBlockReason(null);
         }
       } else if (!churchSnap.exists() && effectiveChurchId === 'demo_sandbox' && isMasterUser) {
         try {
           const created = await ensureDemoSandboxChurch(user.uid);
           setChurchData(created);
+          setChurchResolutionState('valid');
+          setChurchAccessBlockReason(null);
         } catch (err) {
           console.error("Erro ao inicializar igreja sandbox:", err);
           setChurchData(null);
+          setChurchResolutionState('missing');
+          setChurchAccessBlockReason('missing');
         }
       } else if (churchSnap.exists()) {
         const data = churchSnap.data();
         const isSeed = effectiveChurchId === 'semente';
+        const rawStatus = String(data.planStatus || '').toLowerCase().trim();
+        const isDeletedOrBlocked =
+          !isSeed &&
+          !isMasterUser &&
+          (
+            data.deleted === true ||
+            rawStatus === 'deleted' ||
+            rawStatus === 'suspended' ||
+            rawStatus === 'cancelled'
+          );
+
+        if (isDeletedOrBlocked) {
+          purgeCrossTenantLocalCaches();
+          setChurchData(null);
+          setChurchResolutionState('blocked');
+          setChurchAccessBlockReason(
+            rawStatus === 'suspended'
+              ? 'suspended'
+              : rawStatus === 'cancelled'
+              ? 'cancelled'
+              : 'deleted'
+          );
+          setLoading(false);
+          return;
+        }
+
         if (
           isSeed &&
           isMasterUser &&
@@ -456,12 +522,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isSeedChurch: isSeed,
           isVitalicio: isSeed ? true : data.isVitalicio
         });
+        setChurchResolutionState('valid');
+        setChurchAccessBlockReason(null);
       } else {
+        // HARD GUARD: Church document does NOT exist in Firestore (deleted/ghost tenant)
+        purgeCrossTenantLocalCaches();
         setChurchData(null);
+        setChurchResolutionState('missing');
+        setChurchAccessBlockReason('missing');
       }
       setLoading(false);
     }, (err) => {
       console.error("Erro ao assinar canal da igreja:", err);
+      purgeCrossTenantLocalCaches();
+      setChurchData(null);
+      setChurchResolutionState('missing');
+      setChurchAccessBlockReason('missing');
       setLoading(false);
       handleFirestoreError(err, OperationType.GET, 'churches/' + effectiveChurchId);
     });
@@ -506,8 +582,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user?.uid]);
 
+  const effectiveLoading = loading || Boolean(user && rawMemberData && effectiveChurchId && churchResolutionState === 'loading');
+
   return (
-    <AuthContext.Provider value={{ user, loading, memberData, isAdmin, churchData, effectivePlan, isVitalicio, isPaidActive, isSandboxMode, switchChurchContext }}>
+    <AuthContext.Provider value={{ user, loading: effectiveLoading, memberData, isAdmin, churchData, churchResolutionState, churchAccessBlockReason, effectivePlan, isVitalicio, isPaidActive, isSandboxMode, switchChurchContext }}>
       {children}
     </AuthContext.Provider>
   );
