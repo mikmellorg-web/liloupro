@@ -1259,6 +1259,60 @@ export default function App() {
   );
 }
 
+function LogoutConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/15 p-6 shadow-2xl space-y-5 text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+          <LogOut size={22} />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-base font-black text-white">
+            Deseja realmente sair da sua conta?
+          </h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Você precisará fazer login novamente para acessar as escalas e cifras da sua igreja.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full min-h-[44px] py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/25 transition-all cursor-pointer"
+          >
+            Continuar conectado
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onConfirm();
+            }}
+            className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-white/5 hover:bg-red-500/15 text-slate-300 hover:text-red-300 border border-white/10 hover:border-red-500/30 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+          >
+            Sim, sair
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuthView({ 
   defaultMode = 'login', 
   onBackToLanding 
@@ -1279,6 +1333,7 @@ function AuthView({
     return '';
   });
   const [error, setError] = useState<string | null>(null);
+  const [existingMembershipAlert, setExistingMembershipAlert] = useState<{ churchName?: string; email?: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -1301,15 +1356,60 @@ function AuthView({
     }
   }, []);
 
+  const checkCurrentUserExistingChurch = async () => {
+    if (!auth.currentUser) return false;
+    try {
+      const existingMemberSnap = await getDoc(doc(db, 'members', auth.currentUser.uid));
+      const existingCid = existingMemberSnap.exists() ? (existingMemberSnap.data()?.churchId || '') : '';
+      if (existingCid) {
+        let existingChurchName = 'sua igreja cadastrada';
+        try {
+          const cSnap = await getDoc(doc(db, 'churches', existingCid));
+          if (cSnap.exists() && cSnap.data()?.name) {
+            existingChurchName = cSnap.data().name;
+          }
+        } catch {}
+        setExistingMembershipAlert({
+          churchName: existingChurchName,
+          email: auth.currentUser.email || email.trim()
+        });
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setExistingMembershipAlert(null);
     setSuccess(null);
     setLoading(true);
 
     try {
       if (mode === 'signup') {
         if (signupIntent === 'church_trial') {
+          if (auth.currentUser) {
+            try {
+              const existingMemberSnap = await getDoc(doc(db, 'members', auth.currentUser.uid));
+              const existingCid = existingMemberSnap.exists() ? (existingMemberSnap.data()?.churchId || '') : '';
+              if (existingCid) {
+                let existingChurchName = 'sua igreja cadastrada';
+                try {
+                  const cSnap = await getDoc(doc(db, 'churches', existingCid));
+                  if (cSnap.exists() && cSnap.data()?.name) {
+                    existingChurchName = cSnap.data().name;
+                  }
+                } catch {}
+                setExistingMembershipAlert({
+                  churchName: existingChurchName,
+                  email: auth.currentUser.email || email.trim()
+                });
+                setLoading(false);
+                return;
+              }
+            } catch {}
+          }
           throw new Error('Para cadastrar um novo ministério/igreja no LilouPro, adquira um plano oficial ou solicite o código de acesso ao líder da sua igreja.');
         }
 
@@ -1372,10 +1472,18 @@ function AuthView({
       
       const errorCode = err.code || 'erro-desconhecido';
       
+      if (err.code === 'auth/email-already-in-use') {
+        setExistingMembershipAlert({
+          churchName: 'sua igreja cadastrada',
+          email: email.trim().toLowerCase()
+        });
+        setError(null);
+        setLoading(false);
+        return;
+      }
       if (err.code === 'auth/user-not-found') message = 'Usuário não encontrado.';
       else if (err.code === 'auth/wrong-password') message = 'Senha incorreta.';
       else if (err.code === 'auth/invalid-email') message = 'E-mail inválido.';
-      else if (err.code === 'auth/email-already-in-use') message = 'Este e-mail já está em uso por outro usuário.';
       else if (err.code === 'auth/weak-password') message = 'A senha deve ter pelo menos 6 caracteres.';
       else if (err.code === 'auth/operation-not-allowed') message = 'ERRO CRÍTICO: O login com E-mail/Senha não está ativado no seu Firebase Console.';
       else if (err.code === 'auth/configuration-not-found') message = 'Erro de configuração. Verifique as credenciais do Firebase.';
@@ -1455,7 +1563,11 @@ function AuthView({
               </button>
               <button
                 type="button"
-                onClick={() => { setSignupIntent('church_trial'); setError(null); }}
+                onClick={async () => {
+                  setSignupIntent('church_trial');
+                  setError(null);
+                  await checkCurrentUserExistingChurch();
+                }}
                 className={`flex-1 py-2 px-2 rounded-lg font-black text-[11px] sm:text-xs text-center transition-all cursor-pointer ${
                   signupIntent === 'church_trial'
                     ? 'bg-brand text-white shadow-md'
@@ -1518,6 +1630,32 @@ function AuthView({
             <p className="text-slate-600 dark:text-white/80 text-xs leading-relaxed font-medium">
               Informe seu e-mail cadastrado. Enviaremos um link oficial e seguro para você redefinir sua senha com facilidade.
             </p>
+          </div>
+        )}
+
+        {existingMembershipAlert && (
+          <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 space-y-3 text-left shadow-md">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle size={18} className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-amber-100 leading-relaxed">
+                Você já faz parte da igreja {existingMembershipAlert.churchName || 'sua igreja cadastrada'}! Não é necessário criar uma nova igreja. Volte para a tela de login para entrar na sua conta.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (existingMembershipAlert.email) {
+                  setEmail(existingMembershipAlert.email);
+                }
+                setExistingMembershipAlert(null);
+                setError(null);
+                setSuccess(null);
+                setMode('login');
+              }}
+              className="w-full min-h-[44px] py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/25 transition-all cursor-pointer"
+            >
+              Voltar para o Login
+            </button>
           </div>
         )}
 
@@ -1679,18 +1817,43 @@ function AuthView({
             </div>
           )}
 
-          <div className="text-center pt-2">
+          <div className="text-center pt-2 space-y-3">
             <button 
               type="button"
               onClick={() => {
                 setError(null);
+                setExistingMembershipAlert(null);
                 setSuccess(null);
-                setMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup');
+                if (mode === 'login') {
+                  setSignupIntent('member_join');
+                  setMode('signup');
+                } else {
+                  setMode('login');
+                }
               }}
               className="text-[11px] font-black text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 uppercase tracking-widest underline decoration-2 underline-offset-4 cursor-pointer"
             >
               {mode === 'signup' ? 'Já tem uma conta? Faça Login' : mode === 'forgot' ? 'Lembrou sua senha? Faça Login' : 'Não tem uma conta? Cadastre-se'}
             </button>
+
+            {mode === 'login' && (
+              <div className="pt-3 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setError(null);
+                    setExistingMembershipAlert(null);
+                    setSuccess(null);
+                    setSignupIntent('church_trial');
+                    setMode('signup');
+                    await checkCurrentUserExistingChurch();
+                  }}
+                  className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors cursor-pointer hover:underline underline-offset-2"
+                >
+                  É líder e quer cadastrar uma nova igreja do zero?
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </Card>
@@ -1729,6 +1892,7 @@ function PendingChurchSetupView({
   const [churchName, setChurchName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleJoinWithCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1934,7 +2098,7 @@ function PendingChurchSetupView({
         <div className="pt-3 border-t border-white/10 text-center">
           <button
             type="button"
-            onClick={() => logout()}
+            onClick={() => setShowLogoutConfirm(true)}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <LogOut size={14} />
@@ -1942,6 +2106,12 @@ function PendingChurchSetupView({
           </button>
         </div>
       </Card>
+
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={() => logout()}
+      />
     </div>
   );
 }
@@ -19270,6 +19440,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [previewDeviceMode, setPreviewDeviceMode] = useState<'mobile' | 'web'>('mobile');
   const [unreadBadgeCount, setUnreadBadgeCount] = useState<number>(1);
   const [showSettingsInstallModal, setShowSettingsInstallModal] = useState<boolean>(false);
+  const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (churchData) {
@@ -21646,12 +21817,14 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
                  <div className="flex justify-between items-center">
                    <span className="text-xs font-bold text-text-muted uppercase">Sair da Conta</span>
-                   <ConfirmButton 
-                    onConfirm={() => logout()}
-                    className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                   <button
+                    type="button"
+                    onClick={() => setShowLogoutConfirmModal(true)}
+                    className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                    title="Sair da Conta"
                    >
                      <LogOut size={18} />
-                   </ConfirmButton>
+                   </button>
                  </div>
               </div>
            </Card>
@@ -21659,6 +21832,12 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
        ) : (
          <AdminDashboardView />
        )}
+
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirmModal}
+        onClose={() => setShowLogoutConfirmModal(false)}
+        onConfirm={() => logout()}
+      />
 
       {/* Settings On-Demand PWA Luxury Install Modal */}
       <LuxuryAppInstallModal 
