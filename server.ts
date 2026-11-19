@@ -2604,47 +2604,122 @@ Aqui está a letra com cifras da música:\n\n${content}\n\nPreencha a análise d
         const lyricsClean = lyricLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 
         if (chordsClean.length > 20) {
-          // Fast micro-fetch for BPM with strict 2.0s timeout
-          let bpm = 120;
+          const sanitizeValidBpm = (val: unknown): number | null => {
+            const num = typeof val === "number" ? val : Number(String(val ?? "").replace(/[^\d.]/g, ""));
+            if (!Number.isFinite(num)) return null;
+            const rounded = Math.round(num);
+            return rounded >= 40 && rounded <= 220 ? rounded : null;
+          };
+
+          let resolvedBpm: number | null = null;
           let timeSignature = "4/4";
 
-          const apiKey = getGeminiApiKey();
-          if (apiKey) {
-            try {
-              const ai = new GoogleGenAI({
-                apiKey,
-                httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-              });
-
-              const bpmPromise = (async () => {
-                const response = await ai.models.generateContent({
-                  model: GEMINI_FALLBACK_MODELS[0] || "gemini-flash-latest",
-                  contents: `Estimativa de BPM e compasso para "${extractedTitle}" de "${extractedArtist}". Retorne JSON: {"bpm": número, "timeSignature": "string"}`,
-                  config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                      type: Type.OBJECT,
-                      properties: {
-                        bpm: { type: Type.INTEGER },
-                        timeSignature: { type: Type.STRING }
-                      },
-                      required: ["bpm", "timeSignature"]
-                    }
-                  }
-                });
-                if (response?.text) {
-                  const parsed = JSON.parse(response.text.trim());
-                  if (typeof parsed.bpm === "number") bpm = parsed.bpm;
-                  if (parsed.timeSignature) timeSignature = parsed.timeSignature.trim();
-                }
-              })();
-
-              const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
-              await Promise.race([bpmPromise, timeoutPromise]);
-            } catch {
-              // Ignore BPM timeout/error and fallback to defaults
+          // 1. Extração direta dos metadados HTML ou do texto da cifra
+          const htmlBpmPatterns = [
+            /"bpm"\s*:\s*"?(\d{2,3})"?/i,
+            /\bdata-bpm=["']?(\d{2,3})["']?/i,
+            /"tempo"\s*:\s*"?(\d{2,3})"?/i,
+            /\bandamento(?:<!-- -->)?\s*[:\-]?\s*(?:<[^>]+>\s*)*(\d{2,3})\s*(?:bpm)?/i
+          ];
+          for (const rx of htmlBpmPatterns) {
+            const m = html.match(rx);
+            const candidate = m ? sanitizeValidBpm(m[1]) : null;
+            if (candidate) {
+              resolvedBpm = candidate;
+              break;
             }
           }
+
+          if (!resolvedBpm) {
+            const chordBpmMatch = chordsClean.match(/(?:\bbpm\s*[:=\-]?\s*(\d{2,3})\b|\b(\d{2,3})\s*bpm\b|\bandamento\s*[:=\-]?\s*(\d{2,3})\b)/i);
+            if (chordBpmMatch) {
+              resolvedBpm = sanitizeValidBpm(chordBpmMatch[1] || chordBpmMatch[2] || chordBpmMatch[3]);
+            }
+          }
+
+          const chordTimeSigMatch = chordsClean.match(/\b(2\/4|3\/4|4\/4|6\/8|9\/8|12\/8)\b/);
+          if (chordTimeSigMatch) {
+            timeSignature = chordTimeSigMatch[1];
+          }
+
+          // 2. Consulta instantânea na base local curada (se houver correspondência exata)
+          if (!resolvedBpm) {
+            const localMetaHit = findLocalPopularSong(extractedTitle, extractedArtist);
+            const localBpm = localMetaHit ? sanitizeValidBpm(localMetaHit.bpm) : null;
+            if (localBpm) {
+              resolvedBpm = localBpm;
+              if (localMetaHit?.timeSignature) timeSignature = localMetaHit.timeSignature;
+            }
+          }
+
+          // 3. Consulta rápida via Gemini para obter o BPM original da gravação (com timeout seguro de 5s)
+          if (!resolvedBpm) {
+            const apiKey = getGeminiApiKey();
+            if (apiKey) {
+              try {
+                const ai = new GoogleGenAI({
+                  apiKey,
+                  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+                });
+
+                const bpmModels = Array.from(
+                  new Set([
+                    "gemini-3.1-flash-lite",
+                    "gemini-4-hydrogen",
+                    ...GEMINI_FALLBACK_MODELS
+                  ])
+                );
+
+                const bpmPromise = (async () => {
+                  for (const model of bpmModels) {
+                    try {
+                      const config: any = {
+                        temperature: 0,
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                          type: Type.OBJECT,
+                          properties: {
+                            bpm: { type: Type.INTEGER },
+                            timeSignature: { type: Type.STRING }
+                          },
+                          required: ["bpm", "timeSignature"]
+                        }
+                      };
+                      if (model.includes("2.5")) {
+                        config.thinkingConfig = { thinkingBudget: 0 };
+                      }
+
+                      const response = await ai.models.generateContent({
+                        model,
+                        contents: `Qual o BPM (andamento exato em batidas por minuto) e o compasso da gravação original da música "${extractedTitle}" de "${extractedArtist}"? Retorne apenas JSON válido {"bpm": número inteiro entre 40 e 220, "timeSignature": "4/4"|"6/8"|"3/4"|"2/4"}. Não use 120 como chute padrão se a música for lenta (ex: 64-78 BPM) ou rápida.`,
+                        config
+                      });
+                      if (response?.text) {
+                        const parsed = JSON.parse(response.text.trim());
+                        const candidate = sanitizeValidBpm(parsed?.bpm);
+                        if (candidate) {
+                          resolvedBpm = candidate;
+                          if (typeof parsed?.timeSignature === "string" && parsed.timeSignature.trim()) {
+                            timeSignature = parsed.timeSignature.trim();
+                          }
+                          break;
+                        }
+                      }
+                    } catch {
+                      // Tenta o próximo modelo rápido disponível
+                    }
+                  }
+                })();
+
+                const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 5000));
+                await Promise.race([bpmPromise, timeoutPromise]);
+              } catch {
+                // Fallback seguro para não travar a importação
+              }
+            }
+          }
+
+          const bpm = resolvedBpm ?? 120;
 
           return {
             title: extractedTitle,
@@ -2783,7 +2858,10 @@ REGRAS OBRIGATÓRIAS:
                   title: effectiveTitle,
                   artist: effectiveArtist || parsed.artist || "Ministério de Louvor",
                   key: parsed.key || "C",
-                  bpm: parsed.bpm ? Number(parsed.bpm) : 120,
+                  bpm: (() => {
+                    const n = Math.round(Number(parsed.bpm));
+                    return Number.isFinite(n) && n >= 40 && n <= 220 ? n : 120;
+                  })(),
                   timeSignature: parsed.timeSignature || "4/4",
                   chords: cleanCifraHtml(parsed.chords || parsed.lyrics),
                   lyrics: cleanCifraHtml(parsed.lyrics || parsed.chords),

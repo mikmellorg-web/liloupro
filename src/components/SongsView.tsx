@@ -1201,7 +1201,10 @@ export function SongsView({
         artist: trimmedArtist,
         key: songData.key || songData.tone || 'C',
         tone: songData.key || songData.tone || 'C',
-        bpm: songData.bpm ? Number(songData.bpm) : 120,
+        bpm: (() => {
+          const parsedBpm = Math.round(Number(songData.bpm));
+          return Number.isFinite(parsedBpm) && parsedBpm >= 40 && parsedBpm <= 220 ? parsedBpm : 120;
+        })(),
         timeSignature: songData.timeSignature || '4/4',
         category: songData.category || null,
         chords: typeof songData.chords === 'string' ? cleanCifraHtml(songData.chords) : '',
