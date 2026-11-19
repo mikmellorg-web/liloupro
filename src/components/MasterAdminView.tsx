@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, serverTimestamp, getDocs, getCountFromServer, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -43,7 +43,8 @@ import {
   Gift,
   Zap,
   Instagram,
-  Camera
+  Camera,
+  Music
 } from 'lucide-react';
 const kiwifyBannerImg = '/assets/aistudio/Capa_Kiwify_Atual_b9705a43.jpg';
 import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
@@ -69,6 +70,7 @@ interface ChurchItem {
   contactEmail?: string;
   contactPhone?: string;
   leaderWhatsapp?: string;
+  remoteSupport?: any;
 }
 
 const toIsoDateString = (val: any): string | null => {
@@ -100,12 +102,61 @@ interface MemberItem {
   createdAt?: string;
 }
 
-export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
-  const { user, isSandboxMode, switchChurchContext } = useAuth();
+export default function MasterAdminView({
+  theme = 'dark',
+  onEnterRemoteSupport
+}: {
+  theme?: 'dark' | 'light';
+  onEnterRemoteSupport?: () => void;
+}) {
+  const {
+    user,
+    isSandboxMode,
+    switchChurchContext,
+    isRemoteSupportMode,
+    remoteSupportSession,
+    remoteSupportPolicy,
+    startRemoteSupportSession,
+    endRemoteSupportSession
+  } = useAuth();
   
   // Security Check: Exclusive Master Developer Email
   const userEmailLower = (user?.email || '').toLowerCase().trim();
   const isAuthorized = Boolean(user && userEmailLower === 'mikmellorg@gmail.com');
+
+  const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
+  const [pinErrors, setPinErrors] = useState<Record<string, string>>({});
+  const [isEnteringSupportId, setIsEnteringSupportId] = useState<string | null>(null);
+  const [isSavingSupportPolicy, setIsSavingSupportPolicy] = useState(false);
+
+  const handleUpdateRemoteSupportPolicy = async (nextPolicy: 'all' | 'premium_only') => {
+    if (!isAuthorized || !user || isSavingSupportPolicy) return;
+    setIsSavingSupportPolicy(true);
+    try {
+      await setDoc(doc(db, 'settings', 'remote_support_policy'), {
+        policy: nextPolicy,
+        updatedBy: user.email || 'mikmellorg@gmail.com',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Erro ao atualizar política de suporte remoto:', err);
+      alert('Não foi possível salvar a política de suporte remoto.');
+    } finally {
+      setIsSavingSupportPolicy(false);
+    }
+  };
+
+  const getRemoteSupportExpiresMs = (rs: any): number => {
+    if (!rs) return 0;
+    const rawExp = rs.expiresAt;
+    if (rawExp && typeof rawExp.toMillis === 'function') return rawExp.toMillis();
+    if (rawExp && typeof rawExp.seconds === 'number') return rawExp.seconds * 1000;
+    if (typeof rs.expiresAtIso === 'string') {
+      const parsed = Date.parse(rs.expiresAtIso);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
 
   const [churches, setChurches] = useState<ChurchItem[]>([]);
   const [members, setMembers] = useState<MemberItem[]>([]);
@@ -115,6 +166,90 @@ export default function MasterAdminView({ theme = 'dark' }: { theme?: 'dark' | '
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended' | 'cancelled'>('all');
   const [expandedChurchId, setExpandedChurchId] = useState<string | null>(null);
+  const [churchActivityStats, setChurchActivityStats] = useState<Record<string, {
+    loading: boolean;
+    songsCount: number | null;
+    servicesCount: number | null;
+    error?: string;
+  }>>({});
+
+  const loadChurchActivityStats = async (churchId: string, forceRefresh = false) => {
+    if (!churchId) return;
+    if (!forceRefresh && churchActivityStats[churchId] && !churchActivityStats[churchId].error) return;
+
+    setChurchActivityStats(prev => ({
+      ...prev,
+      [churchId]: {
+        loading: true,
+        songsCount: prev[churchId]?.songsCount ?? null,
+        servicesCount: prev[churchId]?.servicesCount ?? null,
+      }
+    }));
+
+    try {
+      let songsCount = 0;
+      let servicesCount = 0;
+
+      if (churchId === 'semente') {
+        const [songsSnap, servicesSnap] = await Promise.all([
+          getDocs(collection(db, 'songs')),
+          getDocs(collection(db, 'services')),
+        ]);
+        songsCount = songsSnap.docs.filter(d => {
+          const cid = d.data()?.churchId;
+          return cid === 'semente' || !cid;
+        }).length;
+        servicesCount = servicesSnap.docs.filter(d => {
+          const cid = d.data()?.churchId;
+          return cid === 'semente' || !cid;
+        }).length;
+      } else {
+        const songsQ = query(collection(db, 'songs'), where('churchId', '==', churchId));
+        const servicesQ = query(collection(db, 'services'), where('churchId', '==', churchId));
+        try {
+          const [songsAgg, servicesAgg] = await Promise.all([
+            getCountFromServer(songsQ),
+            getCountFromServer(servicesQ),
+          ]);
+          songsCount = songsAgg.data().count;
+          servicesCount = servicesAgg.data().count;
+        } catch {
+          const [songsSnap, servicesSnap] = await Promise.all([
+            getDocs(songsQ),
+            getDocs(servicesQ),
+          ]);
+          songsCount = songsSnap.size;
+          servicesCount = servicesSnap.size;
+        }
+      }
+
+      setChurchActivityStats(prev => ({
+        ...prev,
+        [churchId]: {
+          loading: false,
+          songsCount,
+          servicesCount,
+        }
+      }));
+    } catch (err: any) {
+      console.error('Erro ao carregar contadores agregados da igreja:', err);
+      setChurchActivityStats(prev => ({
+        ...prev,
+        [churchId]: {
+          loading: false,
+          songsCount: null,
+          servicesCount: null,
+          error: 'Não foi possível carregar os contadores.'
+        }
+      }));
+    }
+  };
+
+  useEffect(() => {
+    if (expandedChurchId) {
+      loadChurchActivityStats(expandedChurchId);
+    }
+  }, [expandedChurchId]);
 
   // Modal / Edit States
   const [editingChurch, setEditingChurch] = useState<ChurchItem | null>(null);
@@ -2879,6 +3014,51 @@ Conte conosco para servir seu ministério com excelência!`
         </div>
       </div>
 
+      {/* Global Remote Support Policy Control (Preparation for Premium Plan) */}
+      <div className="bg-black/5 dark:bg-white/5 border border-border/80 rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 shrink-0">
+            <ShieldCheck size={16} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-black text-text-main uppercase tracking-wider">
+              Política Global de Suporte Remoto (PIN)
+            </p>
+            <p className="text-[11px] text-text-muted">
+              {remoteSupportPolicy === 'premium_only'
+                ? 'Apenas igrejas no Plano Premium podem gerar PIN de suporte remoto.'
+                : 'Liberado para todas as igrejas (inclusive em Teste/Trial) gerarem PIN temporário de 2h.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            disabled={isSavingSupportPolicy}
+            onClick={() => handleUpdateRemoteSupportPolicy('all')}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+              remoteSupportPolicy === 'all'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                : 'bg-black/5 dark:bg-white/5 text-text-muted border-border/60 hover:text-text-main'
+            }`}
+          >
+            Todas as Igrejas
+          </button>
+          <button
+            type="button"
+            disabled={isSavingSupportPolicy}
+            onClick={() => handleUpdateRemoteSupportPolicy('premium_only')}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+              remoteSupportPolicy === 'premium_only'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                : 'bg-black/5 dark:bg-white/5 text-text-muted border-border/60 hover:text-text-main'
+            }`}
+          >
+            Exclusivo Premium
+          </button>
+        </div>
+      </div>
+
       {/* Main Churches List */}
       <div className="space-y-4">
         <div className="flex items-center justify-between px-2">
@@ -2943,6 +3123,16 @@ Conte conosco para servir seu ministério com excelência!`
                 )
               );
 
+              const rsExpiresMs = getRemoteSupportExpiresMs(church.remoteSupport);
+              const hasActiveRemoteSupportGrant = Boolean(
+                !isSeedChurch &&
+                church.remoteSupport?.active === true &&
+                rsExpiresMs > Date.now()
+              );
+              const isTargetOfActiveSupport = Boolean(
+                isRemoteSupportMode && remoteSupportSession?.churchId === church.id
+              );
+
               return (
                 <div
                   key={church.id}
@@ -2982,6 +3172,12 @@ Conte conosco para servir seu ministério com excelência!`
                             {church.planStatus === 'active' || !church.planStatus ? '• Ativo (PRO)' : church.planStatus === 'trial' ? '• Em Teste' : '• Suspenso'}
                           </span>
 
+                          {hasActiveRemoteSupportGrant && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                              <ShieldCheck size={11} /> Suporte Autorizado (PIN)
+                            </span>
+                          )}
+
                           {isExpired && (
                             <span className="px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-[9px] font-black uppercase">
                               Licença Expirada
@@ -3008,8 +3204,10 @@ Conte conosco para servir seu ministério com excelência!`
                       {/* Status Selector Dropdown */}
                       <select
                         value={church.planStatus || 'active'}
+                        disabled={isTargetOfActiveSupport}
+                        title={isTargetOfActiveSupport ? 'Bloqueado durante sessão de Suporte Remoto' : undefined}
                         onChange={(e) => handleUpdateStatus(church.id, e.target.value as any)}
-                        className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/10 border border-border/80 text-text-main text-xs font-bold focus:outline-none focus:border-brand cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/10 border border-border/80 text-text-main text-xs font-bold focus:outline-none focus:border-brand cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <option value="active" className="bg-slate-900 text-emerald-400 font-bold">Ativo (PRO)</option>
                         <option value="trial" className="bg-slate-900 text-amber-400 font-bold">Degustação (Trial)</option>
@@ -3019,8 +3217,10 @@ Conte conosco para servir seu ministério com excelência!`
 
                       {/* License Renew Button */}
                       <button
+                        disabled={isTargetOfActiveSupport}
+                        title={isTargetOfActiveSupport ? 'Bloqueado durante sessão de Suporte Remoto' : undefined}
                         onClick={() => setQuickExtendChurchId(isExtending ? null : church.id)}
-                        className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Clock size={14} /> Validade
                       </button>
@@ -3036,12 +3236,14 @@ Conte conosco para servir seu ministério com excelência!`
                       {/* Delete Church Button (Real Cascading Delete Modal) */}
                       {church.id !== 'semente' && (
                         <button
+                          disabled={isTargetOfActiveSupport}
                           onClick={() => {
+                            if (isTargetOfActiveSupport) return;
                             setDeleteMemberMode('unlink');
                             setDeleteChurchModal({ church, memberCount: churchMembers.length });
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 border border-red-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-                          title="Excluir igreja em cascata (dados + vínculos de membros)"
+                          className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 hover:text-red-400 border border-red-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={isTargetOfActiveSupport ? 'Bloqueado durante sessão de Suporte Remoto' : 'Excluir igreja em cascata (dados + vínculos de membros)'}
                         >
                           <Trash2 size={14} /> Excluir
                         </button>
@@ -3149,8 +3351,10 @@ Conte conosco para servir seu ministério com excelência!`
                               <Sparkles size={14} className="text-amber-400 shrink-0" />
                               <select
                                 value={church.planName || 'Plano Completo'}
+                                disabled={isTargetOfActiveSupport}
+                                title={isTargetOfActiveSupport ? 'Bloqueado durante sessão de Suporte Remoto' : undefined}
                                 onChange={(e) => handleUpdatePlanName(church.id, e.target.value)}
-                                className="bg-transparent text-sm font-bold text-text-main focus:outline-none cursor-pointer border-b border-dashed border-amber-400/50 pb-0.5"
+                                className="bg-transparent text-sm font-bold text-text-main focus:outline-none cursor-pointer border-b border-dashed border-amber-400/50 pb-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 <option value="Plano Completo">Plano Completo (R$ 49/mês)</option>
                                 <option value="Plano Semeadora (Gratuito)">Plano Semeadora (Gratuito)</option>
@@ -3166,6 +3370,173 @@ Conte conosco para servir seu ministério com excelência!`
                               <Mail size={14} className="text-indigo-400" /> {church.contactEmail || 'Não informado'}
                             </p>
                           </div>
+
+                          {/* Privacy-Safe Aggregated Usage Metrics */}
+                          {(() => {
+                            const stats = churchActivityStats[church.id];
+                            const isLoadingStats = !stats || stats.loading;
+                            const isInactiveStart = !isLoadingStats && !stats.error && stats.songsCount === 0 && stats.servicesCount === 0;
+                            return (
+                              <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-2.5 md:col-span-3">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <span className="text-[10px] font-black uppercase text-text-muted flex items-center gap-1.5">
+                                    <ShieldCheck size={12} className="text-brand" /> Atividade da Igreja (Contadores Agregados — Privacidade Preservada)
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {isInactiveStart && (
+                                      <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                                        Sem cadastros ainda — ofereça apoio no WhatsApp
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => loadChurchActivityStats(church.id, true)}
+                                      disabled={isLoadingStats}
+                                      className="px-2 py-1 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-muted hover:text-text-main border border-border/60 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+                                      title="Atualizar contadores"
+                                    >
+                                      <RefreshCw size={11} className={isLoadingStats ? 'animate-spin' : ''} />
+                                      Atualizar
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {stats?.error ? (
+                                  <p className="text-xs text-red-400 font-semibold">{stats.error}</p>
+                                ) : (
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/10 dark:bg-white/[0.04] border border-border/50">
+                                      <span className="flex items-center gap-1.5 text-text-muted font-semibold">
+                                        <Music size={13} className="text-brand" /> Músicas cadastradas
+                                      </span>
+                                      <span className="text-sm font-black text-text-main">
+                                        {isLoadingStats ? '...' : (stats.songsCount ?? 0)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/10 dark:bg-white/[0.04] border border-border/50">
+                                      <span className="flex items-center gap-1.5 text-text-muted font-semibold">
+                                        <Calendar size={13} className="text-emerald-400" /> Escalas / Cultos criados
+                                      </span>
+                                      <span className="text-sm font-black text-text-main">
+                                        {isLoadingStats ? '...' : (stats.servicesCount ?? 0)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/10 dark:bg-white/[0.04] border border-border/50">
+                                      <span className="flex items-center gap-1.5 text-text-muted font-semibold">
+                                        <Users size={13} className="text-indigo-400" /> Membros vinculados
+                                      </span>
+                                      <span className="text-sm font-black text-text-main">
+                                        {churchMembers.length}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Delegated Remote Support (PIN 6 digits, 2h) */}
+                          {!isSeedChurch && (
+                            <div className="bg-amber-500/[0.06] border border-amber-500/30 p-4 rounded-2xl space-y-3 md:col-span-3">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1.5">
+                                  <ShieldCheck size={13} /> Suporte Remoto Delegado (PIN de 6 Dígitos • Sem alterar seu perfil Master)
+                                </span>
+                                {isTargetOfActiveSupport ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase">
+                                    • Sessão Conectada Agora
+                                  </span>
+                                ) : hasActiveRemoteSupportGrant ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black uppercase">
+                                    Autorizado até {new Date(rsExpiresMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-black/10 dark:bg-white/10 border border-border text-text-muted text-[10px] font-black uppercase">
+                                    🔒 Aguardando autorização do líder
+                                  </span>
+                                )}
+                              </div>
+
+                              {isTargetOfActiveSupport ? (
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <p className="text-xs text-text-muted">
+                                    Você está conectado ao ambiente desta igreja em <strong className="text-text-main">Modo Suporte Remoto</strong>. Ações destrutivas (excluir igreja, remover líder ou alterar plano) permanecem bloqueadas.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => endRemoteSupportSession('master')}
+                                    className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shrink-0 cursor-pointer transition-all"
+                                  >
+                                    Encerrar Suporte
+                                  </button>
+                                </div>
+                              ) : hasActiveRemoteSupportGrant ? (
+                                <div className="space-y-2.5">
+                                  <p className="text-xs text-text-muted">
+                                    Autorizado por <strong className="text-text-main">{church.remoteSupport?.grantedByName || 'Líder da Igreja'}</strong>. Digite abaixo o PIN de 6 dígitos enviado pelo líder no WhatsApp para acessar temporariamente o ambiente desta igreja:
+                                  </p>
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={6}
+                                      value={pinInputs[church.id] || ''}
+                                      onChange={(e) => {
+                                        const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                        setPinInputs(prev => ({ ...prev, [church.id]: cleaned }));
+                                        setPinErrors(prev => ({ ...prev, [church.id]: '' }));
+                                      }}
+                                      placeholder="Digite o PIN de 6 dígitos"
+                                      className="sm:w-56 px-3.5 py-2.5 rounded-xl bg-black/15 dark:bg-white/10 border border-amber-500/40 text-text-main font-mono font-black tracking-[0.25em] text-sm focus:outline-none focus:border-amber-400"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isEnteringSupportId === church.id || (pinInputs[church.id] || '').length !== 6}
+                                      onClick={async () => {
+                                        setIsEnteringSupportId(church.id);
+                                        setPinErrors(prev => ({ ...prev, [church.id]: '' }));
+                                        const res = await startRemoteSupportSession(church.id, pinInputs[church.id] || '');
+                                        setIsEnteringSupportId(null);
+                                        if (res.ok) {
+                                          setPinInputs(prev => ({ ...prev, [church.id]: '' }));
+                                          onEnterRemoteSupport?.();
+                                        } else {
+                                          setPinErrors(prev => ({ ...prev, [church.id]: res.error || 'PIN inválido.' }));
+                                        }
+                                      }}
+                                      className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed shadow-md shadow-amber-600/20"
+                                    >
+                                      <ShieldCheck size={14} />
+                                      {isEnteringSupportId === church.id ? 'Validando PIN...' : 'Entrar em Modo Suporte'}
+                                    </button>
+                                  </div>
+                                  {pinErrors[church.id] && (
+                                    <p className="text-xs font-bold text-red-400">{pinErrors[church.id]}</p>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-text-muted">
+                                  Para acessar esta igreja como suporte técnico, peça ao líder para abrir <strong className="text-text-main">Configurações → Suporte Técnico Remoto LiLouPro</strong> e gerar o PIN temporário de 6 dígitos (válido por 2 horas).
+                                </p>
+                              )}
+
+                              {church.remoteSupport?.lastSession && (
+                                <div className="pt-2 border-t border-amber-500/20 text-[11px] text-text-muted">
+                                  <strong className="text-text-main">Última sessão registrada:</strong> autorizado por{' '}
+                                  <strong className="text-text-main">{church.remoteSupport.lastSession.grantedByName}</strong>
+                                  {church.remoteSupport.lastSession.startedAt && (
+                                    <> • Início: {new Date(church.remoteSupport.lastSession.startedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                                  )}
+                                  {church.remoteSupport.lastSession.endedAt && (
+                                    <> • Fim: {new Date(church.remoteSupport.lastSession.endedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                                  )}
+                                  {church.remoteSupport.lastSession.endedBy && (
+                                    <> ({church.remoteSupport.lastSession.endedBy})</>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           <div className="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl border border-border/40 space-y-1.5 md:col-span-3">
                             <span className="text-[10px] font-black uppercase text-text-muted flex items-center gap-1.5">

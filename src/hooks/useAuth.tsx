@@ -1,13 +1,22 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { getChurchEffectivePlan, isVitalicioPlan, EffectivePlanResult } from '../services/planService';
 import { requestFcmToken, setupForegroundMessageListener } from '../services/fcmService';
 import { notifyChurchLeadersOfNewMember } from '../services/memberJoinNotificationService';
 
 export type ChurchAccessBlockReason = 'missing' | 'deleted' | 'suspended' | 'cancelled' | null;
 export type ChurchResolutionState = 'idle' | 'loading' | 'valid' | 'missing' | 'blocked';
+export type RemoteSupportPolicy = 'all' | 'premium_only';
+
+export interface RemoteSupportSession {
+  churchId: string;
+  churchName: string;
+  grantedByName: string;
+  expiresAtMs: number;
+  startedAtIso: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -22,6 +31,11 @@ interface AuthContextType {
   isPaidActive: boolean;
   isSandboxMode: boolean;
   switchChurchContext: (targetChurchId: 'semente' | 'demo_sandbox') => Promise<void>;
+  isRemoteSupportMode: boolean;
+  remoteSupportSession: RemoteSupportSession | null;
+  remoteSupportPolicy: RemoteSupportPolicy;
+  startRemoteSupportSession: (churchId: string, pin: string) => Promise<{ ok: boolean; error?: string }>;
+  endRemoteSupportSession: (reason?: 'master' | 'revoked' | 'expired') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -36,7 +50,12 @@ const AuthContext = createContext<AuthContextType>({
   isVitalicio: false,
   isPaidActive: false,
   isSandboxMode: false,
-  switchChurchContext: async () => {}
+  switchChurchContext: async () => {},
+  isRemoteSupportMode: false,
+  remoteSupportSession: null,
+  remoteSupportPolicy: 'all',
+  startRemoteSupportSession: async () => ({ ok: false, error: 'Não inicializado.' }),
+  endRemoteSupportSession: async () => {}
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -56,21 +75,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  const [remoteSupportSession, setRemoteSupportSession] = useState<RemoteSupportSession | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem('liloupro_remote_support_session');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as RemoteSupportSession;
+      if (parsed?.churchId && parsed?.expiresAtMs && parsed.expiresAtMs > Date.now()) {
+        return parsed;
+      }
+      sessionStorage.removeItem('liloupro_remote_support_session');
+    } catch {}
+    return null;
+  });
+  const [remoteSupportPolicy, setRemoteSupportPolicy] = useState<RemoteSupportPolicy>('all');
+
   const isMasterUser = Boolean(user && (user.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com');
-  const isSandboxMode = Boolean(isMasterUser && masterChurchOverride === 'demo_sandbox');
-  const effectiveChurchId = isSandboxMode
-    ? 'demo_sandbox'
-    : (rawMemberData?.churchId || (isMasterUser ? 'semente' : ''));
+  const isRemoteSupportMode = Boolean(isMasterUser && remoteSupportSession?.churchId);
+  const isSandboxMode = Boolean(isMasterUser && !isRemoteSupportMode && masterChurchOverride === 'demo_sandbox');
+  const effectiveChurchId = isRemoteSupportMode
+    ? remoteSupportSession!.churchId
+    : isSandboxMode
+      ? 'demo_sandbox'
+      : (rawMemberData?.churchId || (isMasterUser ? 'semente' : ''));
 
   const memberData = rawMemberData
-    ? (isSandboxMode
+    ? (isRemoteSupportMode
         ? {
             ...rawMemberData,
-            churchId: 'demo_sandbox',
+            churchId: remoteSupportSession!.churchId,
             isAdmin: true,
-            dismissedOnboarding: Boolean(churchData?.onboardingDismissed)
+            dismissedOnboarding: true
           }
-        : rawMemberData)
+        : isSandboxMode
+          ? {
+              ...rawMemberData,
+              churchId: 'demo_sandbox',
+              isAdmin: true,
+              dismissedOnboarding: Boolean(churchData?.onboardingDismissed)
+            }
+          : rawMemberData)
     : null;
 
   // HARD GUARD: Non-master users NEVER receive isAdmin ("MODO ADM") unless their church exists and is active/valid
@@ -80,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     !churchAccessBlockReason
   );
   const isAdmin = isMasterUser
-    ? (isSandboxMode ? true : rawIsAdmin)
+    ? (isSandboxMode || isRemoteSupportMode ? true : rawIsAdmin)
     : (hasValidChurchAccess ? rawIsAdmin : false);
 
   const effectivePlan = hasValidChurchAccess && churchData ? getChurchEffectivePlan(churchData) : null;
@@ -174,9 +218,142 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { id: snap.id, ...snap.data() };
   };
 
+  const extractSupportExpiresMs = (remoteSupport: any): number => {
+    if (!remoteSupport) return 0;
+    const rawExp = remoteSupport.expiresAt;
+    if (rawExp && typeof rawExp.toMillis === 'function') return rawExp.toMillis();
+    if (rawExp && typeof rawExp.seconds === 'number') return rawExp.seconds * 1000;
+    if (typeof remoteSupport.expiresAtIso === 'string') {
+      const parsed = Date.parse(remoteSupport.expiresAtIso);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    if (typeof rawExp === 'string') {
+      const parsed = Date.parse(rawExp);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  const endRemoteSupportSession = async (reason: 'master' | 'revoked' | 'expired' = 'master') => {
+    const activeSession = remoteSupportSession;
+    try {
+      sessionStorage.removeItem('liloupro_remote_support_session');
+    } catch {}
+    setRemoteSupportSession(null);
+    purgeCrossTenantLocalCaches('semente');
+
+    if (activeSession?.churchId && isMasterUser && (reason === 'master' || reason === 'expired')) {
+      try {
+        const churchRef = doc(db, 'churches', activeSession.churchId);
+        const snap = await getDoc(churchRef);
+        if (snap.exists()) {
+          const prevSupport = snap.data()?.remoteSupport || {};
+          const endedAtIso = new Date().toISOString();
+          const endedByLabel = reason === 'expired' ? 'Expiração automática (2h)' : 'Master (Suporte)';
+          await updateDoc(churchRef, {
+            remoteSupport: {
+              ...prevSupport,
+              active: false,
+              pin: null,
+              sessionEndedAt: endedAtIso,
+              sessionEndedBy: endedByLabel,
+              lastSession: {
+                grantedByName: prevSupport.grantedByName || activeSession.grantedByName || 'Líder',
+                grantedByUid: prevSupport.grantedByUid || null,
+                startedAt: prevSupport.sessionStartedAt || activeSession.startedAtIso || prevSupport.grantedAt || endedAtIso,
+                endedAt: endedAtIso,
+                endedBy: endedByLabel
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[RemoteSupport] Falha ao registrar encerramento da sessão:', err);
+      }
+    }
+  };
+
+  const startRemoteSupportSession = async (churchId: string, pin: string): Promise<{ ok: boolean; error?: string }> => {
+    if (!isMasterUser || !user) {
+      return { ok: false, error: 'Apenas o Master Admin pode iniciar sessões de suporte remoto.' };
+    }
+    if (!churchId || churchId === 'semente' || churchId === 'demo_sandbox') {
+      return { ok: false, error: 'Igreja alvo inválida para suporte remoto.' };
+    }
+    const cleanPin = pin.replace(/\D/g, '').trim();
+    if (cleanPin.length !== 6) {
+      return { ok: false, error: 'Informe o PIN temporário de 6 dígitos gerado pelo líder.' };
+    }
+
+    try {
+      const churchRef = doc(db, 'churches', churchId);
+      const snap = await getDoc(churchRef);
+      if (!snap.exists()) {
+        return { ok: false, error: 'Igreja não encontrada.' };
+      }
+      const data = snap.data() as any;
+      const rs = data?.remoteSupport;
+      const expiresAtMs = extractSupportExpiresMs(rs);
+
+      if (!rs || rs.active !== true || !expiresAtMs || expiresAtMs <= Date.now()) {
+        return { ok: false, error: 'Autorização de suporte inativa ou expirada. Peça ao líder para gerar um novo PIN.' };
+      }
+      if (String(rs.pin || '').trim() !== cleanPin) {
+        return { ok: false, error: 'PIN incorreto. Confira os 6 dígitos com o líder da igreja.' };
+      }
+
+      const startedAtIso = new Date().toISOString();
+      const grantedByName = rs.grantedByName || 'Líder da Igreja';
+
+      await updateDoc(churchRef, {
+        remoteSupport: {
+          ...rs,
+          sessionStartedAt: startedAtIso,
+          sessionStartedByEmail: user.email || 'mikmellorg@gmail.com',
+          sessionEndedAt: null,
+          sessionEndedBy: null,
+          lastSession: {
+            grantedByName,
+            grantedByUid: rs.grantedByUid || null,
+            startedAt: startedAtIso,
+            endedAt: null,
+            endedBy: null
+          }
+        }
+      });
+
+      try {
+        localStorage.removeItem('liloupro_master_sandbox_active');
+      } catch {}
+      setMasterChurchOverride(null);
+      purgeCrossTenantLocalCaches(churchId);
+
+      const nextSession: RemoteSupportSession = {
+        churchId,
+        churchName: data.name || 'Igreja Cliente',
+        grantedByName,
+        expiresAtMs,
+        startedAtIso
+      };
+      try {
+        sessionStorage.setItem('liloupro_remote_support_session', JSON.stringify(nextSession));
+      } catch {}
+      setRemoteSupportSession(nextSession);
+
+      return { ok: true };
+    } catch (err: any) {
+      console.error('[RemoteSupport] Erro ao iniciar suporte remoto:', err);
+      return { ok: false, error: err?.message || 'Não foi possível iniciar o suporte remoto.' };
+    }
+  };
+
   const switchChurchContext = async (targetChurchId: 'semente' | 'demo_sandbox') => {
     if (!isMasterUser || !user) return;
     try {
+      if (remoteSupportSession) {
+        try { sessionStorage.removeItem('liloupro_remote_support_session'); } catch {}
+        setRemoteSupportSession(null);
+      }
       if (targetChurchId === 'demo_sandbox') {
         await ensureDemoSandboxChurch(user.uid);
         try {
@@ -213,8 +390,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(true);
         } else {
           setMasterChurchOverride(null);
+          setRemoteSupportSession(null);
           try {
             localStorage.removeItem('liloupro_master_sandbox_active');
+            sessionStorage.removeItem('liloupro_remote_support_session');
           } catch {}
           purgeCrossTenantLocalCaches();
         }
@@ -534,6 +713,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn("Não foi possível auto-restaurar os metadados oficiais da igreja semente:", restoreErr);
           }
         }
+        // Real-time revocation / expiration guard during active Master Remote Support session
+        if (isRemoteSupportMode && remoteSupportSession && churchSnap.id === remoteSupportSession.churchId) {
+          const rs = data?.remoteSupport;
+          const liveExpiresMs = extractSupportExpiresMs(rs);
+          if (!rs || rs.active !== true || !liveExpiresMs || liveExpiresMs <= Date.now()) {
+            try { sessionStorage.removeItem('liloupro_remote_support_session'); } catch {}
+            purgeCrossTenantLocalCaches('semente');
+            setRemoteSupportSession(null);
+            setLoading(false);
+            return;
+          }
+        }
+
         setChurchData({
           id: churchSnap.id,
           ...data,
@@ -544,6 +736,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setChurchResolutionState('valid');
         setChurchAccessBlockReason(null);
       } else {
+        if (isRemoteSupportMode) {
+          try { sessionStorage.removeItem('liloupro_remote_support_session'); } catch {}
+          purgeCrossTenantLocalCaches('semente');
+          setRemoteSupportSession(null);
+          setLoading(false);
+          return;
+        }
         // HARD GUARD: Church document does NOT exist in Firestore (deleted/ghost tenant)
         purgeCrossTenantLocalCaches();
         setChurchData(null);
@@ -601,10 +800,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user?.uid]);
 
+  // Global Remote Support Policy subscription ('all' by default, or 'premium_only')
+  useEffect(() => {
+    if (!user?.uid) {
+      setRemoteSupportPolicy('all');
+      return;
+    }
+    const policyRef = doc(db, 'settings', 'remote_support_policy');
+    const unsub = onSnapshot(policyRef, (snap) => {
+      const val = snap.exists() ? snap.data()?.policy : 'all';
+      setRemoteSupportPolicy(val === 'premium_only' ? 'premium_only' : 'all');
+    }, () => {
+      setRemoteSupportPolicy('all');
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Automatic local expiration watcher for active Remote Support session
+  useEffect(() => {
+    if (!isRemoteSupportMode || !remoteSupportSession?.expiresAtMs) return;
+    const checkExpiry = () => {
+      if (Date.now() >= remoteSupportSession.expiresAtMs) {
+        endRemoteSupportSession('expired');
+      }
+    };
+    checkExpiry();
+    const timer = window.setInterval(checkExpiry, 5000);
+    return () => window.clearInterval(timer);
+  }, [isRemoteSupportMode, remoteSupportSession?.churchId, remoteSupportSession?.expiresAtMs]);
+
   const effectiveLoading = loading || Boolean(user && rawMemberData && effectiveChurchId && churchResolutionState === 'loading');
 
   return (
-    <AuthContext.Provider value={{ user, loading: effectiveLoading, memberData, isAdmin, churchData, churchResolutionState, churchAccessBlockReason, effectivePlan, isVitalicio, isPaidActive, isSandboxMode, switchChurchContext }}>
+    <AuthContext.Provider value={{
+      user,
+      loading: effectiveLoading,
+      memberData,
+      isAdmin,
+      churchData,
+      churchResolutionState,
+      churchAccessBlockReason,
+      effectivePlan,
+      isVitalicio,
+      isPaidActive,
+      isSandboxMode,
+      switchChurchContext,
+      isRemoteSupportMode,
+      remoteSupportSession,
+      remoteSupportPolicy,
+      startRemoteSupportSession,
+      endRemoteSupportSession
+    }}>
       {children}
     </AuthContext.Provider>
   );

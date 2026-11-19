@@ -2368,8 +2368,65 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
   return <style dangerouslySetInnerHTML={{ __html: styleContent }} />;
 }
 
+function RemoteSupportTopBar({
+  churchName,
+  grantedByName,
+  expiresAtMs,
+  onEndSupport
+}: {
+  churchName: string;
+  grantedByName: string;
+  expiresAtMs: number;
+  onEndSupport: () => void;
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [isEnding, setIsEnding] = useState(false);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const remainingSec = Math.max(0, Math.floor((expiresAtMs - nowMs) / 1000));
+  const hrs = Math.floor(remainingSec / 3600);
+  const mins = Math.floor((remainingSec % 3600) / 60);
+  const secs = remainingSec % 60;
+  const formatted = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[95] bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 text-white shadow-xl border-b border-amber-300/40 px-3 sm:px-5 py-2">
+      <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <ShieldCheck size={16} className="shrink-0 text-amber-100" />
+          <span className="font-black uppercase tracking-wider truncate">
+            MODO SUPORTE REMOTO: {churchName}
+          </span>
+          <span className="hidden sm:inline text-amber-100/90 font-semibold">
+            • Autorizado por {grantedByName}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-black/25 font-mono font-black text-[11px] shrink-0">
+            Expira em {formatted}
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={isEnding}
+          onClick={async () => {
+            setIsEnding(true);
+            await onEndSupport();
+            setIsEnding(false);
+          }}
+          className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-900 text-white font-black text-[11px] uppercase tracking-wider shadow-md transition-all cursor-pointer shrink-0 disabled:opacity-60"
+        >
+          {isEnding ? 'Encerrando...' : 'Encerrar Suporte'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MainContent() {
-  const { user, loading, memberData, isAdmin, churchData, churchResolutionState, churchAccessBlockReason, isSandboxMode, switchChurchContext } = useAuth();
+  const { user, loading, memberData, isAdmin, churchData, churchResolutionState, churchAccessBlockReason, isSandboxMode, switchChurchContext, isRemoteSupportMode, remoteSupportSession, endRemoteSupportSession } = useAuth();
   const [isCleanRecordingMode, setIsCleanRecordingMode] = useState(false);
   useEffect(() => {
     if (!isSandboxMode && isCleanRecordingMode) {
@@ -2611,6 +2668,20 @@ function MainContent() {
   const [activePlaylistSongs, setActivePlaylistSongs] = useState<any[] | null>(null);
   const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState<number>(0);
   const [isPlaylistPlayerOpen, setIsPlaylistPlayerOpen] = useState<boolean>(false);
+
+  // Strict cross-tenant cache & transient UI state reset whenever active church context switches (e.g. entering/exiting Remote Support)
+  const prevChurchContextRef = useRef<string>(userChurchId);
+  useEffect(() => {
+    if (prevChurchContextRef.current !== userChurchId) {
+      prevChurchContextRef.current = userChurchId;
+      setAllSongs([]);
+      setAllServices([]);
+      setAllMembers([]);
+      setSelectedSong(null);
+      setIsPlaylistPlayerOpen(false);
+      setActivePlaylistSongs(null);
+    }
+  }, [userChurchId]);
   const [isPlaylistPlayerMinimized, setIsPlaylistPlayerMinimized] = useState<boolean>(false);
   const [activeAudioGuideUrl, setActiveAudioGuideUrl] = useState<string | null>(null);
   const [isPlaylistRepeatActive, setIsPlaylistRepeatActive] = useState<boolean>(() => {
@@ -4308,6 +4379,18 @@ function MainContent() {
         )}
       </AnimatePresence>
 
+      {isMasterDeveloper && isRemoteSupportMode && remoteSupportSession && (
+        <RemoteSupportTopBar
+          churchName={remoteSupportSession.churchName}
+          grantedByName={remoteSupportSession.grantedByName}
+          expiresAtMs={remoteSupportSession.expiresAtMs}
+          onEndSupport={async () => {
+            await endRemoteSupportSession('master');
+            navigateTabSafely('master');
+          }}
+        />
+      )}
+
       <div className={cn(isSongFocusMode ? "w-full min-h-screen" : "w-full max-w-[1440px] mx-auto flex min-h-screen")}>
       <nav 
         className={cn(
@@ -4732,7 +4815,11 @@ function MainContent() {
             />
           )}
           {isMasterDeveloper && activeTab === 'master' && (
-            <MasterAdminView key="master" theme={theme} />
+            <MasterAdminView
+              key="master"
+              theme={theme}
+              onEnterRemoteSupport={() => navigateTabSafely('home')}
+            />
           )}
         </AnimatePresence>
       </main>
@@ -18277,7 +18364,7 @@ function CalendarView({
 }
 
 function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: ResourceCheckResult) => void }) {
-  const { user, isAdmin, memberData, churchData } = useAuth();
+  const { user, isAdmin, memberData, churchData, isRemoteSupportMode } = useAuth();
   const [members, setMembers] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -18479,8 +18566,17 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
   const userEmailLower = (user?.email || '').toLowerCase().trim();
   const isMaster = userEmailLower === 'mikmellorg@gmail.com';
 
+  const isProtectedChurchLeader = (member: any) => Boolean(
+    member?.isAdmin ||
+    (churchData?.createdBy && (member?.id === churchData.createdBy || member?.uid === churchData.createdBy))
+  );
+
   const toggleAdmin = async (member: any) => {
     if (!isMaster) return;
+    if (isRemoteSupportMode) {
+      alert('Ação bloqueada no Modo Suporte Remoto: não é permitido alterar permissões administrativas ou remover o líder principal.');
+      return;
+    }
     
     const memberPath = `members/${member.id}`;
     const adminPath = `admins/${member.id}`;
@@ -18727,7 +18823,7 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
               </div>
             
             <div className="flex items-center gap-2 grow sm:grow-0 justify-end sm:justify-start">
-                {isMaster && member.id !== user?.uid && (
+                {isMaster && !isRemoteSupportMode && member.id !== user?.uid && (
                   <button 
                     onClick={() => toggleAdmin(member)}
                     className={cn(
@@ -18748,9 +18844,13 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                     Editar
                   </button>
                 )}
-                {isAdmin && (
+                {isAdmin && !(isRemoteSupportMode && isProtectedChurchLeader(member)) && (
                   <ConfirmButton 
                     onConfirm={async () => { 
+                      if (isRemoteSupportMode && isProtectedChurchLeader(member)) {
+                        alert('Ação bloqueada no Modo Suporte Remoto: não é permitido remover o líder principal.');
+                        return;
+                      }
                       const memberPath = `members/${member.id}`;
                       try {
                         await deleteDoc(doc(db, 'members', member.id));
@@ -18782,9 +18882,13 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
                   {role}
                 </button>
               ))}
-              {isAdmin && (
+              {isAdmin && !(isRemoteSupportMode && isProtectedChurchLeader(member)) && (
                 <ConfirmButton 
                   onConfirm={async () => { 
+                    if (isRemoteSupportMode && isProtectedChurchLeader(member)) {
+                      alert('Ação bloqueada no Modo Suporte Remoto: não é permitido remover o líder principal.');
+                      return;
+                    }
                     const memberPath = `members/${member.id}`;
                     try {
                       await deleteDoc(doc(db, 'members', member.id));
@@ -19406,7 +19510,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   onReplaySplash?: () => void,
   onTriggerNotification?: (n: any) => void
 }) {
-  const { user, memberData, churchData } = useAuth();
+  const { user, memberData, churchData, isRemoteSupportMode, remoteSupportPolicy, effectivePlan, isVitalicio } = useAuth();
   const isMasterDeveloper = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
   const userChurchId = memberData?.churchId || (isMasterDeveloper ? 'semente' : '');
   const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
@@ -19422,6 +19526,106 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [editChurchNameError, setEditChurchNameError] = useState<string | null>(null);
   const [isSavingChurchName, setIsSavingChurchName] = useState(false);
   const [section, setSection] = useState<'general' | 'reports'>('general');
+
+  // Delegated Remote Support (PIN 6 digits, 2h fixed validity)
+  const [isUpdatingRemoteSupport, setIsUpdatingRemoteSupport] = useState(false);
+  const [remoteSupportCopied, setRemoteSupportCopied] = useState(false);
+  const [remoteSupportNowMs, setRemoteSupportNowMs] = useState(() => Date.now());
+
+  const remoteSupportExpiresMs = useMemo(() => {
+    const rs = churchData?.remoteSupport;
+    if (!rs) return 0;
+    const rawExp = rs.expiresAt;
+    if (rawExp && typeof rawExp.toMillis === 'function') return rawExp.toMillis();
+    if (rawExp && typeof rawExp.seconds === 'number') return rawExp.seconds * 1000;
+    if (typeof rs.expiresAtIso === 'string') {
+      const t = Date.parse(rs.expiresAtIso);
+      return Number.isNaN(t) ? 0 : t;
+    }
+    return 0;
+  }, [churchData?.remoteSupport]);
+
+  const isRemoteSupportActiveForChurch = Boolean(
+    churchData?.remoteSupport?.active === true &&
+    remoteSupportExpiresMs > remoteSupportNowMs
+  );
+
+  useEffect(() => {
+    if (!churchData?.remoteSupport?.active) return;
+    const id = window.setInterval(() => setRemoteSupportNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [churchData?.remoteSupport?.active, remoteSupportExpiresMs]);
+
+  const isChurchEligibleForRemoteSupport = useMemo(() => {
+    if (remoteSupportPolicy !== 'premium_only') return true;
+    const planLower = String(churchData?.planName || '').toLowerCase();
+    return Boolean(isVitalicio || effectivePlan?.planId === 'premium' || planLower.includes('premium'));
+  }, [remoteSupportPolicy, churchData?.planName, isVitalicio, effectivePlan?.planId]);
+
+  const handleGenerateRemoteSupportPin = async () => {
+    if (!churchData?.id || !user || !isAdmin || !isChurchEligibleForRemoteSupport) return;
+    setIsUpdatingRemoteSupport(true);
+    try {
+      const pin = String(Math.floor(100000 + Math.random() * 900000));
+      const now = Date.now();
+      const expiresMs = now + 2 * 60 * 60 * 1000; // 2 horas fixas
+      const prevLastSession = churchData?.remoteSupport?.lastSession || null;
+      await updateDoc(doc(db, 'churches', churchData.id), {
+        remoteSupport: {
+          active: true,
+          pin,
+          expiresAt: Timestamp.fromMillis(expiresMs),
+          expiresAtIso: new Date(expiresMs).toISOString(),
+          grantedByUid: user.uid,
+          grantedByName: memberData?.name || user.displayName || user.email || 'Líder',
+          grantedByEmail: user.email || '',
+          grantedAt: new Date(now).toISOString(),
+          sessionStartedAt: null,
+          sessionStartedByEmail: null,
+          sessionEndedAt: null,
+          sessionEndedBy: null,
+          lastSession: prevLastSession
+        }
+      });
+      setRemoteSupportNowMs(Date.now());
+    } catch (err) {
+      console.error('Erro ao gerar PIN de suporte remoto:', err);
+      alert('Não foi possível gerar o PIN de suporte remoto.');
+    } finally {
+      setIsUpdatingRemoteSupport(false);
+    }
+  };
+
+  const handleRevokeRemoteSupport = async () => {
+    if (!churchData?.id || !user || !isAdmin) return;
+    setIsUpdatingRemoteSupport(true);
+    try {
+      const prevSupport = churchData?.remoteSupport || {};
+      const endedAtIso = new Date().toISOString();
+      const leaderLabel = memberData?.name || user.displayName || 'Líder da Igreja';
+      await updateDoc(doc(db, 'churches', churchData.id), {
+        remoteSupport: {
+          ...prevSupport,
+          active: false,
+          pin: null,
+          sessionEndedAt: endedAtIso,
+          sessionEndedBy: `${leaderLabel} (Revogado)`,
+          lastSession: {
+            grantedByName: prevSupport.grantedByName || leaderLabel,
+            grantedByUid: prevSupport.grantedByUid || user.uid,
+            startedAt: prevSupport.sessionStartedAt || prevSupport.grantedAt || endedAtIso,
+            endedAt: endedAtIso,
+            endedBy: `${leaderLabel} (Revogado)`
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Erro ao encerrar acesso de suporte remoto:', err);
+      alert('Não foi possível encerrar o acesso de suporte remoto.');
+    } finally {
+      setIsUpdatingRemoteSupport(false);
+    }
+  };
 
   useEffect(() => {
     setLeaderWhatsappInput(churchData?.leaderWhatsapp || '');
@@ -19457,7 +19661,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
   const handleJoinChurchByCode = async () => {
     const code = churchCodeInput.trim().toUpperCase();
-    if (!code || !user) return;
+    if (!isMasterDeveloper || !code || !user) return;
     setIsJoiningChurch(true);
     try {
       const q = query(collection(db, 'churches'), where('inviteCode', '==', code));
@@ -20169,6 +20373,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                 )}
 
                 {/* Multi-Igreja Controls */}
+                {isMasterDeveloper && !isRemoteSupportMode && (
                 <div className="space-y-3 pt-2">
                   {/* Entrar em uma igreja */}
                   <div className="space-y-1.5">
@@ -20192,29 +20397,147 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   </div>
 
                   {/* Criar uma igreja */}
-                  {isMasterDeveloper && (
-                    <div className="space-y-1.5 pt-2 border-t border-border/30">
-                      <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Criar Nova Igreja (SaaS)</label>
-                      <div className="space-y-2">
-                        <Input 
-                          value={newChurchName}
-                          onChange={e => setNewChurchName(e.target.value)}
-                          placeholder="Nome da Nova Igreja"
-                          className="text-xs"
-                         />
-                        <Button 
-                          onClick={handleCreateNewChurch}
-                          disabled={isCreatingChurch || !newChurchName.trim()}
-                          className="w-full text-xs"
-                        >
-                          {isCreatingChurch ? <RefreshCcw size={14} className="animate-spin" /> : "Criar Nova Organização"}
-                        </Button>
-                      </div>
+                  <div className="space-y-1.5 pt-2 border-t border-border/30">
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Criar Nova Igreja (SaaS)</label>
+                    <div className="space-y-2">
+                      <Input 
+                        value={newChurchName}
+                        onChange={e => setNewChurchName(e.target.value)}
+                        placeholder="Nome da Nova Igreja"
+                        className="text-xs"
+                       />
+                      <Button 
+                        onClick={handleCreateNewChurch}
+                        disabled={isCreatingChurch || !newChurchName.trim()}
+                        className="w-full text-xs"
+                      >
+                        {isCreatingChurch ? <RefreshCcw size={14} className="animate-spin" /> : "Criar Nova Organização"}
+                      </Button>
                     </div>
-                  )}
+                  </div>
                 </div>
+                )}
               </div>
            </Card>
+
+           {/* Suporte Técnico Remoto Delegado (Apenas Admin/Líder de Igrejas Clientes) */}
+           {isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (
+             <Card className="p-8 space-y-5 border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent">
+               <div className="flex items-center justify-between gap-2 flex-wrap">
+                 <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                   <ShieldCheck size={14} className="text-amber-500" /> Suporte Técnico Remoto LiLouPro
+                 </h3>
+                 {!isChurchEligibleForRemoteSupport ? (
+                   <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-500 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                     Recurso exclusivo do Plano Premium
+                   </span>
+                 ) : isRemoteSupportActiveForChurch ? (
+                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-500 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                     • Acesso Ativo (2h)
+                   </span>
+                 ) : (
+                   <span className="px-2.5 py-0.5 rounded-full bg-black/10 dark:bg-white/10 border border-border text-text-muted text-[10px] font-black uppercase tracking-wider">
+                     🔒 Bloqueado
+                   </span>
+                 )}
+               </div>
+
+               {!isChurchEligibleForRemoteSupport ? (
+                 <div className="bg-black/5 dark:bg-white/5 border border-amber-500/25 rounded-2xl p-4 space-y-2">
+                   <p className="text-xs text-text-muted leading-relaxed">
+                     O suporte remoto assistido com PIN temporário está disponível exclusivamente para igrejas no <strong className="text-text-main">Plano Premium</strong>.
+                   </p>
+                 </div>
+               ) : isRemoteSupportActiveForChurch ? (
+                 (() => {
+                   const remSec = Math.max(0, Math.floor((remoteSupportExpiresMs - remoteSupportNowMs) / 1000));
+                   const hrs = Math.floor(remSec / 3600);
+                   const mins = Math.floor((remSec % 3600) / 60);
+                   const secs = remSec % 60;
+                   const countdownStr = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                   const currentPin = churchData?.remoteSupport?.pin || '------';
+                   return (
+                     <div className="space-y-4">
+                       <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                         <div className="flex items-center justify-between gap-2 flex-wrap">
+                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
+                             PIN Temporário (Informe ao Suporte)
+                           </span>
+                           <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                             <Clock size={12} /> Expira em {countdownStr}
+                           </span>
+                         </div>
+                         <div className="flex items-center justify-between gap-3">
+                           <span className="text-2xl sm:text-3xl font-mono font-black tracking-[0.28em] text-text-main select-all">
+                             {currentPin}
+                           </span>
+                           <Button
+                             type="button"
+                             variant="secondary"
+                             onClick={() => {
+                               try {
+                                 navigator.clipboard.writeText(currentPin);
+                                 setRemoteSupportCopied(true);
+                                 setTimeout(() => setRemoteSupportCopied(false), 2000);
+                               } catch {}
+                             }}
+                             className="shrink-0 text-xs font-bold gap-1.5"
+                           >
+                             {remoteSupportCopied ? <Check size={14} /> : <Copy size={14} />}
+                             {remoteSupportCopied ? 'Copiado' : 'Copiar PIN'}
+                           </Button>
+                         </div>
+                         <p className="text-[11px] text-text-muted leading-relaxed">
+                           O suporte oficial só entra digitando este PIN e nunca pode excluir sua igreja, remover o líder principal ou alterar seu plano.
+                         </p>
+                       </div>
+
+                       {!isRemoteSupportMode && (
+                         <Button
+                           type="button"
+                           disabled={isUpdatingRemoteSupport}
+                           onClick={handleRevokeRemoteSupport}
+                           className="w-full min-h-[44px] bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20"
+                         >
+                           {isUpdatingRemoteSupport ? 'Encerrando...' : 'Encerrar Acesso Agora'}
+                         </Button>
+                       )}
+                     </div>
+                   );
+                 })()
+               ) : (
+                 <div className="space-y-3">
+                   <p className="text-xs text-text-muted leading-relaxed">
+                     Precisa de ajuda para cadastrar músicas, cifras ou montar escalas? Gere um <strong className="text-text-main">PIN temporário de 6 dígitos</strong> (válido por <strong className="text-text-main">2 horas</strong>) para autorizar o suporte técnico oficial com seu total controle.
+                   </p>
+                   <Button
+                     type="button"
+                     disabled={isUpdatingRemoteSupport || isRemoteSupportMode}
+                     onClick={handleGenerateRemoteSupportPin}
+                     className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
+                   >
+                     <KeyRound size={15} />
+                     {isUpdatingRemoteSupport ? 'Gerando PIN...' : 'Gerar PIN de Suporte (2 horas)'}
+                   </Button>
+                 </div>
+               )}
+
+               {churchData?.remoteSupport?.lastSession && (
+                 <div className="pt-3 border-t border-border/50 text-[11px] text-text-muted space-y-0.5">
+                   <p className="font-bold text-text-main text-[10px] uppercase tracking-wider">Registro da Última Sessão:</p>
+                   <p>
+                     Autorizado por <strong className="text-text-main">{churchData.remoteSupport.lastSession.grantedByName}</strong>
+                     {churchData.remoteSupport.lastSession.startedAt && (
+                       <> • Início: {new Date(churchData.remoteSupport.lastSession.startedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                     )}
+                     {churchData.remoteSupport.lastSession.endedAt && (
+                       <> • Encerrado: {new Date(churchData.remoteSupport.lastSession.endedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                     )}
+                   </p>
+                 </div>
+               )}
+             </Card>
+           )}
 
            {/* Compartilhar & Convidar pelo WhatsApp */}
            <Card className="p-8 space-y-6 bg-gradient-to-br from-green-500/10 via-brand/5 to-transparent border-green-500/20 shadow-lg shadow-green-500/5">

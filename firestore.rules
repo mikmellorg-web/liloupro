@@ -70,9 +70,20 @@ service cloud.firestore {
       return isMyChurchAdmin();
     }
 
+    function hasActiveRemoteSupport(churchId) {
+      return isValidId(churchId)
+        && exists(/databases/$(database)/documents/churches/$(churchId))
+        && get(/databases/$(database)/documents/churches/$(churchId)).data.get('remoteSupport', null) is map
+        && get(/databases/$(database)/documents/churches/$(churchId)).data.remoteSupport.get('active', false) == true
+        && get(/databases/$(database)/documents/churches/$(churchId)).data.remoteSupport.get('expiresAt', null) is timestamp
+        && get(/databases/$(database)/documents/churches/$(churchId)).data.remoteSupport.expiresAt > request.time;
+    }
+
     function isValidSettings(data) {
-      return (data.whatsappAdmin == null || data.whatsappAdmin is string)
-        && (data.updatedAt == null || data.updatedAt is timestamp);
+      return (data.get('whatsappAdmin', null) == null || data.whatsappAdmin is string)
+        && (data.get('policy', null) == null || (data.policy is string && data.policy in ['all', 'premium_only']))
+        && (data.get('updatedBy', null) == null || data.updatedBy is string)
+        && (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
     }
 
     function isValidId(id) {
@@ -244,6 +255,7 @@ service cloud.firestore {
       return (data.get('name', null) == null || (data.name is string && data.name.size() > 0 && data.name.size() <= 500))
         && (data.get('inviteCode', null) == null || (data.inviteCode is string && data.inviteCode.size() > 0 && data.inviteCode.size() <= 100))
         && (data.get('leaderWhatsapp', null) == null || (data.leaderWhatsapp is string && data.leaderWhatsapp.size() <= 40))
+        && (data.get('remoteSupport', null) == null || data.remoteSupport is map)
         && (data.get('createdBy', null) == null || (data.createdBy is string))
         && (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt is string);
     }
@@ -265,6 +277,7 @@ service cloud.firestore {
 
     match /settings/{docId} {
       allow get: if isMasterDeveloper()
+                 || (isSignedIn() && docId == 'remote_support_policy')
                  || (isSignedIn() && userChurchId() != '' && (
                       (docId == 'notifications' && isSementeUser()) ||
                       docId == ('notifications_' + userChurchId())
@@ -422,9 +435,12 @@ service cloud.firestore {
     }
 
     match /churches/{churchId}/songs/{songId} {
-      allow get, list: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
-      allow create, update: if isMasterDeveloper() || (churchId != 'semente' && isSignedIn() && userChurchId() == churchId);
-      allow delete: if isMasterDeveloper() || (churchId != 'semente' && isChurchAdminFor(churchId));
+      allow get, list: if (isMasterDeveloper() && (churchId == 'semente' || churchId == 'demo_sandbox' || hasActiveRemoteSupport(churchId)))
+                       || (isSignedIn() && userChurchId() == churchId);
+      allow create, update: if (isMasterDeveloper() && (churchId == 'semente' || churchId == 'demo_sandbox' || hasActiveRemoteSupport(churchId)))
+                            || (churchId != 'semente' && isSignedIn() && userChurchId() == churchId);
+      allow delete: if (isMasterDeveloper() && (churchId == 'semente' || churchId == 'demo_sandbox' || hasActiveRemoteSupport(churchId)))
+                    || (churchId != 'semente' && isChurchAdminFor(churchId));
     }
 
     // Service Rules (Strict Multi-Tenant Isolation - Semente Completely Confidential)
@@ -509,8 +525,10 @@ service cloud.firestore {
       allow delete: if isValidId(churchId) && isMasterDeveloper();
 
       match /{subcollection}/{subdoc=**} {
-        allow get, list: if isMasterDeveloper() || (isSignedIn() && userChurchId() == churchId);
-        allow create, update, delete: if isMasterDeveloper() || (churchId != 'semente' && isChurchAdminFor(churchId));
+        allow get, list: if (isMasterDeveloper() && (churchId == 'semente' || churchId == 'demo_sandbox' || hasActiveRemoteSupport(churchId)))
+                         || (isSignedIn() && userChurchId() == churchId);
+        allow create, update, delete: if (isMasterDeveloper() && (churchId == 'semente' || churchId == 'demo_sandbox' || hasActiveRemoteSupport(churchId)))
+                                      || (churchId != 'semente' && isChurchAdminFor(churchId));
       }
     }
 
