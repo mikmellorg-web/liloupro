@@ -492,7 +492,7 @@ export function SongsView({
         songId: s.id,
         title: s.title,
         artist: s.artist || '',
-        tone: s.tone || s.key || 'C',
+        tone: s.baseKey || s.tone || s.key || 'C',
         order: idx + 1
       });
 
@@ -714,7 +714,7 @@ export function SongsView({
         songId: s.id,
         title: s.title,
         artist: s.artist || '',
-        tone: s.tone || s.key || 'C',
+        tone: s.baseKey || s.tone || s.key || 'C',
         order: idx + 1
       }));
     }
@@ -736,7 +736,7 @@ export function SongsView({
             songId: s.id,
             title: s.title,
             artist: s.artist || item.artist || '',
-            tone: s.tone || s.key || item.tone || 'C'
+            tone: s.baseKey || s.tone || s.key || item.tone || 'C'
           };
         }
       }
@@ -785,7 +785,7 @@ export function SongsView({
               artist: item.artist || item.songArtist || found.artist,
               artistImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
               customImageUrl: item.artistImageUrl || found.artistImageUrl || item.customImageUrl || found.customImageUrl || item.coverImage || found.coverImage,
-              tone: item.tone || item.key || found.tone || found.key,
+              tone: found.baseKey || item.tone || item.key || found.tone || found.key,
               category: item.category || getSongCategory(found) || null,
               youtube: found.youtube || found.youtubeUrl || item.youtube || item.youtubeUrl || found.link || found.video,
               youtubeUrl: found.youtubeUrl || found.youtube || item.youtubeUrl || item.youtube || found.link || found.video,
@@ -1027,6 +1027,7 @@ export function SongsView({
         const docRef = await addDoc(collection(db, 'songs'), {
           title: trimmedTitle,
           artist: trimmedArtist,
+          baseKey: 'C',
           key: 'C',
           tone: 'C',
           bpm: 120,
@@ -1045,6 +1046,7 @@ export function SongsView({
         id: createdId,
         title: trimmedTitle,
         artist: trimmedArtist,
+        baseKey: 'C',
         key: 'C',
         tone: 'C',
         bpm: 120,
@@ -1199,8 +1201,9 @@ export function SongsView({
       const newSongPayload = {
         title: trimmedTitle,
         artist: trimmedArtist,
-        key: songData.key || songData.tone || 'C',
-        tone: songData.key || songData.tone || 'C',
+        baseKey: songData.baseKey || songData.key || songData.tone || 'C',
+        key: songData.baseKey || songData.key || songData.tone || 'C',
+        tone: songData.baseKey || songData.key || songData.tone || 'C',
         bpm: (() => {
           const parsedBpm = Math.round(Number(songData.bpm));
           return Number.isFinite(parsedBpm) && parsedBpm >= 40 && parsedBpm <= 220 ? parsedBpm : 120;
@@ -2310,7 +2313,7 @@ export function SongsView({
                               songId: song.id,
                               title: song.title,
                               artist: song.artist || '',
-                              tone: song.tone || song.key || 'C',
+                              tone: song.baseKey || song.tone || song.key || 'C',
                               order: (currentService.liturgy?.length || 0) + 1
                             };
                             const updatedLiturgy = [...(currentService.liturgy || []), newLiturgyItem];

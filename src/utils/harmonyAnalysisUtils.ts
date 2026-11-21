@@ -4,6 +4,8 @@
  * para os Recursos Exclusivos LiLouPro ("Aprenda com a Música - Harmonia").
  */
 
+import { detectKey, resolveHarmonicBaseKey } from '../services/chordService';
+
 export interface HarmonicDegreeInfo {
   degree: string;
   chord: string;
@@ -85,22 +87,20 @@ export function generateDeterministicHarmonyAnalysis(
   content: string,
   baseKey?: string
 ): HarmonyAnalysisResult {
-  let keyStr = (baseKey || '').trim().replace(/^Tom:\s*/i, '').replace(/\s+(Major|Maior|Minor|Menor)/i, '');
+  let keyStr = resolveHarmonicBaseKey(baseKey, content) || (baseKey || '').trim().replace(/^Tom:\s*/i, '').replace(/\s+(Major|Maior|Minor|Menor)/i, '');
   let isMinor = false;
   let root = 'C';
 
   const m = keyStr.match(/^([A-G][#b]?)(m(?:enor|in)?)?/i);
   if (m) {
     root = m[1].charAt(0).toUpperCase() + (m[1].charAt(1) ? m[1].charAt(1).toLowerCase() : '');
-    isMinor = !!m[2];
+    isMinor = !!m[2] && !/maj|7M/i.test(keyStr);
   } else {
-    const chordMatches = (content || '').match(/\b([A-G][#b]?)(m(?:[a-zA-Z0-9]*)?)?/g) || [];
-    if (chordMatches.length > 0) {
-      const first = chordMatches[0].match(/^([A-G][#b]?)(m)?/);
-      if (first) {
-        root = first[1].charAt(0).toUpperCase() + (first[1].charAt(1) ? first[1].charAt(1).toLowerCase() : '');
-        isMinor = !!first[2];
-      }
+    const detected = detectKey(content || '');
+    const dm = detected?.match(/^([A-G][#b]?)(m)?/);
+    if (dm) {
+      root = dm[1];
+      isMinor = !!dm[2];
     }
   }
 

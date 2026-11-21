@@ -35,7 +35,7 @@ import {
   doc, updateDoc, setDoc, getDoc, orderBy, Timestamp, where, serverTimestamp, deleteField 
 } from 'firebase/firestore';
 import { 
-  transposeLyricsAndChords, transposeChord, isChordLine, detectKey, isChordWord, 
+  transposeLyricsAndChords, transposeChord, isChordLine, detectKey, resolveHarmonicBaseKey, isChordWord, 
   isAnnotationOrHeaderWord, parseChordLineIntoTokens, getCleanChordName, cleanTablatures, 
   cleanCifraHtml, pairChordsAndLyricsIfSeparated, HarmonicDisplayMode, convertLyricsAndChordsToHarmonicMode, 
   convertSingleChordToHarmonicMode, convertHarmonicToChordName, ChordToken, 
@@ -464,6 +464,7 @@ export function SongDetailView({
   };
 
   const [transpose, setTranspose] = useState(0);
+  const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null);
   const [isCapoEnabled, setIsCapoEnabled] = useState(true);
   const [selectedCapoFret, setSelectedCapoFret] = useState<number | null>(null);
 
@@ -897,7 +898,7 @@ export function SongDetailView({
       chords: initialChords,
       lyrics: initialLyrics,
       category: sanitizeCategory(song?.category),
-      baseKey: song?.baseKey || detectKey(initialChords) || '',
+      baseKey: song?.baseKey || (song as any)?.key || (song as any)?.tone || detectKey(initialChords) || '',
       driveAudioLink: song?.driveAudioLink || '',
       driveFilesLink: song?.driveFilesLink || '',
       capo: song?.capo || ''
@@ -926,12 +927,13 @@ export function SongDetailView({
       chords: chordsData,
       lyrics: lyricsData,
       category: sanitizeCategory(song?.category),
-      baseKey: song?.baseKey || detectKey(chordsData) || '',
+      baseKey: song?.baseKey || (song as any)?.key || (song as any)?.tone || detectKey(chordsData) || '',
       driveAudioLink: song?.driveAudioLink || '',
       driveFilesLink: song?.driveFilesLink || '',
       capo: song?.capo || ''
     });
     setTranspose(0);
+    setSelectedTargetKey(null);
     setIsCapoEnabled(true);
     const hasContent = Boolean(chordsData || lyricsData);
     setIsEditing(Boolean(!hasContent || (song?.initialEdit && !hasContent)));
@@ -961,7 +963,7 @@ export function SongDetailView({
             chords: chordsData,
             lyrics: lyricsData,
             category: sanitizeCategory(data.category),
-            baseKey: data.baseKey || detectKey(chordsData) || '',
+            baseKey: data.baseKey || data.key || data.tone || detectKey(chordsData) || '',
             driveAudioLink: data.driveAudioLink || '',
             driveFilesLink: data.driveFilesLink || '',
             capo: data.capo || ''
@@ -1082,9 +1084,24 @@ export function SongDetailView({
 
   const capoSemitones = activeCapoFret;
 
+  const normalizeKeyString = (raw: string | undefined | null): string => {
+    const cleaned = (raw || '').trim().replace(/^Tom:\s*/i, '').trim();
+    if (!cleaned) return '';
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  };
+
+  const parseKeyParts = (raw: string | undefined | null): { note: string; suffix: string } => {
+    const cleaned = normalizeKeyString(raw);
+    const match = cleaned.match(/^([A-G][#b]?)(.*)$/);
+    if (!match) return { note: '', suffix: '' };
+    return { note: match[1], suffix: match[2] || '' };
+  };
+
   const effectiveBaseKey = useMemo(() => {
-    return editedSong.baseKey || detectKey(editedSong.chords || '') || 'C';
-  }, [editedSong.baseKey, editedSong.chords]);
+    const rawDeclared = normalizeKeyString(editedSong.baseKey || (editedSong as any).key || (editedSong as any).tone);
+    const resolved = resolveHarmonicBaseKey(rawDeclared, editedSong.chords || '', originalCapoSemitones);
+    return resolved || rawDeclared || detectKey(editedSong.chords || '') || 'C';
+  }, [editedSong.baseKey, (editedSong as any).key, (editedSong as any).tone, editedSong.chords, originalCapoSemitones]);
 
   const dbChordsAreInCapoShape = useMemo(() => {
     if (!editedSong.chords || originalCapoSemitones === 0) return false;
@@ -1100,9 +1117,10 @@ export function SongDetailView({
   }, [dbChordsAreInCapoShape, transpose, originalCapoSemitones, activeCapoFret]);
 
   const currentKey = useMemo(() => {
+    if (selectedTargetKey) return selectedTargetKey;
     if (transpose === 0) return effectiveBaseKey;
     return transposeChord(effectiveBaseKey, transpose);
-  }, [effectiveBaseKey, transpose]);
+  }, [effectiveBaseKey, transpose, selectedTargetKey]);
 
   const shapeKey = useMemo(() => {
     if (!currentKey) return '';
@@ -1178,30 +1196,108 @@ export function SongDetailView({
   const FLATS: Record<string, string> = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
 
   const handleKeySelect = async (targetNote: string) => {
-    const effectiveBaseKey = editedSong.baseKey || detectKey(editedSong.chords || '') || 'C';
-    
-    const getBase = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
-    const baseNote = getBase(effectiveBaseKey);
-    
-    const baseNormalized = FLATS[baseNote] || baseNote;
-    const targetNormalized = FLATS[targetNote] || targetNote;
-    
+    const baseKeySource = isEditing ? (currentKey || effectiveBaseKey) : effectiveBaseKey;
+    const baseParts = parseKeyParts(baseKeySource);
+    const targetParts = parseKeyParts(targetNote);
+
+    const baseNormalized = FLATS[baseParts.note] || baseParts.note;
+    const targetNormalized = FLATS[targetParts.note] || targetParts.note;
+
     const baseIdx = ALL_NOTES.indexOf(baseNormalized);
     const targetIdx = ALL_NOTES.indexOf(targetNormalized);
-    
+
     if (baseIdx === -1 || targetIdx === -1) return;
-    
-    setTranspose(targetIdx - baseIdx);
+
+    const delta = targetIdx - baseIdx;
+    const exactTargetKey = `${targetParts.note}${baseParts.suffix}`;
+
+    if (isEditing) {
+      setEditedSong(prev => {
+        const newChords = delta !== 0
+          ? transposeLyricsAndChords(prev.chords || '', delta)
+          : (prev.chords || '');
+        return {
+          ...prev,
+          chords: newChords,
+          baseKey: exactTargetKey,
+          key: exactTargetKey,
+          tone: exactTargetKey
+        };
+      });
+      setTranspose(0);
+      setSelectedTargetKey(null);
+      setShowKeyMenu(false);
+      return;
+    }
+
+    setTranspose(delta);
+    setSelectedTargetKey(exactTargetKey);
     setShowKeyMenu(false);
 
     if (!editedSong.baseKey && song?.id && user) {
       try {
-        await updateDoc(doc(db, 'songs', song.id), { baseKey: effectiveBaseKey });
-        setEditedSong(prev => ({ ...prev, baseKey: effectiveBaseKey }));
+        await updateDoc(doc(db, 'songs', song.id), {
+          baseKey: effectiveBaseKey,
+          key: effectiveBaseKey,
+          tone: effectiveBaseKey
+        });
+        setEditedSong(prev => ({
+          ...prev,
+          baseKey: effectiveBaseKey,
+          key: effectiveBaseKey,
+          tone: effectiveBaseKey
+        }));
       } catch (e) {
         console.error('Erro ao salvar baseKey original detectada:', e);
       }
     }
+  };
+
+  const handleTransposeStep = (step: number) => {
+    if (!step) return;
+    if (isEditing) {
+      setEditedSong(prev => {
+        const rawDeclared = normalizeKeyString(prev.baseKey || (prev as any).key || (prev as any).tone);
+        const base = resolveHarmonicBaseKey(rawDeclared, prev.chords || '', originalCapoSemitones) || rawDeclared || detectKey(prev.chords || '') || 'C';
+        const newChords = transposeLyricsAndChords(prev.chords || '', step);
+        const newBaseKey = transposeChord(base, step);
+        return {
+          ...prev,
+          chords: newChords,
+          baseKey: newBaseKey,
+          key: newBaseKey,
+          tone: newBaseKey
+        };
+      });
+      setTranspose(0);
+      setSelectedTargetKey(null);
+      return;
+    }
+    setSelectedTargetKey(null);
+    setTranspose(t => t + step);
+  };
+
+  const handleResetKeyToOriginal = () => {
+    if (isEditing) {
+      const savedOriginalKey = normalizeKeyString(song?.baseKey || (song as any)?.key || (song as any)?.tone);
+      if (savedOriginalKey) {
+        const curParts = parseKeyParts(editedSong.baseKey || effectiveBaseKey);
+        const origParts = parseKeyParts(savedOriginalKey);
+        const curIdx = ALL_NOTES.indexOf(FLATS[curParts.note] || curParts.note);
+        const origIdx = ALL_NOTES.indexOf(FLATS[origParts.note] || origParts.note);
+        const delta = (curIdx !== -1 && origIdx !== -1) ? (origIdx - curIdx) : 0;
+        setEditedSong(prev => ({
+          ...prev,
+          chords: delta !== 0 ? transposeLyricsAndChords(prev.chords || '', delta) : (prev.chords || ''),
+          baseKey: savedOriginalKey,
+          key: savedOriginalKey,
+          tone: savedOriginalKey
+        }));
+      }
+    }
+    setTranspose(0);
+    setSelectedTargetKey(null);
+    setShowKeyMenu(false);
   };
 
   const effectiveYoutubeSrc = useMemo(() => {
@@ -2466,16 +2562,22 @@ export function SongDetailView({
   };
 
   const handleToggleEdit = () => {
-    if (!isEditing && transpose !== 0) {
+    if (!isEditing && (transpose !== 0 || selectedTargetKey)) {
       // Apply the active transposition to the edited song permanently
-      const newChords = transposeLyricsAndChords(editedSong.chords || '', transpose);
-      const newBaseKey = editedSong.baseKey ? transposeChord(editedSong.baseKey, transpose) : editedSong.baseKey;
+      const base = effectiveBaseKey;
+      const newChords = transpose !== 0
+        ? transposeLyricsAndChords(editedSong.chords || '', transpose)
+        : (editedSong.chords || '');
+      const newBaseKey = selectedTargetKey || (transpose !== 0 ? transposeChord(base, transpose) : base);
       setEditedSong(prev => ({ 
         ...prev, 
         chords: newChords, 
-        baseKey: newBaseKey 
+        baseKey: newBaseKey,
+        key: newBaseKey,
+        tone: newBaseKey
       }));
       setTranspose(0);
+      setSelectedTargetKey(null);
     }
     setIsEditing(!isEditing);
   };
@@ -2483,14 +2585,34 @@ export function SongDetailView({
   const handleSave = async () => {
     const songPath = `songs/${song.id}`;
     try {
-      const sanitizedChords = cleanTablatures(editedSong.chords || '');
+      const activeTranspose = transpose;
+      const rawChordsInput = activeTranspose !== 0
+        ? transposeLyricsAndChords(editedSong.chords || '', activeTranspose)
+        : (editedSong.chords || '');
+      const sanitizedChords = cleanTablatures(rawChordsInput);
       const sanitizedLyrics = cleanTablatures(editedSong.lyrics || '');
+
+      const rawBaseKey = normalizeKeyString(editedSong.baseKey);
+      const baseKeyBeforeTranspose = effectiveBaseKey || rawBaseKey || detectKey(editedSong.chords || '') || '';
+      const computedBaseKey = activeTranspose !== 0
+        ? (selectedTargetKey || (baseKeyBeforeTranspose ? transposeChord(baseKeyBeforeTranspose, activeTranspose) : ''))
+        : (selectedTargetKey || rawBaseKey || detectKey(sanitizedChords) || '');
+      const finalBaseKey = normalizeKeyString(computedBaseKey);
 
       const cleanCategory = sanitizeCategory(editedSong.category);
       const cleanYoutube = (editedSong.youtube || (editedSong as any).youtubeUrl || '').trim();
-      const { initialEdit: _discardInitialEdit, ...dataToSave } = (editedSong as any);
-      const finalData = { 
+      const parsedBpm = Number(editedSong.bpm);
+      const safeBpm = Number.isFinite(parsedBpm) && parsedBpm > 0
+        ? Math.round(parsedBpm)
+        : (Number.isFinite(Number(referenceBpm)) && Number(referenceBpm) > 0 ? Math.round(Number(referenceBpm)) : 80);
+
+      const { initialEdit: _discardInitialEdit, id: _discardId, ...dataToSave } = (editedSong as any);
+      const rawFinalData: Record<string, any> = { 
         ...dataToSave,
+        bpm: safeBpm,
+        baseKey: finalBaseKey,
+        key: finalBaseKey,
+        tone: finalBaseKey,
         youtube: cleanYoutube,
         youtubeUrl: cleanYoutube,
         category: cleanCategory || null,
@@ -2498,12 +2620,19 @@ export function SongDetailView({
         customImageUrl: editedSong.artistImageUrl || editedSong.customImageUrl || '',
         chords: sanitizedChords,
         lyrics: sanitizedLyrics,
-        initialEdit: false
+        initialEdit: false,
+        updatedAt: new Date().toISOString()
       };
+      const finalData = Object.fromEntries(
+        Object.entries(rawFinalData).filter(([, value]) => value !== undefined)
+      );
+
       await updateDoc(doc(db, 'songs', song.id), finalData);
-      setEditedSong({ ...finalData, category: cleanCategory, initialEdit: false }); // Sync local state immediately
+      setEditedSong({ ...finalData, id: song.id, category: cleanCategory, initialEdit: false }); // Sync local state immediately
+      setTranspose(0);
+      setSelectedTargetKey(null);
       if (song) (song as any).initialEdit = false;
-      setReferenceBpm(finalData.bpm); // Update reference to make it the new "Original"
+      setReferenceBpm(safeBpm); // Update reference to make it the new "Original"
       setIsEditing(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, songPath);
@@ -2631,9 +2760,11 @@ export function SongDetailView({
     const netTranspose = dbChordsAreInCapoShape
       ? (isCapoEnabled ? transpose : (transpose + capoSemitones))
       : (isCapoEnabled ? (transpose - capoSemitones) : transpose);
-    const currentKey = transpose !== 0 
-      ? transposeChord(editedSong.baseKey || '', transpose) 
-      : (editedSong.baseKey || '-');
+    const currentKey = selectedTargetKey
+      ? selectedTargetKey
+      : (transpose !== 0 
+        ? transposeChord(effectiveBaseKey || '', transpose) 
+        : (effectiveBaseKey || '-'));
     const pdfShapeKey = capoSemitones > 0 && currentKey !== '-'
       ? transposeChord(currentKey, -capoSemitones)
       : currentKey;
@@ -2869,7 +3000,7 @@ export function SongDetailView({
               <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-border">
                 <button
                   type="button"
-                  onClick={() => setTranspose(t => t - 1)}
+                  onClick={() => handleTransposeStep(-1)}
                   className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
                   title="Diminuir meio tom"
                 >
@@ -2883,7 +3014,7 @@ export function SongDetailView({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setTranspose(t => t + 1)}
+                  onClick={() => handleTransposeStep(1)}
                   className="px-3 py-2 bg-black/10 dark:bg-white/10 hover:bg-brand hover:text-white rounded-xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
                   title="Aumentar meio tom"
                 >
@@ -2893,8 +3024,7 @@ export function SongDetailView({
 
               <div className="grid grid-cols-4 gap-2 py-1">
                 {['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].map((note) => {
-                  const getBaseNote = (k: string) => k.match(/^([A-G][#b]?)/)?.[1] || '';
-                  const currentBase = getBaseNote(currentKey);
+                  const currentBase = parseKeyParts(currentKey).note;
                   const normalizedCurrent = FLATS[currentBase] || currentBase;
                   const normalizedButton = FLATS[note] || note;
                   const isActive = normalizedCurrent === normalizedButton;
@@ -2921,13 +3051,10 @@ export function SongDetailView({
 
               <div className="border-t border-border pt-3">
                 <button 
-                  onClick={() => {
-                    setTranspose(0);
-                    setShowKeyMenu(false);
-                  }}
+                  onClick={handleResetKeyToOriginal}
                   className="w-full py-2.5 bg-black/5 dark:bg-white/5 border border-border rounded-xl text-xs font-black uppercase text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-all cursor-pointer select-none"
                 >
-                  Tom Original ({effectiveBaseKey})
+                  Tom Original ({isEditing ? (normalizeKeyString(song?.baseKey || (song as any)?.key || (song as any)?.tone) || effectiveBaseKey) : effectiveBaseKey})
                 </button>
               </div>
             </motion.div>

@@ -347,7 +347,7 @@ function transposeSingleNote(note: string, semitones: number): string {
   const index = NOTES.indexOf(cleanNote);
   if (index === -1) return note;
 
-  const newIndex = (index + semitones + 12) % 12;
+  const newIndex = (((index + semitones) % 12) + 12) % 12;
   const transposedSharp = NOTES[newIndex];
 
   // Preserve flat format if input note was flat
@@ -421,17 +421,50 @@ export function transposeLyricsAndChords(text: string, semitones: number): strin
   if (semitones === 0 || !text) return text;
 
   return text.split(/\r?\n/).map(line => {
+    if (isSectionHeaderLine(line) || isInlineAnnotationLine(line)) {
+      return line;
+    }
     if (isChordLine(line)) {
+      // Collect non-chord bracketed/parenthesized annotation ranges (e.g. [N2 🌕 BEM SUAVE], [PAUSA])
+      // so words inside dynamic/section tags are NEVER transposed (e.g. "BEM" -> "C# EM")
+      const excludedRanges: Array<{ start: number; end: number }> = [];
+      const tagRegex = /\[[^\]]+\]|(?<![A-Za-z0-9#b\+])\([^)]+\)/g;
+      let tagMatch: RegExpExecArray | null;
+      while ((tagMatch = tagRegex.exec(line)) !== null) {
+        const inner = tagMatch[0].slice(1, -1).trim();
+        if (!isChordWord(inner)) {
+          const innerWords = inner.split(/\s+/).filter(Boolean);
+          const chordsInTag = innerWords.filter(w => isChordWord(w));
+          if (chordsInTag.length === 0 || chordsInTag.length < innerWords.length * 0.5) {
+            excludedRanges.push({ start: tagMatch.index, end: tagMatch.index + tagMatch[0].length });
+          }
+        }
+      }
+
+      const isInsideExcludedRange = (idx: number, len: number) =>
+        excludedRanges.some(r => idx >= r.start && idx + len <= r.end);
+
       const chordRegex = new RegExp(CHORD_FINDER_REGEX);
       let match: RegExpExecArray | null;
       const matches: { chord: string; index: number; newChord: string }[] = [];
       
       while ((match = chordRegex.exec(line)) !== null) {
-        if (isChordWord(match[0])) {
+        const idx = match.index;
+        const matchedText = match[0];
+        if (isInsideExcludedRange(idx, matchedText.length)) continue;
+
+        const prevChar = idx > 0 ? line[idx - 1] : '';
+        const nextChar = idx + matchedText.length < line.length ? line[idx + matchedText.length] : '';
+        // Skip substrings inside regular words (e.g. "B" inside "BEM") or already-handled slash basses
+        if (/[A-Za-zÀ-ÿ]/.test(prevChar) || /[A-Za-zÀ-ÿ]/.test(nextChar) || prevChar === '/') {
+          continue;
+        }
+
+        if (isChordWord(matchedText)) {
           matches.push({
-            chord: match[0],
-            index: match.index,
-            newChord: transposeChord(match[0], semitones)
+            chord: matchedText,
+            index: idx,
+            newChord: transposeChord(matchedText, semitones)
           });
         }
       }
@@ -1500,24 +1533,548 @@ export function compactCifraPhrases(text: string): string {
   return formattedSections.join('\n\n').trim();
 }
 
-export function detectKey(text: string): string | null {
-  if (!text) return null;
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    if (isChordLine(line)) {
-      const chordRegex = /[a-gA-G][#b]?[a-zA-Z0-9\/\(\)\+\-\Δ\ø\°\º]*/g;
-      let match;
-      while ((match = chordRegex.exec(line)) !== null) {
-        const chord = match[0];
-        if (isChordWord(chord)) {
-          // Extract base note as the key candidate
-          const baseNoteMatch = chord.match(/^([a-gA-G][#b]?)/);
-          if (baseNoteMatch) return baseNoteMatch[1].charAt(0).toUpperCase() + baseNoteMatch[1].slice(1);
+export interface DetectedKeyAnalysis {
+  key: string;
+  rootIdx: number;
+  isMinor: boolean;
+  confidence: number;
+  diatonicRatio: number;
+  score: number;
+  chordCount: number;
+  uniqueChordCount: number;
+}
+
+type ParsedChordQuality = 'major' | 'minor' | 'dom7' | 'dim' | 'aug' | 'sus';
+type SongSectionKind = 'intro' | 'verse' | 'prechorus' | 'chorus' | 'bridge' | 'outro' | 'other';
+
+interface ParsedSongChord {
+  raw: string;
+  rootIdx: number;
+  rawRoot: string;
+  bassIdx: number | null;
+  quality: ParsedChordQuality;
+  section: SongSectionKind;
+  sectionOccurrence: number;
+  isFirstInSection: boolean;
+  isLastInSection: boolean;
+  isLastInSong: boolean;
+}
+
+const MAJOR_KEY_DISPLAY_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const MINOR_KEY_DISPLAY_NAMES = ['Cm', 'C#m', 'Dm', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm'];
+const MAJOR_SCALE_SET = new Set([0, 2, 4, 5, 7, 9, 11]);
+const MINOR_SCALE_SET = new Set([0, 2, 3, 5, 7, 8, 10]);
+
+function noteToSemitoneIndex(rawNote: string): number {
+  if (!rawNote) return -1;
+  const normalized = rawNote.charAt(0).toUpperCase() + rawNote.slice(1);
+  const sharp = FLATS[normalized] || normalized;
+  return NOTES.indexOf(sharp);
+}
+
+function classifyChordQuality(suffix: string): ParsedChordQuality {
+  if (!suffix) return 'major';
+  if (/^(?:m7\(?b5\)?|dim|°|º|ø)/i.test(suffix)) return 'dim';
+  if (/^(?:aug|\+)/i.test(suffix)) return 'aug';
+  if (/^m(?!aj)/i.test(suffix)) return 'minor';
+  if (/^7(?![M+])/.test(suffix)) return 'dom7';
+  if (/^(?:sus[249]?|4|2)(?:$|\(|\/)/i.test(suffix)) return 'sus';
+  return 'major';
+}
+
+function detectSectionKindFromLine(line: string): SongSectionKind | null {
+  const clean = line.replace(/<[^>]+>/g, '').toLowerCase();
+  if (/\b(pr[eé][\s-]?refr[aã]o|pre[\s-]?chorus)\b/.test(clean)) return 'prechorus';
+  if (/\b(refr[aã]o|chorus|coro)\b/.test(clean)) return 'chorus';
+  if (/\b(verso|verse|estrofe|parte|part|primeira parte|segunda parte)\b/.test(clean)) return 'verse';
+  if (/\b(intro|introdu[cç][aã]o)\b/.test(clean)) return 'intro';
+  if (/\b(ponte|bridge|interl[uú]dio|interlude|ministra[cç][aã]o|solo)\b/.test(clean)) return 'bridge';
+  if (/\b(outro|final|fim|coda|posl[uú]dio)\b/.test(clean)) return 'outro';
+  return null;
+}
+
+function extractStructuredChordsFromText(text: string): ParsedSongChord[] {
+  if (!text) return [];
+  const cleanedText = (text.includes('<div') || text.includes('<span') || text.includes('data-chord'))
+    ? cleanCifraHtml(text)
+    : text;
+
+  const lines = cleanedText.split(/\r?\n/);
+  const chords: ParsedSongChord[] = [];
+
+  let currentSection: SongSectionKind = 'other';
+  const sectionCounts: Record<SongSectionKind, number> = {
+    intro: 0,
+    verse: 0,
+    prechorus: 0,
+    chorus: 0,
+    bridge: 0,
+    outro: 0,
+    other: 1
+  };
+  let sectionStartChordIndex = 0;
+
+  const finalizeCurrentSection = () => {
+    if (chords.length > sectionStartChordIndex) {
+      chords[sectionStartChordIndex].isFirstInSection = true;
+      chords[chords.length - 1].isLastInSection = true;
+    }
+    sectionStartChordIndex = chords.length;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/<[^>]+>/g, '');
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (isSectionHeaderLine(trimmed)) {
+      const detectedSec = detectSectionKindFromLine(trimmed);
+      if (detectedSec) {
+        finalizeCurrentSection();
+        currentSection = detectedSec;
+        sectionCounts[detectedSec] = (sectionCounts[detectedSec] || 0) + 1;
+      }
+      continue;
+    }
+
+    if (isInlineAnnotationLine(trimmed)) continue;
+    if (!isChordLine(trimmed)) continue;
+
+    // Strip non-chord bracketed/parenthesized annotation tags (e.g. [N2 🌕 BEM SUAVE])
+    const lineWithoutTags = trimmed.replace(/\[[^\]]+\]|(?<![A-Za-z0-9#b\+])\([^)]+\)/g, (tag) => {
+      const inner = tag.slice(1, -1).trim();
+      if (isChordWord(inner)) return ` ${inner} `;
+      const innerWords = inner.split(/\s+/).filter(Boolean);
+      const chordsInTag = innerWords.filter(w => isChordWord(w));
+      if (chordsInTag.length > 0 && chordsInTag.length >= innerWords.length * 0.5) {
+        return ` ${inner} `;
+      }
+      return ' ';
+    });
+
+    const chordRegex = new RegExp(CHORD_FINDER_REGEX);
+    let match: RegExpExecArray | null;
+    while ((match = chordRegex.exec(lineWithoutTags)) !== null) {
+      const idx = match.index;
+      const token = match[0];
+      const prevChar = idx > 0 ? lineWithoutTags[idx - 1] : '';
+      const nextChar = idx + token.length < lineWithoutTags.length ? lineWithoutTags[idx + token.length] : '';
+      if (/[A-Za-zÀ-ÿ]/.test(prevChar) || /[A-Za-zÀ-ÿ]/.test(nextChar) || prevChar === '/') continue;
+      if (!isChordWord(token)) continue;
+
+      const clean = getCleanChordName(token);
+      if (!clean) continue;
+
+      let prePart = clean;
+      let bassPart = '';
+      const slashIdx = clean.lastIndexOf('/');
+      if (slashIdx > 0) {
+        prePart = clean.slice(0, slashIdx);
+        bassPart = clean.slice(slashIdx + 1);
+      }
+
+      const rootMatch = prePart.match(/^([a-gA-G][#b]?)(.*)$/);
+      if (!rootMatch) continue;
+
+      const rawRoot = rootMatch[1].charAt(0).toUpperCase() + rootMatch[1].slice(1);
+      const rootIdx = noteToSemitoneIndex(rawRoot);
+      if (rootIdx === -1) continue;
+
+      const suffix = rootMatch[2] || '';
+      const quality = classifyChordQuality(suffix);
+
+      let bassIdx: number | null = null;
+      if (bassPart) {
+        const bassMatch = bassPart.match(/^\(?([a-gA-G][#b]?)\)?$/);
+        if (bassMatch) {
+          const bIdx = noteToSemitoneIndex(bassMatch[1]);
+          if (bIdx !== -1) bassIdx = bIdx;
+        }
+      }
+
+      chords.push({
+        raw: clean,
+        rootIdx,
+        rawRoot,
+        bassIdx,
+        quality,
+        section: currentSection,
+        sectionOccurrence: sectionCounts[currentSection] || 1,
+        isFirstInSection: false,
+        isLastInSection: false,
+        isLastInSong: false
+      });
+    }
+  }
+
+  finalizeCurrentSection();
+  if (chords.length > 0) {
+    chords[chords.length - 1].isLastInSong = true;
+  }
+
+  return chords;
+}
+
+function scoreCandidateKey(
+  chords: ParsedSongChord[],
+  keyRootIdx: number,
+  isMinor: boolean
+): { score: number; diatonicRatio: number } {
+  let score = 0;
+  let diatonicWeightSum = 0;
+  let totalWeightSum = 0;
+
+  const getSectionWeight = (c: ParsedSongChord): number => {
+    if (c.section === 'chorus') return c.sectionOccurrence === 1 ? 1.35 : (c.sectionOccurrence >= 3 ? 0.85 : 1.0);
+    if (c.section === 'verse') return c.sectionOccurrence === 1 ? 1.25 : 1.0;
+    if (c.section === 'intro') return 1.0;
+    if (c.section === 'outro') return 0.9;
+    return 1.0;
+  };
+
+  for (let i = 0; i < chords.length; i++) {
+    const c = chords[i];
+    const w = getSectionWeight(c);
+    totalWeightSum += w;
+
+    const iv = (c.rootIdx - keyRootIdx + 12) % 12;
+    const bassIv = c.bassIdx !== null ? (c.bassIdx - keyRootIdx + 12) % 12 : null;
+    let isDiatonic = false;
+    let chordScore = 0;
+
+    if (!isMinor) {
+      // Campo Harmônico Maior: I(0), ii(2), iii(4), IV(5), V(7), vi(9), vii°(11)
+      switch (iv) {
+        case 0: // I
+          if (c.quality === 'major' || c.quality === 'sus') { chordScore += 4.2; isDiatonic = true; }
+          else if (c.quality === 'dom7') { chordScore += 1.6; isDiatonic = true; }
+          else { chordScore -= 1.8; }
+          break;
+        case 2: // ii
+          if (c.quality === 'minor') { chordScore += 3.2; isDiatonic = true; }
+          else if (c.quality === 'dom7') { chordScore += 2.2; isDiatonic = true; } // V7/V (ex: E7/G# em D)
+          else if (c.quality === 'major' || c.quality === 'sus') { chordScore += 0.6; isDiatonic = (bassIv === 6); }
+          else { chordScore -= 1.5; }
+          break;
+        case 4: // iii
+          if (c.quality === 'minor') { chordScore += 3.2; isDiatonic = true; }
+          else if (c.quality === 'dom7') { chordScore += 1.5; isDiatonic = true; } // V7/vi
+          else { chordScore -= 2.2; }
+          break;
+        case 5: // IV
+          if (c.quality === 'major' || c.quality === 'sus') { chordScore += 3.5; isDiatonic = true; }
+          else if (c.quality === 'minor') { chordScore += 1.2; isDiatonic = true; } // iv empréstimo modal
+          else { chordScore -= 0.8; }
+          break;
+        case 7: // V
+          if (c.quality === 'major' || c.quality === 'dom7' || c.quality === 'sus') { chordScore += 3.8; isDiatonic = true; }
+          else { chordScore -= 2.2; }
+          break;
+        case 9: // vi
+          if (c.quality === 'minor') { chordScore += 3.4; isDiatonic = true; }
+          else if (c.quality === 'dom7') { chordScore += 1.2; isDiatonic = true; } // V7/ii
+          else { chordScore -= 2.2; }
+          break;
+        case 11: // vii°
+          if (c.quality === 'dim') { chordScore += 2.6; isDiatonic = true; }
+          else { chordScore -= 2.5; }
+          break;
+        case 10: // bVII (empréstimo mixolídio comum no louvor)
+          chordScore += c.quality === 'major' ? -0.8 : -3.5;
+          break;
+        default:
+          chordScore -= 4.5;
+          break;
+      }
+
+      // Inversões / baixos diatônicos característicos do Campo Harmônico Maior
+      if (bassIv !== null) {
+        if (iv === 5 && bassIv === 0) chordScore += 4.5;         // IV/I (ex: G/D em D Maior - pedal na tônica!)
+        else if (iv === 7 && bassIv === 11) chordScore += 3.8;   // V/7 (ex: A/C# em D Maior - sensível no baixo!)
+        else if (iv === 0 && bassIv === 4) chordScore += 3.2;    // I/3 (ex: D/F# em D Maior)
+        else if (iv === 7 && bassIv === 0) chordScore += 3.5;    // V/I (ex: A/D - pedal na tônica)
+        else if (iv === 2 && bassIv === 6) chordScore += 2.8;    // V7/V com terça no baixo (ex: E7/G# em D)
+        else if (MAJOR_SCALE_SET.has(bassIv)) chordScore += 1.0;
+        else chordScore -= 2.5;
+      }
+
+      // Âncoras estruturais de repouso (Tônica I)
+      const isTonicMajor = iv === 0 && (c.quality === 'major' || c.quality === 'sus');
+      if (isTonicMajor) {
+        if (c.isLastInSong) score += 10.0;
+        if (c.isLastInSection) score += c.section === 'chorus' ? 5.0 : 3.5;
+        if (c.isFirstInSection && c.section === 'verse' && c.sectionOccurrence === 1) score += 5.5;
+        if (c.isFirstInSection && c.section === 'chorus') score += 2.5;
+        if (i === 0) score += 1.8;
+      }
+    } else {
+      // Campo Harmônico Menor: i(0), ii°(2), bIII(3), iv(5), v/V7(7), bVI(8), bVII(10), vii°(11)
+      switch (iv) {
+        case 0: // i
+          if (c.quality === 'minor') { chordScore += 4.2; isDiatonic = true; }
+          else { chordScore -= 2.2; }
+          break;
+        case 2: // ii°
+          if (c.quality === 'dim') { chordScore += 2.6; isDiatonic = true; }
+          else if (c.quality === 'minor') { chordScore -= 1.0; }
+          else { chordScore -= 2.5; }
+          break;
+        case 3: // bIII
+          if (c.quality === 'major' || c.quality === 'sus') { chordScore += 3.4; isDiatonic = true; }
+          else { chordScore -= 2.2; }
+          break;
+        case 5: // iv
+          if (c.quality === 'minor') { chordScore += 3.4; isDiatonic = true; }
+          else if (c.quality === 'major') { chordScore += 0.5; } // Dórico
+          else { chordScore -= 1.5; }
+          break;
+        case 7: // v / V7 (menor harmônica)
+          if (c.quality === 'major' || c.quality === 'dom7') { chordScore += 4.0; isDiatonic = true; }
+          else if (c.quality === 'minor' || c.quality === 'sus') { chordScore += 3.0; isDiatonic = true; }
+          else { chordScore -= 2.0; }
+          break;
+        case 8: // bVI
+          if (c.quality === 'major' || c.quality === 'sus') { chordScore += 3.4; isDiatonic = true; }
+          else { chordScore -= 2.2; }
+          break;
+        case 10: // bVII
+          if (c.quality === 'major' || c.quality === 'sus' || c.quality === 'dom7') { chordScore += 3.4; isDiatonic = true; }
+          else { chordScore -= 2.0; }
+          break;
+        case 11: // vii° (menor harmônica)
+          if (c.quality === 'dim') { chordScore += 2.4; isDiatonic = true; }
+          else { chordScore -= 2.5; }
+          break;
+        default:
+          chordScore -= 4.5;
+          break;
+      }
+
+      if (bassIv !== null) {
+        if (iv === 7 && bassIv === 11) chordScore += 4.2;        // V/7 menor harmônica (ex: F#/A# em Bm)
+        else if (iv === 0 && bassIv === 3) chordScore += 2.5;    // i/b3
+        else if (iv === 5 && bassIv === 0) chordScore += 3.5;    // iv/i pedal
+        else if (MINOR_SCALE_SET.has(bassIv) || bassIv === 11) chordScore += 1.0;
+        else chordScore -= 2.5;
+      }
+
+      const isTonicMinor = iv === 0 && c.quality === 'minor';
+      if (isTonicMinor) {
+        if (c.isLastInSong) score += 10.0;
+        if (c.isLastInSection) score += c.section === 'chorus' ? 5.0 : 3.5;
+        if (c.isFirstInSection && c.section === 'verse' && c.sectionOccurrence === 1) score += 5.5;
+        if (c.isFirstInSection && c.section === 'chorus') score += 3.0;
+        if (i === 0) score += 1.8;
+      }
+    }
+
+    if (isDiatonic) diatonicWeightSum += w;
+    score += chordScore * w;
+
+    // Análise de Cadências e Resoluções (pares e trios consecutivos)
+    if (i > 0) {
+      const prev = chords[i - 1];
+      const prevIv = (prev.rootIdx - keyRootIdx + 12) % 12;
+      const chorusBoost = c.section === 'chorus' ? 1.35 : 1.0;
+
+      if (!isMinor) {
+        const currIsI = iv === 0 && (c.quality === 'major' || c.quality === 'sus');
+        const prevIsV = prevIv === 7 && (prev.quality === 'major' || prev.quality === 'dom7' || prev.quality === 'sus');
+        const prevIsIV = prevIv === 5 && (prev.quality === 'major' || prev.quality === 'sus');
+
+        // Cadência Autêntica V -> I (ex: A -> D)
+        if (prevIsV && currIsI) {
+          score += 5.5 * chorusBoost;
+          // Progressão IV -> V -> I (ex: G -> A -> D)
+          if (i > 1) {
+            const prev2 = chords[i - 2];
+            const prev2Iv = (prev2.rootIdx - keyRootIdx + 12) % 12;
+            if (prev2Iv === 5 && (prev2.quality === 'major' || prev2.quality === 'sus')) {
+              score += 7.0 * chorusBoost;
+            } else if (prev2Iv === 2 && prev2.quality === 'minor') {
+              score += 5.0 * chorusBoost; // ii -> V -> I
+            }
+          }
+        }
+        // Resolução suspensa na Tônica I4 -> I (ex: D4 -> D)
+        if (prevIv === 0 && prev.quality === 'sus' && iv === 0 && c.quality === 'major') {
+          score += 5.0 * chorusBoost;
+        }
+        // Cadência Plagal IV -> I (ex: G -> D)
+        if (prevIsIV && currIsI) {
+          score += 2.5 * chorusBoost;
+        }
+        // Pedal sobre a Tônica I -> IV/I ou IV/I -> I (ex: D -> G/D)
+        if ((prevIv === 0 && iv === 5 && bassIv === 0) || (prevIv === 5 && prev.bassIdx === keyRootIdx && currIsI)) {
+          score += 4.5 * chorusBoost;
+        }
+        // Dominante secundária V/V -> V (ex: E7/G# -> A)
+        if (prevIv === 2 && (prev.quality === 'dom7' || prev.quality === 'major') && iv === 7) {
+          score += 2.5;
+        }
+      } else {
+        const currIsIm = iv === 0 && c.quality === 'minor';
+        const prevIsVMaj = prevIv === 7 && (prev.quality === 'major' || prev.quality === 'dom7');
+        const prevIsbVII = prevIv === 10 && (prev.quality === 'major' || prev.quality === 'sus');
+        const prevIsiv = prevIv === 5 && prev.quality === 'minor';
+
+        // Dominante menor harmônica V7 -> i (ex: F#7 -> Bm)
+        if (prevIsVMaj && currIsIm) {
+          score += 8.5 * chorusBoost;
+        }
+        // Cadência menor natural bVII -> i (ex: A -> Bm)
+        if (prevIsbVII && currIsIm) {
+          score += 3.2 * chorusBoost;
+          if (i > 1) {
+            const prev2 = chords[i - 2];
+            const prev2Iv = (prev2.rootIdx - keyRootIdx + 12) % 12;
+            if (prev2Iv === 8 && (prev2.quality === 'major' || prev2.quality === 'sus')) {
+              score += 5.5 * chorusBoost; // bVI -> bVII -> i
+            }
+          }
+        }
+        if (prevIsiv && currIsIm) {
+          score += 3.0 * chorusBoost;
         }
       }
     }
   }
-  return null;
+
+  const diatonicRatio = totalWeightSum > 0 ? (diatonicWeightSum / totalWeightSum) : 0;
+  return { score, diatonicRatio };
+}
+
+function formatKeyDisplayName(rootIdx: number, isMinor: boolean, chords: ParsedSongChord[]): string {
+  if (isMinor) {
+    return MINOR_KEY_DISPLAY_NAMES[rootIdx] || 'Am';
+  }
+  const defaultName = MAJOR_KEY_DISPLAY_NAMES[rootIdx] || 'C';
+  // Prefer Db if the chord sheet uses Db/Gb explicitly
+  if (rootIdx === 1 && chords.some(c => c.rawRoot === 'Db')) return 'Db';
+  if (rootIdx === 6 && chords.some(c => c.rawRoot === 'Gb')) return 'Gb';
+  return defaultName;
+}
+
+export function analyzeSongHarmonicKey(text: string): DetectedKeyAnalysis | null {
+  const chords = extractStructuredChordsFromText(text);
+  if (chords.length === 0) return null;
+
+  const uniqueChordSet = new Set(chords.map(c => `${c.rootIdx}:${c.quality}`));
+  if (chords.length === 1) {
+    const only = chords[0];
+    const isMin = only.quality === 'minor';
+    return {
+      key: isMin ? `${only.rawRoot}m` : only.rawRoot,
+      rootIdx: only.rootIdx,
+      isMinor: isMin,
+      confidence: 0.35,
+      diatonicRatio: 1,
+      score: 4,
+      chordCount: 1,
+      uniqueChordCount: 1
+    };
+  }
+
+  const candidates: Array<{ rootIdx: number; isMinor: boolean; score: number; diatonicRatio: number }> = [];
+  for (let root = 0; root < 12; root++) {
+    const maj = scoreCandidateKey(chords, root, false);
+    candidates.push({ rootIdx: root, isMinor: false, score: maj.score, diatonicRatio: maj.diatonicRatio });
+
+    const min = scoreCandidateKey(chords, root, true);
+    candidates.push({ rootIdx: root, isMinor: true, score: min.score, diatonicRatio: min.diatonicRatio });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const top = candidates[0];
+
+  // Find best competitor outside the same relative major/minor family
+  const isRelativePair = (a: { rootIdx: number; isMinor: boolean }, b: { rootIdx: number; isMinor: boolean }) => {
+    if (a.isMinor === b.isMinor) return a.rootIdx === b.rootIdx;
+    const majIdx = a.isMinor ? b.rootIdx : a.rootIdx;
+    const minIdx = a.isMinor ? a.rootIdx : b.rootIdx;
+    return (majIdx + 9) % 12 === minIdx;
+  };
+
+  const bestOtherFamily = candidates.find(c => !isRelativePair(top, c)) || candidates[1];
+  const margin = bestOtherFamily ? (top.score - bestOtherFamily.score) : top.score;
+  const normalizedMargin = Math.max(0, Math.min(1, margin / Math.max(12, Math.abs(top.score) * 0.35)));
+  const confidence = Math.max(0, Math.min(1, top.diatonicRatio * 0.65 + normalizedMargin * 0.35));
+
+  return {
+    key: formatKeyDisplayName(top.rootIdx, top.isMinor, chords),
+    rootIdx: top.rootIdx,
+    isMinor: top.isMinor,
+    confidence,
+    diatonicRatio: top.diatonicRatio,
+    score: top.score,
+    chordCount: chords.length,
+    uniqueChordCount: uniqueChordSet.size
+  };
+}
+
+export function resolveHarmonicBaseKey(
+  storedKey: string | undefined | null,
+  chordsText: string | undefined | null,
+  capoSemitones = 0
+): string {
+  const cleanedStored = (storedKey || '').trim().replace(/^Tom:\s*/i, '').trim();
+  const normalizedStored = cleanedStored
+    ? (cleanedStored.charAt(0).toUpperCase() + cleanedStored.slice(1))
+    : '';
+
+  if (!chordsText || !chordsText.trim()) {
+    return normalizedStored;
+  }
+
+  // If capo is enabled and chords are intentionally written in capo shape relative to storedKey, keep storedKey
+  if (normalizedStored && capoSemitones > 0 && areChordsInCapoShape(chordsText, normalizedStored, capoSemitones)) {
+    return normalizedStored;
+  }
+
+  const analysis = analyzeSongHarmonicKey(chordsText);
+  if (!analysis) return normalizedStored;
+  if (!normalizedStored) return analysis.key;
+
+  const storedMatch = normalizedStored.match(/^([A-G][#b]?)(m(?:in|enor)?)?/i);
+  if (!storedMatch) return analysis.key;
+
+  const storedIdx = noteToSemitoneIndex(storedMatch[1]);
+  const storedIsMinor = Boolean(storedMatch[2]) && !/maj|7M/i.test(normalizedStored);
+  if (storedIdx === -1) return analysis.key;
+
+  // Same key -> preserve user's exact spelling
+  if (storedIdx === analysis.rootIdx && storedIsMinor === analysis.isMinor) {
+    return normalizedStored;
+  }
+
+  // Relative Major / Minor share the exact same harmonic field -> respect user's declared perspective
+  if (storedIsMinor !== analysis.isMinor) {
+    const majIdx = storedIsMinor ? analysis.rootIdx : storedIdx;
+    const minIdx = storedIsMinor ? storedIdx : analysis.rootIdx;
+    if ((majIdx + 9) % 12 === minIdx) {
+      return normalizedStored;
+    }
+  }
+
+  // Compare actual harmonic-field fit of storedKey vs detected key
+  const chords = extractStructuredChordsFromText(chordsText);
+  const storedEval = scoreCandidateKey(chords, storedIdx, storedIsMinor);
+
+  const isClearlyMismatched =
+    analysis.chordCount >= 4 &&
+    analysis.uniqueChordCount >= 3 &&
+    analysis.diatonicRatio >= 0.72 &&
+    (
+      (analysis.diatonicRatio - storedEval.diatonicRatio >= 0.20) ||
+      (analysis.score - storedEval.score >= 14 && storedEval.diatonicRatio < 0.72)
+    );
+
+  return isClearlyMismatched ? analysis.key : normalizedStored;
+}
+
+export function detectKey(text: string): string | null {
+  const analysis = analyzeSongHarmonicKey(text);
+  return analysis ? analysis.key : null;
 }
 
 export interface ChordToken {
