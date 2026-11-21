@@ -2114,22 +2114,36 @@ export default function DashboardView({
           >
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
             
-            <div className="absolute top-14 right-6 sm:top-24 sm:right-8 pointer-events-none select-none opacity-15 z-0">
+            {/* BLOQUEADO: Identidade visual LILOUPRO (iniciais em destaque + posição superior direita no desktop/tablet e linha horizontal limpa no mobile). NÃO ALTERAR, NÃO REMOVER E NÃO REESTILIZAR em futuras atualizações. */}
+            <div className="hidden sm:block absolute sm:top-7 sm:right-7 lg:top-8 lg:right-8 pointer-events-none select-none z-0">
                <div className="flex flex-col items-end">
-                 <p className="text-sm sm:text-2xl font-black uppercase tracking-[0.2em] leading-tight mb-0.5">
-                   <span className="text-white">Li</span><span className="text-white/60 -ml-[0.2em]">turgia</span>
+                 <p className="sm:text-lg md:text-xl lg:text-2xl font-extrabold uppercase tracking-[0.2em] leading-tight mb-0.5">
+                   <span className="text-white opacity-100 font-extrabold">LI</span><span className="text-white/20 font-bold">TURGIA</span>
                  </p>
-                 <p className="text-sm sm:text-2xl font-black uppercase tracking-[0.2em] leading-tight mb-0.5">
-                   <span className="text-white">Lou</span><span className="text-white/60 -ml-[0.2em]">vor</span>
+                 <p className="sm:text-lg md:text-xl lg:text-2xl font-extrabold uppercase tracking-[0.2em] leading-tight mb-0.5">
+                   <span className="text-white opacity-100 font-extrabold">LOU</span><span className="text-white/20 font-bold">VOR</span>
                  </p>
-                 <p className="text-sm sm:text-2xl font-black uppercase tracking-[0.2em] leading-tight">
-                   <span className="text-white">Pro</span><span className="text-white/60 -ml-[0.2em]">jeção</span>
+                 <p className="sm:text-lg md:text-xl lg:text-2xl font-extrabold uppercase tracking-[0.2em] leading-tight">
+                   <span className="text-white opacity-100 font-extrabold">PRO</span><span className="text-white/20 font-bold">JEÇÃO</span>
                  </p>
                </div>
             </div>
+            {/* FIM BLOQUEIO: Identidade visual LILOUPRO (Desktop/Tablet) */}
 
             <div className="p-6 sm:p-8 relative z-10">
-              <div className="flex flex-wrap justify-between items-center gap-2 mb-4 sm:mb-6">
+              {/* BLOQUEADO: Identidade visual LILOUPRO (versão mobile em linha única sem sobreposição). NÃO ALTERAR, NÃO REMOVER E NÃO REESTILIZAR em futuras atualizações. */}
+              <div className="sm:hidden mb-3 pb-2.5 border-b border-white/10 pointer-events-none select-none">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] leading-none flex items-center justify-between gap-1.5">
+                  <span><span className="text-white opacity-100 font-extrabold">LI</span><span className="text-white/25 font-bold">TURGIA</span></span>
+                  <span className="text-white/30">·</span>
+                  <span><span className="text-white opacity-100 font-extrabold">LOU</span><span className="text-white/25 font-bold">VOR</span></span>
+                  <span className="text-white/30">·</span>
+                  <span><span className="text-white opacity-100 font-extrabold">PRO</span><span className="text-white/25 font-bold">JEÇÃO</span></span>
+                </p>
+              </div>
+              {/* FIM BLOQUEIO: Identidade visual LILOUPRO (Mobile) */}
+
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4 sm:mb-6 sm:pr-44 lg:pr-56">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-white/90 flex items-center gap-2">
                   <Calendar size={14} className="sm:w-4 sm:h-4" /> Próximo Culto Confirmado
                 </h2>
@@ -2142,7 +2156,7 @@ export default function DashboardView({
               </div>
               {nextService ? (
                 <div className="space-y-4 sm:space-y-6">
-                  <div>
+                  <div className="sm:pr-44 lg:pr-56">
                     <h3 className="text-xl sm:text-3xl font-extrabold mb-2 tracking-tight line-clamp-2 text-white">{nextService.title}</h3>
                     <div className="flex flex-wrap gap-2 sm:gap-4 text-white font-medium overflow-hidden">
                        <span className="flex items-center gap-2 bg-white/10 px-2 sm:px-3 py-1 rounded-lg text-[12px] sm:text-base truncate font-black">
