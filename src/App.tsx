@@ -19527,9 +19527,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [newChurchName, setNewChurchName] = useState('');
   const [isJoiningChurch, setIsJoiningChurch] = useState(false);
   const [isCreatingChurch, setIsCreatingChurch] = useState(false);
-  const [leaderWhatsappInput, setLeaderWhatsappInput] = useState(churchData?.leaderWhatsapp || '');
-  const [isSavingLeaderWhatsapp, setIsSavingLeaderWhatsapp] = useState(false);
-  const [leaderWhatsappSaved, setLeaderWhatsappSaved] = useState(false);
   const [showEditChurchNameModal, setShowEditChurchNameModal] = useState(false);
   const [editChurchNameInput, setEditChurchNameInput] = useState('');
   const [editChurchNameError, setEditChurchNameError] = useState<string | null>(null);
@@ -19635,10 +19632,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
       setIsUpdatingRemoteSupport(false);
     }
   };
-
-  useEffect(() => {
-    setLeaderWhatsappInput(churchData?.leaderWhatsapp || '');
-  }, [churchData?.id, churchData?.leaderWhatsapp]);
 
   // Local Branding Preview state
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -20333,47 +20326,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                         {churchData.inviteCode}
                       </span>
                     </div>
-
-                    {isAdmin && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/50">
-                        <label className="text-[10px] font-black text-text-muted uppercase tracking-widest block">
-                          WhatsApp do Líder (para receber avisos da equipe)
-                        </label>
-                        <div className="flex gap-2">
-                          <Input
-                            value={leaderWhatsappInput}
-                            onChange={(e) => setLeaderWhatsappInput(e.target.value)}
-                            placeholder="Ex: (53) 99999-9999"
-                            className="text-xs"
-                          />
-                          <Button
-                            onClick={async () => {
-                              if (!churchData?.id) return;
-                              setIsSavingLeaderWhatsapp(true);
-                              setLeaderWhatsappSaved(false);
-                              try {
-                                await updateDoc(doc(db, 'churches', churchData.id), {
-                                  leaderWhatsapp: leaderWhatsappInput.trim(),
-                                  updatedAt: new Date().toISOString()
-                                });
-                                setLeaderWhatsappSaved(true);
-                                setTimeout(() => setLeaderWhatsappSaved(false), 2500);
-                              } catch (err) {
-                                console.error('Erro ao salvar WhatsApp do líder:', err);
-                                alert('Não foi possível salvar o WhatsApp do líder.');
-                              } finally {
-                                setIsSavingLeaderWhatsapp(false);
-                              }
-                            }}
-                            disabled={isSavingLeaderWhatsapp}
-                            variant="secondary"
-                            className="shrink-0 text-xs font-bold"
-                          >
-                            {isSavingLeaderWhatsapp ? <RefreshCcw size={14} className="animate-spin" /> : (leaderWhatsappSaved ? 'Salvo ✓' : 'Salvar')}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 text-xs text-text-muted">
