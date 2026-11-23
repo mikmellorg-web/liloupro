@@ -1525,11 +1525,13 @@ function AuthView({
       <Card className="max-w-md w-full p-8 space-y-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl backdrop-blur-xl">
         <div className="text-center space-y-2">
           <div className="relative inline-block mx-auto cursor-pointer group" onClick={() => setShowInstallModal(true)} title="Instalar aplicativo oficial no celular">
-            <img 
-              src={luxuryAppIcon} 
-              alt="LiLouPro" 
-              className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg shadow-black/60 group-hover:scale-105 transition-transform" 
-            />
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-transparent shadow-md group-hover:scale-105 transition-transform">
+              <img 
+                src="/logo-youtube.jpeg" 
+                alt="LiLouPro" 
+                className="w-full h-full object-cover scale-110" 
+              />
+            </div>
             <div className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 p-1 rounded-full border border-amber-200 shadow-md">
               <Sparkles size={10} className="fill-slate-950 stroke-slate-950" />
             </div>
@@ -1985,11 +1987,13 @@ function PendingChurchSetupView({
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6">
       <Card className="max-w-md w-full p-7 sm:p-8 space-y-6 bg-slate-900/90 border border-white/10 shadow-2xl">
         <div className="text-center space-y-2">
-          <img
-            src={luxuryAppIcon}
-            alt="LiLouPro"
-            className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-400/60 shadow-lg mx-auto"
-          />
+          <div className="w-14 h-14 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-md mx-auto">
+            <img
+              src="/logo-youtube.jpeg"
+              alt="LiLouPro"
+              className="w-full h-full object-cover scale-110"
+            />
+          </div>
           <h1 className="text-xl font-black tracking-tight text-white">
             {blockMessage ? 'Ambiente Indisponível — Revincule sua Conta' : `Olá, ${firstName}! Vincule sua conta à igreja`}
           </h1>

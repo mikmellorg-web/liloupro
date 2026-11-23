@@ -19,7 +19,6 @@ import {
   Zap,
   UserCheck
 } from 'lucide-react';
-import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 interface LandingJourneyAndFAQProps {
   onEnterApp: (mode: 'login' | 'signup') => void;
@@ -634,11 +633,13 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
-              <img
-                src={luxuryAppIcon}
-                alt="LiLouPro"
-                className="w-8 h-8 rounded-xl object-cover border border-amber-400/60 shadow-md shadow-black/60 brightness-105 contrast-105"
-              />
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-md shadow-black/60 shrink-0">
+                <img
+                  src="/logo-youtube.jpeg"
+                  alt="LiLouPro"
+                  className="w-full h-full object-cover scale-110"
+                />
+              </div>
               <span className="text-lg font-black text-white tracking-tight">LiLouPro</span>
             </div>
             <p className="text-slate-300 leading-relaxed">

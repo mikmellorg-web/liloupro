@@ -376,6 +376,9 @@ Liberamos *30 DIAS GRÁTIS DE ACESSO VIP COMPLETO* para a sua igreja testar sem 
 👉 *Acesse agora e comece a usar em segundos:*
 ${appInviteLink}
 
+📺 *Quer ver o sistema funcionando na prática?* Confira nosso canal oficial com tutoriais passo a passo no YouTube:
+https://www.youtube.com/@liloupro.oficial
+
 Qualquer dúvida ou para ativar a sua igreja, estou à disposição por aqui. Deus abençoe grandemente seu ministério! 🙏✨`,
 
     quick: `Paz do Senhor, Músico/Líder! 🙏
@@ -385,6 +388,8 @@ Já conhece o *Liloupro*? É a plataforma mais completa para organizar cifras, r
 Liberamos um presente de *30 DIAS GRÁTIS DE ACESSO VIP* para a sua igreja experimentar sem custo:
 
 👉 *Acesse o app aqui:* ${appInviteLink}
+
+📺 *Veja na prática (canal oficial com tutoriais):* https://www.youtube.com/@liloupro.oficial
 
 Aproveite para testar no próximo ensaio ou culto de domingo! 🎵🙌`,
 
@@ -396,6 +401,9 @@ Com ele, seus músicos acompanham cifras no tom certo, recebem escalas com confi
 
 Liberamos um teste gratuito de *30 dias VIP sem compromisso* para a sua igreja:
 👉 ${appInviteLink}
+
+📺 *Conheça a plataforma em vídeo:* Acesse nosso canal oficial de tutoriais no YouTube:
+https://www.youtube.com/@liloupro.oficial
 
 Conte conosco para servir seu ministério com excelência!`
   }), [appInviteLink]);

@@ -1,5 +1,4 @@
 import React from 'react';
-import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 import LandingHeroAndChallenges from './LandingHeroAndChallenges';
 import LandingBenefitsAndFeatures from './LandingBenefitsAndFeatures';
 import LandingJourneyAndFAQ from './LandingJourneyAndFAQ';
@@ -56,12 +55,11 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group shrink-0"
           >
-            <div className="relative shrink-0">
-              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-tr from-amber-500/40 via-amber-300/25 to-amber-500/40 blur-[3px] opacity-80 group-hover:opacity-100 transition-opacity" />
+            <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-lg shadow-black/70 shrink-0 group-hover:scale-105 transition-transform">
               <img
-                src={luxuryAppIcon}
+                src="/logo-youtube.jpeg"
                 alt="LiLouPro"
-                className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-amber-400/60 shadow-lg shadow-black/70 group-hover:scale-105 transition-transform brightness-105 contrast-105"
+                className="w-full h-full object-cover scale-110"
               />
             </div>
             <div className="flex flex-col">
