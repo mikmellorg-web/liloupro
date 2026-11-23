@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { url } = req.body || {};
+    const { url, title: bodyTitle, artist: bodyArtist } = req.body || {};
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'A URL do Cifra Club é obrigatória.' });
     }
@@ -301,12 +301,197 @@ export default async function handler(req: any, res: any) {
         const lyricsClean = lyricLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
         if (chordsClean.length > 20) {
+          const sanitizeValidBpm = (val: unknown): number | null => {
+            const num = typeof val === 'number' ? val : Number(String(val ?? '').replace(/[^\d.]/g, ''));
+            if (!Number.isFinite(num)) return null;
+            const rounded = Math.round(num);
+            return rounded >= 40 && rounded <= 220 ? rounded : null;
+          };
+
+          const sanitizeTimeSig = (val: unknown): string | null => {
+            const m = String(val ?? '').trim().match(/\b(2\/4|3\/4|4\/4|6\/8|9\/8|12\/8)\b/);
+            return m ? m[1] : null;
+          };
+
+          const lookupTitle = (extractedTitle || (typeof bodyTitle === 'string' ? bodyTitle.trim() : '') || songGuess).trim();
+          const lookupArtist = (extractedArtist || (typeof bodyArtist === 'string' ? bodyArtist.trim() : '') || artistGuess).trim();
+
+          let resolvedBpm: number | null = null;
+          let timeSignature = '4/4';
+
+          // 1. Extração direta dos metadados HTML ou do texto da cifra
+          const htmlBpmPatterns = [
+            /"bpm"\s*:\s*"?(\d{2,3})"?/i,
+            /\bdata-bpm=["']?(\d{2,3})["']?/i,
+            /"tempo"\s*:\s*"?(\d{2,3})"?/i,
+            /\bandamento(?:<!-- -->)?\s*[:\-]?\s*(?:<[^>]+>\s*)*(\d{2,3})\s*(?:bpm)?/i
+          ];
+          for (const rx of htmlBpmPatterns) {
+            const m = html.match(rx);
+            const candidate = m ? sanitizeValidBpm(m[1]) : null;
+            if (candidate) {
+              resolvedBpm = candidate;
+              break;
+            }
+          }
+
+          if (!resolvedBpm) {
+            const chordBpmMatch = chordsClean.match(/(?:\bbpm\s*[:=\-]?\s*(\d{2,3})\b|\b(\d{2,3})\s*bpm\b|\bandamento\s*[:=\-]?\s*(\d{2,3})\b)/i);
+            if (chordBpmMatch) {
+              resolvedBpm = sanitizeValidBpm(chordBpmMatch[1] || chordBpmMatch[2] || chordBpmMatch[3]);
+            }
+          }
+
+          const chordTimeSigMatch = chordsClean.match(/\b(2\/4|3\/4|4\/4|6\/8|9\/8|12\/8)\b/);
+          if (chordTimeSigMatch) {
+            timeSignature = chordTimeSigMatch[1];
+          }
+
+          // 2. Consulta instantânea na base local curada (com validação estrita de título/artista)
+          if (!resolvedBpm) {
+            const localMetaHit = findLocalPopularSong(lookupTitle, lookupArtist);
+            if (localMetaHit) {
+              const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+              const lt = norm(localMetaHit.title);
+              const qt = norm(lookupTitle);
+              const la = norm(localMetaHit.artist);
+              const qa = norm(lookupArtist);
+              const titleOk = lt === qt || lt.includes(qt) || qt.includes(lt);
+              const artistOk = !qa || la.includes(qa) || qa.includes(la);
+              const localBpm = titleOk && artistOk ? sanitizeValidBpm(localMetaHit.bpm) : null;
+              if (localBpm) {
+                resolvedBpm = localBpm;
+                const localTs = sanitizeTimeSig(localMetaHit.timeSignature);
+                if (localTs) timeSignature = localTs;
+              }
+            }
+          }
+
+          // 3. Consulta real na internet via Gemini (Google Search Grounding -> Fallback JSON estruturado)
+          if (!resolvedBpm) {
+            const apiKey = getGeminiApiKey();
+            if (apiKey) {
+              try {
+                const ai = new GoogleGenAI({
+                  apiKey,
+                  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+                });
+
+                const parseBpmResponseText = (rawText: string) => {
+                  const text = rawText.trim();
+                  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+                  if (jsonMatch) {
+                    try {
+                      const parsed = JSON.parse(jsonMatch[0]);
+                      const candidate = sanitizeValidBpm(parsed?.bpm);
+                      if (candidate) {
+                        resolvedBpm = candidate;
+                        const ts = sanitizeTimeSig(parsed?.timeSignature);
+                        if (ts) timeSignature = ts;
+                        return true;
+                      }
+                    } catch {
+                      // fallback para regex
+                    }
+                  }
+                  const bpmRx = text.match(/"?bpm"?\s*[:=]\s*"?(\d{2,3})"?/i) || text.match(/\b(\d{2,3})\s*bpm\b/i);
+                  const candidate = bpmRx ? sanitizeValidBpm(bpmRx[1]) : null;
+                  if (candidate) {
+                    resolvedBpm = candidate;
+                    const ts = sanitizeTimeSig(text);
+                    if (ts) timeSignature = ts;
+                    return true;
+                  }
+                  return false;
+                };
+
+                // 3A. Busca ativa na internet com Google Search Grounding (TuneBat, SongBPM, MultiTracks, Musicstax, etc.)
+                const searchGroundedPromise = (async () => {
+                  const searchModels = ['gemini-2.5-flash', 'gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
+                  for (const model of searchModels) {
+                    try {
+                      const response = await ai.models.generateContent({
+                        model,
+                        contents: `Pesquise na internet (TuneBat, SongBPM, MultiTracks, Musicstax, Chordify ou Cifra Club) o andamento exato em BPM e o compasso da gravação original da música "${lookupTitle}" de "${lookupArtist}". Responda APENAS com JSON válido no formato {"bpm": 74, "timeSignature": "4/4"} (bpm inteiro entre 40 e 220; compasso entre "4/4", "6/8", "3/4", "2/4", "9/8", "12/8"). Nunca use 120 como chute padrão se a música for lenta ou rápida.`,
+                        config: {
+                          tools: [{ googleSearch: {} }]
+                        }
+                      });
+                      if (response?.text && parseBpmResponseText(response.text)) {
+                        return;
+                      }
+                    } catch {
+                      // Tenta o próximo modelo com Google Search
+                    }
+                  }
+                })();
+
+                await Promise.race([
+                  searchGroundedPromise,
+                  new Promise((resolve) => setTimeout(resolve, 3800))
+                ]);
+
+                // 3B. Fallback estruturado ultra-rápido caso a busca web exceda o tempo ou cota
+                if (!resolvedBpm) {
+                  const structuredModels = [
+                    'gemini-2.5-flash',
+                    'gemini-4-hydrogen',
+                    'gemini-3.1-flash-lite',
+                    'gemini-flash-lite-latest',
+                    'gemini-flash-latest'
+                  ];
+
+                  const structuredPromise = (async () => {
+                    for (const model of structuredModels) {
+                      try {
+                        const config: any = {
+                          responseMimeType: 'application/json',
+                          responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                              bpm: { type: Type.INTEGER },
+                              timeSignature: { type: Type.STRING }
+                            },
+                            required: ['bpm', 'timeSignature']
+                          }
+                        };
+                        if (model.includes('2.5')) {
+                          config.thinkingConfig = { thinkingBudget: 0 };
+                        }
+
+                        const response = await ai.models.generateContent({
+                          model,
+                          contents: `Qual o BPM (andamento exato em batidas por minuto) e o compasso da gravação original da música "${lookupTitle}" de "${lookupArtist}"? Retorne apenas JSON válido {"bpm": número inteiro entre 40 e 220, "timeSignature": "4/4"|"6/8"|"3/4"|"2/4"}. Não use 120 como chute padrão se a música for lenta (ex: 64-78 BPM) ou rápida.`,
+                          config
+                        });
+                        if (response?.text && parseBpmResponseText(response.text)) {
+                          return;
+                        }
+                      } catch {
+                        // Tenta o próximo modelo rápido disponível
+                      }
+                    }
+                  })();
+
+                  await Promise.race([
+                    structuredPromise,
+                    new Promise((resolve) => setTimeout(resolve, 2500))
+                  ]);
+                }
+              } catch {
+                // Fallback seguro para não travar a importação
+              }
+            }
+          }
+
+          const bpm = resolvedBpm ?? 120;
+
           return res.status(200).json({
             title: extractedTitle,
             artist: extractedArtist,
             key,
-            bpm: 120,
-            timeSignature: '4/4',
+            bpm,
+            timeSignature,
             chords: cleanCifraHtml(chordsClean),
             lyrics: cleanCifraHtml(lyricsClean),
             capo: capo || '',
