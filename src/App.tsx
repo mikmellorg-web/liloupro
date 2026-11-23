@@ -1335,10 +1335,69 @@ function AuthView({
     return '';
   });
   const [error, setError] = useState<string | null>(null);
+  const [loginCredentialAlert, setLoginCredentialAlert] = useState(false);
+  const [googleUnregisteredAlert, setGoogleUnregisteredAlert] = useState<{ email?: string } | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [existingMembershipAlert, setExistingMembershipAlert] = useState<{ churchName?: string; email?: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
+
+  // Escuta rejeição de login/cadastro via Google conforme status da conta no Firestore
+  useEffect(() => {
+    try {
+      const rawAlert = sessionStorage.getItem('liloupro_google_unregistered_alert');
+      if (rawAlert) {
+        sessionStorage.removeItem('liloupro_google_unregistered_alert');
+        const parsed = JSON.parse(rawAlert);
+        setGoogleUnregisteredAlert({ email: parsed?.email || '' });
+        setGoogleLoading(false);
+        setError(null);
+        setLoginCredentialAlert(false);
+      }
+      const rawAlreadyAlert = sessionStorage.getItem('liloupro_google_already_registered_alert');
+      if (rawAlreadyAlert) {
+        sessionStorage.removeItem('liloupro_google_already_registered_alert');
+        const parsed = JSON.parse(rawAlreadyAlert);
+        setExistingMembershipAlert({ email: parsed?.email || '' });
+        setGoogleLoading(false);
+        setError(null);
+        setLoginCredentialAlert(false);
+      }
+    } catch {}
+
+    const handleGoogleUnregistered = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ email?: string }>)?.detail;
+      try { sessionStorage.removeItem('liloupro_google_unregistered_alert'); } catch {}
+      setGoogleLoading(false);
+      setError(null);
+      setLoginCredentialAlert(false);
+      setGoogleUnregisteredAlert({ email: detail?.email || '' });
+    };
+
+    const handleGoogleAlreadyRegistered = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ email?: string }>)?.detail;
+      try { sessionStorage.removeItem('liloupro_google_already_registered_alert'); } catch {}
+      setGoogleLoading(false);
+      setError(null);
+      setLoginCredentialAlert(false);
+      setExistingMembershipAlert({ email: detail?.email || '' });
+    };
+
+    const handleGoogleCheckError = () => {
+      setGoogleLoading(false);
+      setError('Não foi possível verificar seu cadastro com o Google agora. Tente novamente em instantes.');
+    };
+
+    window.addEventListener('liloupro:google-unregistered', handleGoogleUnregistered);
+    window.addEventListener('liloupro:google-already-registered', handleGoogleAlreadyRegistered);
+    window.addEventListener('liloupro:google-check-error', handleGoogleCheckError);
+    return () => {
+      window.removeEventListener('liloupro:google-unregistered', handleGoogleUnregistered);
+      window.removeEventListener('liloupro:google-already-registered', handleGoogleAlreadyRegistered);
+      window.removeEventListener('liloupro:google-check-error', handleGoogleCheckError);
+    };
+  }, []);
 
   // Check if opened after logout or first time to show install prompt automatically
   useEffect(() => {
@@ -1384,6 +1443,8 @@ function AuthView({
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoginCredentialAlert(false);
+    setGoogleUnregisteredAlert(null);
     setExistingMembershipAlert(null);
     setSuccess(null);
     setLoading(true);
@@ -1482,6 +1543,12 @@ function AuthView({
         setLoading(false);
         return;
       }
+      if (mode === 'login' && (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found')) {
+        setLoginCredentialAlert(true);
+        setError(null);
+        setLoading(false);
+        return;
+      }
       if (err.code === 'auth/invalid-credential') {
         setError("E-mail ou senha incorretos. Se você criou sua conta com o Google, clique em 'Entrar com Google'.");
         setLoading(false);
@@ -1501,14 +1568,41 @@ function AuthView({
     }
   };
 
-  const handleGoogleAuth = () => {
+  const handleGoogleAuth = async () => {
+    setError(null);
+    setLoginCredentialAlert(false);
+    setGoogleUnregisteredAlert(null);
+    setExistingMembershipAlert(null);
+    setSuccess(null);
     try {
       localStorage.removeItem('pending_church_name_for_signup');
-      if (mode === 'signup' && signupIntent === 'member_join' && memberInviteCode.trim()) {
-        localStorage.setItem('pending_invite_code', memberInviteCode.trim().toUpperCase());
+      if (mode === 'signup') {
+        if (signupIntent === 'member_join' && memberInviteCode.trim()) {
+          localStorage.setItem('pending_invite_code', memberInviteCode.trim().toUpperCase());
+        }
+        sessionStorage.removeItem('liloupro_google_login_only_check');
+        sessionStorage.setItem('liloupro_google_signup_check', 'true');
+      } else if (mode === 'login') {
+        localStorage.removeItem('pending_invite_code');
+        sessionStorage.removeItem('liloupro_google_signup_check');
+        sessionStorage.setItem('liloupro_google_login_only_check', 'true');
       }
     } catch {}
-    loginWithGoogle();
+
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      try {
+        sessionStorage.removeItem('liloupro_google_login_only_check');
+        sessionStorage.removeItem('liloupro_google_signup_check');
+      } catch {}
+      const code = err?.code || '';
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        setError('Não foi possível entrar com o Google no momento. Tente novamente.');
+      }
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -1601,6 +1695,40 @@ function AuthView({
                     </p>
                   </div>
                 </div>
+                <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-300/80 dark:border-amber-500/35 rounded-xl p-3 text-[11px] sm:text-xs text-amber-950 dark:text-amber-100 leading-relaxed font-medium">
+                  <span>⚠️ </span>
+                  <strong className="font-black">Atenção:</strong>{' '}
+                  <span>
+                    Esta opção é exclusiva para líderes cadastrarem uma NOVA igreja do zero. Se a sua igreja já usa o LiLouPro ou você já tem conta, clique em{' '}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingMembershipAlert(null);
+                      setLoginCredentialAlert(false);
+                      setError(null);
+                      setSuccess(null);
+                      setMode('login');
+                    }}
+                    className="font-black text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    Fazer Login
+                  </button>
+                  <span> ou </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingMembershipAlert(null);
+                      setError(null);
+                      setSuccess(null);
+                      setSignupIntent('member_join');
+                    }}
+                    className="font-black text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    Sou Membro
+                  </button>
+                  <span>.</span>
+                </div>
                 <a
                   href="https://wa.me/5551926361240?text=Ol%C3%A1!%20Sou%20l%C3%ADder%2Fpastor%20e%20gostaria%20de%20solicitar%20um%20teste%20do%20LiLouPro%20para%20a%20minha%20igreja."
                   target="_blank"
@@ -1621,9 +1749,27 @@ function AuthView({
                 </div>
               </div>
             ) : (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-blue-800 dark:text-blue-300 text-xs font-semibold flex items-start gap-2 leading-relaxed">
-                <Building2 size={16} className="shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <span>Sua igreja já usa o LiLouPro? Digite abaixo o código de convite enviado pelo seu líder de louvor para entrar na equipe.</span>
+              <div className="space-y-2.5">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-blue-800 dark:text-blue-300 text-xs font-semibold flex items-start gap-2 leading-relaxed">
+                  <Building2 size={16} className="shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <span>Sua igreja já usa o LiLouPro? Digite abaixo o código de convite enviado pelo seu líder de louvor para entrar na equipe.</span>
+                </div>
+                <div className="bg-slate-100/90 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium text-left">
+                  <span>💡 Já se cadastrou antes? O código da igreja só é usado no primeiro acesso. </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingMembershipAlert(null);
+                      setLoginCredentialAlert(false);
+                      setError(null);
+                      setSuccess(null);
+                      setMode('login');
+                    }}
+                    className="font-black text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    Fazer Login
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1642,15 +1788,24 @@ function AuthView({
         )}
 
         {existingMembershipAlert && (
-          <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 space-y-3 text-left shadow-md">
+          <div className="bg-amber-50 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/40 rounded-2xl p-4 space-y-3 text-left shadow-md">
             <div className="flex items-start gap-2.5">
-              <AlertTriangle size={18} className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-amber-100 leading-relaxed">
-                {existingMembershipAlert.churchName
-                  ? `Você já faz parte da igreja ${existingMembershipAlert.churchName}!`
-                  : 'Você já faz parte de uma igreja cadastrada!'}{' '}
-                Não é necessário criar uma nova igreja. Volte para a tela de login para entrar na sua conta.
-              </p>
+              <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                <AlertTriangle size={16} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-amber-100 leading-snug">
+                  Você já tem uma conta no LiLouPro!
+                </h3>
+                <p className="text-xs text-slate-700 dark:text-amber-100/85 leading-relaxed font-medium">
+                  O e-mail informado já está cadastrado. Você não precisa criar uma nova conta nem usar o código da igreja novamente.
+                </p>
+                {existingMembershipAlert.email && (
+                  <p className="text-[11px] font-mono text-slate-600 dark:text-amber-200/90 bg-amber-100/80 dark:bg-white/10 px-2.5 py-1 rounded-lg inline-block max-w-full truncate">
+                    {existingMembershipAlert.email}
+                  </p>
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -1659,13 +1814,14 @@ function AuthView({
                   setEmail(existingMembershipAlert.email);
                 }
                 setExistingMembershipAlert(null);
+                setLoginCredentialAlert(false);
                 setError(null);
                 setSuccess(null);
                 setMode('login');
               }}
-              className="w-full min-h-[44px] py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand/25 transition-all cursor-pointer"
+              className="w-full min-h-[44px] py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs tracking-wide shadow-lg shadow-brand/25 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              Voltar para o Login
+              <span>Fazer Login com este e-mail</span>
             </button>
           </div>
         )}
@@ -1742,6 +1898,72 @@ function AuthView({
             </div>
           )}
 
+          {mode === 'login' && loginCredentialAlert && (
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/35 rounded-2xl p-4 space-y-3 text-left shadow-sm">
+              <div className="flex items-start gap-2.5">
+                <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                  <AlertTriangle size={16} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-amber-100 leading-snug">
+                    Conta não encontrada ou senha incorreta
+                  </h3>
+                  <p className="text-xs text-slate-700 dark:text-amber-100/85 leading-relaxed font-medium">
+                    Se este é o seu primeiro acesso, você ainda não tem cadastro no LiLouPro. Entre com o código da sua igreja ou, se você é líder, crie o ambiente da sua igreja grátis!
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-slate-800 dark:text-amber-200 leading-relaxed font-bold pt-0.5">
+                    Criou sua conta pelo Google? Clique no botão &apos;Entrar com Google&apos; abaixo.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginCredentialAlert(false);
+                    setError(null);
+                    setSuccess(null);
+                    setSignupIntent('member_join');
+                    setMode('signup');
+                  }}
+                  className="w-full min-h-[44px] py-2.5 px-3.5 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs tracking-wide shadow-md shadow-brand/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Users size={15} className="shrink-0" />
+                  <span>Entrar com Código da Igreja</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginCredentialAlert(false);
+                    setError(null);
+                    setSuccess(null);
+                    setSignupIntent('church_trial');
+                    setMode('signup');
+                  }}
+                  className="w-full min-h-[44px] py-2.5 px-3.5 rounded-xl bg-white dark:bg-white/10 hover:bg-slate-100 dark:hover:bg-white/15 text-slate-800 dark:text-white border border-slate-300 dark:border-white/20 font-bold text-xs tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Building2 size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span>Sou Líder — Testar Grátis</span>
+                </button>
+              </div>
+              <div className="text-center pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginCredentialAlert(false);
+                    setError(null);
+                    setSuccess(null);
+                    setMode('forgot');
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-brand hover:text-blue-700 dark:text-blue-400 dark:hover:text-cyan-300 hover:underline cursor-pointer"
+                >
+                  <KeyRound size={12} className="shrink-0" />
+                  <span>Já tem conta? Esqueci minha senha</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <p className="text-[11px] text-red-600 dark:text-red-400 font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20 italic text-center">
               {error}
@@ -1785,6 +2007,7 @@ function AuthView({
               <button 
                 type="button"
                 onClick={() => {
+                  setLoginCredentialAlert(false);
                   setError(null);
                   setSuccess(null);
                   setMode('forgot');
@@ -1802,11 +2025,21 @@ function AuthView({
 
               <Button 
                 onClick={handleGoogleAuth} 
+                disabled={googleLoading}
                 variant="ghost" 
                 className="w-full py-4 flex items-center justify-center gap-3 border border-slate-200 dark:border-white/10 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-slate-800 dark:text-white font-black uppercase tracking-widest text-xs h-14 rounded-xl shadow-sm cursor-pointer"
               >
-                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 transition-all" alt="Google" />
-                 Entrar com Google
+                 {googleLoading ? (
+                   <>
+                     <RefreshCcw size={16} className="animate-spin" />
+                     <span>Verificando conta...</span>
+                   </>
+                 ) : (
+                   <>
+                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 transition-all" alt="Google" />
+                     Entrar com Google
+                   </>
+                 )}
               </Button>
             </div>
           )}
@@ -1816,6 +2049,7 @@ function AuthView({
               <button 
                 type="button"
                 onClick={() => {
+                  setLoginCredentialAlert(false);
                   setError(null);
                   setSuccess(null);
                   setMode('login');
@@ -1832,6 +2066,7 @@ function AuthView({
             <button 
               type="button"
               onClick={() => {
+                setLoginCredentialAlert(false);
                 setError(null);
                 setExistingMembershipAlert(null);
                 setSuccess(null);
@@ -1852,6 +2087,7 @@ function AuthView({
                 <button
                   type="button"
                   onClick={async () => {
+                    setLoginCredentialAlert(false);
                     setError(null);
                     setExistingMembershipAlert(null);
                     setSuccess(null);
@@ -1868,6 +2104,88 @@ function AuthView({
           </div>
         </div>
       </Card>
+
+      {/* Modal amigável para primeiro acesso via Google sem cadastro no LiLouPro */}
+      {googleUnregisteredAlert && (
+        <div
+          className="fixed inset-0 z-[10060] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setGoogleUnregisteredAlert(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/15 p-6 sm:p-7 shadow-2xl space-y-5 text-center relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setGoogleUnregisteredAlert(null)}
+              aria-label="Fechar aviso"
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/25 text-brand flex items-center justify-center mx-auto">
+              <Sparkles size={26} />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white leading-tight">
+                Você ainda não tem cadastro no LiLouPro!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                Percebemos que este é o seu primeiro acesso com esta conta. Para começar, escolha uma das opções abaixo:
+              </p>
+              {googleUnregisteredAlert.email && (
+                <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-3 py-1 rounded-lg inline-block max-w-full truncate">
+                  {googleUnregisteredAlert.email}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setGoogleUnregisteredAlert(null);
+                  setLoginCredentialAlert(false);
+                  setError(null);
+                  setSuccess(null);
+                  setSignupIntent('member_join');
+                  setMode('signup');
+                }}
+                className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-brand hover:bg-brand/90 text-white font-black text-xs sm:text-sm shadow-lg shadow-brand/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Users size={16} className="shrink-0" />
+                <span>Sou Membro (Tenho o Código da Igreja)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setGoogleUnregisteredAlert(null);
+                  setLoginCredentialAlert(false);
+                  setError(null);
+                  setSuccess(null);
+                  setSignupIntent('church_trial');
+                  setMode('signup');
+                }}
+                className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-900 dark:text-white border border-slate-200 dark:border-white/15 font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Building2 size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>Sou Líder (Criar Ambiente da Igreja — 30 dias grátis)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGoogleUnregisteredAlert(null)}
+                className="w-full min-h-[44px] py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                Voltar para a tela de Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Luxury App PWA Install Prompt Modal & Floating Banner */}
       <LuxuryAppInstallModal 

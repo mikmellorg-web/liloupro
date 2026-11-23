@@ -378,6 +378,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let previousUid: string | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      // Guard: tentativa de login via Google na tela "Área do Membro" sem cadastro prévio no Firestore
+      if (currentUser && typeof window !== 'undefined') {
+        let isGoogleLoginOnlyCheck = false;
+        try {
+          isGoogleLoginOnlyCheck = sessionStorage.getItem('liloupro_google_login_only_check') === 'true';
+        } catch {}
+
+        if (isGoogleLoginOnlyCheck) {
+          const userEmailLower = (currentUser.email || '').toLowerCase().trim();
+          const isMaster = userEmailLower === 'mikmellorg@gmail.com';
+          if (isMaster) {
+            try { sessionStorage.removeItem('liloupro_google_login_only_check'); } catch {}
+          } else {
+            try {
+              const memberSnap = await getDoc(doc(db, 'members', currentUser.uid));
+              const memberChurchId = memberSnap.exists() ? String(memberSnap.data()?.churchId || '').trim() : '';
+              const isRegisteredWithChurch = memberSnap.exists() && memberChurchId.length > 0;
+              try { sessionStorage.removeItem('liloupro_google_login_only_check'); } catch {}
+
+              if (!isRegisteredWithChurch) {
+                const payload = { email: currentUser.email || '' };
+                try {
+                  sessionStorage.setItem('liloupro_google_unregistered_alert', JSON.stringify(payload));
+                } catch {}
+                window.dispatchEvent(new CustomEvent('liloupro:google-unregistered', { detail: payload }));
+                try {
+                  await auth.signOut();
+                } catch (signOutErr) {
+                  console.warn('[Auth] Falha ao encerrar sessão de conta Google sem cadastro:', signOutErr);
+                }
+                previousUid = null;
+                setUser(null);
+                setRawMemberData(null);
+                setRawIsAdmin(false);
+                setChurchData(null);
+                setChurchResolutionState('idle');
+                setChurchAccessBlockReason(null);
+                setLoading(false);
+                return;
+              }
+            } catch (checkErr) {
+              try { sessionStorage.removeItem('liloupro_google_login_only_check'); } catch {}
+              console.warn('[Auth] Erro ao verificar cadastro da conta Google:', checkErr);
+              window.dispatchEvent(new CustomEvent('liloupro:google-check-error'));
+              try {
+                await auth.signOut();
+              } catch {}
+              previousUid = null;
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Guard: tentativa de cadastro via Google quando a conta já possui igreja vinculada no Firestore
+        let isGoogleSignupCheck = false;
+        try {
+          isGoogleSignupCheck = sessionStorage.getItem('liloupro_google_signup_check') === 'true';
+        } catch {}
+
+        if (isGoogleSignupCheck) {
+          try { sessionStorage.removeItem('liloupro_google_signup_check'); } catch {}
+          try {
+            const memberSnap = await getDoc(doc(db, 'members', currentUser.uid));
+            const memberChurchId = memberSnap.exists() ? String(memberSnap.data()?.churchId || '').trim() : '';
+            if (memberSnap.exists() && memberChurchId.length > 0) {
+              const payload = { email: currentUser.email || '' };
+              try {
+                sessionStorage.setItem('liloupro_google_already_registered_alert', JSON.stringify(payload));
+              } catch {}
+              window.dispatchEvent(new CustomEvent('liloupro:google-already-registered', { detail: payload }));
+              try {
+                await auth.signOut();
+              } catch (signOutErr) {
+                console.warn('[Auth] Falha ao encerrar sessão de conta Google já cadastrada:', signOutErr);
+              }
+              previousUid = null;
+              setUser(null);
+              setRawMemberData(null);
+              setRawIsAdmin(false);
+              setChurchData(null);
+              setChurchResolutionState('idle');
+              setChurchAccessBlockReason(null);
+              setLoading(false);
+              return;
+            }
+          } catch (signupCheckErr) {
+            console.warn('[Auth] Erro ao verificar conta Google existente no cadastro:', signupCheckErr);
+          }
+        }
+      }
+
       const nextUid = currentUser?.uid || null;
       if (previousUid !== nextUid) {
         previousUid = nextUid;

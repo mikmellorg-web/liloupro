@@ -633,11 +633,11 @@ export default function LandingJourneyAndFAQ({ onEnterApp }: LandingJourneyAndFA
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-md shadow-black/60 shrink-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-md shadow-black/60 shrink-0">
                 <img
                   src="/logo-youtube.jpeg"
                   alt="LiLouPro"
-                  className="w-full h-full object-cover scale-110"
+                  className="w-full h-full object-cover object-center scale-[1.35]"
                 />
               </div>
               <span className="text-lg font-black text-white tracking-tight">LiLouPro</span>

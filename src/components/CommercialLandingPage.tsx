@@ -55,11 +55,11 @@ export default function CommercialLandingPage({ onEnterApp }: CommercialLandingP
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group shrink-0"
           >
-            <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-lg shadow-black/70 shrink-0 group-hover:scale-105 transition-transform">
+            <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-transparent ring-1 ring-white/10 shadow-lg shadow-black/70 shrink-0 group-hover:scale-105 transition-transform">
               <img
                 src="/logo-youtube.jpeg"
                 alt="LiLouPro"
-                className="w-full h-full object-cover scale-110"
+                className="w-full h-full object-cover object-center scale-[1.35]"
               />
             </div>
             <div className="flex flex-col">
