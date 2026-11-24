@@ -77,6 +77,7 @@ import { UpgradeModal } from './components/UpgradeModal';
 import { SetPasswordView } from './components/SetPasswordView';
 import { LuxuryAppInstallModal } from './components/LuxuryAppInstallModal';
 import { CustomInstallBanner } from './components/CustomInstallBanner';
+import { ServiceThemeDropdown } from './components/ServiceThemeDropdown';
 import { LilouproAssistant } from './components/LilouproAssistant';
 import { ChromaticTunerModal } from './components/ChromaticTunerModal';
 import { StudyMetronomeModal } from './components/StudyMetronomeModal';
@@ -16699,11 +16700,46 @@ function CalendarView({
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newService, setNewService] = useState({ title: '', date: '', scales: {}, setlist: [], playlistUrl: '', theme: 'normal' });
+  const [isCustomThemeMode, setIsCustomThemeMode] = useState(false);
+  const [customThemeText, setCustomThemeText] = useState('');
+  const [localCustomThemes, setLocalCustomThemes] = useState<string[]>([]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [localScales, setLocalScales] = useState<Record<string, string[]>>({});
   const [cadernoModalService, setCadernoModalService] = useState<any>(null);
   const [noticeCalendarService, setNoticeCalendarService] = useState<any>(null);
   const [allSongs, setAllSongs] = useState<any[]>([]);
+
+  // Sincroniza temas personalizados salvos no documento da igreja atual
+  useEffect(() => {
+    const raw = Array.isArray(churchData?.customThemes) ? churchData.customThemes : [];
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const item of raw) {
+      const cleaned = String(item || '').trim();
+      if (!cleaned) continue;
+      const lower = cleaned.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        normalized.push(cleaned);
+      }
+    }
+    setLocalCustomThemes(normalized);
+  }, [churchData?.customThemes, userChurchId]);
+
+  const handleDeleteCustomTheme = async (themeToDelete: string) => {
+    const targetLower = themeToDelete.trim().toLowerCase();
+    const updated = localCustomThemes.filter((t) => t.trim().toLowerCase() !== targetLower);
+    setLocalCustomThemes(updated);
+    if (!isCustomThemeMode && (newService.theme || '').trim().toLowerCase() === targetLower) {
+      setNewService((prev) => ({ ...prev, theme: 'normal' }));
+    }
+    if (!userChurchId) return;
+    try {
+      await updateDoc(doc(db, 'churches', userChurchId), { customThemes: updated });
+    } catch (err) {
+      console.warn('[CalendarView] Não foi possível remover tema personalizado da igreja:', err);
+    }
+  };
 
   useEffect(() => {
     if (!user || !userChurchId) {
@@ -16981,15 +17017,50 @@ function CalendarView({
       onOpenUpgradeModal?.(limitCheck);
       return;
     }
+
+    // Resolve tema final (pré-definido ou personalizado)
+    const rawThemeInput = isCustomThemeMode
+      ? customThemeText.trim()
+      : String(newService.theme || 'normal').trim();
+    let finalTheme = rawThemeInput || 'normal';
+
+    // Se o usuário digitou exatamente o nome de um tema padrão, reutiliza a chave padrão
+    if (!SERVICE_THEMES[finalTheme]) {
+      const matchedPredefined = Object.entries(SERVICE_THEMES).find(
+        ([, t]) => t.name.trim().toLowerCase() === finalTheme.toLowerCase()
+      );
+      if (matchedPredefined) {
+        finalTheme = matchedPredefined[0];
+      }
+    }
+
     const servicePath = 'services';
     try {
       await addDoc(collection(db, servicePath), { 
-        ...newService, 
+        ...newService,
+        theme: finalTheme,
         availability: {},
         liturgy: [],
         createdAt: serverTimestamp(),
         churchId: userChurchId
       });
+
+      // Salva tema personalizado novo no documento da igreja sem duplicatas (case-insensitive)
+      if (finalTheme !== 'normal' && !SERVICE_THEMES[finalTheme]) {
+        const lowerFinal = finalTheme.toLowerCase();
+        const alreadyExists = localCustomThemes.some((t) => t.trim().toLowerCase() === lowerFinal);
+        if (!alreadyExists) {
+          const nextCustomThemes = [...localCustomThemes, finalTheme];
+          setLocalCustomThemes(nextCustomThemes);
+          try {
+            await updateDoc(doc(db, 'churches', userChurchId), {
+              customThemes: nextCustomThemes
+            });
+          } catch (themeErr) {
+            console.warn('[CalendarView] Não foi possível salvar tema personalizado na igreja:', themeErr);
+          }
+        }
+      }
 
       // Trigger notification
       const dateStr = new Date(newService.date).toLocaleDateString('pt-BR');
@@ -17002,6 +17073,8 @@ function CalendarView({
       );
 
       setIsAdding(false);
+      setIsCustomThemeMode(false);
+      setCustomThemeText('');
       setNewService({ title: '', date: '', scales: {}, setlist: [], playlistUrl: '', theme: 'normal' });
     } catch (error) {
        handleFirestoreError(error, OperationType.CREATE, servicePath);
@@ -17862,6 +17935,19 @@ function CalendarView({
                               {t.icon} {t.name}
                             </option>
                           ))}
+                          {localCustomThemes.map((customThemeName) => (
+                            <option key={`custom-${customThemeName}`} value={customThemeName} className="bg-surface text-text-main">
+                              📌 {customThemeName}
+                            </option>
+                          ))}
+                          {service.theme &&
+                            service.theme !== 'normal' &&
+                            !SERVICE_THEMES[service.theme] &&
+                            !localCustomThemes.some((ct) => ct.trim().toLowerCase() === String(service.theme).trim().toLowerCase()) && (
+                              <option key={`svc-custom-${service.theme}`} value={service.theme} className="bg-surface text-text-main">
+                                📌 {service.theme}
+                              </option>
+                            )}
                         </select>
                       ) : (
                         service.theme && service.theme !== 'normal' && (
@@ -17869,8 +17955,8 @@ function CalendarView({
                             "inline-flex items-center gap-1 py-1 px-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border",
                             (SERVICE_THEMES[service.theme] || SERVICE_THEMES.normal).badge
                           )}>
-                            <span>{(SERVICE_THEMES[service.theme] || SERVICE_THEMES.normal).icon}</span>
-                            <span>{(SERVICE_THEMES[service.theme] || SERVICE_THEMES.normal).name}</span>
+                            <span>{SERVICE_THEMES[service.theme]?.icon || '📌'}</span>
+                            <span>{SERVICE_THEMES[service.theme]?.name || service.theme}</span>
                           </span>
                         )
                       )}
@@ -18490,17 +18576,27 @@ function CalendarView({
                  </div>
                  <div className="space-y-2">
                    <label className="text-[9px] sm:text-[10px] font-black text-text-main uppercase tracking-widest pl-1">Tema / Ocasião do Culto</label>
-                   <select 
-                     value={newService.theme || 'normal'} 
-                     onChange={e => setNewService({...newService, theme: e.target.value})} 
-                     className="w-full bg-black/5 dark:bg-slate-900 border border-border rounded-xl h-10 sm:h-12 px-3 text-xs font-bold text-text-main hover:bg-black/10 dark:hover:bg-slate-800 transition-all outline-none cursor-pointer"
-                   >
-                     {Object.entries(SERVICE_THEMES).map(([key, t]) => (
-                       <option key={key} value={key} className="bg-surface text-text-main">
-                         {t.icon} {t.name}
-                       </option>
-                     ))}
-                   </select>
+                   <ServiceThemeDropdown
+                     predefinedThemes={SERVICE_THEMES}
+                     customThemes={localCustomThemes}
+                     value={newService.theme || 'normal'}
+                     isCustomMode={isCustomThemeMode}
+                     customText={customThemeText}
+                     onSelectTheme={(selectedTheme) => {
+                       setIsCustomThemeMode(false);
+                       setCustomThemeText('');
+                       setNewService({ ...newService, theme: selectedTheme });
+                     }}
+                     onEnterCustomMode={() => {
+                       setIsCustomThemeMode(true);
+                       setCustomThemeText('');
+                     }}
+                     onCustomTextChange={(text) => {
+                       setCustomThemeText(text);
+                       setNewService({ ...newService, theme: text.trim() || 'normal' });
+                     }}
+                     onDeleteCustomTheme={handleDeleteCustomTheme}
+                   />
                  </div>
                  <div className="space-y-2">
                    <label className="text-[9px] sm:text-[10px] font-black text-text-main uppercase tracking-widest pl-1">Data e Horário</label>
@@ -18514,7 +18610,7 @@ function CalendarView({
                  </div>
               </div>
                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <Button variant="ghost" onClick={() => setIsAdding(false)} className="sm:flex-1 text-text-main hover:bg-black/5 dark:hover:bg-white/5 border border-border h-10 sm:h-auto font-bold">Cancelar</Button>
+                <Button variant="ghost" onClick={() => { setIsAdding(false); setIsCustomThemeMode(false); setCustomThemeText(''); }} className="sm:flex-1 text-text-main hover:bg-black/5 dark:hover:bg-white/5 border border-border h-10 sm:h-auto font-bold">Cancelar</Button>
                 <Button onClick={handleAddService} className="sm:flex-1 bg-brand hover:brightness-110 shadow-lg shadow-brand/20 h-10 sm:h-auto text-xs font-black uppercase tracking-widest text-white">Criar Agendamento</Button>
               </div>
             </motion.div>

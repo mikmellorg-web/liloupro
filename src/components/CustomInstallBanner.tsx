@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, X, Sparkles, Smartphone, Check, ArrowRight } from 'lucide-react';
-import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 interface CustomInstallBannerProps {
   onOpenGuideModal?: () => void;
@@ -171,16 +170,15 @@ export const CustomInstallBanner: React.FC<CustomInstallBannerProps> = ({
           </button>
 
           <div className="flex items-center gap-3.5 relative z-10">
-            {/* Official Luxury Icon with Gold Border */}
+            {/* Official Logo Icon with Gold Border */}
             <div className="relative shrink-0">
               <div className="absolute -inset-1 bg-gradient-to-tr from-amber-500 to-yellow-300 rounded-2xl blur-xs opacity-60" />
-              <img
-                src={luxuryAppIcon}
-                alt="Logo Oficial LiLouPro Luxo"
-                className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border-2 border-amber-400/70 shadow-lg shadow-black/60"
-              />
-              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow">
-                <Sparkles size={10} className="fill-slate-950 stroke-slate-950" />
+              <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 border-amber-400/70 shadow-lg shadow-black/60 bg-slate-950">
+                <img
+                  src="/logo-youtube.jpeg"
+                  alt="LiLouPro"
+                  className="w-full h-full object-cover object-center scale-[1.30]"
+                />
               </div>
             </div>
 

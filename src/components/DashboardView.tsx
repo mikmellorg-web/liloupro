@@ -1849,7 +1849,9 @@ export default function DashboardView({
                 )}>
                   {nextService.theme && SERVICE_THEMES[nextService.theme] 
                     ? SERVICE_THEMES[nextService.theme].icon 
-                    : '⛪'}
+                    : nextService.theme && nextService.theme !== 'normal'
+                      ? '📌'
+                      : '⛪'}
                 </div>
                 
                 {/* Title & Info */}
@@ -2149,8 +2151,8 @@ export default function DashboardView({
                 </h2>
                 {nextService?.theme && nextService.theme !== 'normal' && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white backdrop-blur-sm border border-white/25 shadow-sm">
-                    <span>{SERVICE_THEMES[nextService.theme]?.icon}</span>
-                    <span>{SERVICE_THEMES[nextService.theme]?.name}</span>
+                    <span>{SERVICE_THEMES[nextService.theme]?.icon || '📌'}</span>
+                    <span>{SERVICE_THEMES[nextService.theme]?.name || nextService.theme}</span>
                   </span>
                 )}
               </div>
