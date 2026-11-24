@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Zap
 } from 'lucide-react';
-import luxuryAppIcon from '../assets/images/liloupro_luxury_logo_1787753536902.jpg';
 
 export interface LuxuryAppInstallModalProps {
   isOpen: boolean;
@@ -145,11 +144,13 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
           <div className="text-center space-y-3 relative z-10 mt-1">
             <div className="relative inline-block mx-auto group">
               <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 rounded-3xl blur-md opacity-50 group-hover:opacity-80 transition duration-500 animate-pulse" />
-              <img
-                src={luxuryAppIcon}
-                alt="Logo Oficial LiLouPro Luxo"
-                className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl object-cover shadow-2xl border-2 border-amber-400/60 shadow-black/80"
-              />
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-2 border-amber-400/60 shadow-black/80 bg-slate-950">
+                <img
+                  src="/logo-youtube.jpeg"
+                  alt="Logo Oficial LiLouPro Luxo"
+                  className="w-full h-full object-cover object-center scale-[1.30]"
+                />
+              </div>
               <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 p-1.5 rounded-full shadow-lg border border-amber-200">
                 <Sparkles size={14} className="fill-slate-950 stroke-slate-950" />
               </div>
@@ -337,7 +338,7 @@ export const LuxuryAppInstallModal: React.FC<LuxuryAppInstallModalProps> = ({
             <div className="pt-2 border-t border-white/5 text-center">
               <a
                 id="link-download-luxury-logo-hd"
-                href={luxuryAppIcon}
+                href="/logo-youtube.jpeg"
                 download="LiLouPro-Logo-Oficial-Luxo-HD.jpg"
                 className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-4 decoration-amber-400/40 hover:decoration-amber-300 transition-colors"
               >

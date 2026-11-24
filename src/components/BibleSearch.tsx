@@ -3,6 +3,7 @@ import { Search, BookOpen, Check, Copy, AlertCircle, RefreshCw, Sparkles, Chevro
 import { getLocalBiblePassage, getBiblePassageAsync } from '../localBibleDb';
 import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
+import { getMaxVerses } from '../data/bibleVerseLimits';
 
 const BIBLE_BOOKS = [
   { name: "Gênesis", abbrev: "gn", apiId: "Genesis" },
@@ -170,6 +171,36 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
   const [selectedChapter, setSelectedChapter] = useState('23');
   const [selectedVerse, setSelectedVerse] = useState('1');
   const [selectedEndVerse, setSelectedEndVerse] = useState('');
+
+  const currentBookName = (BIBLE_BOOKS[selectedBookIndex] || BIBLE_BOOKS[0]).name;
+  const currentChapterNumber = parseInt(selectedChapter, 10) || 1;
+  const maxVerses = getMaxVerses(currentBookName, currentChapterNumber);
+
+  const clampVerseValue = (rawValue: string): string => {
+    if (rawValue === '') return '';
+    const parsed = parseInt(rawValue, 10);
+    if (isNaN(parsed)) return '';
+    return String(Math.min(maxVerses, Math.max(1, parsed)));
+  };
+
+  useEffect(() => {
+    setSelectedVerse((prev) => {
+      if (prev === '') return prev;
+      const parsed = parseInt(prev, 10);
+      if (isNaN(parsed)) return prev;
+      if (parsed > maxVerses) return String(maxVerses);
+      if (parsed < 1) return '1';
+      return prev;
+    });
+    setSelectedEndVerse((prev) => {
+      if (prev === '') return prev;
+      const parsed = parseInt(prev, 10);
+      if (isNaN(parsed)) return prev;
+      if (parsed > maxVerses) return String(maxVerses);
+      if (parsed < 1) return '1';
+      return prev;
+    });
+  }, [selectedBookIndex, selectedChapter, maxVerses]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -574,10 +605,11 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
               <label className="text-[9px] text-text-muted font-bold uppercase tracking-wider block pl-1">V. Inicial</label>
               <input
                 type="number"
-                min="1"
+                min={1}
+                max={maxVerses}
                 placeholder="Ex: 1"
                 value={selectedVerse}
-                onChange={(e) => setSelectedVerse(e.target.value)}
+                onChange={(e) => setSelectedVerse(clampVerseValue(e.target.value))}
                 className="w-full bg-black/20 border border-white/10 text-center text-xs text-white h-10 rounded-xl"
               />
             </div>
@@ -586,10 +618,11 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
               <label className="text-[9px] text-text-muted font-bold uppercase tracking-wider block pl-1">V. Final (Opcional)</label>
               <input
                 type="number"
-                min="1"
+                min={1}
+                max={maxVerses}
                 placeholder="S/ fim"
                 value={selectedEndVerse}
-                onChange={(e) => setSelectedEndVerse(e.target.value)}
+                onChange={(e) => setSelectedEndVerse(clampVerseValue(e.target.value))}
                 className="w-full bg-black/20 border border-white/10 text-center text-xs text-white h-10 rounded-xl"
               />
             </div>
