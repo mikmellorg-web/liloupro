@@ -2679,18 +2679,18 @@ function DynamicThemeStyle({ churchData }: { churchData: any }) {
   
   const styleContent = `
     :root {
-      --primary: ${activeTheme.primary};
-      --brand: ${activeTheme.brandDark};
-      --brand-text: ${brandDarkText};
-      --accent: ${activeTheme.accent};
-      --surface: ${activeTheme.surfaceDark};
+      --primary: ${activeTheme.primary} !important;
+      --brand: ${activeTheme.brandDark} !important;
+      --brand-text: ${brandDarkText} !important;
+      --accent: ${activeTheme.accent} !important;
+      --surface: ${activeTheme.surfaceDark} !important;
     }
     .light {
-      --primary: ${activeTheme.primary};
-      --brand: ${activeTheme.brandLight};
-      --brand-text: ${brandLightText};
-      --accent: ${activeTheme.accent};
-      --surface: ${activeTheme.surfaceLight};
+      --primary: ${activeTheme.primary} !important;
+      --brand: ${activeTheme.brandLight} !important;
+      --brand-text: ${brandLightText} !important;
+      --accent: ${activeTheme.accent} !important;
+      --surface: ${activeTheme.surfaceLight} !important;
     }
     .dark select option {
       background-color: ${activeTheme.surfaceDark};
@@ -20052,22 +20052,46 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   };
 
   // Local Branding Preview state
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [logoFitPreview, setLogoFitPreview] = useState<'cover' | 'contain'>('contain');
-  const [logoPaddingPreview, setLogoPaddingPreview] = useState<string>('p-1');
-  const [logoBgPreview, setLogoBgPreview] = useState<string>('transparent');
-  const [logoBgCustomColorPreview, setLogoBgCustomColorPreview] = useState<string>('#ffffff');
-  const [logoRadiusPreview, setLogoRadiusPreview] = useState<string>('rounded-xl');
-  const [themeColorPreview, setThemeColorPreview] = useState<string>('navy');
-  const [customBrandColorPreview, setCustomBrandColorPreview] = useState<string>('#2ba9b8');
+  const [logoPreview, setLogoPreview] = useState<string | null>(() => churchData?.logoUrl || null);
+  const [logoFitPreview, setLogoFitPreview] = useState<'cover' | 'contain'>(() => churchData?.logoFit || 'contain');
+  const [logoPaddingPreview, setLogoPaddingPreview] = useState<string>(() => churchData?.logoPadding || 'p-1');
+  const [logoBgPreview, setLogoBgPreview] = useState<string>(() => churchData?.logoBg || 'transparent');
+  const [logoBgCustomColorPreview, setLogoBgCustomColorPreview] = useState<string>(() => churchData?.logoBgCustomColor || '#ffffff');
+  const [logoRadiusPreview, setLogoRadiusPreview] = useState<string>(() => churchData?.logoRadius || 'rounded-xl');
+  const [themeColorPreview, setThemeColorPreview] = useState<string>(() => churchData?.themeColor || 'navy');
+  const [customBrandColorPreview, setCustomBrandColorPreview] = useState<string>(() => churchData?.customBrandColor || '#2ba9b8');
   const [isSavingBranding, setIsSavingBranding] = useState(false);
   const [previewDeviceMode, setPreviewDeviceMode] = useState<'mobile' | 'web'>('mobile');
   const [unreadBadgeCount, setUnreadBadgeCount] = useState<number>(1);
   const [showSettingsInstallModal, setShowSettingsInstallModal] = useState<boolean>(false);
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState<boolean>(false);
+  const customColorDebounceRef = useRef<number | null>(null);
+  const lastBrandingWriteAtRef = useRef<number>(0);
+
+  const persistBrandingUpdate = useCallback(async (updates: Record<string, any>, firestoreUpdates?: Record<string, any>) => {
+    if (!churchData?.id) return;
+    lastBrandingWriteAtRef.current = Date.now();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('liloupro:theme-updated', {
+          detail: {
+            churchId: churchData.id,
+            updates
+          }
+        })
+      );
+    }
+    try {
+      await updateDoc(doc(db, 'churches', churchData.id), firestoreUpdates || updates);
+    } catch (err) {
+      console.error('Erro ao gravar identidade visual da igreja:', err);
+    }
+  }, [churchData?.id]);
 
   useEffect(() => {
     if (churchData) {
+      // Avoid overwriting local preview with a stale snapshot right while an immediate write is in flight
+      if (Date.now() - lastBrandingWriteAtRef.current < 1200) return;
       setLogoPreview(churchData.logoUrl || null);
       setLogoFitPreview(churchData.logoFit || 'contain');
       setLogoPaddingPreview(churchData.logoPadding || 'p-1');
@@ -21148,7 +21172,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                            <div className="grid grid-cols-2 gap-2 mt-1.5">
                              <button
                                type="button"
-                               onClick={() => setLogoFitPreview('cover')}
+                               onClick={() => {
+                                 setLogoFitPreview('cover');
+                                 persistBrandingUpdate({ logoFit: 'cover' });
+                               }}
                                className={cn(
                                  "flex flex-col items-center justify-center p-2.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all select-none text-center",
                                  logoFitPreview === 'cover'
@@ -21161,7 +21188,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                              </button>
                              <button
                                type="button"
-                               onClick={() => setLogoFitPreview('contain')}
+                               onClick={() => {
+                                 setLogoFitPreview('contain');
+                                 persistBrandingUpdate({ logoFit: 'contain' });
+                               }}
                                className={cn(
                                  "flex flex-col items-center justify-center p-2.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all select-none text-center",
                                  logoFitPreview === 'contain'
@@ -21190,7 +21220,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                                <button
                                  key={pad.id}
                                  type="button"
-                                 onClick={() => setLogoPaddingPreview(pad.id)}
+                                 onClick={() => {
+                                   setLogoPaddingPreview(pad.id);
+                                   persistBrandingUpdate({ logoPadding: pad.id });
+                                 }}
                                  className={cn(
                                    "p-1.5 text-[9px] font-black rounded-lg border uppercase transition-all select-none text-center",
                                    logoPaddingPreview === pad.id
@@ -21221,7 +21254,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                                <button
                                  key={bgItem.id}
                                  type="button"
-                                 onClick={() => setLogoBgPreview(bgItem.id)}
+                                 onClick={() => {
+                                   setLogoBgPreview(bgItem.id);
+                                   persistBrandingUpdate({ logoBg: bgItem.id });
+                                 }}
                                  className={cn(
                                    "p-1 text-[8px] font-black rounded-lg border uppercase transition-all select-none text-center truncate",
                                    logoBgPreview === bgItem.id
@@ -21239,7 +21275,11 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                                <input 
                                  type="color" 
                                  value={logoBgCustomColorPreview} 
-                                 onChange={e => setLogoBgCustomColorPreview(e.target.value)}
+                                 onChange={e => {
+                                   const nextVal = e.target.value;
+                                   setLogoBgCustomColorPreview(nextVal);
+                                   persistBrandingUpdate({ logoBgCustomColor: nextVal });
+                                 }}
                                  className="w-8 h-5 rounded cursor-pointer border-0 bg-transparent shrink-0"
                                 />
                                <span className="text-[10px] font-mono text-text-main uppercase">{logoBgCustomColorPreview}</span>
@@ -21264,7 +21304,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                                <button
                                  key={rad.id}
                                  type="button"
-                                 onClick={() => setLogoRadiusPreview(rad.id)}
+                                 onClick={() => {
+                                   setLogoRadiusPreview(rad.id);
+                                   persistBrandingUpdate({ logoRadius: rad.id });
+                                 }}
                                  className={cn(
                                    "p-1 text-[8px] font-black rounded-lg border uppercase transition-all select-none text-center truncate",
                                    logoRadiusPreview === rad.id
@@ -21300,7 +21343,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                            <button
                              type="button"
                              key={key}
-                             onClick={() => setThemeColorPreview(key)}
+                             onClick={() => {
+                               setThemeColorPreview(key);
+                               persistBrandingUpdate({ themeColor: key });
+                             }}
                              className={cn(
                                "relative p-3 rounded-xl border text-left transition-all hover:scale-102 flex flex-col gap-2 bg-surface select-none",
                                isActive 
@@ -21323,7 +21369,11 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                        {/* Custom Brand Option */}
                        <button
                          type="button"
-                         onClick={() => setThemeColorPreview('custom')}
+                         onClick={() => {
+                           const nextCustom = customBrandColorPreview || '#2ba9b8';
+                           setThemeColorPreview('custom');
+                           persistBrandingUpdate({ themeColor: 'custom', customBrandColor: nextCustom });
+                         }}
                          className={cn(
                            "p-3 rounded-xl border text-left transition-all hover:scale-102 flex flex-col gap-2 bg-surface select-none",
                            themeColorPreview === 'custom'
@@ -21356,7 +21406,16 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                            <input 
                              type="color" 
                              value={customBrandColorPreview || '#2ba9b8'} 
-                             onChange={(e) => setCustomBrandColorPreview(e.target.value)}
+                             onChange={(e) => {
+                               const nextColor = e.target.value;
+                               setCustomBrandColorPreview(nextColor);
+                               if (customColorDebounceRef.current) {
+                                 window.clearTimeout(customColorDebounceRef.current);
+                               }
+                               customColorDebounceRef.current = window.setTimeout(() => {
+                                 persistBrandingUpdate({ themeColor: 'custom', customBrandColor: nextColor });
+                               }, 180);
+                             }}
                              className="w-10 h-10 rounded-xl cursor-pointer border-0 bg-transparent shrink-0"
                            />
                            <div className="min-w-0">
@@ -21371,6 +21430,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                              const val = e.target.value.trim();
                              if (val.startsWith('#') && val.length === 7) {
                                setCustomBrandColorPreview(val);
+                               persistBrandingUpdate({ themeColor: 'custom', customBrandColor: val });
                              }
                            }}
                            placeholder="#2ba9b8"

@@ -858,6 +858,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user?.uid, rawMemberData?.churchId, effectiveChurchId, isMasterUser]);
 
+  // Immediate optimistic sync for church theme/branding updates so exiting Settings never reverts color
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleThemeUpdated = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (!detail || !detail.churchId) return;
+      setChurchData((prev: any) => {
+        if (!prev || prev.id !== detail.churchId) return prev;
+        return {
+          ...prev,
+          ...detail.updates
+        };
+      });
+    };
+    window.addEventListener('liloupro:theme-updated', handleThemeUpdated);
+    return () => window.removeEventListener('liloupro:theme-updated', handleThemeUpdated);
+  }, []);
+
   // Firebase Cloud Messaging (FCM) token registration and foreground message listener
   const fcmRegisteredUidRef = useRef<string | null>(null);
 

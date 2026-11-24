@@ -3,7 +3,7 @@ import { Search, BookOpen, Check, Copy, AlertCircle, RefreshCw, Sparkles, Chevro
 import { getLocalBiblePassage, getBiblePassageAsync } from '../localBibleDb';
 import { useAuth } from '../hooks/useAuth';
 import { useBibleVersion } from '../contexts/BibleVersionContext';
-import { getMaxVerses } from '../data/bibleVerseLimits';
+import { BIBLE_VERSE_LIMITS, getMaxVerses } from '../data/bibleVerseLimits';
 
 const BIBLE_BOOKS = [
   { name: "Gênesis", abbrev: "gn", apiId: "Genesis" },
@@ -173,8 +173,27 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
   const [selectedEndVerse, setSelectedEndVerse] = useState('');
 
   const currentBookName = (BIBLE_BOOKS[selectedBookIndex] || BIBLE_BOOKS[0]).name;
-  const currentChapterNumber = parseInt(selectedChapter, 10) || 1;
+  const maxChapters = BIBLE_VERSE_LIMITS[currentBookName]?.length || 150;
+  const currentChapterNumber = Math.min(maxChapters, Math.max(1, parseInt(selectedChapter, 10) || 1));
   const maxVerses = getMaxVerses(currentBookName, currentChapterNumber);
+
+  const clampChapterValue = (rawValue: string): string => {
+    if (rawValue === '') return '';
+    const parsed = parseInt(rawValue, 10);
+    if (isNaN(parsed)) return '';
+    return String(Math.min(maxChapters, Math.max(1, parsed)));
+  };
+
+  useEffect(() => {
+    setSelectedChapter((prev) => {
+      if (prev === '') return prev;
+      const parsed = parseInt(prev, 10);
+      if (isNaN(parsed)) return '1';
+      if (parsed > maxChapters) return '1';
+      if (parsed < 1) return '1';
+      return prev;
+    });
+  }, [selectedBookIndex, maxChapters]);
 
   const clampVerseValue = (rawValue: string): string => {
     if (rawValue === '') return '';
@@ -595,8 +614,12 @@ export function BibleSearch({ onInsert, onInsertDirect, onClose }: BibleSearchPr
               <input
                 type="number"
                 min="1"
+                max={maxChapters}
                 value={selectedChapter}
-                onChange={(e) => setSelectedChapter(e.target.value)}
+                onChange={(e) => setSelectedChapter(clampChapterValue(e.target.value))}
+                onBlur={() => {
+                  if (!selectedChapter) setSelectedChapter('1');
+                }}
                 className="w-full bg-black/20 border border-white/10 text-center text-xs text-white h-10 rounded-xl"
               />
             </div>
