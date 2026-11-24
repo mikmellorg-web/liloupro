@@ -2103,11 +2103,9 @@ export default function DashboardView({
           <Card 
             style={{
               background: (() => {
-                if (nextService?.theme && nextService.theme !== 'normal') {
-                  const sTheme = SERVICE_THEMES[nextService.theme];
-                  if (sTheme) {
-                    return theme === 'dark' ? sTheme.bgDark : sTheme.bgLight;
-                  }
+                if (nextService?.theme === 'santa_ceia') {
+                  const sTheme = SERVICE_THEMES.santa_ceia;
+                  return theme === 'dark' ? sTheme.bgDark : sTheme.bgLight;
                 }
                 return `linear-gradient(135deg, ${primaryColor} 0%, ${surfaceColor} 100%)`;
               })()
