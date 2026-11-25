@@ -19,6 +19,7 @@ import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
 import { cleanCifraHtml, extractLyricsFromChords } from '../services/chordService';
 import { checkResourceLimit, ResourceCheckResult } from '../services/planService';
 import { PdfChordImportSection } from './PdfChordImportSection';
+import { PdfIcon } from './PdfIcon';
 import { ExtractedPdfSong } from '../utils/pdfChordImportUtils';
 
 // Re-exports for critical modules referenced by App.tsx and LiturgyView
@@ -1757,7 +1758,7 @@ export function SongsView({
                 }`}
                 title={orderedLiturgySongs.length === 0 ? "Aguardando definição das músicas para gerar o caderno de cifras" : "Gerar caderno de cifras do culto"}
               >
-                <FileText size={14} className="shrink-0" />
+                <PdfIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="truncate">CIFRAS DO CULTO</span>
               </button>
 

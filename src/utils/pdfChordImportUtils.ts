@@ -5,6 +5,8 @@ export const MAX_PDF_FILE_SIZE_MB = 25;
 export const MAX_PDF_FILE_SIZE_BYTES = MAX_PDF_FILE_SIZE_MB * 1024 * 1024;
 const PDF_CHUNK_SIZE = 5;
 const PDF_CHUNK_OVERLAP = 1;
+const PDF_INTER_CHUNK_DELAY_MS = 600;
+const PDF_RETRY_BACKOFF_MS = [2500, 5000]; // 2ª tentativa após 2.5s, 3ª tentativa após 5s
 
 export interface PdfExtractionProgress {
   fileName: string;
@@ -15,6 +17,21 @@ export interface PdfExtractionProgress {
   totalPages: number;
   songsFoundInFile: number;
   chunkPercent: number;
+  retryAttempt?: number;
+  maxAttempts?: number;
+  statusMessage?: string;
+}
+
+export interface FailedPdfChunkInfo {
+  id: string;
+  fileName: string;
+  chunkIndex: number;
+  totalChunks: number;
+  pageStart: number;
+  pageEnd: number;
+  totalPages: number;
+  base64Data: string;
+  friendlyMessage: string;
 }
 
 export type DuplicateStatus = 'new' | 'duplicate' | 'version';
@@ -189,6 +206,160 @@ export function validatePdfFileSize(file: File): string | null {
   return null;
 }
 
+interface PdfChunkApiError extends Error {
+  status?: number;
+  isTransient?: boolean;
+}
+
+function isTransientPdfApiError(status?: number, rawMessage?: string): boolean {
+  if (status === 429 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+  const msg = String(rawMessage || '').toLowerCase();
+  return (
+    msg.includes('503') ||
+    msg.includes('429') ||
+    msg.includes('502') ||
+    msg.includes('504') ||
+    msg.includes('unavailable') ||
+    msg.includes('high demand') ||
+    msg.includes('overloaded') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('quota') ||
+    msg.includes('rate') ||
+    msg.includes('alta demanda') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('load failed') ||
+    msg.includes('timeout')
+  );
+}
+
+/**
+ * Sanitiza mensagens de erro para nunca exibir JSON bruto em inglês na interface.
+ */
+export function formatFriendlyPdfChunkError(
+  pageStart: number,
+  pageEnd: number,
+  fileName?: string,
+  totalFiles: number = 1
+): string {
+  const pageLabel =
+    pageStart === pageEnd
+      ? `a página ${pageStart}`
+      : `as páginas ${pageStart}–${pageEnd}`;
+  const filePrefix =
+    totalFiles > 1 && fileName ? `[${fileName}] ` : '';
+  return `${filePrefix}Não foi possível ler ${pageLabel} devido à instabilidade temporária do servidor.`;
+}
+
+export function sanitizeRawApiErrorMessage(rawError: any, fallback: string): string {
+  const msg = String(rawError?.message || rawError || '').trim();
+  if (!msg) return fallback;
+  const lower = msg.toLowerCase();
+  if (
+    msg.includes('{') ||
+    msg.includes('"error"') ||
+    lower.includes('unavailable') ||
+    lower.includes('high demand') ||
+    lower.includes('resource_exhausted') ||
+    lower.includes('503') ||
+    lower.includes('429')
+  ) {
+    return fallback;
+  }
+  return msg;
+}
+
+/**
+ * Pós-processa a cifra extraída do PDF garantindo fidelidade 100% ao alinhamento Acorde × Sílaba:
+ * - NUNCA aplica .trim() à esquerda e NUNCA colapsa múltiplos espaços nas linhas de acordes.
+ * - Remove apenas espaços em branco sobrando no FINAL (à direita) de cada linha.
+ * - Se uma estrofe inteira estiver indentada/recuada à direita no PDF (como um bloco com Tab),
+ *   remove apenas o recuo comum mínimo de todas as linhas daquela estrofe na mesma proporção,
+ *   preservando intacto o alinhamento relativo de cada acorde sobre a sílaba correspondente.
+ */
+export function formatExtractedPdfCifra(rawCifra: string): string {
+  if (!rawCifra) return '';
+
+  const rawLines = String(rawCifra)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\t/g, '    ')
+    .replace(/\u00A0/g, ' ')
+    .split('\n');
+
+  // 1. Filtra rodapés/links de sites sem alterar os espaços à esquerda das linhas válidas
+  const cleanedLines: string[] = [];
+  for (const line of rawLines) {
+    const rightTrimmed = line.replace(/ +$/g, '');
+    const checkTrimmed = rightTrimmed.trim();
+
+    if (checkTrimmed) {
+      if (/^(?:https?:\/\/|www\.)\S+$/i.test(checkTrimmed)) continue;
+      if (/(?:cifraclub\.com\.br|letras\.mus\.br|superpartituras\.com|bananacifras\.com)/i.test(checkTrimmed)) continue;
+      if (/^(?:p[aá]gina|pag\.?|pg\.?)\s*\d+(?:\s*(?:de|\/)\s*\d+)?$/i.test(checkTrimmed)) continue;
+      if (/^-?\s*\d+\s*\/\s*\d+\s*-?$/.test(checkTrimmed)) continue;
+    }
+
+    cleanedLines.push(checkTrimmed === '' ? '' : rightTrimmed);
+  }
+
+  // 2. Compacta múltiplas linhas em branco consecutivas em apenas 1 linha vazia entre estrofes
+  const compactLines: string[] = [];
+  let emptyRun = 0;
+  for (const line of cleanedLines) {
+    if (line === '') {
+      emptyRun += 1;
+      if (compactLines.length > 0 && emptyRun <= 1) {
+        compactLines.push('');
+      }
+    } else {
+      emptyRun = 0;
+      compactLines.push(line);
+    }
+  }
+  while (compactLines.length > 0 && compactLines[compactLines.length - 1] === '') {
+    compactLines.pop();
+  }
+
+  // 3. Agrupa por estrofe (separada por linha em branco) e remove apenas o recuo comum da estrofe
+  //    na mesma proporção entre linhas de acordes e linhas de letra
+  const stanzas: string[][] = [];
+  let currentStanza: string[] = [];
+  for (const line of compactLines) {
+    if (line === '') {
+      if (currentStanza.length > 0) {
+        stanzas.push(currentStanza);
+        currentStanza = [];
+      }
+    } else {
+      currentStanza.push(line);
+    }
+  }
+  if (currentStanza.length > 0) {
+    stanzas.push(currentStanza);
+  }
+
+  const dedentedStanzas = stanzas.map((stanzaLines) => {
+    let minCommonIndent = Infinity;
+    for (const l of stanzaLines) {
+      if (!l) continue;
+      const match = l.match(/^( *)/);
+      const leadingSpaces = match ? match[1].length : 0;
+      if (leadingSpaces < minCommonIndent) {
+        minCommonIndent = leadingSpaces;
+      }
+    }
+    if (!Number.isFinite(minCommonIndent) || minCommonIndent <= 0) {
+      return stanzaLines.join('\n');
+    }
+    return stanzaLines.map((l) => l.slice(minCommonIndent)).join('\n');
+  });
+
+  return dedentedStanzas.join('\n\n');
+}
+
 /**
  * Envia um payload Base64 de PDF (arquivo inteiro ou bloco fatiado) para o endpoint server-side do Gemini.
  */
@@ -196,33 +367,113 @@ async function postPdfChunkToApi(
   base64Data: string,
   displayName: string
 ): Promise<RawExtractedPdfSong[]> {
-  const response = await fetch('/api/songs/extract-pdf-chords', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fileName: displayName,
-      mimeType: 'application/pdf',
-      base64Data
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/songs/extract-pdf-chords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: displayName,
+        mimeType: 'application/pdf',
+        base64Data
+      })
+    });
+  } catch (networkErr: any) {
+    const err: PdfChunkApiError = new Error(
+      'Instabilidade temporária de conexão com o servidor.'
+    );
+    err.isTransient = true;
+    throw err;
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(
-      payload?.error || `Falha ao processar "${displayName}". Tente novamente.`
+    const rawMsg = String(payload?.error || `HTTP ${response.status}`);
+    const transient = isTransientPdfApiError(response.status, rawMsg);
+    const err: PdfChunkApiError = new Error(
+      sanitizeRawApiErrorMessage(
+        rawMsg,
+        'Não foi possível ler este trecho devido à instabilidade temporária do servidor.'
+      )
     );
+    err.status = response.status;
+    err.isTransient = transient;
+    throw err;
   }
 
-  return Array.isArray(payload?.songs) ? payload.songs : [];
+  const rawSongs = Array.isArray(payload?.songs) ? payload.songs : [];
+  return rawSongs.map((s: any) => ({
+    ...s,
+    cifra: formatExtractedPdfCifra(s?.cifra || '')
+  }));
+}
+
+/**
+ * Executa a leitura de um bloco de páginas com até 3 tentativas automáticas
+ * e backoff progressivo (2.5s antes da 2ª tentativa e 5s antes da 3ª tentativa).
+ */
+async function postPdfChunkWithRetry(params: {
+  base64Data: string;
+  displayName: string;
+  fileName: string;
+  chunkIndex: number;
+  totalChunks: number;
+  pageStart: number;
+  pageEnd: number;
+  totalPages: number;
+  songsFoundInFile: number;
+  chunkPercent: number;
+  onProgress?: (progress: PdfExtractionProgress) => void;
+}): Promise<RawExtractedPdfSong[]> {
+  const maxAttempts = 3;
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await postPdfChunkToApi(params.base64Data, params.displayName);
+    } catch (err: any) {
+      lastError = err;
+      const isTransient =
+        err?.isTransient !== false &&
+        isTransientPdfApiError(err?.status, err?.message);
+
+      if (!isTransient || attempt >= maxAttempts) {
+        break;
+      }
+
+      const nextAttempt = attempt + 1;
+      const delayMs = PDF_RETRY_BACKOFF_MS[attempt - 1] ?? 5000;
+      const retryMsg = `Servidor ocupado no bloco ${params.chunkIndex} (páginas ${params.pageStart}–${params.pageEnd}), tentando novamente (${nextAttempt}/${maxAttempts})...`;
+
+      params.onProgress?.({
+        fileName: params.fileName,
+        chunkIndex: params.chunkIndex,
+        totalChunks: params.totalChunks,
+        pageStart: params.pageStart,
+        pageEnd: params.pageEnd,
+        totalPages: params.totalPages,
+        songsFoundInFile: params.songsFoundInFile,
+        chunkPercent: params.chunkPercent,
+        retryAttempt: nextAttempt,
+        maxAttempts,
+        statusMessage: retryMsg
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError || new Error('Instabilidade temporária do servidor.');
 }
 
 /**
  * Une duas cifras da mesma música que atravessaram uma emenda de bloco,
- * evitando duplicar linhas já presentes na página de overlap.
+ * evitando duplicar linhas já presentes na página de overlap e NUNCA usando .trim()
+ * à esquerda para não deslocar os acordes da primeira linha.
  */
 function mergeOverlappingCifra(prevCifra: string, nextCifra: string): string {
-  const cleanPrev = (prevCifra || '').trimEnd();
-  const cleanNext = (nextCifra || '').trim();
+  const cleanPrev = formatExtractedPdfCifra(prevCifra || '');
+  const cleanNext = formatExtractedPdfCifra(nextCifra || '');
   if (!cleanPrev) return cleanNext;
   if (!cleanNext) return cleanPrev;
 
@@ -289,7 +540,7 @@ function mergeOverlappingCifra(prevCifra: string, nextCifra: string): string {
  * Mescla músicas extraídas de um bloco sequencial no acumulado do mesmo arquivo PDF,
  * deduplicando títulos repetidos pelo overlap de 1 página e unindo músicas fragmentadas na emenda.
  */
-function mergeChunkSongsIntoAccumulated(
+export function mergeChunkSongsIntoAccumulated(
   accumulated: RawExtractedPdfSong[],
   incomingSongs: RawExtractedPdfSong[],
   isSubsequentChunk: boolean
@@ -373,14 +624,44 @@ function buildPdfPageChunks(totalPages: number): Array<{ startIdx: number; endId
 }
 
 export interface ExtractPdfFileOptions {
+  totalFiles?: number;
   onProgress?: (progress: PdfExtractionProgress) => void;
   onChunkWarning?: (warning: string) => void;
+  onChunkFailed?: (failedChunk: FailedPdfChunkInfo) => void;
+}
+
+/**
+ * Reprocessa exclusivamente um bloco de páginas que falhou anteriormente,
+ * aplicando a mesma política de até 3 tentativas automáticas com backoff (2.5s / 5s).
+ */
+export async function retryFailedPdfChunk(
+  chunk: FailedPdfChunkInfo,
+  onProgress?: (progress: PdfExtractionProgress) => void
+): Promise<RawExtractedPdfSong[]> {
+  const chunkLabel =
+    chunk.totalChunks > 1
+      ? `${chunk.fileName} (páginas ${chunk.pageStart}-${chunk.pageEnd})`
+      : chunk.fileName;
+
+  return postPdfChunkWithRetry({
+    base64Data: chunk.base64Data,
+    displayName: chunkLabel,
+    fileName: chunk.fileName,
+    chunkIndex: chunk.chunkIndex,
+    totalChunks: chunk.totalChunks,
+    pageStart: chunk.pageStart,
+    pageEnd: chunk.pageEnd,
+    totalPages: chunk.totalPages,
+    songsFoundInFile: 0,
+    chunkPercent: 50,
+    onProgress
+  });
 }
 
 /**
  * Envia um arquivo PDF para o endpoint server-side do Gemini com fatiamento automático
- * em blocos de 5 páginas (via pdf-lib) para apostilas grandes, merge na emenda das páginas
- * e emissão de progresso real bloco a bloco.
+ * em blocos de 5 páginas (via pdf-lib) para apostilas grandes, merge na emenda das páginas,
+ * retentativa automática inteligente (3 tentativas com backoff 2.5s/5s) e intervalo de 600ms entre blocos.
  */
 export async function extractSongsFromPdfFile(
   file: File,
@@ -391,6 +672,7 @@ export async function extractSongsFromPdfFile(
     throw new Error(sizeError);
   }
 
+  const totalFiles = options?.totalFiles ?? 1;
   let sourcePdf: PDFDocument | null = null;
   let totalPages = 0;
 
@@ -404,7 +686,7 @@ export async function extractSongsFromPdfFile(
     totalPages = 0;
   }
 
-  // PDFs com até 5 páginas (ou fallback quando não foi possível inspecionar páginas): envio único
+  // PDFs com até 5 páginas (ou fallback quando não foi possível inspecionar páginas): envio único com até 3 tentativas
   if (!sourcePdf || totalPages <= PDF_CHUNK_SIZE) {
     const pageCountDisplay = totalPages > 0 ? totalPages : 1;
     options?.onProgress?.({
@@ -419,33 +701,72 @@ export async function extractSongsFromPdfFile(
     });
 
     const base64Data = await readPdfFileAsBase64(file);
-    const songs = await postPdfChunkToApi(base64Data, file.name);
+    try {
+      const songs = await postPdfChunkWithRetry({
+        base64Data,
+        displayName: file.name,
+        fileName: file.name,
+        chunkIndex: 1,
+        totalChunks: 1,
+        pageStart: 1,
+        pageEnd: pageCountDisplay,
+        totalPages: pageCountDisplay,
+        songsFoundInFile: 0,
+        chunkPercent: 30,
+        onProgress: options?.onProgress
+      });
 
-    options?.onProgress?.({
-      fileName: file.name,
-      chunkIndex: 1,
-      totalChunks: 1,
-      pageStart: 1,
-      pageEnd: pageCountDisplay,
-      totalPages: pageCountDisplay,
-      songsFoundInFile: songs.length,
-      chunkPercent: 100
-    });
+      options?.onProgress?.({
+        fileName: file.name,
+        chunkIndex: 1,
+        totalChunks: 1,
+        pageStart: 1,
+        pageEnd: pageCountDisplay,
+        totalPages: pageCountDisplay,
+        songsFoundInFile: songs.length,
+        chunkPercent: 100
+      });
 
-    return songs;
+      return songs;
+    } catch {
+      const friendlyMessage = formatFriendlyPdfChunkError(
+        1,
+        pageCountDisplay,
+        file.name,
+        totalFiles
+      );
+      options?.onChunkFailed?.({
+        id: `${file.name}_chunk_1_${Date.now()}`,
+        fileName: file.name,
+        chunkIndex: 1,
+        totalChunks: 1,
+        pageStart: 1,
+        pageEnd: pageCountDisplay,
+        totalPages: pageCountDisplay,
+        base64Data,
+        friendlyMessage
+      });
+      throw new Error(friendlyMessage);
+    }
   }
 
   // Apostilas grandes (> 5 páginas): fatia automaticamente no navegador em blocos de 5 páginas com overlap de 1 página
   const chunks = buildPdfPageChunks(totalPages);
   let accumulatedSongs: RawExtractedPdfSong[] = [];
   let failedChunks = 0;
-  let lastChunkError: Error | null = null;
+  let lastFriendlyError: string | null = null;
 
   for (let i = 0; i < chunks.length; i += 1) {
+    // Pequeno intervalo de 600ms entre o envio de blocos consecutivos para evitar rajadas simultâneas
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, PDF_INTER_CHUNK_DELAY_MS));
+    }
+
     const { startIdx, endIdx } = chunks[i];
     const pageStart = startIdx + 1;
     const pageEnd = endIdx + 1;
     const chunkIndex = i + 1;
+    const currentPercent = Math.round((i / chunks.length) * 100);
 
     options?.onProgress?.({
       fileName: file.name,
@@ -455,7 +776,7 @@ export async function extractSongsFromPdfFile(
       pageEnd,
       totalPages,
       songsFoundInFile: accumulatedSongs.length,
-      chunkPercent: Math.round((i / chunks.length) * 100)
+      chunkPercent: currentPercent
     });
 
     const chunkPdf = await PDFDocument.create();
@@ -471,32 +792,47 @@ export async function extractSongsFromPdfFile(
     const chunkBase64 = await chunkPdf.saveAsBase64({ dataUri: false });
     const chunkLabel = `${file.name} (páginas ${pageStart}-${pageEnd})`;
 
-    let chunkSongs: RawExtractedPdfSong[] | null = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        chunkSongs = await postPdfChunkToApi(chunkBase64, chunkLabel);
-        break;
-      } catch (err: any) {
-        lastChunkError = err instanceof Error ? err : new Error(String(err));
-        if (attempt === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-        }
-      }
-    }
+    try {
+      const chunkSongs = await postPdfChunkWithRetry({
+        base64Data: chunkBase64,
+        displayName: chunkLabel,
+        fileName: file.name,
+        chunkIndex,
+        totalChunks: chunks.length,
+        pageStart,
+        pageEnd,
+        totalPages,
+        songsFoundInFile: accumulatedSongs.length,
+        chunkPercent: currentPercent,
+        onProgress: options?.onProgress
+      });
 
-    if (chunkSongs) {
       accumulatedSongs = mergeChunkSongsIntoAccumulated(
         accumulatedSongs,
         chunkSongs,
         i > 0
       );
-    } else {
+    } catch {
       failedChunks += 1;
-      options?.onChunkWarning?.(
-        `Bloco ${chunkIndex} (páginas ${pageStart}–${pageEnd}) de "${file.name}": ${
-          lastChunkError?.message || 'não foi possível extrair este trecho.'
-        }`
+      const friendlyMessage = formatFriendlyPdfChunkError(
+        pageStart,
+        pageEnd,
+        file.name,
+        totalFiles
       );
+      lastFriendlyError = friendlyMessage;
+      options?.onChunkWarning?.(friendlyMessage);
+      options?.onChunkFailed?.({
+        id: `${file.name}_chunk_${chunkIndex}_${Date.now()}`,
+        fileName: file.name,
+        chunkIndex,
+        totalChunks: chunks.length,
+        pageStart,
+        pageEnd,
+        totalPages,
+        base64Data: chunkBase64,
+        friendlyMessage
+      });
     }
 
     options?.onProgress?.({
@@ -511,8 +847,8 @@ export async function extractSongsFromPdfFile(
     });
   }
 
-  if (accumulatedSongs.length === 0 && failedChunks === chunks.length && lastChunkError) {
-    throw lastChunkError;
+  if (accumulatedSongs.length === 0 && failedChunks === chunks.length && lastFriendlyError) {
+    throw new Error(lastFriendlyError);
   }
 
   return accumulatedSongs;

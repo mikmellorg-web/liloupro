@@ -8,14 +8,21 @@ import {
   Sparkles,
   FileWarning,
   RotateCcw,
+  RefreshCw,
   Save
 } from 'lucide-react';
 import { PdfIcon } from './PdfIcon';
 import {
   ExtractedPdfSong,
+  FailedPdfChunkInfo,
   PdfExtractionProgress,
+  RawExtractedPdfSong,
   classifyExtractedPdfSongs,
   extractSongsFromPdfFile,
+  mergeChunkSongsIntoAccumulated,
+  normalizeTitleForDuplicateCheck,
+  retryFailedPdfChunk,
+  sanitizeRawApiErrorMessage,
   validatePdfFileSize
 } from '../utils/pdfChordImportUtils';
 
@@ -61,6 +68,8 @@ export function PdfChordImportSection({
   } | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [partialWarnings, setPartialWarnings] = useState<string[]>([]);
+  const [failedChunks, setFailedChunks] = useState<FailedPdfChunkInfo[]>([]);
+  const [isRetryingFailedChunks, setIsRetryingFailedChunks] = useState(false);
   const [extractedSongs, setExtractedSongs] = useState<ExtractedPdfSong[]>([]);
   const [expandedSongIds, setExpandedSongIds] = useState<Record<string, boolean>>({});
   const [isSavingBatch, setIsSavingBatch] = useState(false);
@@ -80,6 +89,8 @@ export function PdfChordImportSection({
     setExpandedSongIds({});
     setExtractError(null);
     setPartialWarnings([]);
+    setFailedChunks([]);
+    setIsRetryingFailedChunks(false);
     setProgressText('');
     setProgressState(null);
     if (fileInputRef.current) {
@@ -104,6 +115,7 @@ export function PdfChordImportSection({
     setIsExtracting(true);
     setExtractError(null);
     setPartialWarnings([]);
+    setFailedChunks([]);
     setExtractedSongs([]);
     setExpandedSongIds({});
     onReviewActiveChange?.(false);
@@ -117,6 +129,7 @@ export function PdfChordImportSection({
       sourceFileName: string;
     }> = [];
     const warnings: string[] = [];
+    const collectedFailedChunks: FailedPdfChunkInfo[] = [];
 
     if (ignoredCount > 0) {
       warnings.push(
@@ -151,6 +164,7 @@ export function PdfChordImportSection({
       for (let i = 0; i < validSizedFiles.length; i += 1) {
         const file = validSizedFiles[i];
         const songsBeforeCurrentFile = collectedRaw.length;
+        const failedCountBeforeFile = collectedFailedChunks.length;
 
         setProgressText(
           validSizedFiles.length === 1
@@ -172,6 +186,7 @@ export function PdfChordImportSection({
 
         try {
           const foundInFile = await extractSongsFromPdfFile(file, {
+            totalFiles: validSizedFiles.length,
             onProgress: (p: PdfExtractionProgress) => {
               const songsFoundTotal = songsBeforeCurrentFile + p.songsFoundInFile;
               const overallPercent = Math.min(
@@ -182,7 +197,9 @@ export function PdfChordImportSection({
                 songsFoundTotal === 1
                   ? '1 música encontrada'
                   : `${songsFoundTotal} músicas encontradas`;
-              const detailedText = `Processando bloco ${p.chunkIndex} de ${p.totalChunks} (páginas ${p.pageStart}–${p.pageEnd} de ${p.totalPages})... ${songsLabel}`;
+              const detailedText =
+                p.statusMessage ||
+                `Processando bloco ${p.chunkIndex} de ${p.totalChunks} (páginas ${p.pageStart}–${p.pageEnd} de ${p.totalPages})... ${songsLabel}`;
 
               setProgressText(detailedText);
               setProgressState({
@@ -200,10 +217,16 @@ export function PdfChordImportSection({
             },
             onChunkWarning: (chunkWarning: string) => {
               warnings.push(chunkWarning);
+            },
+            onChunkFailed: (failedChunk: FailedPdfChunkInfo) => {
+              collectedFailedChunks.push(failedChunk);
             }
           });
 
-          if (foundInFile.length === 0) {
+          const fileHadFailedChunks =
+            collectedFailedChunks.length > failedCountBeforeFile;
+
+          if (foundInFile.length === 0 && !fileHadFailedChunks) {
             warnings.push(`Nenhuma cifra identificável encontrada em "${file.name}".`);
           } else {
             for (const song of foundInFile) {
@@ -214,11 +237,17 @@ export function PdfChordImportSection({
             }
           }
         } catch (fileErr: any) {
-          warnings.push(
-            `${file.name}: ${fileErr?.message || 'falha ao extrair cifras deste arquivo.'}`
+          const friendlyMsg = sanitizeRawApiErrorMessage(
+            fileErr,
+            `Não foi possível ler "${file.name}" devido à instabilidade temporária do servidor.`
           );
+          if (!warnings.includes(friendlyMsg)) {
+            warnings.push(friendlyMsg);
+          }
         }
       }
+
+      setFailedChunks(collectedFailedChunks);
 
       if (collectedRaw.length === 0) {
         setExtractError(
@@ -240,9 +269,177 @@ export function PdfChordImportSection({
       }
     } catch (err: any) {
       setExtractError(
-        err?.message || 'Erro inesperado ao processar os PDFs. Tente novamente.'
+        sanitizeRawApiErrorMessage(
+          err,
+          'Erro inesperado ao processar os PDFs devido à instabilidade temporária do servidor. Tente novamente.'
+        )
       );
     } finally {
+      setIsExtracting(false);
+      setProgressText('');
+      setProgressState(null);
+    }
+  };
+
+  /**
+   * Reprocessa exclusivamente os blocos de páginas que falharam e mescla as músicas
+   * recuperadas com a lista já extraída sem perder nenhuma música ou edição já feita.
+   */
+  const handleRetryFailedChunks = async () => {
+    if (failedChunks.length === 0 || isExtracting || isRetryingFailedChunks || isSavingBatch) {
+      return;
+    }
+
+    const chunksToRetry = [...failedChunks];
+    setIsRetryingFailedChunks(true);
+    setIsExtracting(true);
+    setExtractError(null);
+
+    const stillFailed: FailedPdfChunkInfo[] = [];
+    const recoveredByFile = new Map<string, RawExtractedPdfSong[]>();
+    const previousSelectionByNormTitle = new Map<string, boolean>();
+    extractedSongs.forEach((s) => {
+      const nt = normalizeTitleForDuplicateCheck(s.titulo);
+      if (nt) previousSelectionByNormTitle.set(nt, s.selected);
+    });
+
+    try {
+      for (let i = 0; i < chunksToRetry.length; i += 1) {
+        if (i > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+
+        const chunk = chunksToRetry[i];
+        const basePercent = Math.round((i / chunksToRetry.length) * 100);
+        const pageLabel =
+          chunk.pageStart === chunk.pageEnd
+            ? `página ${chunk.pageStart}`
+            : `páginas ${chunk.pageStart}–${chunk.pageEnd}`;
+
+        setProgressText(
+          `Reprocessando bloco ${i + 1} de ${chunksToRetry.length} (${pageLabel} de ${chunk.totalPages})...`
+        );
+        setProgressState({
+          fileIndex: 1,
+          totalFiles: 1,
+          fileName: chunk.fileName,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
+          pageStart: chunk.pageStart,
+          pageEnd: chunk.pageEnd,
+          totalPages: chunk.totalPages,
+          songsFoundTotal: extractedSongs.length,
+          percent: basePercent
+        });
+
+        try {
+          const recoveredSongs = await retryFailedPdfChunk(chunk, (p) => {
+            if (p.statusMessage) {
+              setProgressText(p.statusMessage);
+            }
+          });
+
+          if (recoveredSongs.length > 0) {
+            const currentFileSongs = recoveredByFile.get(chunk.fileName) || [];
+            recoveredByFile.set(
+              chunk.fileName,
+              mergeChunkSongsIntoAccumulated(currentFileSongs, recoveredSongs, true)
+            );
+          }
+        } catch {
+          stillFailed.push(chunk);
+        }
+
+        setProgressState({
+          fileIndex: 1,
+          totalFiles: 1,
+          fileName: chunk.fileName,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
+          pageStart: chunk.pageStart,
+          pageEnd: chunk.pageEnd,
+          totalPages: chunk.totalPages,
+          songsFoundTotal: extractedSongs.length,
+          percent: Math.round(((i + 1) / chunksToRetry.length) * 100)
+        });
+      }
+
+      // Mescla as músicas já existentes na tela com as recém-recuperadas por arquivo
+      const fileOrder: string[] = [];
+      const songsByFile = new Map<string, RawExtractedPdfSong[]>();
+
+      for (const existing of extractedSongs) {
+        const fName = existing.sourceFileName || 'arquivo.pdf';
+        if (!songsByFile.has(fName)) {
+          fileOrder.push(fName);
+          songsByFile.set(fName, []);
+        }
+        songsByFile.get(fName)!.push({
+          titulo: existing.titulo,
+          artista: existing.artista,
+          tom: existing.tom,
+          bpm: existing.bpm,
+          cifra: existing.cifra
+        });
+      }
+
+      recoveredByFile.forEach((recoveredList, fName) => {
+        if (!songsByFile.has(fName)) {
+          fileOrder.push(fName);
+          songsByFile.set(fName, []);
+        }
+        const mergedForFile = mergeChunkSongsIntoAccumulated(
+          songsByFile.get(fName)!,
+          recoveredList,
+          true
+        );
+        songsByFile.set(fName, mergedForFile);
+      });
+
+      const mergedAllRaw: Array<RawExtractedPdfSong & { sourceFileName: string }> = [];
+      for (const fName of fileOrder) {
+        const list = songsByFile.get(fName) || [];
+        for (const item of list) {
+          mergedAllRaw.push({
+            ...item,
+            sourceFileName: fName
+          });
+        }
+      }
+
+      const reclassified = classifyExtractedPdfSongs(mergedAllRaw, existingSongs).map(
+        (song) => {
+          const nt = normalizeTitleForDuplicateCheck(song.titulo);
+          if (nt && previousSelectionByNormTitle.has(nt)) {
+            return { ...song, selected: previousSelectionByNormTitle.get(nt)! };
+          }
+          return song;
+        }
+      );
+
+      // Atualiza avisos removendo os blocos que foram recuperados com sucesso
+      const retriedMessages = new Set(chunksToRetry.map((c) => c.friendlyMessage));
+      const nonChunkWarnings = partialWarnings.filter((w) => !retriedMessages.has(w));
+      const updatedWarnings = [
+        ...nonChunkWarnings,
+        ...stillFailed.map((c) => c.friendlyMessage)
+      ];
+
+      setFailedChunks(stillFailed);
+      setPartialWarnings(updatedWarnings);
+
+      if (reclassified.length > 0) {
+        setExtractedSongs(reclassified);
+        updateReviewActive(reclassified);
+        if (reclassified.length === 1 && reclassified[0].status === 'new') {
+          onPopulateSingleFields?.(reclassified[0].titulo, reclassified[0].artista);
+          setExpandedSongIds({ [reclassified[0].id]: true });
+        }
+      } else if (stillFailed.length > 0) {
+        setExtractError(stillFailed[0].friendlyMessage);
+      }
+    } finally {
+      setIsRetryingFailedChunks(false);
       setIsExtracting(false);
       setProgressText('');
       setProgressState(null);
@@ -512,34 +709,72 @@ export function PdfChordImportSection({
       )}
 
       {/* Erro na extração */}
-      {extractError && (
+      {extractError && !isExtracting && (
         <div
-          className={`p-3 rounded-xl border text-xs leading-relaxed flex items-start gap-2 animate-in fade-in duration-150 ${
+          className={`p-3 rounded-xl border text-xs leading-relaxed space-y-2.5 animate-in fade-in duration-150 ${
             isLight
               ? 'bg-red-50 border-red-200 text-red-800'
               : 'bg-red-950/35 border-red-500/40 text-red-200'
           }`}
         >
-          <FileWarning size={15} className="shrink-0 mt-0.5 text-red-500" />
-          <span>{extractError}</span>
+          <div className="flex items-start gap-2">
+            <FileWarning size={15} className="shrink-0 mt-0.5 text-red-500" />
+            <span>{extractError}</span>
+          </div>
+          {failedChunks.length > 0 && (
+            <button
+              type="button"
+              onClick={handleRetryFailedChunks}
+              disabled={isExtracting || isRetryingFailedChunks || isSavingBatch}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${
+                isLight
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-xs'
+                  : 'bg-red-600/90 hover:bg-red-500 text-white shadow-md shadow-red-950/40'
+              }`}
+            >
+              <RefreshCw size={13} className="shrink-0" />
+              <span>Tentar novamente páginas com falha</span>
+            </button>
+          )}
         </div>
       )}
 
-      {/* Avisos parciais em lote (quando alguns PDFs falharam mas outros deram certo) */}
-      {partialWarnings.length > 0 && extractedSongs.length > 0 && (
+      {/* Avisos parciais em lote (quando alguns blocos/PDFs falharam mas outros deram certo) */}
+      {partialWarnings.length > 0 && extractedSongs.length > 0 && !isExtracting && (
         <div
-          className={`p-2.5 rounded-xl border text-[11px] space-y-1 ${
+          className={`p-3 rounded-xl border text-[11px] space-y-2 animate-in fade-in duration-150 ${
             isLight
               ? 'bg-amber-50 border-amber-200 text-amber-800'
-              : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+              : 'bg-amber-950/30 border-amber-500/35 text-amber-200'
           }`}
         >
-          {partialWarnings.map((w, idx) => (
-            <div key={idx} className="flex items-start gap-1.5">
-              <AlertTriangle size={12} className="shrink-0 mt-0.5 text-amber-500" />
-              <span>{w}</span>
-            </div>
-          ))}
+          <div className="space-y-1">
+            {partialWarnings.map((w, idx) => (
+              <div key={idx} className="flex items-start gap-1.5 leading-relaxed">
+                <AlertTriangle size={13} className="shrink-0 mt-0.5 text-amber-500" />
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
+
+          {failedChunks.length > 0 && (
+            <button
+              type="button"
+              onClick={handleRetryFailedChunks}
+              disabled={isExtracting || isRetryingFailedChunks || isSavingBatch}
+              className={`w-full py-2 px-3 rounded-lg font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${
+                isLight
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                  : 'bg-amber-500/25 hover:bg-amber-500/35 border border-amber-400/40 text-amber-200'
+              }`}
+            >
+              <RefreshCw size={13} className="shrink-0" />
+              <span>
+                Tentar novamente páginas com falha ({failedChunks.length}{' '}
+                {failedChunks.length === 1 ? 'bloco' : 'blocos'})
+              </span>
+            </button>
+          )}
         </div>
       )}
 

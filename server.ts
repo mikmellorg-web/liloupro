@@ -3876,9 +3876,9 @@ Complete a finalização da música`,
         }
       });
 
-      const systemInstruction = `Você é um especialista sênior em transcrição e extração de cifras musicais (louvor e adoração) a partir de arquivos PDF — tanto PDFs digitais quanto PDFs escaneados/fotografados (OCR visual).
+      const systemInstruction = `Você é um especialista sênior em transcrição e extração 100% fiel de cifras musicais (louvor e adoração) a partir de arquivos PDF — tanto PDFs digitais quanto PDFs escaneados/fotografados (OCR visual).
 
-REGRAS CRÍTICAS DE EXTRAÇÃO:
+REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
 1. SUPORTE A 1 MÚSICA OU CADERNO MULTI-MÚSICAS:
    - Analise todas as páginas do PDF do início ao fim.
    - Se o PDF contiver 1 música, retorne um array "songs" com 1 objeto.
@@ -3891,20 +3891,25 @@ REGRAS CRÍTICAS DE EXTRAÇÃO:
    - "tom": Tom musical principal (ex: "C", "G", "D", "Am", "F#m", "Bb") retirado do cabeçalho (ex: "Tom: G") ou inferido harmonicamente dos acordes principais da canção.
    - "bpm": Número inteiro do andamento (BPM) se indicado no PDF (entre 40 e 220), ou 0 se não informado.
 
-3. PRESERVAÇÃO RIGOROSA DO ALINHAMENTO HORIZONTAL DAS CIFRAS ("cifra"):
-   - O campo "cifra" será exibido em fonte monoespaçada.
-   - Mantenha RIGOROSAMENTE o alinhamento horizontal dos acordes acima das sílabas exatas da letra usando EXCLUSIVAMENTE espaços simples (" "). NUNCA use tabulações (\\t) e NUNCA colapse múltiplos espaços em uma linha de acordes!
-   - Mantenha linhas em branco separando cada estrofe/seção.
-   - Preserve e padronize marcadores de seção quando existirem: [Intro], [Verso 1], [Verso 2], [Pré-Refrão], [Refrão], [Ponte], [Solo], [Final].
-   - Use notação clara para sétimas: "7M" para sétima maior (ex: C7M, G7M) e mantenha acordes com baixo invertido intactos (ex: G/B, D/F#).
-   - Remova completamente rodapés, números de página ("Página 1 de 4", "1/2"), links de sites (ex: cifraclub.com.br), datas de impressão e anotações administrativas fora da cifra.
-   - NUNCA invente trechos que não estejam no PDF; transcreva fielmente todo o conteúdo musical do arquivo.`;
+3. PROIBIDO INVENTAR OU INSERIR ETIQUETAS DE SEÇÃO:
+   - Mantenha EXCLUSIVAMENTE os marcadores de seção que JÁ ESTIVEREM ESCRITOS no PDF original (ex.: se o PDF só tem "[Intro]", mantenha apenas "[Intro]").
+   - É ESTRITAMENTE PROIBIDO inserir "[Verso 1]", "[Verso 2]", "[Refrão]", "[Ponte]", "[Final]" ou qualquer outra tag onde o PDF original possui apenas estrofes separadas por linha em branco!
 
-      const promptText = `Extraia todas as músicas e cifras contidas neste arquivo PDF${fileName ? ` ("${fileName}")` : ""}.
-Lembre-se:
-- Pode haver 1 única música ou um caderno com várias músicas: separe cada música corretamente no array "songs".
-- Preserve com precisão o alinhamento horizontal de cada acorde acima da sílaba correta da letra usando espaços simples (nunca tabs).
-- Mantenha linhas em branco entre estrofes e marcadores como [Intro], [Verso], [Refrão], [Ponte].
+4. PRESERVAÇÃO EXATA DO ALINHAMENTO ACORDE × SÍLABA EM FONTE MONOESPAÇADA ("cifra"):
+   - Considere que a cifra final será exibida em FONTE MONOESPAÇADA (cada caractere ocupa exatamente a mesma largura horizontal).
+   - Alinhe cada acorde usando ESPAÇOS EM BRANCO EXATOS (" ") para que a primeira letra do acorde fique na MESMA COLUNA DE CARACTERES da sílaba/palavra correspondente na linha da letra logo abaixo.
+   - Exemplo prático: se na letra "Em Espírito, em verdade" o acorde "F" está posicionado sobre a sílaba "pí" de "Espírito" (coluna 5) e o acorde "C/F" está sobre a sílaba "ver" de "verdade" (coluna 16), a linha de acordes DEVE conter exatamente os 5 espaços iniciais antes de "F" e os espaços exatos entre "F" e "C/F":
+     "     F          C/F"
+     "Em Espírito, em verdade"
+   - NUNCA remova os espaços iniciais da linha de acordes e NUNCA colapse os espaços entre os acordes!
+   - Se uma estrofe inteira estiver recuada/indentada à direita no PDF (como um bloco com Tab), remova apenas o recuo comum tanto da linha de acordes quanto da linha da letra na mesma proporção, mantendo o alinhamento relativo Acorde × Sílaba 100% intacto.
+   - Mantenha linhas em branco separando cada estrofe exatamente como no PDF.
+   - Remova apenas rodapés, números de página ("Página 1 de 4", "1/2") e links de sites externos.`;
+
+      const promptText = `Extraia todas as músicas e cifras contidas neste arquivo PDF${fileName ? ` ("${fileName}")` : ""} com 100% de fidelidade visual ao original:
+- NÃO invente nem adicione etiquetas de seção ([Verso 1], [Refrão], [Ponte], etc.): mantenha EXCLUSIVAMENTE os marcadores que já estiverem escritos no PDF. Onde houver apenas linha em branco entre estrofes, mantenha apenas a linha em branco.
+- Fonte monoespaçada: posicione cada acorde usando espaços em branco exatos para que a primeira letra do acorde fique na mesma coluna de caracteres da sílaba correspondente na linha da letra logo abaixo (incluindo os espaços iniciais antes do primeiro acorde da linha).
+- Se uma estrofe inteira estiver recuada à direita no PDF, remova apenas o recuo comum tanto da linha de acordes quanto da linha da letra na mesma proporção.
 - Remova números de página, rodapés e links de sites.`;
 
       const pdfModelsToTry = ["gemini-4-hydrogen", ...GEMINI_FALLBACK_MODELS];
@@ -4022,6 +4027,7 @@ Lembre-se:
           .replace(/\r\n/g, "\n")
           .replace(/\r/g, "\n")
           .replace(/\t/g, "    ")
+          .replace(/\u00A0/g, " ")
           .split("\n");
 
         const filtered = lines.filter((line) => {
@@ -4037,7 +4043,7 @@ Lembre-se:
         const normalized: string[] = [];
         let consecutiveEmpty = 0;
         for (const line of filtered) {
-          const rightTrimmed = line.replace(/[ \u00A0]+$/g, "").replace(/\u00A0/g, " ");
+          const rightTrimmed = line.replace(/ +$/g, "");
           if (rightTrimmed.trim() === "") {
             consecutiveEmpty += 1;
             if (normalized.length > 0 && consecutiveEmpty <= 1) {
@@ -4051,7 +4057,40 @@ Lembre-se:
         while (normalized.length > 0 && normalized[normalized.length - 1] === "") {
           normalized.pop();
         }
-        return normalized.join("\n");
+
+        const stanzas: string[][] = [];
+        let currentStanza: string[] = [];
+        for (const line of normalized) {
+          if (line === "") {
+            if (currentStanza.length > 0) {
+              stanzas.push(currentStanza);
+              currentStanza = [];
+            }
+          } else {
+            currentStanza.push(line);
+          }
+        }
+        if (currentStanza.length > 0) {
+          stanzas.push(currentStanza);
+        }
+
+        const dedentedStanzas = stanzas.map((stanzaLines) => {
+          let minCommonIndent = Infinity;
+          for (const l of stanzaLines) {
+            if (!l) continue;
+            const match = l.match(/^( *)/);
+            const leading = match ? match[1].length : 0;
+            if (leading < minCommonIndent) {
+              minCommonIndent = leading;
+            }
+          }
+          if (!Number.isFinite(minCommonIndent) || minCommonIndent <= 0) {
+            return stanzaLines.join("\n");
+          }
+          return stanzaLines.map((l) => l.slice(minCommonIndent)).join("\n");
+        });
+
+        return dedentedStanzas.join("\n\n");
       };
 
       const normalizedSongs = rawSongs
