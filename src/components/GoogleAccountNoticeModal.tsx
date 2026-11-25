@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, ExternalLink, UserPlus, ArrowRight, Download, FileText, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
 import { GoogleCalendarIcon } from './GoogleCalendarIcon';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
+import { PdfIcon } from './PdfIcon';
 
 export interface GoogleAccountNoticeModalProps {
   isOpen: boolean;
@@ -184,7 +185,7 @@ export function GoogleAccountNoticeModal({
                         }}
                         className="bg-card hover:bg-background-secondary text-text-main border border-border font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all"
                       >
-                        <FileText size={13} className="text-rose-500 shrink-0" />
+                        <PdfIcon className="w-4 h-4" />
                         <span>Cifras (PDF)</span>
                       </button>
                     )}

@@ -16,8 +16,10 @@ import { findBestSongMatch } from '../utils/servicePlaylistUtils';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
 import ContextualHelp from './ContextualHelp';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
-import { cleanCifraHtml } from '../services/chordService';
+import { cleanCifraHtml, extractLyricsFromChords } from '../services/chordService';
 import { checkResourceLimit, ResourceCheckResult } from '../services/planService';
+import { PdfChordImportSection } from './PdfChordImportSection';
+import { ExtractedPdfSong } from '../utils/pdfChordImportUtils';
 
 // Re-exports for critical modules referenced by App.tsx and LiturgyView
 export { SongDetailView } from './SongDetailView';
@@ -257,6 +259,7 @@ export function SongsView({
   const [searchCandidates, setSearchCandidates] = useState<any[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [importingCandidateId, setImportingCandidateId] = useState<string | null>(null);
+  const [isPdfReviewActive, setIsPdfReviewActive] = useState(false);
 
   // Modal do Google Drive da Equipe
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
@@ -1080,6 +1083,7 @@ export function SongsView({
     setSearchCandidates([]);
     setSearchError(null);
     setImportingCandidateId(null);
+    setIsPdfReviewActive(false);
     if (onAddModalClose) onAddModalClose();
   };
 
@@ -1242,6 +1246,90 @@ export function SongsView({
       setSearchError(err?.message || 'Falha ao importar esta opção. Tente outra ou cadastre manualmente.');
     } finally {
       setImportingCandidateId(null);
+    }
+  };
+
+  // Salvar músicas extraídas de PDF (1 música ou lote) usando a mesma estrutura oficial do Firestore
+  const handleSavePdfImportedSongs = async (songsToSave: ExtractedPdfSong[]) => {
+    if (!songsToSave || songsToSave.length === 0) return;
+
+    const initialLimitCheck = checkResourceLimit(churchData, 'songs', songs.length);
+    if (!initialLimitCheck.allowed) {
+      setIsAddModalOpen(false);
+      setIsPdfReviewActive(false);
+      onOpenUpgradeModal?.(initialLimitCheck);
+      return;
+    }
+
+    if (!churchId) return;
+
+    const createdSongs: any[] = [];
+    let reachedLimitCheck: ResourceCheckResult | null = null;
+
+    for (let i = 0; i < songsToSave.length; i += 1) {
+      const item = songsToSave[i];
+      const stepLimitCheck = checkResourceLimit(churchData, 'songs', songs.length + createdSongs.length);
+      if (!stepLimitCheck.allowed) {
+        reachedLimitCheck = stepLimitCheck;
+        break;
+      }
+
+      const trimmedTitle = (item.titulo || '').trim();
+      if (!trimmedTitle) continue;
+      const trimmedArtist = (item.artista || '').trim() || 'Ministério de Louvor';
+      const resolvedKey = (item.tom || 'C').trim() || 'C';
+      const parsedBpm = Math.round(Number(item.bpm));
+      const resolvedBpm = Number.isFinite(parsedBpm) && parsedBpm >= 40 && parsedBpm <= 220 ? parsedBpm : 120;
+      const cleanedChords = typeof item.cifra === 'string' ? item.cifra.replace(/\r\n/g, '\n') : '';
+      const extractedLyrics = extractLyricsFromChords(cleanedChords);
+
+      const newSongPayload = {
+        title: trimmedTitle,
+        artist: trimmedArtist,
+        baseKey: resolvedKey,
+        key: resolvedKey,
+        tone: resolvedKey,
+        bpm: resolvedBpm,
+        timeSignature: '4/4',
+        category: null,
+        chords: cleanedChords,
+        lyrics: extractedLyrics,
+        youtube: '',
+        artistImageUrl: '',
+        capo: '',
+        tags: [],
+        churchId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      let createdId = `song_${Date.now()}_${i}`;
+      if (db) {
+        const docRef = await addDoc(collection(db, 'songs'), newSongPayload);
+        createdId = docRef.id;
+      }
+
+      createdSongs.push({
+        ...newSongPayload,
+        id: createdId,
+        initialEdit: false
+      });
+    }
+
+    if (createdSongs.length > 0) {
+      const createdIds = new Set(createdSongs.map((s) => s.id));
+      setSongs((prev) => [...createdSongs, ...prev.filter((s) => !createdIds.has(s.id))]);
+    }
+
+    handleCloseAddModal();
+
+    if (reachedLimitCheck) {
+      onOpenUpgradeModal?.(reachedLimitCheck);
+      return;
+    }
+
+    if (createdSongs.length === 1) {
+      onSelectSong(createdSongs[0]);
     }
   };
 
@@ -2484,8 +2572,12 @@ export function SongsView({
       {/* MODAL: CADASTRAR NOVA MÚSICA                                   */}
       {/* ============================================================== */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className={`w-full max-w-md max-h-[92vh] overflow-y-auto ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-5 sm:p-6 flex flex-col animate-in zoom-in-95 duration-150 scrollbar-thin`}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => e.preventDefault()}
+        >
+          <div className={`w-full ${isPdfReviewActive ? 'max-w-2xl' : 'max-w-md'} max-h-[92vh] overflow-y-auto ${isLight ? 'bg-white border-slate-200 text-slate-900 shadow-2xl' : 'bg-[#101a35] border-slate-800 text-slate-100 shadow-2xl'} border rounded-2xl p-5 sm:p-6 flex flex-col animate-in zoom-in-95 duration-150 scrollbar-thin transition-all`}>
             <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2.5">
                 <div className={`w-8 h-8 rounded-lg ${isLight ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-blue-600/20 text-blue-400 border border-blue-500/30'} flex items-center justify-center`}>
@@ -2572,6 +2664,19 @@ export function SongsView({
                   )}
                 </button>
               </div>
+
+              {/* Importação Isolada de Cifras via PDF (Individual, Lote ou Caderno Multi-Músicas) */}
+              <PdfChordImportSection
+                isLight={isLight}
+                existingSongs={songs}
+                disabled={savingSong || isSearchingWeb || importingCandidateId !== null}
+                onReviewActiveChange={setIsPdfReviewActive}
+                onPopulateSingleFields={(title, artist) => {
+                  setNewTitle(title);
+                  setNewArtist(artist);
+                }}
+                onSaveExtractedSongs={handleSavePdfImportedSongs}
+              />
 
               {/* Lista de Opções Encontradas */}
               {searchCandidates.length > 0 && (

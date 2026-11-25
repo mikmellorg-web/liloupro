@@ -84,6 +84,7 @@ import { StudyMetronomeModal } from './components/StudyMetronomeModal';
 import { getChurchEffectivePlan, isVitalicioPlan, checkResourceLimit, isMemberPausedByFreeLimit, ResourceCheckResult } from './services/planService';
 import { getServiceSongs, getServicePlaylistSongs, getServiceSongIds, updateServicePlaylistUrl, parseYoutubeVideoId, parseYoutubePlaylistId } from './utils/servicePlaylistUtils';
 import { downloadCifrasCultoPDF } from './utils/googleDocsCadernoUtils';
+import { PdfIcon } from './components/PdfIcon';
 import { sendPushNotification, requestFcmToken, requestFcmTokenDetailed, scheduleServiceWorkerNotification } from './services/fcmService';
 import {
   notifyChurchLeadersOfNewMember,
@@ -17794,7 +17795,7 @@ function CalendarView({
             onClick={downloadMonthPDF} 
             className="bg-brand text-white hover:bg-brand/90 px-6 py-2.5 border-none shadow-md transition-all font-bold flex items-center"
           >
-            <FileDown size={18} className="mr-2" /> Baixar Escala Mês
+            <PdfIcon className="w-5 h-5 mr-2" /> Baixar Escala Mês
           </Button>
           <Button 
             onClick={shareMonthWhatsApp} 
@@ -17993,7 +17994,7 @@ function CalendarView({
                       onClick={() => downloadScalePDF(service)}
                       className="text-[9px] sm:text-[10px] font-black text-white hover:brightness-110 transition-all uppercase tracking-widest flex items-center gap-2 bg-brand px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-brand/20 shadow-sm"
                     >
-                      <Download size={11} className="sm:w-3.5 sm:h-3.5"/> PDF
+                      <PdfIcon className="w-4 h-4" /> PDF
                     </button>
                     <button 
                       onClick={() => shareScaleWhatsAppIndividual(service)}

@@ -53,6 +53,8 @@ import CommercialLandingPage from './CommercialLandingPage';
 import TheoryStudyView from './TheoryStudyView';
 import { LeaderOnboardingWizard } from './LeaderOnboardingWizard';
 import { CachedAvatar } from './CachedAvatar';
+import { PdfIcon } from './PdfIcon';
+import { ExcelIcon } from './ExcelIcon';
 import BibleReaderView from './BibleReaderView';
 import { QuickBibleSearch } from './QuickBibleSearch';
 import { OfflineView } from './OfflineView';
@@ -118,6 +120,9 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     return localStorage.getItem('app-reminder-template') || 
       'Olá {NOME} tudo bem? O prazo para marcar sua disponibilidade na escala do Louvor termina hoje, conto com sua colaboração. Obrigado por servir na igreja local! Deus abençoe!';
   });
+  const [copiedConvocation, setCopiedConvocation] = useState(false);
+  const [copiedAnnouncement, setCopiedAnnouncement] = useState(false);
+  const [showCustomReminder, setShowCustomReminder] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('app-reminder-deadline', reminderDeadline);
@@ -237,17 +242,65 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     }
   };
 
-  const handleCopyGroupAnnouncement = () => {
+  const handleCopyReleaseAnnouncement = async () => {
+    const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    let deadlineLine = '';
+    if (lockStatus?.deadline) {
+      const deadlineDate = new Date(lockStatus.deadline);
+      if (!isNaN(deadlineDate.getTime())) {
+        const datePart = deadlineDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const timePart = deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const hoursFormatted = activeLockHours >= 24 && activeLockHours % 24 === 0
+          ? `${activeLockHours / 24} dia${activeLockHours / 24 > 1 ? 's' : ''}`
+          : `${activeLockHours}h`;
+        deadlineLine = `⏰ *Prazo:* ${hoursFormatted} — encerra em *${datePart} às ${timePart}*.\n\n`;
+      }
+    }
+    const message = `📢 *MINISTÉRIO DE LOUVOR — MARCAÇÃO LIBERADA!* 🗓️\n\nA agenda de disponibilidade para *${monthName}* já está aberta!\n\n${deadlineLine}Acesse o app agora, marque seus dias disponíveis e clique em *Finalizar e Notificar Liderança* 👇\n🔗 ${window.location.origin}\n\nContamos com todos! 🙏`;
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedConvocation(true);
+      setTimeout(() => setCopiedConvocation(false), 2500);
+    } catch (e) {
+      console.error('Erro ao copiar convocação:', e);
+    }
+  };
+
+  const handleCopyGroupAnnouncement = async () => {
     const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     const names = missingMembers.map(m => {
       const fullName = m.name || m.email?.split('@')[0] || 'Ministro';
       const firstName = fullName.trim().split(' ')[0];
       return `• *${firstName}*`;
     }).join('\n');
-    const message = `📢 *ATENÇÃO MINISTÉRIO DE LOUVOR* 📢\n\n🗓️ Hoje é o último dia para cadastrar sua disponibilidade para as escalas do mês de *${monthName}*.\n\n⚠️ O prazo encerra *HOJE às ${reminderDeadline}*!\n\n⏳ *Falta preencher:*\n${names}\n\nPor favor, acessem o sistema e façam suas marcações o quanto antes! 👇\n🔗 ${window.location.origin}\n\nContamos com a colaboração de todos! 🙏`;
-    
-    navigator.clipboard.writeText(message);
-    alert("Mensagem para o grupo copiada para a área de transferência! Cole no WhatsApp do ministério.");
+
+    let introLine = `🗓️ Hoje é o último dia para cadastrar sua disponibilidade para as escalas do mês de *${monthName}*.`;
+    let deadlineLine = `⚠️ O prazo encerra *HOJE às ${reminderDeadline}*!`;
+
+    if (!isLocked && lockStatus?.deadline) {
+      const deadlineDate = new Date(lockStatus.deadline);
+      if (!isNaN(deadlineDate.getTime())) {
+        const now = new Date();
+        const isSameDay = deadlineDate.toDateString() === now.toDateString();
+        const datePart = deadlineDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const timePart = deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (isSameDay) {
+          deadlineLine = `⚠️ O prazo encerra *HOJE às ${reminderDeadline || timePart}*!`;
+        } else {
+          introLine = `🗓️ A marcação de disponibilidade para as escalas do mês de *${monthName}* está aberta!`;
+          deadlineLine = `⚠️ O prazo encerra em *${datePart} às ${timePart}*!`;
+        }
+      }
+    }
+
+    const message = `📢 *ATENÇÃO MINISTÉRIO DE LOUVOR* 📢\n\n${introLine}\n\n${deadlineLine}\n\n⏳ *Falta preencher:*\n${names}\n\nPor favor, acessem o sistema e façam suas marcações o quanto antes! 👇\n🔗 ${window.location.origin}\n\nContamos com a colaboração de todos! 🙏`;
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedAnnouncement(true);
+      setTimeout(() => setCopiedAnnouncement(false), 2500);
+    } catch (e) {
+      console.error('Erro ao copiar chamada de grupo:', e);
+    }
   };
 
   const handleViewAvailabilityDetail = async (member: any) => {
@@ -412,50 +465,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     }
   };
 
-  const handleSendAvailabilityEmailReport = async () => {
-    try {
-      if (!userChurchId) return;
-      let recipients: string[] = [];
-      const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
-      if (settingsSnap.exists()) {
-        const sd = settingsSnap.data();
-        if (sd.adminEmail && sd.adminEmail.trim()) recipients.push(sd.adminEmail.trim());
-        if (sd.adminEmail2 && sd.adminEmail2.trim()) recipients.push(sd.adminEmail2.trim());
-        if (sd.adminEmail3 && sd.adminEmail3.trim()) recipients.push(sd.adminEmail3.trim());
-      }
-      if (recipients.length === 0) {
-        const adminMembers = allMembers.filter(m => (m.isAdmin || (userChurchId === 'semente' && m.email === 'mikmellorg@gmail.com')) && m.email);
-        adminMembers.forEach(a => { if (a.email && !recipients.includes(a.email)) recipients.push(a.email); });
-      }
-
-      const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-      let bodyText = `🗓️ RELATÓRIO DE DISPONIBILIDADE DA EQUIPE DE LOUVOR\n`;
-      bodyText += `Período: ${monthName.charAt(0).toUpperCase() + monthName.slice(1)}\n\n`;
-      bodyText += `📊 RESUMO DE PARTICIPAÇÃO:\n`;
-      bodyText += `• Total de Ministros Ativos: ${activeMembers.length}\n`;
-      bodyText += `• Ministros Concluídos: ${finishedMembers.length}\n`;
-      bodyText += `• Ministros Pendentes: ${missingMembers.length}\n\n`;
-
-      if (missingMembers.length > 0) {
-        bodyText += `⚠️ MEMBROS PENDENTES DE MARCAÇÃO:\n`;
-        missingMembers.forEach(m => {
-          bodyText += `• ${m.name || m.email}\n`;
-        });
-      } else {
-        bodyText += `🎉 Todos os ministros já concluíram a marcação de disponibilidade!\n`;
-      }
-
-      bodyText += `\n_Relatório gerado via LiLouPro_`;
-
-      const recipientStr = recipients.length > 0 ? recipients.join(',') : '';
-      const subject = `🗓️ Relatório de Disponibilidade - ${monthName} - LiLouPro`;
-      const mailtoUrl = `mailto:${recipientStr}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText)}`;
-      window.open(mailtoUrl, '_self');
-    } catch (e) {
-      console.error("Erro ao preparar e-mail:", e);
-      alert("Ocorreu um erro ao preparar o e-mail de relatório.");
-    }
-  };
 
   const handleDownloadMonthlyAvailabilityPdf = async () => {
     setIsDownloadingPdf(true);
@@ -859,6 +868,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
       return;
     }
+    if (isLocked) return;
     const targetService = services.find(s => s.id === serviceId);
     if (!targetService) return;
     const currentAvail = targetService.availability || {};
@@ -1198,21 +1208,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         adminEmails: adminEmailTargets
       });
 
-      // Attempt popup for the first admin immediately
-      if (adminTargets.length > 0) {
-        try {
-          const firstAdmin = adminTargets[0];
-          const waUrl = `https://wa.me/${firstAdmin.phone}?text=${encodedMessage}`;
-          const confirmMsg = `Sua disponibilidade para ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} foi salva com sucesso!\n\nDeseja abrir o WhatsApp agora para enviar a mensagem de notificação para o coordenador ${firstAdmin.name}?`;
-          
-          if (window.confirm(confirmMsg)) {
-            window.open(waUrl, '_blank');
-          }
-        } catch (e) {
-          console.log("Auto-popup blocked, user will use the modal buttons.");
-        }
-      }
-
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `members/${user?.uid}`);
     } finally {
@@ -1267,7 +1262,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
             />
           </div>
           
-          <div className="w-full max-w-4xl grid sm:grid-cols-4 gap-4">
+          <div className="w-full max-w-4xl grid sm:grid-cols-3 gap-4">
             <Card className="p-4 flex flex-col items-center justify-center border-border bg-card/50">
                <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Mês de Referência</span>
                <div className="flex items-center gap-2">
@@ -1283,20 +1278,17 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               "p-4 flex flex-col items-center justify-center border-border transition-all",
               isFinished ? "bg-green-500/10 border-green-500/20" : "bg-yellow-500/10 border-yellow-500/20"
             )}>
-               <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Status do Mês</span>
-               <div className="flex items-center gap-2">
-                 <div className={cn("w-2 h-2 rounded-full animate-pulse", isFinished ? "bg-green-500" : "bg-yellow-500")} />
-                 <span className={cn("font-black text-xs uppercase", isFinished ? "text-green-500" : "text-yellow-600 dark:text-yellow-400")}>
-                   {isFinished ? "Concluído" : "Pendente"}
+               <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Seu Envio</span>
+               <div className="flex flex-col items-center gap-1">
+                 <div className="flex items-center gap-2">
+                   <div className={cn("w-2 h-2 rounded-full animate-pulse", isFinished ? "bg-green-500" : "bg-yellow-500")} />
+                   <span className={cn("font-black text-xs uppercase", isFinished ? "text-green-500" : "text-yellow-600 dark:text-yellow-400")}>
+                     {isFinished ? "Concluído" : "Pendente"}
+                   </span>
+                 </div>
+                 <span className="text-[10px] font-bold text-text-muted">
+                   {availableDaysCount} {availableDaysCount === 1 ? 'dia disponível' : 'dias disponíveis'}
                  </span>
-               </div>
-            </Card>
- 
-            <Card className="p-4 flex flex-col items-center justify-center border-border bg-brand/5">
-               <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Status Marcação</span>
-               <div className="flex items-center gap-2">
-                 <span className="font-black text-text-main text-lg leading-none">{availableDaysCount}</span>
-                 <span className="text-[10px] font-bold text-text-main uppercase">Dias Disponíveis</span>
                </div>
             </Card>
 
@@ -1304,7 +1296,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               "p-4 flex flex-col items-center justify-center border-border transition-all",
               isLocked ? "bg-red-500/10 border-red-500/20" : "bg-green-500/10 border-green-500/20"
             )}>
-               <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Período de Marcação</span>
+               <span className="text-[10px] font-black uppercase tracking-widest text-text-main mb-1">Prazo da Equipe</span>
                <div className="flex flex-col items-center gap-1">
                  <div className="flex items-center gap-2">
                    {isLocked ? <Lock size={14} className="text-red-500" /> : <Unlock size={14} className="text-green-500" />}
@@ -1392,6 +1384,28 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                   </div>
                 )}
 
+                {!isLocked && (
+                  <Button
+                    onClick={handleCopyReleaseAnnouncement}
+                    className={cn(
+                      "px-3.5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl border flex items-center gap-2 transition-all cursor-pointer shadow-sm",
+                      copiedConvocation
+                        ? "bg-emerald-600 text-white border-emerald-500/40"
+                        : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-500 border-emerald-500/30"
+                    )}
+                  >
+                    {copiedConvocation ? (
+                      <>
+                        <Check size={14} strokeWidth={3} /> Copiado! ✓
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} /> Copiar Convocação (WhatsApp)
+                      </>
+                    )}
+                  </Button>
+                )}
+
                 <Button
                   onClick={handleToggleAvailabilityLock}
                   className={cn(
@@ -1432,88 +1446,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
             </motion.div>
           )}
 
-          {/* Sequência Ilustrativa de Passos para Marcação */}
-          <div className="w-full max-w-4xl p-3 sm:p-4 rounded-2xl bg-card border border-border shadow-md">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-text-muted flex items-center gap-1.5">
-                <Sparkles size={13} className="text-brand" /> Como Marcar Sua Disponibilidade (3 Passos Simples)
-              </span>
-              <span className="text-[10px] font-bold text-brand bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full hidden sm:inline-block">
-                Siga a ordem dos passos
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              {/* Passo 1 */}
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 text-left">
-                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
-                  1
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 1</span>
-                  <p className="text-xs font-black text-text-main leading-tight">Marque os dias que você pode</p>
-                </div>
-              </div>
-
-              {/* Passo 2 */}
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 text-left">
-                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
-                  2
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 2</span>
-                  <p className="text-xs font-black text-text-main leading-tight">Confirme: Conte Comigo ou Não Posso</p>
-                </div>
-              </div>
-
-              {/* Passo 3 */}
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-brand/10 border border-brand/30 text-left">
-                <div className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md shadow-brand/20">
-                  3
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[10px] font-black uppercase tracking-wider text-brand leading-none mb-0.5">Passo 3</span>
-                  <p className="text-xs font-black text-text-main leading-tight">Finalizar e Notificar Liderança</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Passo 3: Finalizar e Notificar Liderança */}
-          <div className="w-full max-w-4xl flex flex-col items-center justify-center gap-2.5 pt-1">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand/10 border border-brand/20 shadow-sm">
-              <span className="w-5 h-5 rounded-md bg-brand text-white flex items-center justify-center font-black text-[11px] shadow-sm">
-                3
-              </span>
-              <span className="text-[11px] font-black uppercase tracking-wider text-brand">
-                Passo 3: Finalizar e Notificar Liderança
-              </span>
-            </div>
-
-            <Button
-              onClick={handleFinishAvailability}
-              disabled={isFinishing || isFinished || isLocked}
-              className={cn(
-                "px-10 py-3 shadow-xl transition-all font-black uppercase tracking-widest text-[10px] h-12 rounded-xl border group cursor-pointer",
-                isFinished 
-                  ? "bg-green-500 border-green-400 text-white cursor-default" 
-                  : (isLocked ? "bg-card border-border text-text-muted cursor-not-allowed opacity-50" : "bg-brand hover:scale-105 border-brand shadow-brand/20 text-white")
-              )}
-            >
-              {isFinished ? (
-                <div className="flex items-center gap-2">
-                  <Check size={18} strokeWidth={3} /> Disponibilidade Enviada
-                </div>
-              ) : isFinishing ? (
-                <div className="flex items-center gap-2">
-                  <RefreshCcw size={16} className="animate-spin" /> Notificando Admin...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Send size={16} /> Finalizar e Notificar Liderança
-                </div>
-              )}
-            </Button>
-          </div>
        </div>
 
        <div className="grid lg:grid-cols-2 gap-8">
@@ -1675,24 +1607,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                       })}
                     </div>
 
-                    {/* Dica para o Passo 3 */}
-                    <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-text-muted">
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <span className="w-4 h-4 rounded-full bg-brand/20 text-brand text-[9px] font-black flex items-center justify-center">3</span>
-                        Após marcar seus dias:
-                      </span>
-                      <button 
-                        type="button"
-                        onClick={handleFinishAvailability}
-                        disabled={isFinishing || isFinished || isLocked}
-                        className={cn(
-                          "text-[10px] font-black uppercase text-brand hover:underline flex items-center gap-1 transition-opacity",
-                          (isFinishing || isFinished || isLocked) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                        )}
-                      >
-                        <Send size={11} /> Passo 3: Finalizar Envio
-                      </button>
-                    </div>
                   </Card>
 
                   {getServicesForDay(selectedDate.getDate()).length > 0 && (
@@ -1748,24 +1662,28 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
+                                  disabled={isLocked}
                                   onClick={() => toggleServiceAvailability(service.id, 'available')}
                                   className={cn(
                                     "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                     myServiceStatus === 'available'
                                       ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20"
-                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30"
+                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30",
+                                    isLocked && "opacity-50 cursor-not-allowed"
                                   )}
                                 >
                                   <Check size={13} strokeWidth={3} /> Disponível
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={isLocked}
                                   onClick={() => toggleServiceAvailability(service.id, 'unavailable')}
                                   className={cn(
                                     "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                     myServiceStatus === 'unavailable'
                                       ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20"
-                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30"
+                                      : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30",
+                                    isLocked && "opacity-50 cursor-not-allowed"
                                   )}
                                 >
                                   <X size={13} strokeWidth={3} /> Não posso
@@ -1797,6 +1715,59 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
           </div>
        </div>
 
+       {/* Passo 3: Único bloco de destaque na ordem natural (1 -> 2 -> 3) */}
+       <Card className={cn(
+         "p-5 sm:p-6 border shadow-xl transition-all flex flex-col sm:flex-row items-center justify-between gap-4",
+         isFinished ? "bg-green-500/10 border-green-500/30" : "bg-card border-brand/30"
+       )}>
+         <div className="flex items-center gap-3 text-left w-full sm:w-auto">
+           <span className={cn(
+             "w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm shadow-md shrink-0",
+             isFinished ? "bg-green-500 text-white" : "bg-brand text-white shadow-brand/20"
+           )}>
+             3
+           </span>
+           <div>
+             <span className={cn("block text-[10px] font-black uppercase tracking-wider", isFinished ? "text-green-500" : "text-brand")}>
+               Passo 3 • Conclusão
+             </span>
+             <h3 className="text-sm sm:text-base font-black text-text-main leading-tight">
+               Finalizar e Notificar Liderança
+             </h3>
+             <p className="text-[11px] font-bold text-text-muted mt-0.5">
+               {isFinished
+                 ? `Envio concluído com ${availableDaysCount} ${availableDaysCount === 1 ? 'dia disponível' : 'dias disponíveis'} para ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}.`
+                 : `Você marcou ${availableDaysCount} ${availableDaysCount === 1 ? 'dia disponível' : 'dias disponíveis'}. Clique ao lado para confirmar seu envio.`}
+             </p>
+           </div>
+         </div>
+
+         <Button
+           onClick={handleFinishAvailability}
+           disabled={isFinishing || isFinished || isLocked}
+           className={cn(
+             "w-full sm:w-auto px-8 py-3 shadow-xl transition-all font-black uppercase tracking-widest text-[11px] h-12 rounded-xl border shrink-0 cursor-pointer",
+             isFinished
+               ? "bg-green-500 border-green-400 text-white cursor-default"
+               : (isLocked ? "bg-card border-border text-text-muted cursor-not-allowed opacity-50" : "bg-brand hover:scale-[1.02] border-brand shadow-brand/20 text-white")
+           )}
+         >
+           {isFinished ? (
+             <div className="flex items-center justify-center gap-2">
+               <Check size={17} strokeWidth={3} /> Disponibilidade Enviada
+             </div>
+           ) : isFinishing ? (
+             <div className="flex items-center justify-center gap-2">
+               <RefreshCcw size={16} className="animate-spin" /> Notificando Admin...
+             </div>
+           ) : (
+             <div className="flex items-center justify-center gap-2">
+               <Send size={15} /> Finalizar e Notificar Liderança
+             </div>
+           )}
+         </Button>
+       </Card>
+
        {/* Painel de Acompanhamento de Marcações */}
        {isAdmin && (
          <Card className="p-6 bg-card border-border shadow-xl w-full">
@@ -1822,15 +1793,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                  <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">Faltantes</span>
                </div>
              </div>
-             
-             <Button
-               onClick={handleSendAvailabilityEmailReport}
-               variant="secondary"
-               className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-500 border border-sky-500/30 font-black text-[10px] uppercase tracking-widest h-10 px-3.5 rounded-xl shrink-0 inline-flex items-center justify-center gap-1.5 hover:scale-105 active:scale-95 transition-all"
-             >
-               <Mail size={14} />
-               <span>Enviar E-mail</span>
-             </Button>
 
              <Button
                onClick={handleDownloadMonthlyAvailabilityPdf}
@@ -1845,7 +1807,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                  </>
                ) : (
                  <>
-                   <Download size={14} />
+                   <PdfIcon className="w-4 h-4" />
                    <span>Baixar PDF</span>
                  </>
                )}
@@ -1855,7 +1817,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
          {/* Lembrete / Cobrança de Disponibilidade (Apenas para Admins) */}
          {isAdmin && missingMembers.length > 0 && (
-           <div className="mb-6 p-5 rounded-2xl bg-yellow-500/5 border border-yellow-500/10 text-left space-y-4">
+           <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-yellow-500/5 border border-yellow-500/15 text-left space-y-3.5">
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                <div className="flex items-center gap-2">
                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse" />
@@ -1874,44 +1836,71 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                  />
                </div>
              </div>
-             
-             <div className="space-y-1.5 p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/60">
-               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                 <label className="text-[10px] font-black uppercase tracking-wider text-text-main">
-                   Mensagem de Lembrete Individual (WhatsApp) 💬
-                 </label>
-                 <span className="text-[8px] font-semibold text-zinc-400 dark:text-zinc-500">
-                   Use <code className="font-mono bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">{`{NOME}`}</code> para o nome do ministro
-                 </span>
-               </div>
-               <textarea
-                 value={reminderMessageTemplate}
-                 onChange={e => setReminderMessageTemplate(e.target.value)}
-                 rows={3}
-                 className="w-full bg-white/50 dark:bg-zinc-950/50 border border-border/80 rounded-xl p-2.5 text-xs text-text-main focus:outline-none focus:ring-1 focus:ring-brand leading-relaxed"
-                 placeholder="Editar a mensagem que será enviada para o WhatsApp de cada um..."
-               />
-             </div>
 
-             <p className="text-[11px] text-text-muted font-bold leading-relaxed">
-               Personalize o horário e a mensagem do template acima. O botão <span className="text-emerald-500">Lembrete</span> ao lado do nome de cada ministro pendente abrirá o WhatsApp individual com essa mensagem formatada. Use o botão abaixo para copiar o aviso coletivo do grupo.
-             </p>
-
-             {getFiveHoursBefore(reminderDeadline) && (
-               <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-xl border border-emerald-500/20 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                 💡 No WhatsApp pessoal, a sugestão é disparar o lembrete individual às <span className="font-black underline">{getFiveHoursBefore(reminderDeadline)}</span> (5 horas antes do prazo) para que todos tenham tempo de marcar!
-               </div>
-             )}
-
-             <div className="flex flex-wrap gap-3 pt-2 border-t border-border/40">
+             <div className="flex flex-wrap items-center justify-between gap-2.5">
                <Button
                  onClick={handleCopyGroupAnnouncement}
-                 className="w-full sm:w-auto h-9 px-4 rounded-xl text-[10px] uppercase font-black tracking-wider inline-flex items-center justify-center gap-1.5 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-text-main border border-border"
+                 className={cn(
+                   "w-full sm:w-auto h-9 px-4 rounded-xl text-[10px] uppercase font-black tracking-wider inline-flex items-center justify-center gap-1.5 border transition-all",
+                   copiedAnnouncement
+                     ? "bg-emerald-600 text-white border-emerald-500/40"
+                     : "bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-text-main border-border"
+                 )}
                >
-                 <Copy size={12} />
-                 <span>Copiar Chamada de Grupo 📋</span>
+                 {copiedAnnouncement ? (
+                   <>
+                     <Check size={12} strokeWidth={3} />
+                     <span>Copiado! ✓</span>
+                   </>
+                 ) : (
+                   <>
+                     <Copy size={12} />
+                     <span>Copiar Chamada de Grupo 📋</span>
+                   </>
+                 )}
                </Button>
+
+               <button
+                 type="button"
+                 onClick={() => setShowCustomReminder(prev => !prev)}
+                 className="inline-flex items-center gap-1.5 text-[11px] font-bold text-text-muted hover:text-text-main transition-colors px-2 py-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+               >
+                 <span>Personalizar mensagem de cobrança</span>
+                 {showCustomReminder ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+               </button>
              </div>
+
+             {showCustomReminder && (
+               <div className="space-y-3 pt-3 border-t border-border/40 animate-fade-in">
+                 <div className="space-y-1.5 p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/60">
+                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                     <label className="text-[10px] font-black uppercase tracking-wider text-text-main">
+                       Mensagem de Lembrete Individual (WhatsApp) 💬
+                     </label>
+                     <span className="text-[8px] font-semibold text-zinc-400 dark:text-zinc-500">
+                       Use <code className="font-mono bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">{`{NOME}`}</code> para o nome do ministro
+                     </span>
+                   </div>
+                   <textarea
+                     value={reminderMessageTemplate}
+                     onChange={e => setReminderMessageTemplate(e.target.value)}
+                     rows={3}
+                     className="w-full bg-white/50 dark:bg-zinc-950/50 border border-border/80 rounded-xl p-2.5 text-xs text-text-main focus:outline-none focus:ring-1 focus:ring-brand leading-relaxed"
+                     placeholder="Editar a mensagem que será enviada para o WhatsApp de cada um..."
+                   />
+                 </div>
+
+                 <p className="text-[11px] text-text-muted font-bold leading-relaxed">
+                   O botão <span className="text-emerald-500">Lembrete</span> ao lado do nome de cada ministro pendente abrirá o WhatsApp individual com essa mensagem formatada.
+                 </p>
+
+                 {getFiveHoursBefore(reminderDeadline) && (
+                   <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-xl border border-emerald-500/20 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                     💡 No WhatsApp pessoal, a sugestão é disparar o lembrete individual às <span className="font-black underline">{getFiveHoursBefore(reminderDeadline)}</span> (5 horas antes do prazo) para que todos tenham tempo de marcar!
+                   </div>
+                 )}
+               </div>
+             )}
            </div>
          )}
 
@@ -1929,13 +1918,13 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                  <button
                    onClick={handleExportExcel}
                    disabled={isExportingExcel}
-                   className="p-1.5 px-2.5 bg-emerald-500/10 dark:bg-emerald-500/5 hover:bg-emerald-500/20 text-emerald-650 dark:text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider transition-all scale-95 hover:scale-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm active:scale-90"
+                   className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] sm:text-xs uppercase tracking-wider h-9 sm:h-10 px-4 py-2 rounded-xl shadow-md shadow-emerald-600/20 border border-emerald-500/30 shrink-0 inline-flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                    title="Exportar dados e dias disponíveis para Excel"
                  >
                    {isExportingExcel ? (
-                     <Loader2 size={11} className="animate-spin text-emerald-500" />
+                     <Loader2 size={15} className="animate-spin text-white" />
                    ) : (
-                     <FileDown size={11} className="text-emerald-650 dark:text-emerald-400" />
+                     <ExcelIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                    )}
                    <span>Exportar Excel</span>
                  </button>
@@ -2010,21 +1999,6 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
          </div>
        </Card>
        )}
-
-       <Card className="p-6 bg-gradient-to-r from-brand/10 to-transparent border-brand/20">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-brand/20 rounded-2xl text-brand shrink-0">
-               <Activity size={24} />
-            </div>
-            <div>
-               <h4 className="font-black text-text-main uppercase tracking-tight text-sm">Por que marcar disponibilidade?</h4>
-               <p className="text-text-main text-sm mt-2 leading-relaxed font-bold">
-                 Marcar seus dias livres nos ajuda a organizar as escalas mensais de forma mais justa e eficiente. 
-                 Assim, evitamos escalar você em dias que você realmente não pode estar presente.
-               </p>
-            </div>
-          </div>
-       </Card>
 
         <AnimatePresence>
           {detailMember && (

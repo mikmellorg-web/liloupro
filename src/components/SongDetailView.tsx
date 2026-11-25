@@ -58,6 +58,7 @@ import CommercialLandingPage from './CommercialLandingPage';
 import TheoryStudyView from './TheoryStudyView';
 import { LeaderOnboardingWizard } from './LeaderOnboardingWizard';
 import { CachedAvatar } from './CachedAvatar';
+import { PdfIcon } from './PdfIcon';
 import BibleReaderView from './BibleReaderView';
 import { QuickBibleSearch } from './QuickBibleSearch';
 import { OfflineView } from './OfflineView';
@@ -4579,7 +4580,7 @@ export function SongDetailView({
                       className="flex items-center gap-1 px-1.5 sm:px-4 py-1 sm:py-2 rounded-lg bg-brand text-white border border-brand/20 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-brand/10 shrink-0"
                       title="Baixar PDF"
                     >
-                      <FileDown size={12} className="sm:w-[18px] sm:h-[18px]" />
+                      <PdfIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       <span className="text-[8px] sm:text-xs font-bold uppercase tracking-widest">PDF</span>
                     </button>
                   )}

@@ -50,6 +50,7 @@ import { BibleVersionProvider } from '../contexts/BibleVersionContext';
 import HelpCenter from './HelpCenter';
 import ContextualHelp from './ContextualHelp';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
+import { PdfIcon } from './PdfIcon';
 import { CadernoGoogleDocsModal } from './CadernoGoogleDocsModal';
 import { downloadCifrasCultoPDF } from '../utils/googleDocsCadernoUtils';
 
@@ -1924,7 +1925,7 @@ export default function LiturgyView({
                   onClick={handleExportPDF} 
                   className="bg-brand text-white hover:bg-brand/90 px-6 border-none shadow-md transition-all font-bold"
                 >
-                  <FileDown size={18} />
+                  <PdfIcon className="w-5 h-5" />
                   Baixar PDF
                 </Button>
                 <Button 
@@ -1932,7 +1933,7 @@ export default function LiturgyView({
                   className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 px-5 sm:px-6 border-none shadow-md transition-all font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-95"
                   title="Baixar todas as cifras completas do culto em PDF formatadas em 2 colunas"
                 >
-                  <FileText size={18} />
+                  <PdfIcon className="w-5 h-5" />
                   Cifras do Culto (PDF)
                 </Button>
                 <Button 
@@ -2128,7 +2129,7 @@ export default function LiturgyView({
                           className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs px-4 h-9 border-none shadow-md transition-all font-bold rounded-full flex items-center gap-1.5"
                           title="Cifras do Culto em PDF (2 colunas)"
                         >
-                          <FileText size={14} />
+                          <PdfIcon className="w-4 h-4" />
                           Cifras do Culto
                         </Button>
                         <Button 

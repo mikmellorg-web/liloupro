@@ -80,6 +80,10 @@
       "destination": "/api/songs/theme-suggestions"
     },
     {
+      "source": "/api/songs/extract-pdf-chords",
+      "destination": "/api/songs/extract-pdf-chords"
+    },
+    {
       "source": "/api/analyze-bible-references",
       "destination": "/api/analyze-bible-references"
     },

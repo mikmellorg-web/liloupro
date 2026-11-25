@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Download, Check, ExternalLink, FileText, Music, BookOpen, Users, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Download, Check, ExternalLink, FileText, Music, BookOpen, Users, Sparkles, Copy, ArrowLeft } from 'lucide-react';
 import { GoogleDocsIcon } from './GoogleDocsIcon';
-import { copyCadernoAndOpenGoogleDocs, downloadCadernoWordDoc, downloadCifrasCultoPDF, generateCadernoHtml, getCadernoSongs, isGoogleEmail, type CadernoOptions } from '../utils/googleDocsCadernoUtils';
+import { PdfIcon } from './PdfIcon';
+import { copyCadernoAndOpenGoogleDocs, downloadCadernoWordDoc, downloadCifrasCultoPDF, generateCadernoGoogleDocsHtml, generateCadernoHtml, getCadernoSongs, isGoogleEmail, type CadernoOptions } from '../utils/googleDocsCadernoUtils';
 import { GoogleAccountNoticeModal } from './GoogleAccountNoticeModal';
 
 interface CadernoGoogleDocsModalProps {
@@ -23,32 +24,122 @@ export function CadernoGoogleDocsModal({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setOpenedDocs(false);
+      setCopied(false);
+      setIsNoticeOpen(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen || !service) return null;
 
   const songs = getCadernoSongs(service, options.allSongs || []);
   const liturgyCount: number = Array.isArray(service.liturgy) ? service.liturgy.length : 0;
   
-  let scaleCount = 0;
+  const uniqueVolunteers = new Set<string>();
   if (service.scales && typeof service.scales === 'object') {
+    const membersList = Array.isArray(options.members) ? options.members : [];
     Object.values(service.scales).forEach((val: any) => {
       const arr = Array.isArray(val) ? val : [val].filter(Boolean);
-      scaleCount += arr.length;
+      arr.forEach((item: any) => {
+        if (item === null || item === undefined) return;
+        if (typeof item === 'object') {
+          const rawId = item.id ?? item.uid ?? item.memberId ?? item.userId;
+          if (rawId !== undefined && rawId !== null && String(rawId).trim()) {
+            const idStr = String(rawId).trim();
+            const matched = membersList.find((m: any) => m.id === idStr || m.uid === idStr);
+            uniqueVolunteers.add(`id:${matched?.id || matched?.uid || idStr}`);
+          } else if (typeof item.name === 'string' && item.name.trim()) {
+            const normalizedName = item.name.trim().replace(/\s+/g, ' ').toLowerCase();
+            const matched = membersList.find(
+              (m: any) => typeof m?.name === 'string' && m.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName
+            );
+            uniqueVolunteers.add(matched?.id || matched?.uid ? `id:${matched.id || matched.uid}` : `name:${normalizedName}`);
+          }
+          return;
+        }
+        const rawStr = String(item).trim();
+        if (!rawStr) return;
+        const matchedById = membersList.find((m: any) => m.id === rawStr || m.uid === rawStr);
+        if (matchedById) {
+          uniqueVolunteers.add(`id:${matchedById.id || matchedById.uid}`);
+          return;
+        }
+        const normalizedName = rawStr.replace(/\s+/g, ' ').toLowerCase();
+        const matchedByName = membersList.find(
+          (m: any) => typeof m?.name === 'string' && m.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedName
+        );
+        if (matchedByName && (matchedByName.id || matchedByName.uid)) {
+          uniqueVolunteers.add(`id:${matchedByName.id || matchedByName.uid}`);
+        } else {
+          uniqueVolunteers.add(`name:${normalizedName}`);
+        }
+      });
     });
   }
+  const scaleCount = uniqueVolunteers.size;
 
   const userEmail = (options.user?.email || (typeof options.user === 'string' ? options.user : '') || options.targetEmail || '').trim();
   const displayAccount = userEmail && userEmail.includes('@') ? userEmail : 'Sua Conta Google Padrão';
 
-  const proceedWithOpenDocs = async () => {
-    setOpenedDocs(true);
-    await copyCadernoAndOpenGoogleDocs(service, {
+  const copyCadernoToClipboard = async () => {
+    const htmlContent = generateCadernoGoogleDocsHtml(service, {
       ...options,
       targetEmail: userEmail || undefined
     });
-    setTimeout(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 5000);
-    }, 400);
+    if (!htmlContent) return false;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    const plainText = tempDiv.innerText || tempDiv.textContent || '';
+
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText,
+          })
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plainText);
+      }
+    } catch (err) {
+      console.warn('Falha na Clipboard API avançada, tentando fallback text:', err);
+      try {
+        await navigator.clipboard.writeText(plainText);
+      } catch (e2) {
+        console.error('Falha ao copiar:', e2);
+      }
+    }
+    return true;
+  };
+
+  const proceedWithOpenDocs = async () => {
+    await copyCadernoToClipboard();
+    setOpenedDocs(true);
+  };
+
+  const handleConfirmOpenGoogleDocs = () => {
+    const memberEmail = userEmail || '';
+    const isGoogle = isGoogleEmail(memberEmail);
+    const targetEmail = memberEmail && memberEmail.includes('@') && isGoogle ? memberEmail.trim() : '';
+    const googleDocsUrl = targetEmail
+      ? `https://docs.google.com/document/create?authuser=${encodeURIComponent(targetEmail)}`
+      : 'https://docs.new';
+
+    if (typeof window !== 'undefined') {
+      window.open(googleDocsUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleCopyAgain = async () => {
+    await copyCadernoToClipboard();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const handleOpenDocs = async () => {
@@ -144,7 +235,7 @@ export function CadernoGoogleDocsModal({
                   <Users size={14} />
                   <span className="text-xs font-bold">Escala</span>
                 </div>
-                <div className="text-base font-black text-text-main">{scaleCount} voluntários</div>
+                <div className="text-base font-black text-text-main">{scaleCount} {scaleCount === 1 ? 'voluntário' : 'voluntários'}</div>
               </div>
             </div>
           </div>
@@ -153,95 +244,114 @@ export function CadernoGoogleDocsModal({
           <div className="flex items-center justify-between text-xs px-3.5 py-2.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/50 rounded-xl">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-              <span className="text-[11px] font-semibold text-text-muted">Conta Google destino:</span>
+              <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Conta Google destino:</span>
             </div>
             <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 truncate max-w-[240px]" title={displayAccount}>
               {displayAccount}
             </span>
           </div>
 
-          {/* Banner de instrução de 1 clique quando abre */}
-          {openedDocs && (
-            <div className="bg-blue-600 dark:bg-blue-600 border border-blue-400/40 rounded-xl p-4 flex items-start gap-3.5 animate-fade-in shadow-lg text-white">
-              <div className="p-1.5 bg-white/20 text-white rounded-md shrink-0 mt-0.5">
-                <Check size={16} className="text-white" />
+          {/* Fluxo em 2 passos: Instruções após copiar vs. Botões iniciais */}
+          {openedDocs ? (
+            <div className="bg-slate-900/95 border border-blue-500/40 rounded-xl p-4 space-y-3.5 animate-fade-in shadow-lg text-slate-100">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-400/30 shrink-0 mt-0.5">
+                  <Check size={16} />
+                </div>
+                <div className="space-y-2.5 flex-1">
+                  <p className="font-bold text-white text-[13px] leading-snug">
+                    Caderno copiado! Como finalizar no Google Docs:
+                  </p>
+                  <ul className="space-y-2 text-xs text-slate-200 leading-relaxed">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-400 font-bold shrink-0">•</span>
+                      <span>
+                        <strong className="text-white">No computador:</strong> Na página em branco que vai abrir, pressione{' '}
+                        <kbd className="px-1.5 py-0.5 bg-slate-800 text-blue-200 rounded font-mono font-bold text-[11px] border border-blue-400/30">
+                          Ctrl + V
+                        </kbd>{' '}
+                        (ou clique com o botão direito &gt; Colar).
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-400 font-bold shrink-0">•</span>
+                      <span>
+                        <strong className="text-white">No celular:</strong> Toque na folha em branco e selecione{' '}
+                        <strong className="text-white">Colar</strong>.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
               </div>
-              <div className="text-xs text-white space-y-1.5">
-                <p className="font-bold text-white text-[13px]">
-                  Caderno copiado para a área de transferência!
-                </p>
-                <p className="text-white text-xs leading-relaxed">
-                  Abrindo Google Docs {userEmail ? <>na conta <b className="text-white font-semibold">{userEmail}</b></> : 'no seu navegador'}. Pressione <kbd className="px-1.5 py-0.5 bg-white/25 text-white rounded font-mono font-bold text-[11px] border border-white/30">Ctrl + V</kbd> para colar a liturgia, escala e lista de repertório.
-                </p>
-                <div className="pt-1.5 mt-1 border-t border-white/20 flex items-start gap-1.5 text-xs text-white">
-                  <span className="shrink-0">💡</span>
-                  <span className="text-white leading-relaxed">
-                    Para ter todas as cifras completas diagramadas em 2 colunas, use o botão <b className="text-white font-semibold">Baixar Caderno (.doc)</b> ou <b className="text-white font-semibold">Cifras do Culto (PDF)</b> abaixo.
-                  </span>
+
+              <div className="space-y-2 pt-1">
+                <button
+                  onClick={handleConfirmOpenGoogleDocs}
+                  className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white font-black py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 text-xs sm:text-sm tracking-wide active:scale-[0.98]"
+                >
+                  <span>Entendi, abrir Google Docs ↗</span>
+                </button>
+
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <button
+                    onClick={handleCopyAgain}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    <span>{copied ? 'Copiado novamente!' : 'Copiar novamente'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setOpenedDocs(false)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <ArrowLeft size={13} />
+                    <span>Voltar</span>
+                  </button>
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Botões de Ação */}
-          <div className="space-y-2.5">
-            {/* Ação Primária: Google Docs com 1 clique */}
-            <button
-              onClick={handleOpenDocs}
-              className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white font-black py-3.5 px-5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-wide group active:scale-[0.98]"
-            >
-              <GoogleDocsIcon size={20} className="group-hover:scale-110 transition-transform" />
-              <span>Abrir no Google Docs</span>
-              <ExternalLink size={15} className="opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </button>
-
-            {/* Ações Secundárias */}
-            <div className="grid grid-cols-2 gap-2.5">
+          ) : (
+            <div className="space-y-2.5">
+              {/* Ação Primária: Google Docs */}
               <button
-                onClick={handleDownloadDoc}
-                className="bg-background-secondary hover:bg-border/60 text-text-main border border-border font-bold py-2.5 px-3.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95"
-                title="Baixar arquivo compatível com Word e Google Drive"
+                onClick={handleOpenDocs}
+                className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white font-black py-3.5 px-5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-wide group active:scale-[0.98]"
               >
-                <Download size={14} className="text-blue-500 shrink-0" />
-                <span>Baixar Caderno (.doc)</span>
+                <GoogleDocsIcon size={20} className="group-hover:scale-110 transition-transform" />
+                <span>Abrir no Google Docs</span>
+                <ExternalLink size={15} className="opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </button>
 
-              <button
-                onClick={handleDownloadCifrasPDF}
-                disabled={downloadingPdf}
-                className="bg-background-secondary hover:bg-border/60 text-text-main border border-border font-bold py-2.5 px-3.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
-                title="Baixar todas as cifras do culto em PDF (duas colunas, tamanho 10 em negrito)"
-              >
-                <FileText size={14} className="text-rose-500 shrink-0" />
-                <span>{downloadingPdf ? 'Gerando...' : 'Cifras do Culto'}</span>
-              </button>
-            </div>
-          </div>
+              {/* Ações Secundárias */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={handleDownloadDoc}
+                  className="bg-background-secondary hover:bg-border/60 text-text-main border border-border font-bold py-2.5 px-3.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95"
+                  title="Baixar arquivo compatível com Word e Google Drive"
+                >
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" aria-hidden="true">
+                    <path d="M6 2h9l5 5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 21V3.5A1.5 1.5 0 0 1 6 2z" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="0.9" />
+                    <path d="M15 2v4a1 1 0 0 0 1 1h4L15 2z" fill="#93C5FD" />
+                    <path d="M13.8 10h3.7M13.8 13h3.7M13.8 16h3.7" stroke="#93C5FD" strokeWidth="1.2" strokeLinecap="round" />
+                    <rect x="1.5" y="7" width="11.5" height="10" rx="2" fill="#185ABD" />
+                    <path d="M3.8 9.3L5.05 14.6L7.25 10.6L9.45 14.6L10.7 9.3" stroke="#FFFFFF" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </svg>
+                  <span>Baixar Caderno (.doc)</span>
+                </button>
 
-          {/* Toggle de Pré-visualização */}
-          <div>
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              className="text-xs text-text-muted hover:text-text-main font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <FileText size={13} />
-              <span>{showPreview ? 'Ocultar Prévia do Caderno' : 'Ver Prévia do Caderno'}</span>
-            </button>
-
-            {showPreview && (
-              <div className="mt-2.5 p-3.5 bg-background border border-border rounded-xl max-h-64 overflow-y-auto text-[11px] font-mono whitespace-pre-wrap text-text-muted leading-relaxed select-text">
-                {(() => {
-                  const html = generateCadernoHtml(service, options);
-                  if (typeof document !== 'undefined') {
-                    const temp = document.createElement('div');
-                    temp.innerHTML = html;
-                    return (temp.innerText || temp.textContent || '').slice(0, 2500);
-                  }
-                  return html.replace(/<[^>]*>?/gm, '\n').slice(0, 2500);
-                })()}...
+                <button
+                  onClick={handleDownloadCifrasPDF}
+                  disabled={downloadingPdf}
+                  className="bg-background-secondary hover:bg-border/60 text-text-main border border-border font-bold py-2.5 px-3.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
+                  title="Baixar todas as cifras do culto em PDF (duas colunas, tamanho 10 em negrito)"
+                >
+                  <PdfIcon className="w-5 h-5" />
+                  <span>{downloadingPdf ? 'Gerando...' : 'Cifras do Culto'}</span>
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Rodapé do Modal */}
