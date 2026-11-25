@@ -1299,15 +1299,15 @@ export function LiturgyEditor({
   }
 
   return (
-    <div className="mt-8 space-y-4 pt-8 border-t border-black/10 dark:border-white/10">
-        <div className="flex flex-col items-center justify-center gap-4 mb-6">
+    <div className="mt-2 space-y-2.5 pt-2 border-t border-black/10 dark:border-white/10">
+        <div className="flex flex-col items-center justify-center gap-2 mb-3">
            <h4 className="text-[10px] sm:text-[11px] font-black text-text-main uppercase tracking-[0.2em] flex items-center gap-3">
               <span className="w-8 sm:12 h-[1px] bg-brand/50"></span> 
               Liturgia e Louvor
               <span className="w-8 sm:12 h-[1px] bg-brand/50"></span>
            </h4>
            {isAdmin && (
-             <div className="flex flex-wrap items-center justify-center gap-3">
+             <div className="flex flex-wrap items-center justify-center gap-2">
                {isEditing ? (
                 <div className="flex items-center gap-2">
                   <button 
@@ -1398,7 +1398,7 @@ export function LiturgyEditor({
 
            {/* Agrupar por Momentos Toggle */}
            {(service.liturgy || []).length > 0 && (
-             <div className="flex items-center justify-center gap-3 mt-2 bg-black/5 dark:bg-white/5 py-2 px-5 rounded-full border border-black/5 dark:border-white/5 shadow-sm">
+             <div className="flex items-center justify-center gap-3 mt-1 bg-black/5 dark:bg-white/5 py-1.5 px-5 rounded-full border border-black/5 dark:border-white/5 shadow-sm">
                <span className="text-[10px] font-black uppercase tracking-widest text-[#E60000]/80 dark:text-zinc-400">Listar Sequencial</span>
                <button
                  type="button"

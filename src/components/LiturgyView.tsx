@@ -2046,9 +2046,9 @@ export default function LiturgyView({
 
         <div className="w-full">
           {selectedService ? (
-            <div className="space-y-6">
+            <div className="space-y-3">
               {/* Selector Mode Toggle */}
-              <div className="flex items-center justify-between bg-black/10 dark:bg-white/5 border border-border p-1.5 rounded-2xl max-w-md mx-auto w-full shadow-inner mb-2">
+              <div className="flex items-center justify-between bg-black/10 dark:bg-white/5 border border-border p-1.5 rounded-2xl max-w-md mx-auto w-full shadow-inner mb-1">
                 <button
                   onClick={() => setIsMobileOptimized(false)}
                   className={cn(
@@ -2077,17 +2077,17 @@ export default function LiturgyView({
 
               {isMobileOptimized ? (
                 /* Mobile optimized expandable list format */
-                <div className="space-y-4 max-w-2xl mx-auto">
+                <div className="space-y-2.5 max-w-2xl mx-auto">
                   {/* Elegant Card with Header info */}
-                  <Card className="p-5 bg-card border border-border rounded-3xl relative overflow-hidden shadow-xl">
+                  <Card className="px-4 py-3 bg-card border border-border rounded-3xl relative overflow-hidden shadow-xl">
                     <div className="absolute inset-0 opacity-[0.02] pointer-events-none bg-[radial-gradient(#888888_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                    <div className="relative z-10 flex flex-col items-center text-center gap-3">
+                    <div className="relative z-10 flex flex-col items-center text-center gap-1.5">
                       <div className="w-12 h-12 rounded-2xl bg-brand/15 flex items-center justify-center text-brand shrink-0 border border-brand/20 shadow-md">
                         <BookOpen size={24} />
                       </div>
                       <div>
                          <h2 className="text-xl sm:text-2xl font-black text-text-main tracking-tight uppercase leading-tight">{selectedService.title}</h2>
-                         <p className="text-text-muted text-[11px] font-black uppercase tracking-widest mt-1">
+                         <p className="text-text-muted text-[11px] font-black uppercase tracking-widest mt-0.5">
                            {formatDate(selectedService.date, { weekday: 'long', day: 'numeric', month: 'long' })} às {formatTime(selectedService.date)}
                          </p>
                       </div>
@@ -2095,7 +2095,7 @@ export default function LiturgyView({
                   </Card>
 
                   {/* Quick summary badges */}
-                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     {playlistSongs.length > 0 && onStartPlaylist && (
                       <Button 
                         onClick={() => onStartPlaylist(playlistSongs)} 
@@ -2828,17 +2828,17 @@ export default function LiturgyView({
                     <div className="w-16 h-2.5 bg-black/20 rounded-full border border-white/5 shadow-inner"></div>
                   </div>
                   
-                  <Card className="p-3 sm:p-10 relative overflow-hidden bg-card border-border shadow-2xl rounded-t-none">
+                  <Card className="px-3 py-3 sm:px-8 sm:py-4 relative overflow-hidden bg-card border-border shadow-2xl rounded-t-none">
                     {/* Visual texture for paper-like feel */}
                     <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#888888_1px,transparent_1px)] [background-size:16px_1px]"></div>
                     
-                    <div className="relative z-10 flex flex-col items-center text-center gap-4 mb-8 border-b border-border pb-8">
+                    <div className="relative z-10 flex flex-col items-center text-center gap-1.5 mb-2 pb-2">
                       <div className="w-16 h-16 rounded-2xl bg-brand/20 flex items-center justify-center text-brand shrink-0 shadow-lg border border-brand/20">
                         <BookOpen size={32} />
                       </div>
                       <div>
                          <h2 className="text-3xl sm:text-4xl font-black text-text-main tracking-tight leading-tight">{selectedService.title}</h2>
-                         <p className="text-text-main/80 text-sm sm:text-lg font-bold mt-2">
+                         <p className="text-text-main/80 text-sm sm:text-lg font-bold mt-0.5">
                            {formatDate(selectedService.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} às {formatTime(selectedService.date)}
                          </p>
                       </div>

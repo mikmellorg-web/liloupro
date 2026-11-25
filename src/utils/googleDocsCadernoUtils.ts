@@ -125,8 +125,9 @@ function formatInlineBoldHtml(line: string, preserveMonospaceSpaces: boolean = f
     let htmlText = escapeHtml(text);
     if (preserveMonospaceSpaces) {
       htmlText = htmlText
-        .replace(/ /g, '&nbsp;')
-        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        .replace(/\t/g, '    ')
+        .replace(/^ +/, (m) => '&nbsp;'.repeat(m.length))
+        .replace(/ {2,}/g, (m) => '&nbsp;'.repeat(m.length - 1) + ' ');
     }
     if (isUnderline) htmlText = `<u>${htmlText}</u>`;
     if (isItalic) htmlText = `<em>${htmlText}</em>`;
@@ -199,67 +200,67 @@ interface HtmlDensityProfile {
 
 const HTML_DENSITY_NORMAL: HtmlDensityProfile = {
   name: 'normal',
-  fontPt: 10,
-  lineHeightRatio: 1.15,
-  lineHeightPt: 11.5,
-  spacerFontPt: 10,
-  spacerHeightPt: 11.5,
-  sectionHeightPt: 25,
-  topSectionHeightPt: 19,
-  consecutiveSectionHeightPt: 20.5,
-  badgeFontPt: 8,
-  dynFontPt: 7.5,
-  badgePad: '2pt 6pt',
-  dynPad: '2pt 5pt',
-  sectionTopPt: 6,
-  sectionBottomPt: 3,
-  sectionLineH: 1.25,
-  colTopPadPt: 8,
-  maxCharsPerLine: 40,
+  fontPt: 8.5,
+  lineHeightRatio: 1.12,
+  lineHeightPt: 9.52,
+  spacerFontPt: 7.5,
+  spacerHeightPt: 8.4,
+  sectionHeightPt: 21,
+  topSectionHeightPt: 17,
+  consecutiveSectionHeightPt: 18,
+  badgeFontPt: 7.5,
+  dynFontPt: 7.0,
+  badgePad: '1.5pt 5pt',
+  dynPad: '1.5pt 4.5pt',
+  sectionTopPt: 4.5,
+  sectionBottomPt: 2,
+  sectionLineH: 1.18,
+  colTopPadPt: 6,
+  maxCharsPerLine: 42,
   collapseSectionSpacer: false
 };
 
 const HTML_DENSITY_COMPACT: HtmlDensityProfile = {
   name: 'compact',
-  fontPt: 9.0,
+  fontPt: 7.5,
   lineHeightRatio: 1.08,
-  lineHeightPt: 9.72,
-  spacerFontPt: 7.0,
-  spacerHeightPt: 7.35,
-  sectionHeightPt: 18.5,
-  topSectionHeightPt: 15.5,
-  consecutiveSectionHeightPt: 16,
-  badgeFontPt: 7.2,
-  dynFontPt: 6.8,
-  badgePad: '1.5pt 5pt',
-  dynPad: '1.5pt 4pt',
+  lineHeightPt: 8.1,
+  spacerFontPt: 6.5,
+  spacerHeightPt: 7.0,
+  sectionHeightPt: 17.5,
+  topSectionHeightPt: 14.5,
+  consecutiveSectionHeightPt: 15,
+  badgeFontPt: 7.0,
+  dynFontPt: 6.5,
+  badgePad: '1.2pt 4.5pt',
+  dynPad: '1.2pt 3.5pt',
   sectionTopPt: 3,
   sectionBottomPt: 1.5,
-  sectionLineH: 1.12,
-  colTopPadPt: 5,
-  maxCharsPerLine: 45,
+  sectionLineH: 1.1,
+  colTopPadPt: 4,
+  maxCharsPerLine: 48,
   collapseSectionSpacer: true
 };
 
 const HTML_DENSITY_TIGHT: HtmlDensityProfile = {
   name: 'tight',
-  fontPt: 8.4,
-  lineHeightRatio: 1.04,
-  lineHeightPt: 8.74,
-  spacerFontPt: 6.0,
-  spacerHeightPt: 6.24,
-  sectionHeightPt: 16.5,
-  topSectionHeightPt: 14,
-  consecutiveSectionHeightPt: 14.5,
-  badgeFontPt: 6.8,
-  dynFontPt: 6.4,
+  fontPt: 7.0,
+  lineHeightRatio: 1.05,
+  lineHeightPt: 7.35,
+  spacerFontPt: 5.5,
+  spacerHeightPt: 5.8,
+  sectionHeightPt: 15.5,
+  topSectionHeightPt: 13,
+  consecutiveSectionHeightPt: 13.5,
+  badgeFontPt: 6.6,
+  dynFontPt: 6.2,
   badgePad: '1pt 4pt',
-  dynPad: '1pt 3.5pt',
+  dynPad: '1pt 3pt',
   sectionTopPt: 2,
   sectionBottomPt: 1,
-  sectionLineH: 1.06,
-  colTopPadPt: 4,
-  maxCharsPerLine: 49,
+  sectionLineH: 1.05,
+  colTopPadPt: 3,
+  maxCharsPerLine: 52,
   collapseSectionSpacer: true
 };
 
@@ -365,20 +366,23 @@ function renderHtmlSingleCifraLine(
   const lineH = `${density.lineHeightRatio}`;
 
   if (isChord) {
-    const cleanChordLine = stripInlineFormattingForMeasure(cleanLine);
+    const cleanChordLine = stripInlineFormattingForMeasure(cleanLine).replace(/\t/g, '    ');
     const tokens = cleanChordLine.match(/(\S+|\s+)/g) || [cleanChordLine];
-    const formattedTokens = tokens.map(token => {
+    const formattedTokens = tokens.map((token, tokenIdx) => {
       if (/^\s+$/.test(token)) {
-        return token.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        if (tokenIdx === 0) {
+          return '&nbsp;'.repeat(token.length);
+        }
+        return token.length === 1 ? ' ' : '&nbsp;'.repeat(token.length - 1) + ' ';
       }
       return `<b><span style="color: #2ba9b8; font-weight: bold;">${escapeHtml(token)}</span></b>`;
     }).join('');
 
-    return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${fontPt}; font-weight: bold; color: #2ba9b8; white-space: pre-wrap;"><b>${formattedTokens}</b></p>`;
+    return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Consolas, Courier, monospace; font-size: ${fontPt}; font-weight: bold; color: #2ba9b8; white-space: pre-wrap; word-wrap: break-word; word-break: break-word;"><b>${formattedTokens}</b></p>`;
   }
 
   const formattedLyric = formatInlineBoldHtml(cleanLine, true);
-  return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${fontPt}; font-weight: normal; color: #3c3c3c; white-space: pre-wrap;">${formattedLyric}</p>`;
+  return `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${lineH}; mso-line-height-rule: exactly; font-family: 'Courier New', Consolas, Courier, monospace; font-size: ${fontPt}; font-weight: normal; color: #3c3c3c; white-space: pre-wrap; word-wrap: break-word; word-break: break-word;">${formattedLyric}</p>`;
 }
 
 /**
@@ -405,7 +409,7 @@ function formatCifraColumnLines(lines: string[], compactOrProfile: boolean | Htm
       }
       lastWasEmpty = true;
       rendered.push(
-        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
+        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Consolas, Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
       );
       continue;
     }
@@ -454,6 +458,29 @@ function estimateWrappedLineCount(line: string, maxCharsPerLine: number): number
   const trimmedRightLen = visible.replace(/\s+$/, '').length;
   if (trimmedRightLen <= maxCharsPerLine) return 1;
   return Math.max(1, Math.ceil(trimmedRightLen / maxCharsPerLine));
+}
+
+function measureHtmlCifraMetrics(rawCifra: string): { maxLineChars: number; totalNonEmptyLines: number } {
+  const rawLines = (rawCifra || '').split(/\r?\n/);
+  let maxLineChars = 0;
+  let totalNonEmptyLines = 0;
+
+  for (const rawLine of rawLines) {
+    const visible = stripInlineFormattingForMeasure(rawLine || '').replace(/\r/g, '').replace(/\t/g, '    ');
+    const trimmed = visible.trim();
+    if (!trimmed) continue;
+    totalNonEmptyLines++;
+
+    const norm = normalizeSpacedTags(visible);
+    if (parseLineSectionAndDynamics(norm).isMatch) continue;
+
+    const lineLen = visible.replace(/\s+$/, '').length;
+    if (lineLen > maxLineChars) {
+      maxLineChars = lineLen;
+    }
+  }
+
+  return { maxLineChars, totalNonEmptyLines };
 }
 
 function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): HtmlSongBlock[] {
@@ -534,7 +561,7 @@ function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): Htm
     }
   }
 
-  // Agrupa em blocos lógicos (mantendo cabeçalho de seção conectado ao início da estrofe e pares acorde+letra atômicos)
+  // Agrupa cada estrofe inteira em um bloco atômico (mantendo cabeçalho de seção + versos da estrofe juntos sem quebrar no meio)
   const blocks: HtmlSongBlock[] = [];
   let currentItems: HtmlSongItem[] = [];
   let currentHeightPt = 0;
@@ -560,7 +587,6 @@ function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): Htm
       currentLineUnits += getItemLines(item);
     } else if (item.type === 'spacer') {
       if (currentItems.length > 0) {
-        // Anexa o spacer ao final do bloco anterior apenas como espaçamento entre estrofes
         currentItems.push(item);
         currentHeightPt += item.heightPt;
         blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
@@ -569,8 +595,9 @@ function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): Htm
         currentLineUnits = 0;
       }
     } else {
+      // Só divide se a música inteira não tiver nenhuma linha em branco nem seção (> 14 pares seguidos)
       const musicCount = currentItems.filter(it => it.type === 'pair' || it.type === 'single').length;
-      if (musicCount >= 4) {
+      if (musicCount >= 14) {
         blocks.push({ items: currentItems, heightPt: currentHeightPt, lineUnits: currentLineUnits });
         currentItems = [];
         currentHeightPt = 0;
@@ -583,7 +610,6 @@ function buildHtmlSongBlocks(rawCifra: string, density: HtmlDensityProfile): Htm
   }
 
   if (currentItems.length > 0) {
-    // Remove spacer sobrando no último bloco
     while (currentItems.length > 0 && currentItems[currentItems.length - 1].type === 'spacer') {
       const removed = currentItems.pop()!;
       currentHeightPt -= removed.heightPt;
@@ -601,7 +627,6 @@ function measureHtmlBlocksHeightPt(blocks: HtmlSongBlock[]): number {
   for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
     const b = blocks[bIdx];
     total += b.heightPt;
-    // Se é o último bloco da coluna, desconta eventual spacer final que não será renderizado
     if (bIdx === blocks.length - 1 && b.items.length > 0) {
       const lastIt = b.items[b.items.length - 1];
       if (lastIt.type === 'spacer') {
@@ -726,43 +751,90 @@ function renderHtmlBlocksToColumn(blocks: HtmlSongBlock[], density: HtmlDensityP
     return '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>';
   }
 
-  const out: string[] = [];
-  const flatItems: HtmlSongItem[] = [];
-  for (const b of blocks) {
-    for (const it of b.items) {
-      flatItems.push(it);
-    }
-  }
+  const stanzaHtmlList: string[] = [];
+  let hasRenderedContent = false;
 
-  // Remove spacer inicial ou final da coluna para alinhamento limpo no topo/rodapé
-  while (flatItems.length > 0 && flatItems[0].type === 'spacer') {
-    flatItems.shift();
-  }
-  while (flatItems.length > 0 && flatItems[flatItems.length - 1].type === 'spacer') {
-    flatItems.pop();
-  }
+  for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+    const block = blocks[bIdx];
+    const isLastBlock = bIdx === blocks.length - 1;
+    const blockOut: string[] = [];
 
-  for (let idx = 0; idx < flatItems.length; idx++) {
-    const item = flatItems[idx];
-    if (item.type === 'section') {
-      const isTop = out.length === 0;
-      out.push(formatSectionDynamicsHtml(item.parsed, isTop, density));
-    } else if (item.type === 'pair') {
-      out.push(renderHtmlSingleCifraLine(item.chordLine, true, density));
-      out.push(renderHtmlSingleCifraLine(item.lyricLine, false, density));
-    } else if (item.type === 'single') {
-      out.push(renderHtmlSingleCifraLine(item.line, item.isChord, density));
-    } else if (item.type === 'spacer') {
-      if (density.collapseSectionSpacer && idx + 1 < flatItems.length && flatItems[idx + 1].type === 'section') {
-        continue;
+    for (let idx = 0; idx < block.items.length; idx++) {
+      const item = block.items[idx];
+      if (item.type === 'section') {
+        const isTop = !hasRenderedContent && blockOut.length === 0;
+        blockOut.push(formatSectionDynamicsHtml(item.parsed, isTop, density));
+      } else if (item.type === 'pair') {
+        blockOut.push(renderHtmlSingleCifraLine(item.chordLine, true, density));
+        blockOut.push(renderHtmlSingleCifraLine(item.lyricLine, false, density));
+      } else if (item.type === 'single') {
+        blockOut.push(renderHtmlSingleCifraLine(item.line, item.isChord, density));
+      } else if (item.type === 'spacer') {
+        if (isLastBlock && idx === block.items.length - 1) {
+          continue;
+        }
+        const nextBlockFirstItem =
+          idx === block.items.length - 1 && bIdx + 1 < blocks.length
+            ? blocks[bIdx + 1].items[0]
+            : block.items[idx + 1];
+        if (density.collapseSectionSpacer && nextBlockFirstItem && nextBlockFirstItem.type === 'section') {
+          continue;
+        }
+        blockOut.push(
+          `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Consolas, Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
+        );
       }
-      out.push(
-        `<p class="cifra-line MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 0pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 0pt; line-height: ${density.lineHeightRatio}; mso-line-height-rule: exactly; font-family: 'Courier New', Courier, monospace; font-size: ${density.spacerFontPt}pt;">&nbsp;</p>`
+    }
+
+    if (blockOut.length > 0) {
+      hasRenderedContent = true;
+      stanzaHtmlList.push(
+        `<div class="cifra-stanza" style="page-break-inside: avoid; break-inside: avoid; margin: 0; padding: 0;">${blockOut.join('\n')}</div>`
       );
     }
   }
 
-  return out.length > 0 ? out.join('\n') : '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>';
+  return stanzaHtmlList.length > 0
+    ? stanzaHtmlList.join('\n')
+    : '<p class="cifra-line MsoNormal" style="margin: 0pt;">&nbsp;</p>';
+}
+
+function selectOptimalHtmlSongPlan(
+  rawCifra: string,
+  firstPageAvailPt: number,
+  contPageAvailPt: number
+): { selectedDensity: HtmlDensityProfile; selectedPages: PackedHtmlPage[] } {
+  const { maxLineChars, totalNonEmptyLines } = measureHtmlCifraMetrics(rawCifra);
+
+  // Ajuste dinâmico de fonte: 8.5pt padrão, reduzindo para 7.5pt ou 7pt se linha > 42 caracteres ou música longa
+  let candidateProfiles: HtmlDensityProfile[];
+  if (maxLineChars > 48 || totalNonEmptyLines > 76) {
+    candidateProfiles = [HTML_DENSITY_TIGHT];
+  } else if (maxLineChars > 42 || totalNonEmptyLines > 52) {
+    candidateProfiles = [HTML_DENSITY_COMPACT, HTML_DENSITY_TIGHT];
+  } else {
+    candidateProfiles = [HTML_DENSITY_NORMAL, HTML_DENSITY_COMPACT, HTML_DENSITY_TIGHT];
+  }
+
+  let selectedDensity = candidateProfiles[0];
+  let selectedPages = packHtmlSongPages(
+    buildHtmlSongBlocks(rawCifra, selectedDensity),
+    firstPageAvailPt,
+    contPageAvailPt
+  );
+
+  for (let i = 1; i < candidateProfiles.length; i++) {
+    if (selectedPages.length <= 1) break;
+    const nextDensity = candidateProfiles[i];
+    const nextBlocks = buildHtmlSongBlocks(rawCifra, nextDensity);
+    const nextPages = packHtmlSongPages(nextBlocks, firstPageAvailPt, contPageAvailPt);
+    if (nextPages.length <= selectedPages.length) {
+      selectedDensity = nextDensity;
+      selectedPages = nextPages;
+    }
+  }
+
+  return { selectedDensity, selectedPages };
 }
 
 /**
@@ -779,34 +851,7 @@ function splitCifraIntoTwoColumnsHtml(rawCifra: string): { col1Html: string; col
 
   const firstPageAvailPt = 640;
   const contPageAvailPt = 675;
-  const normalBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_NORMAL);
-  const normalPages = packHtmlSongPages(normalBlocks, firstPageAvailPt, contPageAvailPt);
-
-  let selectedDensity: HtmlDensityProfile = HTML_DENSITY_NORMAL;
-  let selectedPages: PackedHtmlPage[] = normalPages;
-
-  if (normalPages.length > 1) {
-    const normalLast = normalPages[normalPages.length - 1];
-    const normalLastLines = normalLast.lines1 + normalLast.lines2;
-    const refCap = 2 * (normalPages.length === 2 ? firstPageAvailPt : contPageAvailPt);
-    const normalLastRatio = (normalLast.h1 + normalLast.h2) / refCap;
-
-    if (normalLastLines <= 15 || normalLastRatio < 0.28) {
-      const compactBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_COMPACT);
-      const compactPages = packHtmlSongPages(compactBlocks, firstPageAvailPt, contPageAvailPt);
-      if (compactPages.length < normalPages.length) {
-        selectedDensity = HTML_DENSITY_COMPACT;
-        selectedPages = compactPages;
-      } else {
-        const tightBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_TIGHT);
-        const tightPages = packHtmlSongPages(tightBlocks, firstPageAvailPt, contPageAvailPt);
-        if (tightPages.length < normalPages.length) {
-          selectedDensity = HTML_DENSITY_TIGHT;
-          selectedPages = tightPages;
-        }
-      }
-    }
-  }
+  const { selectedDensity, selectedPages } = selectOptimalHtmlSongPlan(rawCifra, firstPageAvailPt, contPageAvailPt);
 
   const firstPage = selectedPages[0];
   if (!firstPage) {
@@ -823,10 +868,9 @@ function splitCifraIntoTwoColumnsHtml(rawCifra: string): { col1Html: string; col
 }
 
 /**
- * Renderiza uma música com seu cabeçalho completo seguido diretamente pelas cifras em 2 colunas compactas
- * usando o algoritmo "Smart Fit" anti-órfãos (idêntico ao PDF "Cifras do Culto").
- * Cada folha gerada é uma tabela indivisível com page-break-before: always e margem inferior zerada,
- * eliminando páginas extras em branco ou páginas de continuação com 1-4 linhas órfãs.
+ * Renderiza uma música com quebra de página explícita do Word no início,
+ * cabeçalho simples no topo (sem <thead> para evitar repetição do título pelo Word)
+ * e tabela de 2 colunas com largura travada (245pt + 10pt + 245pt = 500pt).
  */
 function renderSongSheetHtml(song: {
   title: string;
@@ -847,28 +891,31 @@ function renderSongSheetHtml(song: {
     const emptyCol = splitCifraIntoTwoColumnsHtml('');
     return `
   <!-- MÚSICA ${index + 1}: ${escapeHtml(song.title)} -->
-  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 0pt; padding: 0; table-layout: fixed; page-break-before: always; page-break-inside: avoid; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
-    <thead>
-      <tr class="cifra-header-row" style="page-break-after: avoid; page-break-inside: avoid; mso-special-format: keep-with-next;">
-        <th colspan="2" style="text-align: left; font-weight: normal; padding: 0; margin: 0; border: none; border-bottom: 1.5pt solid #cbd5e1; padding-bottom: 6pt;">
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
-            ${safeTitleHtml}
-          </p>
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Artista: ${safeArtistHtml}
-          </p>
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
-          </p>
-        </th>
-      </tr>
-    </thead>
+  <br clear="all" style="page-break-before: always; mso-break-type: page-break;" />
+  <div class="song-header-block" style="width: 500pt; max-width: 100%; border-bottom: 1.5pt solid #cbd5e1; padding-bottom: 6pt; margin-bottom: 8pt; page-break-inside: avoid; page-break-after: avoid;">
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
+      ${safeTitleHtml}
+    </p>
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+      Artista: ${safeArtistHtml}
+    </p>
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+      Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
+    </p>
+  </div>
+  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 500pt; max-width: 100%; table-layout: fixed; border-collapse: collapse; border: none; margin: 0; padding: 0; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
+    <colgroup>
+      <col width="245pt" style="width: 245pt;" />
+      <col width="10pt" style="width: 10pt;" />
+      <col width="245pt" style="width: 245pt;" />
+    </colgroup>
     <tbody>
-      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: avoid; mso-row-cant-split: true;">
-        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-right: 12pt; border: none; margin: 0;">
+      <tr class="cifra-body-row" style="vertical-align: top;">
+        <td width="245pt" valign="top" style="width: 245pt; vertical-align: top; overflow: hidden; word-wrap: break-word; padding: 0; border: none; margin: 0;">
           ${emptyCol.col1Html}
         </td>
-        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: 8pt; padding-left: 12pt; border: none; margin: 0;">
+        <td width="10pt" valign="top" style="width: 10pt; vertical-align: top; padding: 0; border: none; margin: 0;">&nbsp;</td>
+        <td width="245pt" valign="top" style="width: 245pt; vertical-align: top; overflow: hidden; word-wrap: break-word; padding: 0; border: none; margin: 0;">
           ${emptyCol.col2Html}
         </td>
       </tr>
@@ -876,50 +923,9 @@ function renderSongSheetHtml(song: {
   </table>`;
   }
 
-  // Orçamento vertical seguro em pontos (A4 Word: 297mm = 841.9pt, margens 20mm+20mm = 113.4pt -> área útil = 728.5pt).
-  // Descontando cabeçalho completo (~62pt) na 1ª folha e cabeçalho de continuação (~28pt) nas seguintes:
   const firstPageAvailPt = 640;
   const contPageAvailPt = 675;
-
-  const normalBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_NORMAL);
-  const normalPages = packHtmlSongPages(normalBlocks, firstPageAvailPt, contPageAvailPt);
-
-  let selectedDensity: HtmlDensityProfile = HTML_DENSITY_NORMAL;
-  let selectedPages: PackedHtmlPage[] = normalPages;
-
-  // Smart Fit: Detecta sobra pequena na última página (até ~15 linhas ou < 28% da folha) para eliminar páginas órfãs
-  if (normalPages.length > 1) {
-    const normalLast = normalPages[normalPages.length - 1];
-    const normalLastLines = normalLast.lines1 + normalLast.lines2;
-    const normalLastHeight = normalLast.h1 + normalLast.h2;
-    const refPageCapacity = 2 * (normalPages.length === 2 ? firstPageAvailPt : contPageAvailPt);
-    const normalLastRatio = normalLastHeight / refPageCapacity;
-
-    const isSmallOverflow = normalLastLines <= 15 || normalLastRatio < 0.28;
-
-    if (isSmallOverflow) {
-      const compactBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_COMPACT);
-      const compactPages = packHtmlSongPages(compactBlocks, firstPageAvailPt, contPageAvailPt);
-
-      if (compactPages.length < normalPages.length) {
-        selectedDensity = HTML_DENSITY_COMPACT;
-        selectedPages = compactPages;
-      } else {
-        const compactLast = compactPages[compactPages.length - 1];
-        const compactLastLines = compactLast.lines1 + compactLast.lines2;
-        const compactLastRatio = (compactLast.h1 + compactLast.h2) / refPageCapacity;
-
-        if (compactLastLines <= 15 || compactLastRatio < 0.28) {
-          const tightBlocks = buildHtmlSongBlocks(rawCifra, HTML_DENSITY_TIGHT);
-          const tightPages = packHtmlSongPages(tightBlocks, firstPageAvailPt, contPageAvailPt);
-          if (tightPages.length < normalPages.length) {
-            selectedDensity = HTML_DENSITY_TIGHT;
-            selectedPages = tightPages;
-          }
-        }
-      }
-    }
-  }
+  const { selectedDensity, selectedPages } = selectOptimalHtmlSongPlan(rawCifra, firstPageAvailPt, contPageAvailPt);
 
   return selectedPages.map((pagePlan, pageIdx) => {
     const col1Html = renderHtmlBlocksToColumn(pagePlan.col1, selectedDensity);
@@ -928,36 +934,39 @@ function renderSongSheetHtml(song: {
 
     const headerHtml = pageIdx === 0
       ? `
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
-            ${safeTitleHtml}
-          </p>
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Artista: ${safeArtistHtml}
-          </p>
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
-            Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
-          </p>`
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 18pt; font-weight: bold; color: #000000; line-height: 1.15; page-break-after: avoid; mso-pagination: lines-together;">
+      ${safeTitleHtml}
+    </p>
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-style: italic; color: #374151; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+      Artista: ${safeArtistHtml}
+    </p>
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #4b5563; line-height: 1.25; page-break-after: avoid; mso-pagination: lines-together;">
+      Tom: <b>${safeKeyHtml}</b>${safeBpmHtml}${safeTimeHtml}
+    </p>`
       : `
-          <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: bold; color: #64748b; line-height: 1.2; page-break-after: avoid; mso-pagination: lines-together;">
-            ${safeTitleHtml} (Continuação)
-          </p>`;
+    <p class="MsoNormal" style="margin: 0pt; margin-top: 0pt; margin-bottom: 2pt; mso-margin-top-alt: 0pt; mso-margin-bottom-alt: 2pt; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: bold; color: #64748b; line-height: 1.2; page-break-after: avoid; mso-pagination: lines-together;">
+      ${safeTitleHtml} (Continuação)
+    </p>`;
 
     return `
   <!-- MÚSICA ${index + 1} (PÁGINA ${pageIdx + 1}/${selectedPages.length}): ${escapeHtml(song.title)} -->
-  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; border: none; margin: 0; margin-bottom: 0pt; padding: 0; table-layout: fixed; page-break-before: always; page-break-inside: avoid; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
-    <thead>
-      <tr class="cifra-header-row" style="page-break-after: avoid; page-break-inside: avoid; mso-special-format: keep-with-next;">
-        <th colspan="2" style="text-align: left; font-weight: normal; padding: 0; margin: 0; border: none; border-bottom: ${pageIdx === 0 ? '1.5pt' : '0.75pt'} solid #cbd5e1; padding-bottom: ${pageIdx === 0 ? '6pt' : '3pt'};">
-          ${headerHtml}
-        </th>
-      </tr>
-    </thead>
+  <br clear="all" style="page-break-before: always; mso-break-type: page-break;" />
+  <div class="song-header-block" style="width: 500pt; max-width: 100%; border-bottom: ${pageIdx === 0 ? '1.5pt' : '0.75pt'} solid #cbd5e1; padding-bottom: ${pageIdx === 0 ? '6pt' : '3pt'}; margin-bottom: ${colPadTop}; page-break-inside: avoid; page-break-after: avoid;">
+    ${headerHtml}
+  </div>
+  <table class="cifra-song-table" width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 500pt; max-width: 100%; table-layout: fixed; border-collapse: collapse; border: none; margin: 0; padding: 0; mso-table-lspace: 0pt; mso-table-rspace: 0pt;">
+    <colgroup>
+      <col width="245pt" style="width: 245pt;" />
+      <col width="10pt" style="width: 10pt;" />
+      <col width="245pt" style="width: 245pt;" />
+    </colgroup>
     <tbody>
-      <tr class="cifra-body-row" style="vertical-align: top; page-break-inside: avoid; mso-row-cant-split: true;">
-        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: ${colPadTop}; padding-right: 12pt; border: none; margin: 0;">
+      <tr class="cifra-body-row" style="vertical-align: top;">
+        <td width="245pt" valign="top" style="width: 245pt; vertical-align: top; overflow: hidden; word-wrap: break-word; padding: 0; border: none; margin: 0;">
           ${col1Html}
         </td>
-        <td width="50%" valign="top" style="width: 50%; vertical-align: top; padding-top: ${colPadTop}; padding-left: 12pt; border: none; margin: 0;">
+        <td width="10pt" valign="top" style="width: 10pt; vertical-align: top; padding: 0; border: none; margin: 0;">&nbsp;</td>
+        <td width="245pt" valign="top" style="width: 245pt; vertical-align: top; overflow: hidden; word-wrap: break-word; padding: 0; border: none; margin: 0;">
           ${col2Html}
         </td>
       </tr>
@@ -1261,32 +1270,46 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       margin-bottom: 0pt;
       mso-margin-top-alt: 0pt;
       mso-margin-bottom-alt: 0pt;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 10pt;
-      line-height: 1.15;
+      font-family: 'Courier New', Consolas, Courier, monospace;
+      font-size: 8.5pt;
+      line-height: 1.12;
       mso-line-height-rule: exactly;
       white-space: pre-wrap;
+      word-wrap: break-word;
+      word-break: break-word;
     }
     p.cifra-section {
       margin: 0pt;
-      margin-top: 6pt;
-      margin-bottom: 3pt;
-      mso-margin-top-alt: 6pt;
-      mso-margin-bottom-alt: 3pt;
-      line-height: 1.25;
+      margin-top: 4.5pt;
+      margin-bottom: 2pt;
+      mso-margin-top-alt: 4.5pt;
+      mso-margin-bottom-alt: 2pt;
+      line-height: 1.18;
+      page-break-after: avoid;
+      mso-pagination: lines-together;
+    }
+    div.cifra-stanza {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      margin: 0;
+      padding: 0;
+    }
+    div.song-header-block {
+      width: 500pt;
+      max-width: 100%;
+      page-break-inside: avoid;
       page-break-after: avoid;
       mso-pagination: lines-together;
     }
     table.cifra-song-table {
-      width: 100%;
+      width: 500pt;
+      max-width: 100%;
       border-collapse: collapse;
       border: none;
       margin: 0;
       margin-bottom: 0pt;
       padding: 0;
       table-layout: fixed;
-      page-break-before: always;
-      page-break-inside: avoid;
       mso-table-lspace: 0pt;
       mso-table-rspace: 0pt;
     }
@@ -1294,32 +1317,11 @@ export function generateCadernoHtml(service: any, options: CadernoOptions = {}):
       border: none;
       padding: 0;
       margin: 0;
-    }
-    tr.cifra-header-row {
-      page-break-after: avoid;
-      page-break-inside: avoid;
-      mso-special-format: keep-with-next;
+      overflow: hidden;
+      word-wrap: break-word;
     }
     tr.cifra-body-row {
       vertical-align: top;
-      page-break-inside: avoid;
-      mso-row-cant-split: true;
-    }
-    table.cifra-columns-table {
-      width: 100%;
-      border-collapse: collapse;
-      border: none;
-      margin: 0;
-      padding: 0;
-      table-layout: fixed;
-      mso-table-lspace: 0pt;
-      mso-table-rspace: 0pt;
-    }
-    table.cifra-columns-table td {
-      border: none;
-      padding: 0;
-      vertical-align: top;
-      width: 50%;
     }
     .footer {
       margin-top: 14pt;
@@ -1491,14 +1493,16 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
       font-size: 11pt;
     }
     table.data-table {
-      width: 100%;
+      width: 480pt;
+      table-layout: fixed;
       border-collapse: collapse;
       margin: 10pt 0 16pt 0;
     }
     table.data-table th, table.data-table td {
       border: 1px solid #cbd5e1;
-      padding: 6pt 8pt;
+      padding: 4pt 6pt;
       text-align: left;
+      vertical-align: top;
     }
     table.data-table tr {
       page-break-inside: avoid;
@@ -1507,6 +1511,8 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
       background-color: #f1f5f9;
       color: #1e293b;
       font-weight: bold;
+      font-size: 9pt;
+      white-space: nowrap;
     }
     table.data-table tr:nth-child(even) {
       background-color: #f8fafc;
@@ -1547,44 +1553,55 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
   <hr style="border: 0; border-top: 1.5pt solid #3b82f6; margin: 12pt 0 16pt 0;">
 `;
 
-  // 1. SEÇÃO DE EQUIPE ESCALADA
+  // 1. SEÇÃO DE EQUIPE ESCALADA (150pt + 330pt = 480pt)
   if (scaleEntries.length > 0) {
     html += `
   <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 12pt 0 6pt 0; page-break-after: avoid;">
     <b>👥 Equipe Escalada (Ministério de Louvor & Culto)</b>
   </div>
-  <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 16pt;">
+  <table class="data-table" border="1" cellpadding="4" cellspacing="0" width="480pt" style="width: 480pt; table-layout: fixed; border-collapse: collapse; margin-bottom: 16pt;">
+    <colgroup>
+      <col width="150pt" style="width: 150pt;" />
+      <col width="330pt" style="width: 330pt;" />
+    </colgroup>
     <thead>
       <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
-        <th style="width: 35%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Função / Ministério</th>
-        <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Integrantes Escalados</th>
+        <th width="150pt" style="width: 150pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Função / Ministério</th>
+        <th width="330pt" style="width: 330pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Integrantes Escalados</th>
       </tr>
     </thead>
     <tbody>
       ${scaleEntries.map(entry => `
       <tr style="page-break-inside: avoid;">
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(entry.role)}</b></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(entry.names)}</td>
+        <td width="150pt" style="width: 150pt; font-size: 9.5pt; line-height: 1.25; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(entry.role)}</b></td>
+        <td width="330pt" style="width: 330pt; font-size: 9.5pt; line-height: 1.25; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(entry.names)}</td>
       </tr>`).join('')}
     </tbody>
   </table>
 `;
   }
 
-  // 2. SEÇÃO DE LITURGIA (ORDEM DO CULTO)
+  // 2. SEÇÃO DE LITURGIA (ORDEM DO CULTO: 25pt + 85pt + 240pt + 75pt + 55pt = 480pt)
   if (liturgyItems.length > 0) {
     html += `
   <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0; page-break-after: avoid;">
     <b>📖 Ordem do Culto (Liturgia Oficial)</b>
   </div>
-  <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 18pt;">
+  <table class="data-table" border="1" cellpadding="4" cellspacing="0" width="480pt" style="width: 480pt; table-layout: fixed; border-collapse: collapse; margin-bottom: 18pt;">
+    <colgroup>
+      <col width="25pt" style="width: 25pt;" />
+      <col width="85pt" style="width: 85pt;" />
+      <col width="240pt" style="width: 240pt;" />
+      <col width="75pt" style="width: 75pt;" />
+      <col width="55pt" style="width: 55pt;" />
+    </colgroup>
     <thead>
       <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
-        <th style="width: 5%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
-        <th style="width: 25%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Momento</th>
-        <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Detalhes / Título / Passagem Bíblica</th>
-        <th style="width: 20%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Responsável</th>
-        <th style="width: 10%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Duração</th>
+        <th width="25pt" style="width: 25pt; text-align: center; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
+        <th width="85pt" style="width: 85pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Momento</th>
+        <th width="240pt" style="width: 240pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Detalhes / Título / Passagem Bíblica</th>
+        <th width="75pt" style="width: 75pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Responsável</th>
+        <th width="55pt" style="width: 55pt; text-align: center; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Duração</th>
       </tr>
     </thead>
     <tbody>
@@ -1593,16 +1610,26 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
         const durationText = item.duration ? `${item.duration} min` : '-';
         const cleanTitle = removeBibleVersionTags(item.title || '-');
         const cleanDetailsRaw = item.details ? removeBibleVersionTags(item.details) : '';
-        const cleanDetails = cleanDetailsRaw ? `<br><small style="color: #64748b;">${formatInlineBoldHtml(cleanDetailsRaw)}</small>` : '';
+        const continuousDetailsText = cleanDetailsRaw
+          ? formatInlineBoldHtml(
+              cleanDetailsRaw
+                .replace(/\r?\n+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim()
+            )
+          : '';
+        const cleanDetails = continuousDetailsText
+          ? `<div style="font-size: 8.5pt; line-height: 1.2; color: #475569; margin: 0; padding: 0;">${continuousDetailsText}</div>`
+          : '';
         const responsible = item.responsible || item.vocalist || item.person || '-';
 
         return `
       <tr style="page-break-inside: avoid;">
-        <td style="text-align: center; font-weight: bold; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${idx + 1}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><span class="badge">${formatInlineBoldHtml(typeLabel)}</span></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(cleanTitle)}</b>${cleanDetails}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(responsible)}</td>
-        <td style="text-align: center; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(durationText)}</td>
+        <td width="25pt" style="width: 25pt; text-align: center; font-size: 9.5pt; font-weight: bold; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${idx + 1}</td>
+        <td width="85pt" style="width: 85pt; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;"><span class="badge">${formatInlineBoldHtml(typeLabel)}</span></td>
+        <td width="240pt" style="width: 240pt; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;"><div style="font-size: 9.5pt; font-weight: bold; line-height: 1.2; color: #1e293b; margin: 0${cleanDetails ? ' 0 2pt 0' : ''}; padding: 0;"><b>${formatInlineBoldHtml(cleanTitle)}</b></div>${cleanDetails}</td>
+        <td width="75pt" style="width: 75pt; font-size: 9pt; line-height: 1.2; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(responsible)}</td>
+        <td width="55pt" style="width: 55pt; font-size: 9pt; line-height: 1.2; text-align: center; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${escapeHtml(durationText)}</td>
       </tr>`;
       }).join('')}
     </tbody>
@@ -1610,30 +1637,37 @@ export function generateCadernoGoogleDocsHtml(service: any, options: CadernoOpti
 `;
   }
 
-  // 3. SEÇÃO DE REPERTÓRIO MUSICAL (LISTA DE MÚSICAS SEM CIFRAS)
+  // 3. SEÇÃO DE REPERTÓRIO MUSICAL (LISTA DE MÚSICAS SEM CIFRAS: 25pt + 220pt + 135pt + 50pt + 50pt = 480pt)
   if (songs.length > 0) {
     html += `
   <div style="font-size: 14pt; font-weight: bold; color: #1e293b; margin: 16pt 0 6pt 0; page-break-after: avoid;">
     <b>🎵 Músicas do Culto (Repertório)</b>
   </div>
-  <table class="data-table" border="1" cellpadding="6" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 12pt;">
+  <table class="data-table" border="1" cellpadding="4" cellspacing="0" width="480pt" style="width: 480pt; table-layout: fixed; border-collapse: collapse; margin-bottom: 12pt;">
+    <colgroup>
+      <col width="25pt" style="width: 25pt;" />
+      <col width="220pt" style="width: 220pt;" />
+      <col width="135pt" style="width: 135pt;" />
+      <col width="50pt" style="width: 50pt;" />
+      <col width="50pt" style="width: 50pt;" />
+    </colgroup>
     <thead>
       <tr style="background-color: #f1f5f9; page-break-inside: avoid;">
-        <th style="width: 6%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
-        <th style="text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Música / Título</th>
-        <th style="width: 25%; text-align: left; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Artista / Ministério</th>
-        <th style="width: 12%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Tom</th>
-        <th style="width: 12%; text-align: center; padding: 6pt 8pt; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">BPM</th>
+        <th width="25pt" style="width: 25pt; text-align: center; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">#</th>
+        <th width="220pt" style="width: 220pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Música / Título</th>
+        <th width="135pt" style="width: 135pt; text-align: left; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Artista / Ministério</th>
+        <th width="50pt" style="width: 50pt; text-align: center; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">Tom</th>
+        <th width="50pt" style="width: 50pt; text-align: center; padding: 4pt 6pt; vertical-align: top; font-size: 9pt; white-space: nowrap; font-weight: bold; color: #1e293b; border: 1px solid #cbd5e1;">BPM</th>
       </tr>
     </thead>
     <tbody>
       ${songs.map((song, idx) => `
       <tr style="page-break-inside: avoid;">
-        <td style="text-align: center; font-weight: bold; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${idx + 1}</td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(song.title)}</b></td>
-        <td style="padding: 6pt 8pt; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(song.artist || 'Desconhecido')}</td>
-        <td style="text-align: center; font-weight: bold; color: #2563eb; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(song.key || '-')}</td>
-        <td style="text-align: center; padding: 6pt 8pt; border: 1px solid #cbd5e1;">${escapeHtml(song.bpm || '-')}</td>
+        <td width="25pt" style="width: 25pt; text-align: center; font-size: 9.5pt; font-weight: bold; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${idx + 1}</td>
+        <td width="220pt" style="width: 220pt; font-size: 9.5pt; line-height: 1.25; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;"><b>${formatInlineBoldHtml(song.title)}</b></td>
+        <td width="135pt" style="width: 135pt; font-size: 9pt; line-height: 1.25; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${formatInlineBoldHtml(song.artist || 'Desconhecido')}</td>
+        <td width="50pt" style="width: 50pt; text-align: center; font-size: 9.5pt; font-weight: bold; color: #2563eb; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${escapeHtml(song.key || '-')}</td>
+        <td width="50pt" style="width: 50pt; text-align: center; font-size: 9pt; padding: 4pt 6pt; vertical-align: top; border: 1px solid #cbd5e1;">${escapeHtml(song.bpm || '-')}</td>
       </tr>`).join('')}
     </tbody>
   </table>

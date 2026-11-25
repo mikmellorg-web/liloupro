@@ -18140,82 +18140,47 @@ function CalendarView({
                  
                  return (
                    <>
-                     {/* Bloco de Disponibilidade do Culto Agendado */}
-                     <div className="mb-6 p-3 sm:p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-border flex flex-col gap-3">
-                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                         <div className="flex items-center gap-2">
+                     {/* Faixa Compacta e Somente Leitura de Voluntários Disponíveis (Visível apenas para Administradores / Líderes) */}
+                     {isAdmin && (
+                       <div className="mb-5 px-3.5 py-2.5 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-border flex flex-wrap items-center gap-2">
+                         <div className="flex items-center gap-2 shrink-0">
                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-text-main flex items-center gap-1.5">
-                             <UserCheck size={14} className="text-emerald-500" />
-                             Disponibilidade para este Culto
+                           <span className="text-[10px] font-black uppercase tracking-wider text-text-main flex items-center gap-1.5">
+                             <UserCheck size={13} className="text-emerald-500" />
+                             Disponibilidade para este Culto:
                            </span>
                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                              {availableVolunteers.length} disponível{availableVolunteers.length !== 1 ? 'is' : ''}
                            </span>
                          </div>
 
-                         {user && (
-                           <div className="flex items-center gap-2">
-                             <span className="text-[9px] font-black uppercase tracking-wider text-text-muted hidden xs:inline">
-                               Minha Presença:
-                             </span>
-                             <button
-                               type="button"
-                               onClick={() => setAvailability(service.id, 'available')}
-                               className={cn(
-                                 "h-7 sm:h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border",
-                                 myStatus === 'available'
-                                   ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/30"
-                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30"
-                               )}
-                             >
-                               <Check size={12} strokeWidth={3} /> Estou Disponível
-                             </button>
-                             <button
-                               type="button"
-                               onClick={() => setAvailability(service.id, 'unavailable')}
-                               className={cn(
-                                 "h-7 sm:h-8 px-3 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border",
-                                 myStatus === 'unavailable'
-                                   ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/30"
-                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30"
-                               )}
-                             >
-                               <X size={12} strokeWidth={3} /> Não Posso
-                             </button>
+                         {availableVolunteers.length > 0 ? (
+                           <div className="flex flex-wrap items-center gap-1.5">
+                             {availableVolunteers.map(m => (
+                               <div 
+                                 key={m.id}
+                                 className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/5 border border-border text-[10px] font-bold text-text-main"
+                               >
+                                 <div className="w-4 h-4 rounded-full overflow-hidden bg-brand/20 shrink-0">
+                                   <CachedAvatar photoUrl={m.photoUrl} alt={m.name} fallbackText={m.name} className="w-full h-full" />
+                                 </div>
+                                 <span>{m.name}</span>
+                                 {Array.isArray(m.roles) && m.roles[0] && (
+                                   <span className="text-[8px] text-brand font-black uppercase px-1 rounded bg-brand/10">
+                                     {m.roles[0]}
+                                   </span>
+                                 )}
+                               </div>
+                             ))}
                            </div>
+                         ) : (
+                           <span className="text-[10px] text-amber-500/90 font-medium italic flex items-center gap-1.5">
+                             <AlertTriangle size={12} className="shrink-0 text-amber-500" />
+                             Nenhum voluntário confirmou disponibilidade na aba Minha Disponibilidade ainda.
+                           </span>
                          )}
                        </div>
-
-                       {availableVolunteers.length > 0 ? (
-                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                           <span className="text-[9px] font-black uppercase text-text-muted mr-1">
-                             Voluntários com disponibilidade confirmada:
-                           </span>
-                           {availableVolunteers.map(m => (
-                             <div 
-                               key={m.id}
-                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-border text-[10px] font-bold text-text-main"
-                             >
-                               <div className="w-4 h-4 rounded-full overflow-hidden bg-brand/20 shrink-0">
-                                 <CachedAvatar photoUrl={m.photoUrl} alt={m.name} fallbackText={m.name} className="w-full h-full" />
-                               </div>
-                               <span>{m.name}</span>
-                               {Array.isArray(m.roles) && m.roles[0] && (
-                                 <span className="text-[8px] text-brand font-black uppercase px-1 rounded bg-brand/10">
-                                   {m.roles[0]}
-                                 </span>
-                               )}
-                             </div>
-                           ))}
-                         </div>
-                       ) : (
-                         <p className="text-[10px] text-amber-500/90 font-medium italic flex items-center gap-1.5 pt-0.5">
-                           <AlertTriangle size={12} className="shrink-0 text-amber-500" />
-                           Nenhum voluntário confirmou disponibilidade para este culto ainda. A Auto-Escala escala apenas quem colocou o nome disponível.
-                         </p>
-                       )}
-                     </div>
+                     )}
 
                      <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-border pb-3 sm:4 mb-6 sm:8 gap-4">
                        <h4 className="text-[9px] sm:text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
