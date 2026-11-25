@@ -3098,22 +3098,23 @@ function MainContent() {
     }
   }, [user, loading]);
 
-  // Auto-register FCM Web Push token for logged in user if permission is already granted
-  useEffect(() => {
-    if (!user || loading) return;
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      requestFcmToken().then((tok) => {
-        if (tok) {
-          console.log('[FCM] Token de push do membro atualizado com sucesso.');
-        }
-      }).catch((err) => {
-        console.warn('[FCM] Falha ao registrar token em background:', err);
-      });
-    }
-  }, [user, loading]);
-
   const alertedNotificationsRef = useRef<Set<string>>(new Set());
+  const recentAlertFingerprintsRef = useRef<Map<string, number>>(new Map());
+  const recentNotificationDispatchesRef = useRef<Map<string, number>>(new Map());
   const isFirstLoadNotificationsRef = useRef(true);
+
+  const computeDeterministicNotifTag = useCallback((title?: string, body?: string, explicitTag?: string) => {
+    if (explicitTag && typeof explicitTag === 'string' && explicitTag.trim().length > 0 && !explicitTag.includes('undefined')) {
+      return explicitTag.trim();
+    }
+    const str = `${(title || '').trim().toLowerCase()}:${(body || '').trim().toLowerCase()}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return 'liloupro-' + Math.abs(hash).toString(36);
+  }, []);
 
   // Floating WhatsApp Heads-Up Notification Banner State
   const [whatsAppBanner, setWhatsAppBanner] = useState<{
@@ -3176,15 +3177,30 @@ function MainContent() {
     }
   }, []);
 
-  // Dispatch both WhatsApp In-App Heads-Up Banner and Native System Push Notification
-  const triggerWhatsAppNotificationAlert = useCallback((n: { id?: string; title?: string; content?: string; type?: string }) => {
+  // Dispatch WhatsApp In-App Heads-Up Banner and coordinate with Service Worker to prevent duplicate OS notifications
+  const triggerWhatsAppNotificationAlert = useCallback((n: { id?: string; title?: string; content?: string; type?: string; tag?: string }) => {
+    const notifTitle = n.title || 'LiLouPro • Notificação';
+    const notifBody = n.content || 'Você tem uma nova atualização no ministério.';
+    const deterministicTag = computeDeterministicNotifTag(notifTitle, notifBody, n.tag);
+
+    const now = Date.now();
+    recentAlertFingerprintsRef.current.forEach((timestamp, key) => {
+      if (now - timestamp > 45000) {
+        recentAlertFingerprintsRef.current.delete(key);
+      }
+    });
+    if (recentAlertFingerprintsRef.current.has(deterministicTag)) {
+      return;
+    }
+    recentAlertFingerprintsRef.current.set(deterministicTag, now);
+
     playWhatsAppNotificationChime();
     triggerNotificationVibration();
 
     setWhatsAppBanner({
-      id: n.id || 'notif-' + Date.now(),
-      title: n.title || 'LiLouPro • Notificação',
-      content: n.content || 'Você tem uma nova atualização no ministério.',
+      id: n.id || deterministicTag,
+      title: notifTitle,
+      content: notifBody,
       type: n.type
     });
 
@@ -3195,39 +3211,20 @@ function MainContent() {
       setWhatsAppBanner(null);
     }, 7000);
 
-    // Trigger Native PWA System Notification (lockscreen / status tray outside the app)
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const notifTitle = n.title || 'LiLouPro • Notificação';
-      const notifOptions: any = {
-        body: n.content || 'Você tem uma nova atualização no ministério.',
-        icon: luxuryAppIcon,
-        badge: luxuryAppIcon,
-        tag: n.id || 'liloupro-msg-' + Date.now(),
-        renotify: true,
-        requireInteraction: true,
-        vibrate: [200, 100, 200, 100, 200, 100, 400],
-        actions: [
-          { action: 'open', title: '💬 Abrir Mensagem' },
-          { action: 'dismiss', title: 'Fechar' }
-        ],
-        data: { id: n.id, type: n.type }
-      };
-
-      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(notifTitle, notifOptions);
-        }).catch(() => {
-          try {
-            new Notification(notifTitle, notifOptions);
-          } catch (e) {}
-        });
-      } else {
-        try {
-          new Notification(notifTitle, notifOptions);
-        } catch (e) {}
-      }
+    // Coordinate with Service Worker:
+    // - If app is visible in foreground, register fingerprint in SW so an incoming FCM push doesn't pop a duplicate OS alert.
+    // - If app is hidden in background, ask SW to display at most ONE deduplicated system notification via displayUniqueNotification.
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const isAppVisible = typeof document !== 'undefined' && document.visibilityState === 'visible';
+      navigator.serviceWorker.controller.postMessage({
+        type: isAppVisible ? 'MARK_NOTIFICATION_SHOWN' : 'DISPLAY_UNIQUE_NOTIFICATION',
+        title: notifTitle,
+        body: notifBody,
+        tag: deterministicTag,
+        url: n.type === 'service' ? '/?tab=liturgy' : '/'
+      });
     }
-  }, [playWhatsAppNotificationChime, triggerNotificationVibration]);
+  }, [computeDeterministicNotifTag, playWhatsAppNotificationChime, triggerNotificationVibration]);
 
   // Listen for Service Worker click messages
   useEffect(() => {
@@ -3416,19 +3413,39 @@ function MainContent() {
   }, [user, userChurchId]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      isFirstLoadNotificationsRef.current = true;
+      return;
+    }
+    isFirstLoadNotificationsRef.current = true;
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.uid)
     );
     const unsub = onSnapshot(q, (snap) => {
-      const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
+      const rawItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
         .filter((n: any) => !n.deleted)
         .sort((a: any, b: any) => {
           const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
           const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
           return timeB - timeA;
         });
+
+      // Deduplicate in-app notifications list if two docs with identical title+content were created within 60s
+      const seenBuckets = new Set<string>();
+      const items = rawItems.filter((n: any) => {
+        const timeMs = n.createdAt?.toDate ? n.createdAt.toDate().getTime() : 0;
+        const minuteBucket = timeMs > 0 ? Math.floor(timeMs / 60000) : 0;
+        const sig = `${(n.type || '').trim()}|${(n.title || '').trim().toLowerCase()}|${(n.content || '').trim().toLowerCase()}|${minuteBucket}`;
+        if (minuteBucket > 0 && seenBuckets.has(sig)) {
+          return false;
+        }
+        if (minuteBucket > 0) {
+          seenBuckets.add(sig);
+        }
+        return true;
+      });
+
       setNotifications(items);
       const nextUnreadCount = items.filter((n: any) => !n.read).length;
       setUnreadCount(nextUnreadCount);
@@ -3443,7 +3460,7 @@ function MainContent() {
         });
       } else {
         // Collect current unread IDs to prevent alerting historical items on initial load
-        items.forEach((n: any) => {
+        rawItems.forEach((n: any) => {
           if (!n.read) {
             alertedNotificationsRef.current.add(n.id);
           }
@@ -3454,7 +3471,7 @@ function MainContent() {
       console.error("Notifications snapshot error:", error);
     });
     return unsub;
-  }, [user]);
+  }, [user, triggerWhatsAppNotificationAlert]);
 
   useEffect(() => {
     // 1. Native platform Badging API call (runs in active window context)
@@ -3759,102 +3776,166 @@ function MainContent() {
     pushErrors?: any[];
   }> => {
     try {
+      const cleanTitle = (title || '').trim();
+      const cleanContent = (content || '').trim();
+      const dispatchSignature = `${userChurchId || 'semente'}|${type}|${preferenceKey || ''}|${cleanTitle.toLowerCase()}|${cleanContent.toLowerCase()}`;
+      let sigHash = 0;
+      for (let i = 0; i < dispatchSignature.length; i++) {
+        sigHash = ((sigHash << 5) - sigHash) + dispatchSignature.charCodeAt(i);
+        sigHash |= 0;
+      }
+      const eventHash = Math.abs(sigHash).toString(36);
+
+      // Guard against duplicate rapid calls for the exact same notification event (within 15s)
+      const nowMs = Date.now();
+      recentNotificationDispatchesRef.current.forEach((ts, key) => {
+        if (nowMs - ts > 15000) {
+          recentNotificationDispatchesRef.current.delete(key);
+        }
+      });
+      if (recentNotificationDispatchesRef.current.has(eventHash)) {
+        console.log('[Notifications] Ignorando disparo duplicado recente:', cleanTitle);
+        return { success: true, targetsCount: 0, pushTokensCount: 0, pushSentCount: 0 };
+      }
+      recentNotificationDispatchesRef.current.set(eventHash, nowMs);
+
+      const minuteBucket = Math.floor(nowMs / 60000).toString(36);
+      const dedupKey = computeDeterministicNotifTag(cleanTitle, cleanContent);
+
+      // Identify excluded user's email and device tokens so the sender never receives their own push via a secondary profile
+      const excludedEmail = excludeUserId && user?.uid === excludeUserId
+        ? (user?.email || '').toLowerCase().trim()
+        : '';
+      const excludedDeviceTokens = new Set<string>();
+      if (excludeUserId) {
+        (allMembers || []).forEach((m) => {
+          const mUid = m.uid || m.id;
+          const mEmail = (m.email || '').toLowerCase().trim();
+          if (mUid === excludeUserId || (excludedEmail && mEmail === excludedEmail)) {
+            if (typeof m.lastFcmToken === 'string' && m.lastFcmToken.trim()) excludedDeviceTokens.add(m.lastFcmToken.trim());
+            if (typeof m.fcmToken === 'string' && m.fcmToken.trim()) excludedDeviceTokens.add(m.fcmToken.trim());
+            if (Array.isArray(m.fcmTokens)) {
+              m.fcmTokens.forEach((t: any) => {
+                if (typeof t === 'string' && t.trim()) excludedDeviceTokens.add(t.trim());
+              });
+            }
+          }
+        });
+      }
+
+      // Deduplicate recipients by userId and email so each member receives at most ONE notification
+      const seenTargetUserIds = new Set<string>();
+      const seenTargetEmails = new Set<string>();
       const targets = (allMembers || []).filter(m => {
-        const userId = m.uid || m.id;
+        const userId = String(m.uid || m.id || '').trim();
         if (!userId) return false;
         if (excludeUserId && userId === excludeUserId) return false;
-        
+
+        const memberEmail = (m.email || '').toLowerCase().trim();
+        if (excludedEmail && memberEmail && memberEmail === excludedEmail) return false;
+
         // Respect customizable user preferences
         if (preferenceKey && m[preferenceKey] === false) {
           return false;
         }
+
+        if (seenTargetUserIds.has(userId)) return false;
+        if (memberEmail && seenTargetEmails.has(memberEmail)) return false;
+
+        seenTargetUserIds.add(userId);
+        if (memberEmail) seenTargetEmails.add(memberEmail);
         return true;
       });
 
-      // 1. Gravar no mural / central de notificações in-app
+      // 1. Gravar no mural / central de notificações in-app com notificationId determinístico por destinatário
       if (targets.length > 0) {
         const creations = targets.map(m => {
-          const userId = m.uid || m.id;
+          const userId = String(m.uid || m.id || '').trim();
           if (!userId) return Promise.resolve();
-          return addDoc(collection(db, 'notifications'), {
+          const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+          const deterministicNotifId = `notif_${eventHash}_${minuteBucket}_${safeUserId}`;
+          return setDoc(doc(db, 'notifications', deterministicNotifId), {
             userId,
-            title,
-            content,
+            title: cleanTitle,
+            content: cleanContent,
             type,
             read: false,
             ...(userChurchId ? { churchId: userChurchId } : {}),
             createdAt: serverTimestamp()
           }).catch(err => {
-            console.warn('[Notifications] Erro ao gravar notificação in-app para usuário:', userId, err);
+            console.warn('[Notifications] Aviso ao gravar notificação in-app para usuário:', userId, err);
             return null;
           });
         });
         await Promise.allSettled(creations);
       }
 
-      // 2. Disparar Web Push (FCM) em background para os aparelhos dos destinatários (1 token ativo por usuário)
-      const pushTokens: string[] = [];
-      const addTokenSafe = (rawTok: any) => {
-        if (typeof rawTok === 'string') {
-          const clean = rawTok.trim();
-          if (clean.length > 15 && !pushTokens.includes(clean)) {
-            pushTokens.push(clean);
-          }
-        }
-      };
-
-      // Mapear apenas os membros-alvo (destinatários válidos sem o autor excluído)
-      const targetUserIds = new Set(targets.map(m => m.uid || m.id).filter(Boolean));
+      // 2. Disparar Web Push (FCM) em background para os aparelhos dos destinatários (estritamente 1 token ativo por usuário)
+      const targetUserIds = new Set<string>(targets.map(m => String(m.uid || m.id || '').trim()).filter(Boolean));
+      const tokensByUid = new Map<string, string>();
 
       targets.forEach(m => {
-        // Priorizar o último token registrado ativo do membro para evitar múltiplos disparos no mesmo aparelho
+        const uid = String(m.uid || m.id || '').trim();
+        if (!uid) return;
         const activeToken = m.lastFcmToken || m.fcmToken || (Array.isArray(m.fcmTokens) ? m.fcmTokens[m.fcmTokens.length - 1] : null);
-        if (activeToken) {
-          addTokenSafe(activeToken);
+        if (typeof activeToken === 'string') {
+          const clean = activeToken.trim();
+          if (clean.length > 15 && !excludedDeviceTokens.has(clean)) {
+            tokensByUid.set(uid, clean);
+          }
         }
       });
 
-      // Coletar do Firestore apenas para destinatários da mesma igreja que ainda não tenham token carregado em memória
+      // Coletar do Firestore para destinatários da mesma igreja (sobrescrevendo pelo registro mais recente por UID sem duplicar)
       try {
         if (targetUserIds.size > 0 && userChurchId) {
           const fcmTokensQ = userChurchId === 'semente'
             ? collection(db, 'fcm_tokens')
             : query(collection(db, 'fcm_tokens'), where('churchId', '==', userChurchId));
           const fcmTokensSnap = await getDocs(fcmTokensQ);
-          const tokensByUid = new Map<string, string>();
           fcmTokensSnap.forEach(docSnap => {
             const data = docSnap.data();
-            const uid = data.uid;
-            if (uid && targetUserIds.has(uid) && uid !== excludeUserId && data.token) {
-              tokensByUid.set(uid, data.token);
+            const uid = String(data?.uid || '').trim();
+            const tok = typeof data?.token === 'string' ? data.token.trim() : '';
+            if (! tok || tok.length <= 15) return;
+            if (excludeUserId && uid === excludeUserId) {
+              excludedDeviceTokens.add(tok);
+              return;
             }
-          });
-          tokensByUid.forEach((tok) => {
-            addTokenSafe(tok);
+            if (uid && targetUserIds.has(uid) && !excludedDeviceTokens.has(tok)) {
+              tokensByUid.set(uid, tok);
+            }
           });
         }
       } catch (fcmFetchErr) {
         console.warn('[FCM] Error fetching fresh tokens from Firestore:', fcmFetchErr);
       }
 
+      const pushTokens = Array.from(
+        new Set(
+          Array.from(tokensByUid.values()).filter(tok => !excludedDeviceTokens.has(tok))
+        )
+      );
+
       let pushSentCount = 0;
       let pushErrors: any[] | undefined = undefined;
 
       if (pushTokens.length > 0) {
         const targetUrl = type === 'service' || preferenceKey === 'notifyNewLiturgy' ? '/?tab=liturgy' : '/';
-        const notificationTag = `liloupro-${type}-${(title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}`;
         try {
           const pushResult = await sendPushNotification({
             tokens: pushTokens,
-            title,
-            body: content,
+            title: cleanTitle,
+            body: cleanContent,
             url: targetUrl,
+            tag: dedupKey,
             data: { 
               type: String(type), 
-              timestamp: String(Date.now()),
-              title: String(title),
-              body: String(content),
-              tag: notificationTag
+              timestamp: String(nowMs),
+              title: String(cleanTitle),
+              body: String(cleanContent),
+              tag: dedupKey,
+              dedupKey
             }
           });
           pushSentCount = pushResult.sentCount || 0;

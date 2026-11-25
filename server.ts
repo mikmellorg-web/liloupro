@@ -4845,6 +4845,15 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
       if (!uid || !token || typeof token !== "string") {
         return res.status(400).json({ success: false, error: "UID e token obrigatórios." });
       }
+      const cleanToken = token.trim();
+
+      // Remove este token físico de outros UIDs caso o usuário tenha trocado de conta no mesmo aparelho
+      for (const [otherUid, entry] of tokenRegistryMap.entries()) {
+        if (otherUid !== uid && Array.isArray(entry.tokens) && entry.tokens.includes(cleanToken)) {
+          entry.tokens = entry.tokens.filter((t) => t !== cleanToken);
+          tokenRegistryMap.set(otherUid, entry);
+        }
+      }
 
       const existing = tokenRegistryMap.get(uid) || {
         uid,
@@ -4859,9 +4868,7 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
       if (email) existing.email = email;
       if (notifyDayBeforeReminder !== undefined) existing.notifyDayBeforeReminder = notifyDayBeforeReminder !== false;
 
-      if (!existing.tokens.includes(token)) {
-        existing.tokens.push(token);
-      }
+      existing.tokens = [cleanToken];
       existing.updatedAt = Date.now();
       tokenRegistryMap.set(uid, existing);
       saveFcmRegistryToDisk();
@@ -4889,8 +4896,12 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
       for (const m of members) {
         if (!m || !m.uid) continue;
         const incomingTokens = Array.isArray(m.fcmTokens) ? m.fcmTokens : (m.fcmToken ? [m.fcmToken] : []);
-        const validTokens = incomingTokens.filter((t: any) => typeof t === "string" && t.trim().length > 10);
+        const validTokens = incomingTokens
+          .filter((t: any) => typeof t === "string" && t.trim().length > 10)
+          .map((t: string) => t.trim());
         if (validTokens.length === 0) continue;
+
+        const latestToken = validTokens[validTokens.length - 1];
 
         const existing = tokenRegistryMap.get(m.uid) || {
           uid: m.uid,
@@ -4905,11 +4916,7 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
         if (m.email) existing.email = m.email;
         if (m.notifyDayBeforeReminder !== undefined) existing.notifyDayBeforeReminder = m.notifyDayBeforeReminder !== false;
 
-        validTokens.forEach((t: string) => {
-          if (!existing.tokens.includes(t)) {
-            existing.tokens.push(t);
-          }
-        });
+        existing.tokens = [latestToken];
 
         existing.updatedAt = Date.now();
         tokenRegistryMap.set(m.uid, existing);

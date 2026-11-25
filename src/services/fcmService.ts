@@ -1,6 +1,6 @@
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { getFirebaseMessaging, db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, getDoc, setDoc, getDocs, collection, query, where, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, deleteDoc, collection, query, where } from 'firebase/firestore';
 
 /**
  * Service to manage Firebase Cloud Messaging (FCM) Web Push tokens and foreground messages.
@@ -97,106 +97,122 @@ export interface FcmTokenDetailedResult {
   permission?: NotificationPermission;
 }
 
+let inFlightTokenRequest: Promise<FcmTokenDetailedResult> | null = null;
+let lastRegisteredBindingKey: string | null = null;
+let lastRegisteredAtMs = 0;
+
 /**
  * Requests push notification permission from the user and retrieves the FCM token with comprehensive diagnostics.
  */
 export const requestFcmTokenDetailed = async (): Promise<FcmTokenDetailedResult> => {
-  if (!isPushNotificationSupported()) {
-    console.warn('[FCM] Push notifications are not supported in this browser environment.');
-    return { success: false, error: 'Notificações Push não são suportadas neste navegador ou dispositivo.' };
+  if (inFlightTokenRequest) {
+    return inFlightTokenRequest;
   }
 
-  const vapidKey = getVapidKey();
+  inFlightTokenRequest = (async (): Promise<FcmTokenDetailedResult> => {
+    if (!isPushNotificationSupported()) {
+      console.warn('[FCM] Push notifications are not supported in this browser environment.');
+      return { success: false, error: 'Notificações Push não são suportadas neste navegador ou dispositivo.' };
+    }
+
+    const vapidKey = getVapidKey();
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.warn('[FCM] Notification permission was not granted:', permission);
+        return {
+          success: false,
+          permission,
+          error: `Permissão de notificação está "${permission}". Altere nas configurações do navegador.`
+        };
+      }
+
+      const messaging = await getFirebaseMessaging();
+      if (!messaging) {
+        console.warn('[FCM] Firebase Messaging is not supported or failed to initialize.');
+        return { success: false, permission, error: 'Firebase Cloud Messaging não pôde ser inicializado.' };
+      }
+
+      // Obter service worker registration ativo
+      const registration = await navigator.serviceWorker.ready;
+
+      let token: string | null = null;
+      let lastError: any = null;
+
+      // Tenta primeiro com a chave VAPID configurada
+      if (vapidKey) {
+        try {
+          token = await getToken(messaging, {
+            serviceWorkerRegistration: registration,
+            vapidKey: vapidKey
+          });
+        } catch (vapidErr: any) {
+          lastError = vapidErr;
+          console.warn('[FCM] Error with custom VAPID key:', vapidErr?.message || vapidErr);
+        }
+      }
+
+      // Fallback se não passou ou falhou com VAPID customizada
+      if (!token) {
+        try {
+          token = await getToken(messaging, {
+            serviceWorkerRegistration: registration
+          });
+        } catch (fallbackErr: any) {
+          if (!lastError) lastError = fallbackErr;
+          console.warn('[FCM] Error retrieving token with default options:', fallbackErr?.message || fallbackErr);
+        }
+      }
+
+      // Fallback adicional caso getRegistration('/sw.js') retorne instância diferente
+      if (!token) {
+        try {
+          const swReg = await navigator.serviceWorker.getRegistration('/sw.js') || await navigator.serviceWorker.getRegistration();
+          if (swReg) {
+            token = await getToken(messaging, {
+              serviceWorkerRegistration: swReg,
+              ...(vapidKey ? { vapidKey } : {})
+            });
+          }
+        } catch (regErr: any) {
+          if (!lastError) lastError = regErr;
+          console.warn('[FCM] Error retrieving token via getRegistration:', regErr?.message || regErr);
+        }
+      }
+
+      if (token) {
+        console.log('[FCM] Token obtido com sucesso!');
+        const firestoreResult = await registerTokenInFirestore(token);
+        return {
+          success: true,
+          token,
+          vapidKeyUsed: vapidKey,
+          permission,
+          firestoreSaved: firestoreResult.success,
+          firestoreError: firestoreResult.error
+        };
+      } else {
+        return {
+          success: false,
+          permission,
+          vapidKeyUsed: vapidKey,
+          error: lastError?.message || 'Nenhum token foi gerado pelo Firebase Messaging.'
+        };
+      }
+    } catch (error: any) {
+      console.error('[FCM] Error retrieving FCM token:', error);
+      return {
+        success: false,
+        error: error?.message || String(error)
+      };
+    }
+  })();
 
   try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn('[FCM] Notification permission was not granted:', permission);
-      return {
-        success: false,
-        permission,
-        error: `Permissão de notificação está "${permission}". Altere nas configurações do navegador.`
-      };
-    }
-
-    const messaging = await getFirebaseMessaging();
-    if (!messaging) {
-      console.warn('[FCM] Firebase Messaging is not supported or failed to initialize.');
-      return { success: false, permission, error: 'Firebase Cloud Messaging não pôde ser inicializado.' };
-    }
-
-    // Obter service worker registration ativo
-    const registration = await navigator.serviceWorker.ready;
-
-    let token: string | null = null;
-    let lastError: any = null;
-
-    // Tenta primeiro com a chave VAPID configurada
-    if (vapidKey) {
-      try {
-        token = await getToken(messaging, {
-          serviceWorkerRegistration: registration,
-          vapidKey: vapidKey
-        });
-      } catch (vapidErr: any) {
-        lastError = vapidErr;
-        console.warn('[FCM] Error with custom VAPID key:', vapidErr?.message || vapidErr);
-      }
-    }
-
-    // Fallback se não passou ou falhou com VAPID customizada
-    if (!token) {
-      try {
-        token = await getToken(messaging, {
-          serviceWorkerRegistration: registration
-        });
-      } catch (fallbackErr: any) {
-        if (!lastError) lastError = fallbackErr;
-        console.warn('[FCM] Error retrieving token with default options:', fallbackErr?.message || fallbackErr);
-      }
-    }
-
-    // Fallback adicional caso getRegistration('/sw.js') retorne instância diferente
-    if (!token) {
-      try {
-        const swReg = await navigator.serviceWorker.getRegistration('/sw.js') || await navigator.serviceWorker.getRegistration();
-        if (swReg) {
-          token = await getToken(messaging, {
-            serviceWorkerRegistration: swReg,
-            ...(vapidKey ? { vapidKey } : {})
-          });
-        }
-      } catch (regErr: any) {
-        if (!lastError) lastError = regErr;
-        console.warn('[FCM] Error retrieving token via getRegistration:', regErr?.message || regErr);
-      }
-    }
-
-    if (token) {
-      console.log('[FCM] Token obtido com sucesso!');
-      const firestoreResult = await registerTokenInFirestore(token);
-      return {
-        success: true,
-        token,
-        vapidKeyUsed: vapidKey,
-        permission,
-        firestoreSaved: firestoreResult.success,
-        firestoreError: firestoreResult.error
-      };
-    } else {
-      return {
-        success: false,
-        permission,
-        vapidKeyUsed: vapidKey,
-        error: lastError?.message || 'Nenhum token foi gerado pelo Firebase Messaging.'
-      };
-    }
-  } catch (error: any) {
-    console.error('[FCM] Error retrieving FCM token:', error);
-    return {
-      success: false,
-      error: error?.message || String(error)
-    };
+    return await inFlightTokenRequest;
+  } finally {
+    inFlightTokenRequest = null;
   }
 };
 
@@ -206,7 +222,8 @@ export const requestFcmToken = async (): Promise<string | null> => {
 };
 
 /**
- * Associates an FCM token with the logged-in member document and device registry in Firestore.
+ * Associates an FCM token exclusively with the logged-in member document and device registry in Firestore,
+ * removing stale tokens and orphan links when switching accounts or churches on the same device.
  */
 export const registerTokenInFirestore = async (token: string): Promise<{ success: boolean; error?: string }> => {
   const currentUser = auth.currentUser;
@@ -223,9 +240,52 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       }
     } catch {}
 
-    // 1. Registra na coleção global de aparelhos 'fcm_tokens' com churchId para isolamento multi-tenant
+    const bindingKey = `${currentUser.uid}:${resolvedChurchId}:${token}`;
+    const nowMs = Date.now();
+    if (lastRegisteredBindingKey === bindingKey && nowMs - lastRegisteredAtMs < 15000) {
+      return { success: true };
+    }
+
     const safeTokenSuffix = token.slice(-16).replace(/[^a-zA-Z0-9]/g, '');
     const tokenDocId = `${currentUser.uid}_${safeTokenSuffix}`;
+
+    // 1. Limpa tokens antigos ou duplicados do próprio usuário na coleção 'fcm_tokens'
+    try {
+      const userTokensSnap = await getDocs(
+        query(collection(db, 'fcm_tokens'), where('uid', '==', currentUser.uid))
+      );
+      const staleDeletions: Promise<any>[] = [];
+      userTokensSnap.forEach((docSnap) => {
+        if (docSnap.id !== tokenDocId || docSnap.data()?.token !== token) {
+          staleDeletions.push(deleteDoc(doc(db, 'fcm_tokens', docSnap.id)).catch(() => {}));
+        }
+      });
+      if (staleDeletions.length > 0) {
+        await Promise.allSettled(staleDeletions);
+      }
+    } catch {}
+
+    // 2. Se o mesmo dispositivo/navegador estava vinculado a outra conta na igreja, remove o vínculo órfão
+    if (resolvedChurchId) {
+      try {
+        const churchTokensQuery = resolvedChurchId === 'semente'
+          ? collection(db, 'fcm_tokens')
+          : query(collection(db, 'fcm_tokens'), where('churchId', '==', resolvedChurchId));
+        const churchTokensSnap = await getDocs(churchTokensQuery);
+        const orphanDeletions: Promise<any>[] = [];
+        churchTokensSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data?.token === token && (docSnap.id !== tokenDocId || data?.uid !== currentUser.uid)) {
+            orphanDeletions.push(deleteDoc(doc(db, 'fcm_tokens', docSnap.id)).catch(() => {}));
+          }
+        });
+        if (orphanDeletions.length > 0) {
+          await Promise.allSettled(orphanDeletions);
+        }
+      } catch {}
+    }
+
+    // 3. Registra o vínculo único e atualizado na coleção 'fcm_tokens' com churchId ativo
     await setDoc(doc(db, 'fcm_tokens', tokenDocId), {
       token,
       uid: currentUser.uid,
@@ -235,14 +295,14 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       updatedAt: new Date()
     }, { merge: true });
 
-    // 2. Garante que o documento do membro com o UID do Auth receba o token
+    // 4. Atualiza o documento do membro autenticado mantendo apenas o token ativo (sem acumular duplicatas)
     try {
       const memberRef = doc(db, 'members', currentUser.uid);
       await setDoc(memberRef, {
         uid: currentUser.uid,
         email: currentUser.email || '',
         name: currentUser.displayName || '',
-        fcmTokens: arrayUnion(token),
+        fcmTokens: [token],
         fcmToken: token,
         lastFcmToken: token,
         lastFcmTokenUpdate: new Date(),
@@ -251,30 +311,42 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       console.warn('[FCM] Aviso ao atualizar doc do membro no Firestore:', memErr);
     }
 
-    // 3. Se houver outro documento de membro com mesmo e-mail na mesma igreja (criado por líder), atualiza também
-    if (currentUser.email && resolvedChurchId) {
+    // 5. Remove este token físico de outros documentos de membros na mesma igreja (caso tenha trocado de conta no mesmo aparelho)
+    if (resolvedChurchId) {
       try {
-        const q = resolvedChurchId === 'semente'
-          ? query(collection(db, 'members'), where('email', '==', currentUser.email))
+        const membersQuery = resolvedChurchId === 'semente'
+          ? collection(db, 'members')
           : query(collection(db, 'members'), where('churchId', '==', resolvedChurchId));
-        const emailSnap = await getDocs(q);
-        emailSnap.forEach(async (d) => {
+        const membersSnap = await getDocs(membersQuery);
+        const cleanups: Promise<any>[] = [];
+        membersSnap.forEach((d) => {
+          if (d.id === currentUser.uid) return;
           const data = d.data() as any;
-          const matchChurch = data.churchId === resolvedChurchId || (!data.churchId && resolvedChurchId === 'semente');
-          if (d.id !== currentUser.uid && data.email === currentUser.email && matchChurch) {
-            await setDoc(doc(db, 'members', d.id), {
-              fcmTokens: arrayUnion(token),
-              fcmToken: token,
-              lastFcmToken: token,
-              lastFcmTokenUpdate: new Date()
-            }, { merge: true });
+          const hasToken =
+            data?.fcmToken === token ||
+            data?.lastFcmToken === token ||
+            (Array.isArray(data?.fcmTokens) && data.fcmTokens.includes(token));
+          if (hasToken) {
+            const remainingTokens = Array.isArray(data?.fcmTokens)
+              ? data.fcmTokens.filter((t: string) => t && t !== token)
+              : [];
+            const nextActive = remainingTokens.length > 0 ? remainingTokens[remainingTokens.length - 1] : '';
+            cleanups.push(
+              setDoc(doc(db, 'members', d.id), {
+                fcmTokens: remainingTokens,
+                fcmToken: nextActive,
+                lastFcmToken: nextActive,
+              }, { merge: true }).catch(() => {})
+            );
           }
         });
-      } catch (err) {
-        // Silencioso em caso de query
-      }
+        if (cleanups.length > 0) {
+          await Promise.allSettled(cleanups);
+        }
+      } catch {}
     }
-    // 4. Registra também no registry do servidor para disparos em segundo plano com app fechado
+
+    // 6. Registra também no registry do servidor para disparos em segundo plano com app fechado
     try {
       await fetch('/api/notifications/register-token', {
         method: 'POST',
@@ -282,6 +354,7 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
         body: JSON.stringify({
           uid: currentUser.uid,
           token,
+          churchId: resolvedChurchId,
           email: currentUser.email || '',
           name: currentUser.displayName || ''
         })
@@ -290,7 +363,9 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       // Ignora erro de rede se offline
     }
 
-    console.log('[FCM] Token de push registrado com sucesso no Firestore.');
+    lastRegisteredBindingKey = bindingKey;
+    lastRegisteredAtMs = nowMs;
+    console.log('[FCM] Token de push registrado e deduplicado com sucesso no Firestore.');
     return { success: true };
   } catch (error: any) {
     console.warn('[FCM] Failed to update member fcmTokens in Firestore:', error);

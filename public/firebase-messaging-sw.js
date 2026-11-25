@@ -18,13 +18,18 @@ function getDeterministicTag(tag, title, body) {
   return 'liloupro-' + Math.abs(hash).toString(36);
 }
 
-function shouldShow(fingerprint) {
+function shouldShow(tag, title, body) {
   const now = Date.now();
   for (const [k, t] of shownHistory.entries()) {
-    if (now - t > 25000) shownHistory.delete(k);
+    if (now - t > 60000) shownHistory.delete(k);
   }
-  if (shownHistory.has(fingerprint)) return false;
-  shownHistory.set(fingerprint, now);
+  const cleanTitle = (title || '').trim().toLowerCase();
+  const cleanBody = (body || '').trim().toLowerCase();
+  const tagKey = `tag:${tag}`;
+  const contentKey = `content:${cleanTitle}|${cleanBody}`;
+  if (shownHistory.has(tagKey) || shownHistory.has(contentKey)) return false;
+  shownHistory.set(tagKey, now);
+  shownHistory.set(contentKey, now);
   return true;
 }
 
@@ -47,9 +52,9 @@ messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message: ', payload);
   const notificationTitle = payload.notification?.title || payload.data?.title || 'LiLouPro • Notificação';
   const body = payload.notification?.body || payload.data?.body || 'Nova mensagem no ministério de louvor.';
-  const effectiveTag = getDeterministicTag(payload.data?.tag || payload.notification?.tag, notificationTitle, body);
+  const effectiveTag = getDeterministicTag(payload.data?.dedupKey || payload.data?.tag || payload.notification?.tag, notificationTitle, body);
 
-  if (!shouldShow(effectiveTag)) {
+  if (!shouldShow(effectiveTag, notificationTitle, body)) {
     console.log('[firebase-messaging-sw.js] Descartando notificação duplicada:', effectiveTag);
     return;
   }

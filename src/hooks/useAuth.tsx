@@ -885,31 +885,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    let isActive = true;
     let unsubscribeForeground: (() => void) | null = null;
+    const contextKey = `${user.uid}:${effectiveChurchId || ''}`;
 
-    // Register token once per user session
-    if (fcmRegisteredUidRef.current !== user.uid) {
-      fcmRegisteredUidRef.current = user.uid;
-      requestFcmToken().catch((err) => {
-        console.warn('[FCM] Token registration skipped or deferred:', err);
-      });
+    // Register token once per user/church session when permission is granted
+    if (fcmRegisteredUidRef.current !== contextKey) {
+      fcmRegisteredUidRef.current = contextKey;
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        requestFcmToken().catch((err) => {
+          console.warn('[FCM] Token registration skipped or deferred:', err);
+        });
+      }
     }
 
-    // Attach foreground listener for active app sessions
+    // Attach single foreground listener for active app sessions
     setupForegroundMessageListener((payload) => {
       console.log('[FCM] Notificação em primeiro plano recebida:', payload);
     }).then((unsub) => {
+      if (!isActive) {
+        if (unsub) unsub();
+        return;
+      }
       if (unsub) {
         unsubscribeForeground = unsub;
       }
     });
 
     return () => {
+      isActive = false;
       if (unsubscribeForeground) {
         unsubscribeForeground();
       }
     };
-  }, [user?.uid]);
+  }, [user?.uid, effectiveChurchId]);
 
   // Global Remote Support Policy subscription ('all' by default, or 'premium_only')
   useEffect(() => {

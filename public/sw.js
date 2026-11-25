@@ -16,25 +16,42 @@ function generateDeterministicTag(tag, title, body) {
   return 'liloupro-' + Math.abs(hash).toString(36);
 }
 
+function recordNotificationShown(title, body, tag) {
+  const now = Date.now();
+  for (const [key, timestamp] of shownNotificationHistory.entries()) {
+    if (now - timestamp > 60000) {
+      shownNotificationHistory.delete(key);
+    }
+  }
+  const cleanTitle = (title || '').trim().toLowerCase();
+  const cleanBody = (body || '').trim().toLowerCase();
+  const effectiveTag = generateDeterministicTag(tag, title, body);
+  shownNotificationHistory.set(`tag:${effectiveTag}`, now);
+  shownNotificationHistory.set(`content:${cleanTitle}|${cleanBody}`, now);
+}
+
 function shouldDisplayNotification(title, body, tag) {
   const now = Date.now();
-  // Clean entries older than 25 seconds
+  // Clean entries older than 60 seconds
   for (const [key, timestamp] of shownNotificationHistory.entries()) {
-    if (now - timestamp > 25000) {
+    if (now - timestamp > 60000) {
       shownNotificationHistory.delete(key);
     }
   }
 
   const cleanTitle = (title || '').trim().toLowerCase();
   const cleanBody = (body || '').trim().toLowerCase();
-  const fingerprint = tag ? `tag:${tag}` : `content:${cleanTitle}|${cleanBody}`;
+  const effectiveTag = generateDeterministicTag(tag, title, body);
+  const tagKey = `tag:${effectiveTag}`;
+  const contentKey = `content:${cleanTitle}|${cleanBody}`;
 
-  if (shownNotificationHistory.has(fingerprint)) {
-    console.log('[sw.js] Ignorando notificação repetida recebida em intervalo curto:', fingerprint);
+  if (shownNotificationHistory.has(tagKey) || shownNotificationHistory.has(contentKey)) {
+    console.log('[sw.js] Ignorando notificação repetida recebida em intervalo curto:', tagKey, contentKey);
     return false;
   }
 
-  shownNotificationHistory.set(fingerprint, now);
+  shownNotificationHistory.set(tagKey, now);
+  shownNotificationHistory.set(contentKey, now);
   return true;
 }
 
@@ -106,6 +123,47 @@ async function displayUniqueNotification({
     }
   }
 }
+
+// Intercept Push Notifications BEFORE importing firebase-messaging-compat so Firebase SDK does not auto-display a second duplicate notification
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  if (typeof event.stopImmediatePropagation === 'function') {
+    event.stopImmediatePropagation();
+  }
+
+  event.waitUntil(
+    (async () => {
+      try {
+        const payload = event.data.json();
+        const title = payload.notification?.title || payload.data?.title || payload.title || 'LiLouPro • Nova Notificação';
+        const body = payload.notification?.body || payload.data?.body || payload.body || 'Você tem uma nova mensagem ou atualização no ministério.';
+        const icon = payload.notification?.icon || payload.data?.icon || payload.icon || '/pwa-512x512.png?v=4.0';
+        const badge = payload.notification?.badge || payload.data?.badge || payload.badge || '/pwa-192x192.png?v=4.0';
+        const targetUrl = payload.data?.url || payload.fcmOptions?.link || payload.url || '/';
+        const tag = payload.data?.dedupKey || payload.data?.tag || payload.notification?.tag || payload.tag;
+
+        await displayUniqueNotification({
+          title,
+          body,
+          icon,
+          badge,
+          tag,
+          data: payload.data || {},
+          targetUrl
+        });
+      } catch (err) {
+        const text = event.data.text();
+        await displayUniqueNotification({
+          title: 'LiLouPro • Nova Notificação',
+          body: text || 'Nova mensagem no ministério de louvor.',
+          icon: '/pwa-512x512.png?v=4.0',
+          badge: '/pwa-192x192.png?v=4.0',
+          targetUrl: '/'
+        });
+      }
+    })()
+  );
+});
 
 // Import official Firebase compat libraries for background messaging
 try {
@@ -304,6 +362,21 @@ self.addEventListener('message', (event) => {
     );
     return;
   }
+  if (event.data.type === 'MARK_NOTIFICATION_SHOWN') {
+    recordNotificationShown(event.data.title, event.data.body, event.data.tag);
+    return;
+  }
+  if (event.data.type === 'DISPLAY_UNIQUE_NOTIFICATION') {
+    event.waitUntil(
+      displayUniqueNotification({
+        title: event.data.title,
+        body: event.data.body,
+        tag: event.data.tag,
+        targetUrl: event.data.url || '/'
+      })
+    );
+    return;
+  }
   if (event.data.type === 'SCHEDULE_NOTIFICATION') {
     const delay = parseInt(event.data.delay, 10) || 4000;
     const title = event.data.title || 'LiLouPro • Notificação do Sistema';
@@ -328,44 +401,6 @@ self.addEventListener('message', (event) => {
     }, delay);
     return;
   }
-});
-
-// Listen to Push Notifications sent from a server or Firebase Cloud Messaging
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  event.waitUntil(
-    (async () => {
-      try {
-        const payload = event.data.json();
-        const title = payload.notification?.title || payload.data?.title || payload.title || 'LiLouPro • Nova Notificação';
-        const body = payload.notification?.body || payload.data?.body || payload.body || 'Você tem uma nova mensagem ou atualização no ministério.';
-        const icon = payload.notification?.icon || payload.icon || '/pwa-512x512.png?v=4.0';
-        const badge = payload.notification?.badge || payload.badge || '/pwa-192x192.png?v=4.0';
-        const targetUrl = payload.data?.url || payload.fcmOptions?.link || payload.url || '/';
-        const tag = payload.data?.tag || payload.notification?.tag || payload.tag;
-
-        await displayUniqueNotification({
-          title,
-          body,
-          icon,
-          badge,
-          tag,
-          data: payload.data || {},
-          targetUrl
-        });
-      } catch (err) {
-        const text = event.data.text();
-        await displayUniqueNotification({
-          title: 'LiLouPro • Nova Notificação',
-          body: text || 'Nova mensagem no ministério de louvor.',
-          icon: '/pwa-512x512.png?v=4.0',
-          badge: '/pwa-192x192.png?v=4.0',
-          targetUrl: '/'
-        });
-      }
-    })()
-  );
 });
 
 // Handle notification click: open/focus window and set app badge

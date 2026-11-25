@@ -661,8 +661,10 @@ export function LiturgyEditor({
   const [addItemStatus, setAddItemStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
 
   const handleSaveLiturgy = async () => {
+    if (isSaving || saveStatus === "saving") return;
+    setIsSaving(true);
     setSaveStatus("saving");
-    setSaveFeedbackMessage("Salvando alterações no Firebase...");
+    setSaveFeedbackMessage("Salvando liturgia e notificando equipe...");
     const servicePath = `services/${service.id}`;
     try {
       const liturgy = service.liturgy || [];
@@ -670,17 +672,35 @@ export function LiturgyEditor({
         liturgy,
         updatedAt: new Date().toISOString()
       });
+
+      if (createNotifications && liturgy.length > 0) {
+        const dateStr = new Date(service.date).toLocaleDateString("pt-BR");
+        try {
+          await createNotifications(
+            "📖 Nova Liturgia Disponível",
+            `A liturgia para o culto "${service.title}" em ${dateStr} foi definida. Venha conferir!`,
+            "service",
+            user?.uid,
+            "notifyNewLiturgy"
+          );
+        } catch (notifErr) {
+          console.warn("Aviso ao enviar notificação da liturgia:", notifErr);
+        }
+      }
+
       setSaveStatus("success");
-      setSaveFeedbackMessage("Liturgia salva com sucesso no Firebase!");
+      setSaveFeedbackMessage("Liturgia salva e equipe notificada!");
       setTimeout(() => {
         setIsEditing(false);
         setSaveStatus("idle");
         setSaveFeedbackMessage(null);
-      }, 1200);
+        setIsSaving(false);
+      }, 1500);
     } catch (error) {
       console.error("Erro ao salvar liturgia:", error);
       setSaveStatus("error");
       setSaveFeedbackMessage("Falha ao salvar no banco de dados. Tente novamente.");
+      setIsSaving(false);
       handleFirestoreError(error, OperationType.UPDATE, servicePath);
       setTimeout(() => {
         setSaveStatus("idle");
@@ -889,16 +909,6 @@ export function LiturgyEditor({
       setShowCustomMomentInput(false);
       setShowBibleSearch(false);
 
-      if (liturgy.length === 0 && createNotifications) {
-        const dateStr = new Date(service.date).toLocaleDateString("pt-BR");
-        await createNotifications(
-          "📖 Nova Liturgia Disponível",
-          `A liturgia para o culto "${service.title}" em ${dateStr} foi definida. Venha conferir!`,
-          "service",
-          undefined,
-          "notifyNewLiturgy"
-        );
-      }
       setTimeout(() => {
         setAddItemStatus("idle");
       }, 1500);
@@ -908,34 +918,6 @@ export function LiturgyEditor({
       setTimeout(() => {
         setAddItemStatus("idle");
       }, 3000);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleManualNotifyLiturgy = async () => {
-    if (!createNotifications) return;
-    setIsSaving(true);
-    try {
-      const dateStr = new Date(service.date).toLocaleDateString('pt-BR');
-      const result = await createNotifications(
-        '📖 Nova Liturgia Disponível',
-        `A liturgia para o culto "${service.title}" em ${dateStr} foi definida. Venha conferir!`,
-        'service',
-        undefined,
-        'notifyNewLiturgy'
-      );
-      if (result && result.pushSentCount > 0) {
-        alert(`🚀 Notificação enviada para ${result.pushSentCount} aparelho(s) e registrada no mural do aplicativo!`);
-      } else if (result && result.pushTokensCount > 0 && result.pushSentCount === 0) {
-        const errorDetail = result.pushErrors && result.pushErrors.length > 0 ? `\n\nDetalhe do erro: ${result.pushErrors[0].error}` : '';
-        alert(`🔔 Notificação registrada com sucesso no aplicativo!\n\n⚠️ O servidor não conseguiu entregar o push para os ${result.pushTokensCount} aparelho(s) cadastrados.${errorDetail}\n\nCertifique-se de cadastrar a chave FIREBASE_SERVICE_ACCOUNT na Vercel.`);
-      } else {
-        alert(`🔔 Notificação registrada no mural do aplicativo!\n\n💡 Dica: Nenhum aparelho registrado encontrado no momento. Peça aos membros para acessarem Ajustes > Notificações e ativarem as notificações.`);
-      }
-    } catch (e) {
-      console.error("Erro ao notificar liturgia:", e);
-      alert("Não foi possível enviar a notificação.");
     } finally {
       setIsSaving(false);
     }
@@ -1330,9 +1312,9 @@ export function LiturgyEditor({
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={handleSaveLiturgy} 
-                    disabled={saveStatus === "saving"}
+                    disabled={isSaving || saveStatus === "saving"}
                     className={cn(
-                      "text-[10px] sm:text-[11px] font-black uppercase tracking-widest flex items-center gap-2 px-5 py-2 rounded-full border shadow-lg active:scale-95 cursor-pointer transition-all",
+                      "text-[10px] sm:text-[11px] font-black uppercase tracking-widest flex items-center gap-2 px-5 py-2 rounded-full border shadow-lg active:scale-95 cursor-pointer transition-all disabled:opacity-75",
                       saveStatus === "saving" && "bg-amber-600 text-white border-amber-600 cursor-wait",
                       saveStatus === "success" && "bg-emerald-600 text-white border-emerald-600",
                       saveStatus === "error" && "bg-red-600 text-white border-red-600",
@@ -1347,7 +1329,7 @@ export function LiturgyEditor({
                     ) : saveStatus === "success" ? (
                       <>
                         <Check size={14} strokeWidth={3}/>
-                        Salvo no Firebase!
+                        Liturgia Salva e Equipe Notificada!
                       </>
                     ) : (
                       <>
@@ -1383,14 +1365,6 @@ export function LiturgyEditor({
                </button>
                {(service.liturgy || []).length > 0 && (
                  <>
-                   <button 
-                     onClick={handleManualNotifyLiturgy} 
-                     disabled={isSaving}
-                     className="text-[10px] sm:text-[11px] font-black text-emerald-700 dark:text-white transition-all uppercase tracking-widest flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-600/30 hover:bg-emerald-500/20 dark:hover:bg-emerald-600/50 px-5 py-2 rounded-full border border-emerald-500/20 dark:border-emerald-500/40 shadow-lg shadow-emerald-500/10 active:scale-95 disabled:opacity-50 cursor-pointer"
-                   >
-                     <Bell size={14}/>
-                     Notificar Membros (Push & In-App)
-                   </button>
                    <button 
                      onClick={handleShareLiturgyWhatsApp} 
                      disabled={isSaving}
@@ -2321,10 +2295,10 @@ export function LiturgyEditor({
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 w-full sm:w-auto">
               <Button 
                 onClick={handleSaveLiturgy}
-                disabled={saveStatus === "saving"}
+                disabled={isSaving || saveStatus === "saving"}
                 className={cn(
-                  "w-full sm:w-auto font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl shadow-xl flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-95 cursor-pointer",
-                  saveStatus === "saving" && "bg-amber-600 text-white shadow-amber-600/20 cursor-wait opacity-90",
+                  "w-full sm:w-auto font-black uppercase text-xs tracking-widest px-10 py-4 rounded-xl shadow-xl flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-80",
+                  (isSaving || saveStatus === "saving") && "bg-amber-600 text-white shadow-amber-600/20 cursor-wait opacity-90",
                   saveStatus === "success" && "bg-emerald-600 hover:bg-emerald-600 text-white shadow-emerald-600/30 scale-[1.02]",
                   saveStatus === "error" && "bg-red-600 hover:bg-red-600 text-white shadow-red-600/30",
                   saveStatus === "idle" && "bg-brand hover:bg-blue-700 text-white shadow-brand/20 hover:scale-[1.02]"
@@ -2333,13 +2307,13 @@ export function LiturgyEditor({
                 {saveStatus === "saving" && (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    <span>Salvando...</span>
+                    <span>Salvando e Notificando...</span>
                   </>
                 )}
                 {saveStatus === "success" && (
                   <>
                     <Check size={18} strokeWidth={3} className="text-white animate-bounce" />
-                    <span>Liturgia Salva com Sucesso!</span>
+                    <span>Liturgia Salva e Equipe Notificada!</span>
                   </>
                 )}
                 {saveStatus === "error" && (
