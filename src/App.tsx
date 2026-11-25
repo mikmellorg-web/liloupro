@@ -19938,8 +19938,9 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   onReplaySplash?: () => void,
   onTriggerNotification?: (n: any) => void
 }) {
-  const { user, memberData, churchData, isRemoteSupportMode, remoteSupportPolicy, effectivePlan, isVitalicio } = useAuth();
+  const { user, memberData, churchData, isSandboxMode, isRemoteSupportMode, remoteSupportPolicy, effectivePlan, isVitalicio } = useAuth();
   const isMasterDeveloper = (user?.email || '').toLowerCase().trim() === 'mikmellorg@gmail.com';
+  const showMasterDebugControls = isMasterDeveloper && !isSandboxMode && !isRemoteSupportMode;
   const userChurchId = memberData?.churchId || (isMasterDeveloper ? 'semente' : '');
   const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
   const [churchCodeInput, setChurchCodeInput] = useState('');
@@ -19951,6 +19952,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
   const [editChurchNameError, setEditChurchNameError] = useState<string | null>(null);
   const [isSavingChurchName, setIsSavingChurchName] = useState(false);
   const [section, setSection] = useState<'general' | 'reports'>('general');
+  const [isDevToolsExpanded, setIsDevToolsExpanded] = useState(false);
 
   // Delegated Remote Support (PIN 6 digits, 2h fixed validity)
   const [isUpdatingRemoteSupport, setIsUpdatingRemoteSupport] = useState(false);
@@ -20565,109 +20567,17 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     Receba notificações e avisos de escalas mesmo quando o aplicativo estiver totalmente fechado ou com a tela do celular desligada.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const result = await requestFcmTokenDetailed();
-                          if (result.permission) setNotificationPermission(result.permission);
-                          if (result.success && result.token) {
-                            const shortTok = result.token.slice(0, 12) + '...' + result.token.slice(-6);
-                            if (result.firestoreSaved) {
-                              alert(`✅ APARELHO REGISTRADO!\n\nSeu celular está conectado para receber notificações em segundo plano mesmo com o aplicativo fechado.\n\n📱 Token FCM: ${shortTok}\n💾 Banco Firebase: Sincronizado com sucesso!`);
-                            } else {
-                              alert(`⚠️ Token FCM gerado (${shortTok}), mas houve aviso ao salvar no banco: ${result.firestoreError || 'Permissão'}`);
-                            }
-                          } else {
-                            alert(`⚠️ Falha ao obter token do aparelho:\n\n${result.error || 'Erro desconhecido'}\n\n💡 Verifique se as notificações estão permitidas nas configurações do celular.`);
-                          }
-                        } catch (e: any) {
-                          alert("Aviso: " + (e?.message || String(e)));
-                        }
-                      }}
-                      className="bg-brand hover:brightness-110 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-brand/20 cursor-pointer"
-                    >
-                      <Bell size={14} />
-                      <span>{notificationPermission === 'granted' ? '🔄 Atualizar Token' : '🔔 Ativar Permissão'}</span>
-                    </Button>
-
-                    <Button
-                      onClick={async () => {
-                        try {
-                          let perm = notificationPermission;
-                          if (perm !== 'granted') {
-                            perm = await Notification.requestPermission();
-                            setNotificationPermission(perm);
-                          }
-                          
-                          if (perm !== 'granted') {
-                            alert("⚠️ A permissão de notificações não foi concedida nas configurações do seu navegador.");
-                            return;
-                          }
-
-                          // Disparo de teste único (se houver token FCM remoto, usa o servidor; senão, agenda direto no Service Worker)
-                          const tok = await requestFcmToken().catch(() => null);
-                          if (tok) {
-                            setTimeout(() => {
-                              sendPushNotification({
-                                tokens: [tok],
-                                title: "LiLouPro • Notificação no Celular",
-                                body: "🎉 Teste com celular fechado entregue com sucesso!",
-                                url: "/",
-                                tag: "liloupro-test-single"
-                              }).catch(() => {});
-                            }, 4000);
-                          } else {
-                            await scheduleServiceWorkerNotification({
-                              delayMs: 4000,
-                              title: "LiLouPro • Notificação no Celular",
-                              body: "🎉 Teste com celular fechado funcionando com sucesso!",
-                              url: "/"
-                            });
-                          }
-
-                          alert("🚀 TESTE INICIADO!\n\nBLOQUEIE a tela do celular ou FECHE o aplicativo AGORA.\nEm 4 segundos a notificação vai tocar na tela!");
-                        } catch (err: any) {
-                          alert("Erro ao disparar teste: " + (err?.message || String(err)));
-                        }
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer"
-                    >
-                      <Sparkles size={14} />
-                      <span>📲 Testar Celular Fechado (4s)</span>
-                    </Button>
-                  </div>
-
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const tok = await requestFcmToken();
-                        if (!tok) {
-                          alert("⚠️ Este aparelho ainda não possui um token FCM ativo.\nToque no botão 'Atualizar Token' acima primeiro.");
-                          return;
-                        }
-                        alert("📡 Enviando notificação push real via Servidor Vercel (FCM HTTP v1)...\n\nFECHE o aplicativo ou BLOQUEIE a tela agora!");
-                        const res = await sendPushNotification({
-                          tokens: [tok],
-                          title: "LiLouPro • Teste Servidor FCM",
-                          body: "🎉 Notificação remota entregue com sucesso pelo Firebase Admin no Vercel!",
-                          url: "/"
-                        });
-                        if (res.success && res.sentCount > 0) {
-                          alert(`🚀 SUCESSO NO SERVIDOR!\n\nO servidor Vercel enviou a notificação para ${res.sentCount} aparelho(s) via Firebase Cloud Messaging.`);
-                        } else {
-                          const errMsg = res.errors?.[0]?.error || (res as any).error || 'Falha ao despachar';
-                          alert(`⚠️ Resposta do Servidor:\n\n${errMsg}\n\n💡 Verifique se FIREBASE_SERVICE_ACCOUNT está cadastrado na Vercel.`);
-                        }
-                      } catch (err: any) {
-                        alert("Erro ao testar servidor: " + (err?.message || String(err)));
-                      }
-                    }}
-                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer mt-1"
-                  >
-                    <Send size={13} className="text-amber-400" />
-                    <span>📡 Testar Disparo Real Servidor FCM</span>
-                  </Button>
+                  {notificationPermission !== 'granted' && (
+                    <div className="pt-1">
+                      <Button
+                        onClick={handleRequestNotificationPermission}
+                        className="w-full bg-brand hover:brightness-110 text-white font-black text-[10px] uppercase tracking-wider h-10 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-brand/20 cursor-pointer"
+                      >
+                        <Bell size={14} />
+                        <span>🔔 Ativar Notificações</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-4">
@@ -20824,8 +20734,8 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
               </div>
            </Card>
 
-           {/* Suporte Técnico Remoto Delegado (Apenas Admin/Líder de Igrejas Clientes) */}
-           {isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (
+           {/* Suporte Técnico Remoto Delegado (Apenas Admin/Líder de Igrejas Clientes, ou quando houver suporte ativo) */}
+           {isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (!isMasterDeveloper || isRemoteSupportActiveForChurch || isRemoteSupportMode) && (
              <Card className="p-8 space-y-5 border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent">
                <div className="flex items-center justify-between gap-2 flex-wrap">
                  <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
@@ -20926,17 +20836,11 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                  </div>
                )}
 
-               {churchData?.remoteSupport?.lastSession && (
+               {isRemoteSupportActiveForChurch && churchData?.remoteSupport?.sessionStartedAt && (
                  <div className="pt-3 border-t border-border/50 text-[11px] text-text-muted space-y-0.5">
-                   <p className="font-bold text-text-main text-[10px] uppercase tracking-wider">Registro da Última Sessão:</p>
+                   <p className="font-bold text-emerald-500 text-[10px] uppercase tracking-wider">Sessão de Suporte em Andamento:</p>
                    <p>
-                     Autorizado por <strong className="text-text-main">{churchData.remoteSupport.lastSession.grantedByName}</strong>
-                     {churchData.remoteSupport.lastSession.startedAt && (
-                       <> • Início: {new Date(churchData.remoteSupport.lastSession.startedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
-                     )}
-                     {churchData.remoteSupport.lastSession.endedAt && (
-                       <> • Encerrado: {new Date(churchData.remoteSupport.lastSession.endedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
-                     )}
+                     Início: {new Date(churchData.remoteSupport.sessionStartedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                    </p>
                  </div>
                )}
@@ -20970,30 +20874,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                 Convidar via WhatsApp
               </Button>
            </Card>
-
-            {/* Abertura do Aplicativo / Splash Intro */}
-            <Card className="p-8 space-y-6 bg-gradient-to-br from-brand/10 via-violet-500/5 to-transparent border-brand/20 shadow-lg shadow-brand/5">
-               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                 <Sparkles size={14} className="text-brand animate-pulse" /> Abertura do Aplicativo (Splash Intro)
-               </h3>
-               <p className="text-xs text-text-muted leading-relaxed">
-                 Assista à elegante animação de entrada com a formação das sílabas do <strong>Liloupro</strong>: <span className="text-brand font-black">LI</span>turgia, <span className="text-violet-400 font-black">LOU</span>vor e <span className="text-emerald-400 font-black">PRO</span>jeção.
-               </p>
-               
-               <Button
-                 onClick={() => {
-                   try {
-                     sessionStorage.removeItem('liloupro_splash_shown');
-                   } catch (e) {}
-                   if (onReplaySplash) {
-                     onReplaySplash();
-                   }
-                 }}
-                 className="w-full bg-brand hover:brightness-110 text-white font-black text-xs uppercase tracking-widest h-11 gap-2 flex items-center justify-center rounded-xl shadow-lg shadow-brand/20 transition-all select-none border border-brand/20 cursor-pointer"
-               >
-                 ✨ Reassistir Introdução Animada
-               </Button>
-            </Card>
 
             {/* Assistente Liloupro (IA & Voz) */}
             <Card className="p-8 space-y-6 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-transparent border-sky-500/20 shadow-lg shadow-sky-500/5">
@@ -21928,8 +21808,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                         { id: 'singer2', title: 'Cantor', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80' },
                         { id: 'guitar1', title: 'Guitarra', url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=150&h=150&q=80' },
                         { id: 'guitar2', title: 'Violão', url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'piano', title: 'Teclado', url: 'https://images.unsplash.com/photo-1552422535-c45813c61732?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'drum', title: 'Batera', url: 'https://images.unsplash.com/photo-1510119635499-cbb51c65aaea?auto=format&fit=crop&w=150&h=150&q=80' }
+                        { id: 'piano', title: 'Teclado', url: 'https://images.unsplash.com/photo-1552422535-c45813c61732?auto=format&fit=crop&w=150&h=150&q=80' }
                       ].map(preset => (
                         <button 
                           key={preset.id}
@@ -22048,189 +21927,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                 </div>
               </div>
            </Card>
-   
-            {/* Novo Ícone de Luxo (Premium) Card */}
-            <Card className="p-8 space-y-6 md:col-span-2 border-amber-500/20 bg-amber-500/[0.01] dark:bg-amber-500/[0.02]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
-                <div className="space-y-1">
-                  <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                    <Sparkles size={14} className="text-amber-500 animate-pulse" /> ✨ Novo Ícone de Luxo (Premium &amp; Comercial)
-                  </h3>
-                  <p className="text-xs text-text-muted">
-                    Visualize o novo ícone do aplicativo com acabamento profissional e colcheia dourada antes da publicação oficial.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center pt-2">
-                {/* Smartphone Home Screen Mockup */}
-                <div className="relative flex justify-center">
-                  <div className="w-56 h-[380px] bg-slate-950 rounded-[40px] border-[6px] border-zinc-800 shadow-2xl relative overflow-hidden flex flex-col justify-between p-4 font-sans select-none">
-                    {/* Speaker & Camera notch */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-4 bg-zinc-800 rounded-b-2xl z-20 flex items-center justify-center">
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 mr-2" />
-                      <span className="w-8 h-1 bg-zinc-900 rounded-full" />
-                    </div>
-
-                    {/* Smartphone Background Wallpaper (Warm/Luxurious) */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#090d16] via-[#111827] to-[#030712] z-0 opacity-90" />
-                    <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-amber-500/10 rounded-full filter blur-[40px] z-0 animate-pulse" />
-                    <div className="absolute bottom-1/4 right-1/4 w-32 h-32 bg-sky-500/10 rounded-full filter blur-[40px] z-0 animate-pulse" />
-
-                    {/* Status bar */}
-                    <div className="flex justify-between items-center text-[8px] text-white/60 font-medium z-10 pt-1.5 px-2">
-                      <span>14:40</span>
-                      <div className="flex items-center gap-1">
-                        <span>5G</span>
-                        <div className="w-3 h-1.5 border border-white/60 rounded-[2px] flex items-center p-[1px]">
-                          <div className="w-full h-full bg-white/80 rounded-[1px]" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Home Screen Icons Grid */}
-                    <div className="grid grid-cols-4 gap-y-6 gap-x-2 z-10 mt-6 px-1 flex-1 content-start">
-                      {/* Random Mock Icons */}
-                      <div className="flex flex-col items-center gap-1 opacity-40">
-                        <div className="w-9 h-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-md">
-                          <span className="text-[14px]">💬</span>
-                        </div>
-                        <span className="text-[7px] text-white/80 truncate max-w-full">Whats</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1 opacity-40">
-                        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md">
-                          <span className="text-[14px]">🌐</span>
-                        </div>
-                        <span className="text-[7px] text-white/80 truncate max-w-full">Safari</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1 opacity-40">
-                        <div className="w-9 h-9 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md">
-                          <span className="text-[14px]">📺</span>
-                        </div>
-                        <span className="text-[7px] text-white/80 truncate max-w-full">Video</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1 opacity-40">
-                        <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-white shadow-md">
-                          <span className="text-[14px]">⚙️</span>
-                        </div>
-                        <span className="text-[7px] text-white/80 truncate max-w-full">Ajustes</span>
-                      </div>
-
-                      {/* THE LILOUPRO ICON - PROMINENT & FLOATING */}
-                      <motion.div 
-                        initial={{ scale: 0.9, y: 5 }}
-                        animate={{ scale: [1, 1.05, 1], y: [0, -4, 0] }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                        className="flex flex-col items-center gap-1.5 col-span-4 justify-self-center my-4"
-                      >
-                        <div className="relative">
-                          {/* Outer Luxury Golden Glow ring */}
-                          <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 to-amber-300 rounded-2xl opacity-40 blur-md animate-pulse" />
-                          
-                          {/* The Real App Icon Preview */}
-                          <div className="w-16 h-16 rounded-2xl bg-[#070b13] border border-amber-500/40 shadow-2xl relative overflow-hidden flex items-center justify-center z-10">
-                            <img 
-                              src={luxuryAppIcon} 
-                              referrerPolicy="no-referrer"
-                              alt="Novo Ícone Liloupro" 
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          
-                          {/* Dynamic Red Notification Badge */}
-                          {unreadBadgeCount > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUnreadBadgeCount(0);
-                              }}
-                              className="absolute -top-1 -right-1 bg-red-500 text-white font-black text-[8px] min-w-[18px] h-4 px-1 rounded-full z-20 shadow-md border border-red-400/60 flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                              title="Clique para zerar a notificação"
-                            >
-                              {unreadBadgeCount}
-                            </button>
-                          )}
-                        </div>
-                        <span className="text-[9px] font-black tracking-wider text-amber-300 drop-shadow-md">LiLouPro</span>
-                      </motion.div>
-                    </div>
-
-                    {/* Bottom Dock */}
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2 flex justify-around items-center z-10 mb-2 border border-white/5 mx-2">
-                      <div className="w-8 h-8 rounded-lg bg-green-500 opacity-40" />
-                      <div className="w-8 h-8 rounded-lg bg-blue-400 opacity-40" />
-                      {/* Active PWA Icon on Dock */}
-                      <div className="w-8 h-8 rounded-lg bg-[#070b13] border border-amber-500/30 overflow-hidden flex items-center justify-center shadow-md">
-                        <img 
-                          src={luxuryAppIcon} 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover" 
-                          alt="LiLouPro" 
-                        />
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-amber-600 opacity-40" />
-                    </div>
-
-                    {/* Bottom indicator bar */}
-                    <div className="w-20 h-1 bg-white/40 rounded-full self-center mb-1 z-10" />
-                  </div>
-                </div>
-
-                {/* Right Column: Information & Actions */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
-                      ✨ Status: Pronto para Visualização
-                    </div>
-                    <h4 className="text-sm font-black text-text-main">Sua Marca de Forma Excepcional</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      Este novo ícone foi gerado com acabamento tridimensional premium. Ele utiliza a cor de fundo oficial escura do aplicativo com a colcheia central banhada a ouro metálico com brilho reluzente e reflexos realistas.
-                    </p>
-                    <p className="text-xs text-text-muted leading-relaxed">
-                      A visualização ao lado simula como ele ficará destacado e elegante na tela inicial de um smartphone Android ou iOS.
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 bg-black/5 dark:bg-white/5 border border-border/40 rounded-2xl space-y-2">
-                    <p className="text-[10px] uppercase font-black text-text-main tracking-wider">Como aplicar oficialmente?</p>
-                    <p className="text-[10px] text-text-muted leading-relaxed">
-                      O ícone já está disponível nas configurações e pode ser visualizado no seu painel. Quando você clicar em <span className="font-bold text-amber-500">Republicar</span> para gerar a nova versão do aplicativo, o sistema PWA lerá a imagem atualizada e aplicará para todos os celulares.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button 
-                      type="button"
-                      onClick={() => setShowSettingsInstallModal(true)}
-                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-95"
-                    >
-                      <Smartphone size={14} className="stroke-[2.5]" />
-                      Instalar no Celular
-                    </button>
-                    <a 
-                      href={luxuryAppIcon} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
-                    >
-                      <Sparkles size={14} />
-                      Ver em Tela Cheia
-                    </a>
-                    <a 
-                      href="/pwa-512x512.png?v=6.0" 
-                      download="liloupro_icone_luxo_512x512.png"
-                      className="flex-1 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-text-main border border-border font-black uppercase tracking-wider text-[10px] h-10 gap-1.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
-                    >
-                      <Download size={14} />
-                      Baixar Ícone (PNG)
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            
 
             {/* PWA Connection & Notification Guide Card */}
             <Card className="p-8 space-y-6 md:col-span-2 border-amber-500/15 bg-amber-500/[0.01] dark:bg-amber-500/[0.02]">
@@ -22427,90 +22123,14 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
              <Card className="p-8 space-y-6">
                 <div>
                   <h3 className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                    <Bell size={16} className="text-brand" /> WhatsApp Administrativo
+                    <Share2 size={16} className="text-brand" /> Link Padrão de Compartilhamento (Grupo de Louvor)
                   </h3>
                   <p className="text-xs text-text-muted leading-relaxed mt-1">
-                    Configure os números dos administradores que receberão notificações automáticas de escala e avisos importantes via WhatsApp.
+                    Configure o link de convite do grupo do WhatsApp do ministério de louvor para agilizar o compartilhamento de escalas e avisos com a equipe.
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador WhatsApp 1 (Principal)</label>
-                    <Input 
-                      placeholder="Ex: 5511999999999"
-                      value={adminPhone}
-                      onChange={e => setAdminPhone(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador WhatsApp 2</label>
-                    <Input 
-                      placeholder="Ex: 5511999999999"
-                      value={adminPhone2}
-                      onChange={e => setAdminPhone2(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador WhatsApp 3</label>
-                    <Input 
-                      placeholder="Ex: 5511999999999"
-                      value={adminPhone3}
-                      onChange={e => setAdminPhone3(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/10 space-y-4">
-                  <div>
-                    <h3 className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                      <Mail size={16} className="text-brand" /> E-mails de Notificação Administrativa
-                    </h3>
-                    <p className="text-xs text-text-muted leading-relaxed mt-1">
-                      Configure os e-mails dos administradores para recebimento de relatórios de escala, disponibilidade e alertas por e-mail.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador E-mail 1 (Principal)</label>
-                    <Input 
-                      type="email"
-                      placeholder="ex: pastor@igreja.com"
-                      value={adminEmail}
-                      onChange={e => setAdminEmail(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador E-mail 2</label>
-                    <Input 
-                      type="email"
-                      placeholder="ex: lider@igreja.com"
-                      value={adminEmail2}
-                      onChange={e => setAdminEmail2(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Administrador E-mail 3</label>
-                    <Input 
-                      type="email"
-                      placeholder="ex: coordenador@igreja.com"
-                      value={adminEmail3}
-                      onChange={e => setAdminEmail3(e.target.value)}
-                      className="font-mono h-11 bg-white/5 border-white/10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 pt-3 border-t border-white/10">
+                <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">Link Padrão de Compartilhamento (Grupo de Louvor)</label>
                   <Input 
                     placeholder="Ex: https://chat.whatsapp.com/Gj3Hdf..."
@@ -22531,10 +22151,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   {isSavingPhone ? <RefreshCcw size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
                   Salvar Configurações Administrativas
                 </Button>
-
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight bg-amber-500/10 p-2.5 rounded-lg leading-relaxed">
-                  Atenção: Os e-mails e números configurados acima receberão as cópias dos relatórios de escala gerados no sistema.
-                </p>
              </Card>
            )}
 
@@ -22589,6 +22205,165 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                      <LogOut size={18} />
                    </button>
                  </div>
+
+                 {/* Gaveta Retrátil Discreta: Ferramentas de Diagnóstico (Exclusiva para mikmellorg@gmail.com fora do Modo Gravação) */}
+                 {showMasterDebugControls && (
+                   <div className="pt-3 border-t border-border/60">
+                     <button
+                       type="button"
+                       onClick={() => setIsDevToolsExpanded((prev) => !prev)}
+                       className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 border border-border/60 text-left transition-all cursor-pointer"
+                     >
+                       <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">
+                         🛠️ Ferramentas de Diagnóstico (Desenvolvedor)
+                       </span>
+                       <ChevronDown
+                         size={14}
+                         className={cn(
+                           "text-text-muted transition-transform duration-200",
+                           isDevToolsExpanded && "rotate-180 text-brand"
+                         )}
+                       />
+                     </button>
+
+                     {isDevToolsExpanded && (
+                       <div className="mt-2.5 p-3.5 rounded-xl border border-border/60 bg-black/10 dark:bg-black/30 space-y-3">
+                         {/* Indicadores técnicos rápidos */}
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                           <div className="p-2 rounded-lg bg-black/10 dark:bg-white/5 border border-border/40 flex items-center justify-between gap-2">
+                             <span className="text-text-muted font-bold uppercase">Church ID Ativo:</span>
+                             <span className="font-mono font-black text-brand truncate">
+                               {churchData?.id || userChurchId || 'semente'}
+                             </span>
+                           </div>
+                           <div className="p-2 rounded-lg bg-black/10 dark:bg-white/5 border border-border/40 flex items-center justify-between gap-2">
+                             <span className="text-text-muted font-bold uppercase">Cache / SW:</span>
+                             <span className="font-mono font-black text-emerald-400">
+                               {typeof navigator !== 'undefined' && 'serviceWorker' in navigator ? 'SW Ativo • v2.7.0' : 'Sem SW • v2.7.0'}
+                             </span>
+                           </div>
+                         </div>
+
+                         {/* Botões de Diagnóstico Push FCM */}
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                           <Button
+                             onClick={async () => {
+                               try {
+                                 const result = await requestFcmTokenDetailed();
+                                 if (result.permission) setNotificationPermission(result.permission);
+                                 if (result.success && result.token) {
+                                   const shortTok = result.token.slice(0, 12) + '...' + result.token.slice(-6);
+                                   if (result.firestoreSaved) {
+                                     alert(`✅ APARELHO REGISTRADO!\n\nSeu celular está conectado para receber notificações em segundo plano mesmo com o aplicativo fechado.\n\n📱 Token FCM: ${shortTok}\n💾 Banco Firebase: Sincronizado com sucesso!`);
+                                   } else {
+                                     alert(`⚠️ Token FCM gerado (${shortTok}), mas houve aviso ao salvar no banco: ${result.firestoreError || 'Permissão'}`);
+                                   }
+                                 } else {
+                                   alert(`⚠️ Falha ao obter token do aparelho:\n\n${result.error || 'Erro desconhecido'}\n\n💡 Verifique se as notificações estão permitidas nas configurações do celular.`);
+                                 }
+                               } catch (e: any) {
+                                 alert("Aviso: " + (e?.message || String(e)));
+                               }
+                             }}
+                             className="bg-brand hover:brightness-110 text-white font-black text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                           >
+                             <Bell size={13} />
+                             <span>🔄 Atualizar Token</span>
+                           </Button>
+
+                           <Button
+                             onClick={async () => {
+                               try {
+                                 let perm = notificationPermission;
+                                 if (perm !== 'granted') {
+                                   perm = await Notification.requestPermission();
+                                   setNotificationPermission(perm);
+                                 }
+                                 if (perm !== 'granted') {
+                                   alert("⚠️ A permissão de notificações não foi concedida nas configurações do seu navegador.");
+                                   return;
+                                 }
+                                 const tok = await requestFcmToken().catch(() => null);
+                                 if (tok) {
+                                   setTimeout(() => {
+                                     sendPushNotification({
+                                       tokens: [tok],
+                                       title: "LiLouPro • Notificação no Celular",
+                                       body: "🎉 Teste com celular fechado entregue com sucesso!",
+                                       url: "/",
+                                       tag: "liloupro-test-single"
+                                     }).catch(() => {});
+                                   }, 4000);
+                                 } else {
+                                   await scheduleServiceWorkerNotification({
+                                     delayMs: 4000,
+                                     title: "LiLouPro • Notificação no Celular",
+                                     body: "🎉 Teste com celular fechado funcionando com sucesso!",
+                                     url: "/"
+                                   });
+                                 }
+                                 alert("🚀 TESTE INICIADO!\n\nBLOQUEIE a tela do celular ou FECHE o aplicativo AGORA.\nEm 4 segundos a notificação vai tocar na tela!");
+                               } catch (err: any) {
+                                 alert("Erro ao disparar teste: " + (err?.message || String(err)));
+                               }
+                             }}
+                             className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                           >
+                             <Sparkles size={13} />
+                             <span>📲 Testar Celular Fechado (4s)</span>
+                           </Button>
+                         </div>
+
+                         <Button
+                           onClick={async () => {
+                             try {
+                               const tok = await requestFcmToken();
+                               if (!tok) {
+                                 alert("⚠️ Este aparelho ainda não possui um token FCM ativo.\nToque no botão 'Atualizar Token' acima primeiro.");
+                                 return;
+                               }
+                               alert("📡 Enviando notificação push real via Servidor Vercel (FCM HTTP v1)...\n\nFECHE o aplicativo ou BLOQUEIE a tela agora!");
+                               const res = await sendPushNotification({
+                                 tokens: [tok],
+                                 title: "LiLouPro • Teste Servidor FCM",
+                                 body: "🎉 Notificação remota entregue com sucesso pelo Firebase Admin no Vercel!",
+                                 url: "/"
+                               });
+                               if (res.success && res.sentCount > 0) {
+                                 alert(`🚀 SUCESSO NO SERVIDOR!\n\nO servidor Vercel enviou a notificação para ${res.sentCount} aparelho(s) via Firebase Cloud Messaging.`);
+                               } else {
+                                 const errMsg = res.errors?.[0]?.error || (res as any).error || 'Falha ao despachar';
+                                 alert(`⚠️ Resposta do Servidor:\n\n${errMsg}\n\n💡 Verifique se FIREBASE_SERVICE_ACCOUNT está cadastrado na Vercel.`);
+                               }
+                             } catch (err: any) {
+                               alert("Erro ao testar servidor: " + (err?.message || String(err)));
+                             }
+                           }}
+                           className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                         >
+                           <Send size={13} className="text-amber-400" />
+                           <span>📡 Testar Disparo Real Servidor FCM</span>
+                         </Button>
+
+                         {/* Botão Reassistir Introdução Animada (Splash Intro) */}
+                         <Button
+                           onClick={() => {
+                             try {
+                               sessionStorage.removeItem('liloupro_splash_shown');
+                             } catch (e) {}
+                             if (onReplaySplash) {
+                               onReplaySplash();
+                             }
+                           }}
+                           className="w-full bg-violet-600/80 hover:bg-violet-600 text-white font-black text-[10px] uppercase tracking-wider h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                         >
+                           <Sparkles size={13} />
+                           <span>✨ Reassistir Introdução Animada (Splash Intro)</span>
+                         </Button>
+                       </div>
+                     )}
+                   </div>
+                 )}
               </div>
            </Card>
          </div>

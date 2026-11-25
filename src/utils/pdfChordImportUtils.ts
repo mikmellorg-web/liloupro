@@ -5,8 +5,8 @@ export const MAX_PDF_FILE_SIZE_MB = 25;
 export const MAX_PDF_FILE_SIZE_BYTES = MAX_PDF_FILE_SIZE_MB * 1024 * 1024;
 const PDF_CHUNK_SIZE = 5;
 const PDF_CHUNK_OVERLAP = 1;
-const PDF_INTER_CHUNK_DELAY_MS = 600;
-const PDF_RETRY_BACKOFF_MS = [2500, 5000]; // 2ª tentativa após 2.5s, 3ª tentativa após 5s
+const PDF_INTER_CHUNK_DELAY_MS = 1000;
+const PDF_RETRY_BACKOFF_MS = [3000, 6000]; // 2ª tentativa após 3s, 3ª tentativa após 6s
 
 export interface PdfExtractionProgress {
   fileName: string;
@@ -250,7 +250,7 @@ export function formatFriendlyPdfChunkError(
       : `as páginas ${pageStart}–${pageEnd}`;
   const filePrefix =
     totalFiles > 1 && fileName ? `[${fileName}] ` : '';
-  return `${filePrefix}Não foi possível ler ${pageLabel} devido à instabilidade temporária do servidor.`;
+  return `${filePrefix}Não foi possível ler ${pageLabel} (alta demanda temporária do servidor).`;
 }
 
 export function sanitizeRawApiErrorMessage(rawError: any, fallback: string): string {
@@ -271,21 +271,74 @@ export function sanitizeRawApiErrorMessage(rawError: any, fallback: string): str
   return msg;
 }
 
+export const PDF_CHORD_EXTRACTION_SYSTEM_INSTRUCTION = `Você é um especialista sênior em transcrição e extração 100% fiel de cifras musicais (louvor e adoração) a partir de arquivos PDF — tanto PDFs digitais quanto PDFs escaneados/fotografados (OCR visual).
+
+REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
+1. SUPORTE A 1 MÚSICA OU CADERNO MULTI-MÚSICAS:
+   - Analise todas as páginas do PDF do início ao fim.
+   - Se o PDF contiver 1 música, retorne um array "songs" com 1 objeto.
+   - Se o PDF for um caderno/coletânea com várias músicas, separe CADA música corretamente em seu próprio objeto dentro de "songs", na ordem em que aparecem no documento.
+   - Não misture letras ou acordes de músicas diferentes.
+
+2. METADADOS LIMPOS (NÃO REPETIR TÍTULO NEM "Tom: X" NO CORPO DA CIFRA):
+   - "titulo": Título limpo da música, SEM numeração de índice (ex: remova "01 - ", "1. ") e SEM números de página.
+   - "artista": Cantor, banda ou ministério se aparecer no cabeçalho/subtítulo; caso não conste, retorne string vazia "".
+   - "tom": Tom musical principal (ex: "C", "G", "D", "Am", "F#m", "Bb") retirado do cabeçalho (ex: "Tom: G") ou inferido harmonicamente dos acordes principais da canção.
+   - "bpm": Número inteiro do andamento (BPM) se indicado no PDF (entre 40 e 220), ou 0 se não informado.
+   - IMPORTANTE: NÃO inclua a repetição do título da música nem a linha "Tom: X" no topo do campo "cifra", pois essas informações já vão nos campos "titulo" e "tom".
+
+3. PROIBIDO INVENTAR OU INJETAR ETIQUETAS DE SEÇÃO INEXISTENTES:
+   - Mantenha EXCLUSIVAMENTE os marcadores de seção que JÁ ESTIVEREM ESCRITOS no PDF original (ex.: se o PDF só tem "[Intro]", mantenha apenas "[Intro]").
+   - É ESTRITAMENTE PROIBIDO adicionar "[Verso 1]", "[Verso 2]", "[Refrão]", "[Ponte]", "[Final]" ou qualquer outra tag quando o PDF original não tiver essas palavras escritas.
+   - Se o PDF apenas separar estrofes com linha em branco, mantenha APENAS a linha em branco!
+
+4. ANCORAGEM EXATA ACORDE × SÍLABA PELO ÍNDICE DE CARACTERE (COLUNA) DA LINHA DE BAIXO ("cifra"):
+   - No PDF original, os textos usam fonte proporcional e tabulações/espaços largos entre acordes, o que desloca os acordes se copiados literalmente.
+   - Para corrigir isso, calcule o alinhamento PELO ÍNDICE DE CARACTERE (COLUNA 0-INDEXED) da sílaba exata onde o acorde é tocado na linha de letra logo abaixo:
+   - EXEMPLO 1 (OBRIGATÓRIO SEGUIR):
+     Se na linha de baixo "Que toda a Terra proclame que Ele é Santo" a sílaba "Ter" começa na coluna 11, "pro" começa na coluna 17 e "San" começa na coluna 36, a linha de cima DEVE posicionar "Am/E" na coluna 11, "B/D#" na coluna 17 e "C#m7" na coluna 36 usando espaços em branco exatos:
+     "           Am/E  B/D#               C#m7"
+     "Que toda a Terra proclame que Ele é Santo"
+   - EXEMPLO 2 (OBRIGATÓRIO SEGUIR):
+     Se na linha "Te adoramos, Te adoramos" o acorde "Bb" está sobre "a" do primeiro "adoramos" (coluna 3), "F" sobre "a" do segundo "adoramos" (coluna 16), "Bb" sobre "ra" (coluna 19) e "C" sobre "mos" (coluna 21), posicione cada acorde exatamente nessas colunas com espaços em branco, NUNCA colando "F Bb C" juntos e NUNCA empurrando para o fim da linha:
+     "   Bb           F  Bb C"
+     "Te adoramos, Te adoramos"
+   - NUNCA remova os espaços iniciais da linha de acordes e NUNCA colapse múltiplos espaços entre acordes!`;
+
+export function buildPdfChordExtractionUserPrompt(fileName?: string): string {
+  return `Extraia todas as músicas e cifras contidas neste arquivo PDF${fileName ? ` ("${fileName}")` : ""} com 100% de fidelidade ao documento original:
+1. ANCORAGEM POR COLUNA DE CARACTERE (ACORDE × SÍLABA):
+   - Ignore a largura visual enganosa das tabulações/fonte proporcional do PDF e posicione cada acorde na linha de cima exatamente no mesmo índice de caractere (coluna) da sílaba correspondente na linha de letra logo abaixo.
+   - Exemplo 1: em "Que toda a Terra proclame que Ele é Santo", posicione "Am/E" exatamente na coluna 11 (sobre "Ter" de "Terra"), "B/D#" na coluna 17 (sobre "pro" de "proclame") e "C#m7" na coluna 36 (sobre "San" de "Santo"):
+     "           Am/E  B/D#               C#m7"
+     "Que toda a Terra proclame que Ele é Santo"
+   - Exemplo 2: em "Te adoramos, Te adoramos", posicione "Bb" sobre "a" (coluna 3), "F" sobre o segundo "a" (coluna 16), "Bb" sobre "ra" (coluna 19) e "C" sobre "mos" (coluna 21), nunca colando "F Bb C" juntos.
+2. NÃO INJETAR ETIQUETAS DE SEÇÃO INEXISTENTES:
+   - NÃO adicione [Verso 1], [Verso 2], [Refrão] ou [Ponte] se essas palavras não estiverem escritas no PDF. Onde o PDF separa estrofes apenas com linha em branco, mantenha apenas a linha em branco.
+3. SEM CABEÇALHO DUPLICADO NA CIFRA:
+   - Remova da string "cifra" a repetição do Título da música e da linha "Tom: X" no topo, pois eles já vão nos campos "titulo" e "tom".`;
+}
+
 /**
  * Pós-processa a cifra extraída do PDF garantindo fidelidade 100% ao alinhamento Acorde × Sílaba:
- * - NUNCA aplica .trim() à esquerda e NUNCA colapsa múltiplos espaços nas linhas de acordes.
+ * - Converte tabulações (\t) em 6 espaços antes de processar.
+ * - NUNCA aplica .trim() no início das linhas de acordes e NUNCA substitui múltiplos espaços por um único espaço.
+ * - Remove da string `cifra` a repetição do Título da música, Artista e da linha `Tom: X` no topo.
  * - Remove apenas espaços em branco sobrando no FINAL (à direita) de cada linha.
- * - Se uma estrofe inteira estiver indentada/recuada à direita no PDF (como um bloco com Tab),
- *   remove apenas o recuo comum mínimo de todas as linhas daquela estrofe na mesma proporção,
- *   preservando intacto o alinhamento relativo de cada acorde sobre a sílaba correspondente.
+ * - Se uma estrofe inteira estiver indentada/recuada à direita no PDF (onde todas as linhas de acordes E letras têm recuo comum),
+ *   remove apenas o recuo comum mínimo de todas as linhas daquela estrofe na mesma proporção.
  */
-export function formatExtractedPdfCifra(rawCifra: string): string {
+export function formatExtractedPdfCifra(
+  rawCifra: string,
+  songTitle?: string,
+  songArtist?: string
+): string {
   if (!rawCifra) return '';
 
   const rawLines = String(rawCifra)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    .replace(/\t/g, '    ')
+    .replace(/\t/g, '      ')
     .replace(/\u00A0/g, ' ')
     .split('\n');
 
@@ -305,10 +358,64 @@ export function formatExtractedPdfCifra(rawCifra: string): string {
     cleanedLines.push(checkTrimmed === '' ? '' : rightTrimmed);
   }
 
-  // 2. Compacta múltiplas linhas em branco consecutivas em apenas 1 linha vazia entre estrofes
+  // 2. Remove do topo da cifra a repetição do Título da música, Artista e da linha "Tom: X" / "BPM: X"
+  const normHeader = (str?: string) =>
+    String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+  const normTitle = normHeader(songTitle);
+  const normArtist = normHeader(songArtist);
+
+  let startIdx = 0;
+  let inspectedNonEmpty = 0;
+  while (startIdx < cleanedLines.length && inspectedNonEmpty < 6) {
+    const currentTrimmed = cleanedLines[startIdx].trim();
+    if (!currentTrimmed) {
+      startIdx += 1;
+      continue;
+    }
+
+    inspectedNonEmpty += 1;
+
+    // Linha "Tom: X", "Tonalidade: X", "Key: X", "Capotraste...", "BPM: X" (isolados ou combinados)
+    const isTomOrMetaHeader =
+      /^(?:tom|tonalidade|key)\s*[:=-]\s*[A-G][#b]?(?:m|maj|min|menor|maior|7M|7m|7)?(?:\s*[\(\/|,-].*)?$/i.test(currentTrimmed) ||
+      /^(?:bpm|andamento|tempo)\s*[:=-]\s*\d{2,3}(?:\s*bpm)?$/i.test(currentTrimmed) ||
+      /^(?:capo(?:traste)?)\s*[:=-]?\s*\d+.*$/i.test(currentTrimmed);
+
+    if (isTomOrMetaHeader) {
+      startIdx += 1;
+      continue;
+    }
+
+    // Linha que repete exatamente o título ou título + artista no cabeçalho
+    const normLine = normHeader(currentTrimmed);
+    const isRepeatedTitle =
+      Boolean(normTitle && normLine) &&
+      (normLine === normTitle ||
+        (normArtist && normLine === `${normTitle}${normArtist}`) ||
+        (normArtist && normLine === `${normArtist}${normTitle}`));
+
+    const isRepeatedArtist =
+      Boolean(normArtist && normLine && normLine.length >= 3) && normLine === normArtist;
+
+    if (isRepeatedTitle || isRepeatedArtist) {
+      startIdx += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  const bodyLines = cleanedLines.slice(startIdx);
+
+  // 3. Compacta múltiplas linhas em branco consecutivas em apenas 1 linha vazia entre estrofes
   const compactLines: string[] = [];
   let emptyRun = 0;
-  for (const line of cleanedLines) {
+  for (const line of bodyLines) {
     if (line === '') {
       emptyRun += 1;
       if (compactLines.length > 0 && emptyRun <= 1) {
@@ -323,7 +430,7 @@ export function formatExtractedPdfCifra(rawCifra: string): string {
     compactLines.pop();
   }
 
-  // 3. Agrupa por estrofe (separada por linha em branco) e remove apenas o recuo comum da estrofe
+  // 4. Agrupa por estrofe (separada por linha em branco) e remove apenas o recuo comum da estrofe
   //    na mesma proporção entre linhas de acordes e linhas de letra
   const stanzas: string[][] = [];
   let currentStanza: string[] = [];
@@ -375,7 +482,9 @@ async function postPdfChunkToApi(
       body: JSON.stringify({
         fileName: displayName,
         mimeType: 'application/pdf',
-        base64Data
+        base64Data,
+        systemInstruction: PDF_CHORD_EXTRACTION_SYSTEM_INSTRUCTION,
+        promptText: buildPdfChordExtractionUserPrompt(displayName)
       })
     });
   } catch (networkErr: any) {
@@ -393,7 +502,7 @@ async function postPdfChunkToApi(
     const err: PdfChunkApiError = new Error(
       sanitizeRawApiErrorMessage(
         rawMsg,
-        'Não foi possível ler este trecho devido à instabilidade temporária do servidor.'
+        'Não foi possível ler este trecho (alta demanda temporária do servidor).'
       )
     );
     err.status = response.status;
@@ -404,7 +513,7 @@ async function postPdfChunkToApi(
   const rawSongs = Array.isArray(payload?.songs) ? payload.songs : [];
   return rawSongs.map((s: any) => ({
     ...s,
-    cifra: formatExtractedPdfCifra(s?.cifra || '')
+    cifra: formatExtractedPdfCifra(s?.cifra || '', s?.titulo, s?.artista)
   }));
 }
 
@@ -442,8 +551,8 @@ async function postPdfChunkWithRetry(params: {
       }
 
       const nextAttempt = attempt + 1;
-      const delayMs = PDF_RETRY_BACKOFF_MS[attempt - 1] ?? 5000;
-      const retryMsg = `Servidor ocupado no bloco ${params.chunkIndex} (páginas ${params.pageStart}–${params.pageEnd}), tentando novamente (${nextAttempt}/${maxAttempts})...`;
+      const delayMs = PDF_RETRY_BACKOFF_MS[attempt - 1] ?? 6000;
+      const retryMsg = `Servidor ocupado nas páginas ${params.pageStart}–${params.pageEnd}, tentando novamente (${nextAttempt}/${maxAttempts})...`;
 
       params.onProgress?.({
         fileName: params.fileName,

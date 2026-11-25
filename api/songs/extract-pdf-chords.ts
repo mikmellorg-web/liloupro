@@ -78,7 +78,7 @@ function cleanExtractedCifra(raw: string): string {
   const lines = String(raw)
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/\t/g, "    ")
+    .replace(/\t/g, "      ")
     .replace(/\u00A0/g, " ")
     .split("\n");
 
@@ -159,26 +159,30 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
    - Se o PDF for um caderno/coletânea com várias músicas, separe CADA música corretamente em seu próprio objeto dentro de "songs", na ordem em que aparecem no documento.
    - Não misture letras ou acordes de músicas diferentes.
 
-2. METADADOS LIMPOS:
+2. METADADOS LIMPOS (NÃO REPETIR TÍTULO NEM "Tom: X" NO CORPO DA CIFRA):
    - "titulo": Título limpo da música, SEM numeração de índice (ex: remova "01 - ", "1. ") e SEM números de página.
    - "artista": Cantor, banda ou ministério se aparecer no cabeçalho/subtítulo; caso não conste, retorne string vazia "".
    - "tom": Tom musical principal (ex: "C", "G", "D", "Am", "F#m", "Bb") retirado do cabeçalho (ex: "Tom: G") ou inferido harmonicamente dos acordes principais da canção.
    - "bpm": Número inteiro do andamento (BPM) se indicado no PDF (entre 40 e 220), ou 0 se não informado.
+   - IMPORTANTE: NÃO inclua a repetição do título da música nem a linha "Tom: X" no topo do campo "cifra", pois essas informações já vão nos campos "titulo" e "tom".
 
-3. PROIBIDO INVENTAR OU INSERIR ETIQUETAS DE SEÇÃO:
+3. PROIBIDO INVENTAR OU INJETAR ETIQUETAS DE SEÇÃO INEXISTENTES:
    - Mantenha EXCLUSIVAMENTE os marcadores de seção que JÁ ESTIVEREM ESCRITOS no PDF original (ex.: se o PDF só tem "[Intro]", mantenha apenas "[Intro]").
-   - É ESTRITAMENTE PROIBIDO inserir "[Verso 1]", "[Verso 2]", "[Refrão]", "[Ponte]", "[Final]" ou qualquer outra tag onde o PDF original possui apenas estrofes separadas por linha em branco!
+   - É ESTRITAMENTE PROIBIDO adicionar "[Verso 1]", "[Verso 2]", "[Refrão]", "[Ponte]", "[Final]" ou qualquer outra tag quando o PDF original não tiver essas palavras escritas.
+   - Se o PDF apenas separar estrofes com linha em branco, mantenha APENAS a linha em branco!
 
-4. PRESERVAÇÃO EXATA DO ALINHAMENTO ACORDE × SÍLABA EM FONTE MONOESPAÇADA ("cifra"):
-   - Considere que a cifra final será exibida em FONTE MONOESPAÇADA (cada caractere ocupa exatamente a mesma largura horizontal).
-   - Alinhe cada acorde usando ESPAÇOS EM BRANCO EXATOS (" ") para que a primeira letra do acorde fique na MESMA COLUNA DE CARACTERES da sílaba/palavra correspondente na linha da letra logo abaixo.
-   - Exemplo prático: se na letra "Em Espírito, em verdade" o acorde "F" está posicionado sobre a sílaba "pí" de "Espírito" (coluna 5) e o acorde "C/F" está sobre a sílaba "ver" de "verdade" (coluna 16), a linha de acordes DEVE conter exatamente os 5 espaços iniciais antes de "F" e os espaços exatos entre "F" e "C/F":
-     "     F          C/F"
-     "Em Espírito, em verdade"
-   - NUNCA remova os espaços iniciais da linha de acordes e NUNCA colapse os espaços entre os acordes!
-   - Se uma estrofe inteira estiver recuada/indentada à direita no PDF (como um bloco com Tab), remova apenas o recuo comum tanto da linha de acordes quanto da linha da letra na mesma proporção, mantendo o alinhamento relativo Acorde × Sílaba 100% intacto.
-   - Mantenha linhas em branco separando cada estrofe exatamente como no PDF.
-   - Remova apenas rodapés, números de página ("Página 1 de 4", "1/2") e links de sites externos.`;
+4. ANCORAGEM EXATA ACORDE × SÍLABA PELO ÍNDICE DE CARACTERE (COLUNA) DA LINHA DE BAIXO ("cifra"):
+   - No PDF original, os textos usam fonte proporcional e tabulações/espaços largos entre acordes, o que desloca os acordes se copiados literalmente.
+   - Para corrigir isso, calcule o alinhamento PELO ÍNDICE DE CARACTERE (COLUNA 0-INDEXED) da sílaba exata onde o acorde é tocado na linha de letra logo abaixo:
+   - EXEMPLO 1 (OBRIGATÓRIO SEGUIR):
+     Se na linha de baixo "Que toda a Terra proclame que Ele é Santo" a sílaba "Ter" começa na coluna 11, "pro" começa na coluna 17 e "San" começa na coluna 36, a linha de cima DEVE posicionar "Am/E" na coluna 11, "B/D#" na coluna 17 e "C#m7" na coluna 36 usando espaços em branco exatos:
+     "           Am/E  B/D#               C#m7"
+     "Que toda a Terra proclame que Ele é Santo"
+   - EXEMPLO 2 (OBRIGATÓRIO SEGUIR):
+     Se na linha "Te adoramos, Te adoramos" o acorde "Bb" está sobre "a" do primeiro "adoramos" (coluna 3), "F" sobre "a" do segundo "adoramos" (coluna 16), "Bb" sobre "ra" (coluna 19) e "C" sobre "mos" (coluna 21), posicione cada acorde exatamente nessas colunas com espaços em branco, NUNCA colando "F Bb C" juntos e NUNCA empurrando para o fim da linha:
+     "   Bb           F  Bb C"
+     "Te adoramos, Te adoramos"
+   - NUNCA remova os espaços iniciais da linha de acordes e NUNCA colapse múltiplos espaços entre acordes!`;
 
 export const PDF_CHORDS_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -269,11 +273,26 @@ export default async function handler(req: any, res: any) {
       }
     });
 
-    const promptText = `Extraia todas as músicas e cifras contidas neste arquivo PDF${fileName ? ` ("${fileName}")` : ""} com 100% de fidelidade visual ao original:
-- NÃO invente nem adicione etiquetas de seção ([Verso 1], [Refrão], [Ponte], etc.): mantenha EXCLUSIVAMENTE os marcadores que já estiverem escritos no PDF. Onde houver apenas linha em branco entre estrofes, mantenha apenas a linha em branco.
-- Fonte monoespaçada: posicione cada acorde usando espaços em branco exatos para que a primeira letra do acorde fique na mesma coluna de caracteres da sílaba correspondente na linha da letra logo abaixo (incluindo os espaços iniciais antes do primeiro acorde da linha).
-- Se uma estrofe inteira estiver recuada à direita no PDF, remova apenas o recuo comum tanto da linha de acordes quanto da linha da letra na mesma proporção.
-- Remova números de página, rodapés e links de sites.`;
+    const defaultPromptText = `Extraia todas as músicas e cifras contidas neste arquivo PDF${fileName ? ` ("${fileName}")` : ""} com 100% de fidelidade ao documento original:
+1. ANCORAGEM POR COLUNA DE CARACTERE (ACORDE × SÍLABA):
+   - Ignore a largura visual enganosa das tabulações/fonte proporcional do PDF e posicione cada acorde na linha de cima exatamente no mesmo índice de caractere (coluna) da sílaba correspondente na linha de letra logo abaixo.
+   - Exemplo 1: em "Que toda a Terra proclame que Ele é Santo", posicione "Am/E" exatamente na coluna 11 (sobre "Ter" de "Terra"), "B/D#" na coluna 17 (sobre "pro" de "proclame") e "C#m7" na coluna 36 (sobre "San" de "Santo"):
+     "           Am/E  B/D#               C#m7"
+     "Que toda a Terra proclame que Ele é Santo"
+   - Exemplo 2: em "Te adoramos, Te adoramos", posicione "Bb" sobre "a" (coluna 3), "F" sobre o segundo "a" (coluna 16), "Bb" sobre "ra" (coluna 19) e "C" sobre "mos" (coluna 21), nunca colando "F Bb C" juntos.
+2. NÃO INJETAR ETIQUETAS DE SEÇÃO INEXISTENTES:
+   - NÃO adicione [Verso 1], [Verso 2], [Refrão] ou [Ponte] se essas palavras não estiverem escritas no PDF. Onde o PDF separa estrofes apenas com linha em branco, mantenha apenas a linha em branco.
+3. SEM CABEÇALHO DUPLICADO NA CIFRA:
+   - Remova da string "cifra" a repetição do Título da música e da linha "Tom: X" no topo, pois eles já vão nos campos "titulo" e "tom".`;
+
+    const promptText =
+      typeof req.body?.promptText === "string" && req.body.promptText.trim()
+        ? req.body.promptText
+        : defaultPromptText;
+    const systemInstructionToUse =
+      typeof req.body?.systemInstruction === "string" && req.body.systemInstruction.trim()
+        ? req.body.systemInstruction
+        : PDF_CHORDS_SYSTEM_INSTRUCTION;
 
     let responseText = "";
     let lastError: any = null;
@@ -299,7 +318,7 @@ export default async function handler(req: any, res: any) {
             }
           ],
           config: {
-            systemInstruction: PDF_CHORDS_SYSTEM_INSTRUCTION,
+            systemInstruction: systemInstructionToUse,
             responseMimeType: "application/json",
             responseSchema: PDF_CHORDS_RESPONSE_SCHEMA
           }

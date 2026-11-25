@@ -306,7 +306,7 @@ export function PdfChordImportSection({
     try {
       for (let i = 0; i < chunksToRetry.length; i += 1) {
         if (i > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
         const chunk = chunksToRetry[i];

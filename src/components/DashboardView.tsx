@@ -1388,6 +1388,7 @@ export default function DashboardView({
   const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(false);
   const [isSoundDetected, setIsSoundDetected] = useState<boolean>(false);
   const [isCommandCaptured, setIsCommandCaptured] = useState<boolean>(false);
+  const [isAssistantIntroExpanded, setIsAssistantIntroExpanded] = useState<boolean>(false);
   const soundTimeoutRef = useRef<any>(null);
   const commandTimeoutRef = useRef<any>(null);
 
@@ -1934,34 +1935,62 @@ export default function DashboardView({
           </div>
         </div>
         <div className="flex flex-col items-start xl:items-end gap-1.5 w-full xl:w-auto shrink-0">
-          {/* Assistente Liloupro com Apresentação */}
-          <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3.5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-2xl p-3 sm:px-4 sm:py-3 xl:max-w-2xl shadow-sm">
-            {/* Botão de Voz Principal: Arma a escuta de voz diretamente */}
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('liloupro:mic-tap'));
-                }
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer border active:scale-95 shrink-0 ${
-                isWakeWordActive || isSoundDetected || isCommandCaptured
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-400/60 ring-2 ring-emerald-400/40 animate-pulse'
-                  : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white border-sky-400/30'
-              }`}
-              title="Ativar escuta de voz da Lilou ('Oi Lilou' ou fale um comando)"
-            >
-              <Mic size={16} className={isWakeWordActive || isSoundDetected ? "text-amber-300 animate-bounce" : "text-sky-200"} />
-              <span>{isCommandCaptured ? 'Captado!' : isSoundDetected ? 'Ouvindo...' : isWakeWordActive ? 'Lilou na Escuta' : 'Falar Comando 🎙️'}</span>
-            </button>
-            <div className="text-xs sm:text-sm text-text-muted leading-relaxed">
-              <p>
-                Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.{' '}
-                <span className="text-sky-600 dark:text-sky-400 font-medium">
-                  Que tal começarmos? Toque em <strong className="text-sky-700 dark:text-sky-300 font-bold">"Falar Comando"</strong> e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">"Oi Lilou"</strong> ou peça a ação que você precisa.
+          {/* Assistente Liloupro com Apresentação (Barra Compacta + Texto Retrátil) */}
+          <div className="w-full xl:w-auto flex flex-col gap-2 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-transparent border border-sky-400/20 rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2 xl:max-w-2xl shadow-sm">
+            <div className="flex items-center justify-between gap-2 sm:gap-3 w-full">
+              {/* À esquerda: Botão de Voz Principal */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('liloupro:mic-tap'));
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg font-black text-xs shadow-md transition-all cursor-pointer border active:scale-95 shrink-0 ${
+                  isWakeWordActive || isSoundDetected || isCommandCaptured
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-400/60 ring-2 ring-emerald-400/40 animate-pulse'
+                    : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white border-sky-400/30'
+                }`}
+                title="Ativar escuta de voz da Lilou ('Oi Lilou' ou fale um comando)"
+              >
+                <Mic size={14} className={isWakeWordActive || isSoundDetected ? "text-amber-300 animate-bounce" : "text-white"} />
+                <span>{isCommandCaptured ? 'Captado!' : isSoundDetected ? 'Ouvindo...' : isWakeWordActive ? 'Lilou na Escuta' : 'Falar Comando'}</span>
+              </button>
+
+              {/* No centro/meio: Dica curta em 1 linha */}
+              <span className="text-xs text-slate-400 truncate flex-1 min-w-0">
+                Diga &quot;Oi Lilou&quot;
+              </span>
+
+              {/* À direita: Botão discreto de expandir/ajuda (? / ▾) */}
+              <button
+                type="button"
+                onClick={() => setIsAssistantIntroExpanded((prev) => !prev)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-sky-400 hover:bg-sky-500/10 border border-transparent hover:border-sky-400/20 transition-all cursor-pointer shrink-0"
+                title={isAssistantIntroExpanded ? "Recolher apresentação do assistente" : "Ver apresentação e dicas do Assistente Liloupro"}
+                aria-expanded={isAssistantIntroExpanded}
+              >
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-slate-500/50 text-[10px] font-bold leading-none">
+                  ?
                 </span>
-              </p>
+                <ChevronDown
+                  size={13}
+                  className={`transition-transform duration-200 ${isAssistantIntroExpanded ? 'rotate-180 text-sky-400' : ''}`}
+                />
+              </button>
             </div>
+
+            {/* Texto Explicativo Retrátil */}
+            {isAssistantIntroExpanded && (
+              <div className="text-xs sm:text-sm text-text-muted leading-relaxed pt-1.5 border-t border-sky-400/15">
+                <p>
+                  Olá! Sou o <strong className="text-text-main font-bold">Assistente Liloupro</strong>. Posso encontrar cifras, consultar escalas, buscar versículos e guiar você por todos os recursos do app.{' '}
+                  <span className="text-sky-600 dark:text-sky-400 font-medium">
+                    Que tal começarmos? Toque em <strong className="text-sky-700 dark:text-sky-300 font-bold">&quot;Falar Comando&quot;</strong> e diga <strong className="text-sky-700 dark:text-sky-300 font-bold">&quot;Oi Lilou&quot;</strong> ou peça a ação que você precisa.
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Status dos Membros e Modo ADM logo abaixo do assistente */}
