@@ -120,6 +120,11 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     return localStorage.getItem('app-reminder-template') || 
       'Olá {NOME} tudo bem? O prazo para marcar sua disponibilidade na escala do Louvor termina hoje, conto com sua colaboração. Obrigado por servir na igreja local! Deus abençoe!';
   });
+  const [groupReminderTemplate, setGroupReminderTemplate] = useState<string>(() => {
+    return localStorage.getItem('app-group-reminder-template') ||
+      'Olá Grupo! O prazo para a marcação dos seus dias disponíveis está terminando. Se você ainda não marcou seus dias, por favor entre no app e marque para que a liderança possa fazer e liberar a escala o quanto antes. Deus abençoe!';
+  });
+  const [churchWhatsappGroupLink, setChurchWhatsappGroupLink] = useState<string>('');
   const [copiedConvocation, setCopiedConvocation] = useState(false);
   const [copiedAnnouncement, setCopiedAnnouncement] = useState(false);
   const [showCustomReminder, setShowCustomReminder] = useState(false);
@@ -133,6 +138,19 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
   useEffect(() => {
     localStorage.setItem('app-reminder-template', reminderMessageTemplate);
   }, [reminderMessageTemplate]);
+
+  useEffect(() => {
+    localStorage.setItem('app-group-reminder-template', groupReminderTemplate);
+  }, [groupReminderTemplate]);
+
+  useEffect(() => {
+    if (!userChurchId) return;
+    getDoc(doc(db, 'settings', settingsDocId)).then((snap) => {
+      if (snap.exists()) {
+        setChurchWhatsappGroupLink(String(snap.data()?.whatsappGroupLink || '').trim());
+      }
+    }).catch(() => {});
+  }, [userChurchId, settingsDocId]);
 
   // Automatically detect if there is a month that has been unlocked (released) for scheduling,
   // and direct the member to that month as the default on first load or when a new month is unlocked.
@@ -238,9 +256,9 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     
     const encodedMessage = encodeURIComponent(message);
     if (phone) {
-      window.open(`https://wa.me/${phone}?text=${encodedMessage}`, '_blank');
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodedMessage}`, '_blank');
     } else {
-      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
     }
   };
 
@@ -255,10 +273,13 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
         const hoursFormatted = activeLockHours >= 24 && activeLockHours % 24 === 0
           ? `${activeLockHours / 24} dia${activeLockHours / 24 > 1 ? 's' : ''}`
           : `${activeLockHours}h`;
-        deadlineLine = `⏰ *Prazo:* ${hoursFormatted} — encerra em *${datePart} às ${timePart}*.\n\n`;
+        deadlineLine = `\u{23F0} *Prazo:* ${hoursFormatted} — encerra em *${datePart} às ${timePart}*.\n\n`;
       }
     }
-    const message = `📢 *MINISTÉRIO DE LOUVOR — MARCAÇÃO LIBERADA!* 🗓️\n\nA agenda de disponibilidade para *${monthName}* já está aberta!\n\n${deadlineLine}Acesse o app agora, marque seus dias disponíveis e clique em *Finalizar e Notificar Liderança* 👇\n🔗 ${window.location.origin}\n\nContamos com todos! 🙏`;
+    const appUrl = (window.location.origin.includes('run.app') || window.location.origin.includes('localhost'))
+      ? 'https://liloupro.com.br'
+      : window.location.origin;
+    const message = `\u{1F4E2} *MINISTÉRIO DE LOUVOR — MARCAÇÃO LIBERADA!* \u{1F3B6}\n\nA agenda de disponibilidade para *${monthName}* já está aberta!\n\n${deadlineLine}Acesse o app agora, marque seus dias disponíveis e clique em *Finalizar e Notificar Liderança* \u{2705}\n\u{1F449} ${appUrl}\n\nContamos com todos! \u{1F64F}`;
     try {
       await navigator.clipboard.writeText(message);
       setCopiedConvocation(true);
@@ -268,40 +289,50 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     }
   };
 
-  const handleCopyGroupAnnouncement = async () => {
-    const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    const names = missingMembers.map(m => {
+  const buildGroupAnnouncementMessage = () => {
+    const finishedNames = finishedMembers.length > 0
+      ? finishedMembers.map(m => {
+          const fullName = m.name || m.email?.split('@')[0] || 'Ministro';
+          return `• *${fullName.trim()}*`;
+        }).join('\n')
+      : 'Nenhum ministro marcou ainda.';
+
+    const missingNames = missingMembers.map(m => {
       const fullName = m.name || m.email?.split('@')[0] || 'Ministro';
-      const firstName = fullName.trim().split(' ')[0];
-      return `• *${firstName}*`;
+      return `• *${fullName.trim()}*`;
     }).join('\n');
 
-    let introLine = `🗓️ Hoje é o último dia para cadastrar sua disponibilidade para as escalas do mês de *${monthName}*.`;
-    let deadlineLine = `⚠️ O prazo encerra *HOJE às ${reminderDeadline}*!`;
+    const appUrl = (window.location.origin.includes('run.app') || window.location.origin.includes('localhost'))
+      ? 'https://liloupro.com.br'
+      : window.location.origin;
 
-    if (!isLocked && lockStatus?.deadline) {
-      const deadlineDate = new Date(lockStatus.deadline);
-      if (!isNaN(deadlineDate.getTime())) {
-        const now = new Date();
-        const isSameDay = deadlineDate.toDateString() === now.toDateString();
-        const datePart = deadlineDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        const timePart = deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        if (isSameDay) {
-          deadlineLine = `⚠️ O prazo encerra *HOJE às ${reminderDeadline || timePart}*!`;
-        } else {
-          introLine = `🗓️ A marcação de disponibilidade para as escalas do mês de *${monthName}* está aberta!`;
-          deadlineLine = `⚠️ O prazo encerra em *${datePart} às ${timePart}*!`;
-        }
-      }
-    }
+    const customText = (groupReminderTemplate || '').trim();
+    const deadlineText = `\u{23F0} *Prazo termina hoje às ${reminderDeadline || '20:00'}*`;
 
-    const message = `📢 *ATENÇÃO MINISTÉRIO DE LOUVOR* 📢\n\n${introLine}\n\n${deadlineLine}\n\n⏳ *Falta preencher:*\n${names}\n\nPor favor, acessem o sistema e façam suas marcações o quanto antes! 👇\n🔗 ${window.location.origin}\n\nContamos com a colaboração de todos! 🙏`;
+    return `${customText}\n\n${deadlineText}\n\n\u{2705} *JÁ MARCARAM (${finishedMembers.length}):*\n${finishedNames}\n\n\u{23F3} *FALTA MARCAR (${missingMembers.length}):*\n${missingNames}\n\n\u{1F449} ${appUrl}`;
+  };
+
+  const handleCopyGroupAnnouncement = async () => {
+    const message = buildGroupAnnouncementMessage();
     try {
       await navigator.clipboard.writeText(message);
       setCopiedAnnouncement(true);
       setTimeout(() => setCopiedAnnouncement(false), 2500);
     } catch (e) {
       console.error('Erro ao copiar chamada de grupo:', e);
+    }
+  };
+
+  const handleSendGroupAnnouncement = () => {
+    const message = buildGroupAnnouncementMessage();
+    navigator.clipboard.writeText(message).catch(() => {});
+    const grpLink = (churchWhatsappGroupLink || '').trim();
+    if (grpLink) {
+      setReleaseGroupToast(true);
+      setTimeout(() => setReleaseGroupToast(false), 4000);
+      window.open(grpLink, '_blank', 'noopener,noreferrer');
+    } else {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -797,6 +828,10 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
   }, [lockStatus]);
 
   const isLocked = !lockStatus?.unlocked || timeLeft === 'expired';
+  const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+  const currentUserData = allMembers.find(m => m.id === user?.uid);
+  const isFinished = currentUserData?.availabilityStatus?.[currentMonthStr] === 'finished';
+  const isLockedAfterSubmission = Boolean(!isAdmin && isFinished);
 
   const setDayAvailability = async (date: Date, status: 'available' | 'unavailable') => {
     if (!user || !userChurchId) return;
@@ -804,8 +839,10 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
       alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
       return;
     }
-    if (isLocked) {
-      alert("A marcação de disponibilidade para este mês está bloqueada no momento.");
+    if (isLocked || isLockedAfterSubmission) {
+      if (isLocked) {
+        alert("A marcação de disponibilidade para este mês está bloqueada no momento.");
+      }
       return;
     }
     const dateStr = getLocalDateString(date);
@@ -870,7 +907,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
       alert("O período de avaliação da sua igreja encerrou. Peça ao seu líder para reativar a escala completa e demais recursos da equipe! (A Bíblia Sagrada e a Academia de Teoria Musical continuam liberadas para você!)");
       return;
     }
-    if (isLocked) return;
+    if (isLocked || isLockedAfterSubmission) return;
     const targetService = services.find(s => s.id === serviceId);
     if (!targetService) return;
     const currentAvail = targetService.availability || {};
@@ -893,6 +930,9 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
   const [showClearMonthModal, setShowClearMonthModal] = useState(false);
   const [isClearingMonth, setIsClearingMonth] = useState(false);
   const [clearMonthToast, setClearMonthToast] = useState(false);
+  const [releaseModalData, setReleaseModalData] = useState<{ deadline: string; hours: number; groupLink: string } | null>(null);
+  const [copiedReleaseModalText, setCopiedReleaseModalText] = useState(false);
+  const [releaseGroupToast, setReleaseGroupToast] = useState(false);
 
   const activeLockHours = useMemo(() => {
     if (lockStatus?.hours) return Number(lockStatus.hours);
@@ -904,6 +944,28 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     }
     return unlockHours || 48;
   }, [lockStatus, unlockHours]);
+
+  const buildReleaseConvocationMessage = (customDeadline?: string, customHours?: number) => {
+    const monthName = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    let deadlineLine = '';
+    const targetDeadline = customDeadline || lockStatus?.deadline;
+    const targetHours = customHours || activeLockHours;
+    if (targetDeadline) {
+      const deadlineDate = new Date(targetDeadline);
+      if (!isNaN(deadlineDate.getTime())) {
+        const datePart = deadlineDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const timePart = deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const hoursFormatted = targetHours >= 24 && targetHours % 24 === 0
+          ? `${targetHours / 24} dia${targetHours / 24 > 1 ? 's' : ''}`
+          : `${targetHours}h`;
+        deadlineLine = `\u{23F0} *Prazo:* ${hoursFormatted} — encerra em *${datePart} às ${timePart}*.\n\n`;
+      }
+    }
+    const appUrl = (window.location.origin.includes('run.app') || window.location.origin.includes('localhost'))
+      ? 'https://liloupro.com.br'
+      : window.location.origin;
+    return `\u{1F4E2} *MINISTÉRIO DE LOUVOR — MARCAÇÃO LIBERADA!* \u{1F3B6}\n\nA agenda de disponibilidade para *${monthName}* já está aberta!\n\n${deadlineLine}Acesse o app agora, marque seus dias disponíveis e clique em *Finalizar e Notificar Liderança* \u{2705}\n\u{1F449} ${appUrl}\n\nContamos com todos! \u{1F64F}`;
+  };
 
   const handleToggleAvailabilityLock = async () => {
     if (!userChurchId) return;
@@ -937,6 +999,23 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
             "announcement"
           );
         }
+
+        let groupLink = '';
+        try {
+          const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
+          if (settingsSnap.exists()) {
+            groupLink = String(settingsSnap.data()?.whatsappGroupLink || '').trim();
+          }
+        } catch (err) {
+          console.log('Could not load whatsappGroupLink:', err);
+        }
+
+        setCopiedReleaseModalText(false);
+        setReleaseModalData({
+          deadline,
+          hours: hoursToSet,
+          groupLink
+        });
       } else {
         await setDoc(lockRef, {
           unlocked: false,
@@ -950,8 +1029,6 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     }
   };
 
-  const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-  
   const activeMembers = useMemo(() => {
     return allMembers.filter(m => Array.isArray(m.roles) && m.roles.length > 0);
   }, [allMembers]);
@@ -964,8 +1041,6 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
     return activeMembers.filter(m => m.availabilityStatus?.[currentMonthStr] !== 'finished');
   }, [activeMembers, currentMonthStr]);
 
-  const currentUserData = allMembers.find(m => m.id === user?.uid);
-  const isFinished = currentUserData?.availabilityStatus?.[currentMonthStr] === 'finished';
   const [isConfirmingWhatsapp, setIsConfirmingWhatsapp] = useState(false);
 
   const isPendingOpenPeriod = Boolean(user && !isLocked && !isExpiredFreePlan && !isFinished);
@@ -992,7 +1067,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
   const daysWithServices = services.map(s => new Date(s.date).getDate());
 
   const hasUnlockedMonthMarkings = useMemo(() => {
-    if (!user || isLocked || isExpiredFreePlan) return false;
+    if (!user || isLocked || isExpiredFreePlan || isLockedAfterSubmission) return false;
     const hasDayMarkings = availabilities.some(
       a => a.userId === user.uid && String(a.date || '').startsWith(currentMonthStr) && (a.status === 'available' || a.status === 'unavailable')
     );
@@ -1000,10 +1075,10 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
       s => String(s.date || '').startsWith(currentMonthStr) && (s.availability?.[user.uid] === 'available' || s.availability?.[user.uid] === 'unavailable')
     );
     return hasDayMarkings || hasServiceMarkings;
-  }, [user, isLocked, isExpiredFreePlan, availabilities, services, currentMonthStr]);
+  }, [user, isLocked, isExpiredFreePlan, isLockedAfterSubmission, availabilities, services, currentMonthStr]);
 
   const handleClearMonthAvailability = async () => {
-    if (!user || !userChurchId || isLocked || isExpiredFreePlan || isClearingMonth) return;
+    if (!user || !userChurchId || isLocked || isExpiredFreePlan || isLockedAfterSubmission || isClearingMonth) return;
     setIsClearingMonth(true);
     try {
       const monthAvailDocs = availabilities.filter(
@@ -1154,20 +1229,20 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
       }
 
       // Create message
-      let message = `*🗓️ DISPONIBILIDADE CONCLUÍDA*\n\n`;
+      let message = `*\u{1F4C5} DISPONIBILIDADE CONCLUÍDA*\n\n`;
       message += `O membro *${currentUserData?.name || currentUserData?.email || 'Membro'}* acabou de concluir a sua marcação de disponibilidade para o mês de *${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}*.\n\n`;
       
-      message += `📊 *CONTAGEM GERAL:*\n`;
-      message += `✅ Marcaram: *${finishedCount} de ${localActiveMembers.length}*\n`;
-      message += `⏳ Faltando marcar: *${missingCount} de ${localActiveMembers.length}*\n\n`;
+      message += `\u{1F4CA} *CONTAGEM GERAL:*\n`;
+      message += `\u{2705} Marcaram: *${finishedCount} de ${localActiveMembers.length}*\n`;
+      message += `\u{23F3} Faltando marcar: *${missingCount} de ${localActiveMembers.length}*\n\n`;
       
       if (missingCount > 0) {
-        message += `⚠️ *MEMBROS PENDENTES DE MARCAÇÃO:*\n`;
+        message += `\u{23F0} *MEMBROS PENDENTES DE MARCAÇÃO:*\n`;
         localMissingMembers.forEach(m => {
           message += `• ${m.name || m.email}\n`;
         });
       } else {
-        message += `🎉 *TODOS OS MEMBROS CONCLUÍRAM!* A escala de ministros já pode ser elaborada e editada no painel administrativo.`;
+        message += `\u{1F389} *TODOS OS MEMBROS CONCLUÍRAM!* A escala de ministros já pode ser elaborada e editada no painel administrativo.`;
       }
 
       message += `\n\n_Enviado via LiLouPro_`;
@@ -1731,6 +1806,14 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                         </p>
                       </div>
                     )}
+                    {!isLocked && isLockedAfterSubmission && (
+                      <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-center">
+                        <p className="text-xs font-black text-amber-500 flex items-center justify-center gap-1.5 leading-tight">
+                          <Lock size={12} className="shrink-0" />
+                          <span>Marcação finalizada. Caso precise alterar algum dia, entre em contato com a liderança.</span>
+                        </p>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       {(['available', 'unavailable'] as const).map(status => {
                         const dateStr = getLocalDateString(selectedDate);
@@ -1739,13 +1822,13 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                           <button
                             key={status}
                             onClick={() => setDayAvailability(selectedDate, status)}
-                            disabled={isLocked}
+                            disabled={isLocked || isLockedAfterSubmission}
                             className={cn(
                               "py-4 px-2 rounded-2xl flex flex-col items-center justify-center transition-all border gap-2 group",
                               isActive 
                                 ? (status === 'available' ? "bg-green-500 border-green-400 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-red-500 border-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)]")
                                 : "bg-black/5 dark:bg-white/5 border-border text-text-main font-black hover:bg-black/10 hover:border-brand/40",
-                              isLocked && "opacity-50 cursor-not-allowed"
+                              (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                             )}
                           >
                             {status === 'available' ? <Check size={20} strokeWidth={3}/> : <X size={20} strokeWidth={3}/>}
@@ -1812,28 +1895,28 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  disabled={isLocked}
+                                  disabled={isLocked || isLockedAfterSubmission}
                                   onClick={() => toggleServiceAvailability(service.id, 'available')}
                                   className={cn(
                                     "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                     myServiceStatus === 'available'
                                       ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20"
                                       : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-emerald-400 hover:border-emerald-500/30",
-                                    isLocked && "opacity-50 cursor-not-allowed"
+                                    (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                                   )}
                                 >
                                   <Check size={13} strokeWidth={3} /> Disponível
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={isLocked}
+                                  disabled={isLocked || isLockedAfterSubmission}
                                   onClick={() => toggleServiceAvailability(service.id, 'unavailable')}
                                   className={cn(
                                     "flex-1 sm:flex-initial h-8 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                     myServiceStatus === 'unavailable'
                                       ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20"
                                       : "bg-black/5 dark:bg-white/5 border-border text-text-muted hover:text-rose-400 hover:border-rose-500/30",
-                                    isLocked && "opacity-50 cursor-not-allowed"
+                                    (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                                   )}
                                 >
                                   <X size={13} strokeWidth={3} /> Não posso
@@ -2015,27 +2098,37 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
              </div>
 
              <div className="flex flex-wrap items-center justify-between gap-2.5">
-               <Button
-                 onClick={handleCopyGroupAnnouncement}
-                 className={cn(
-                   "w-full sm:w-auto h-9 px-4 rounded-xl text-[10px] uppercase font-black tracking-wider inline-flex items-center justify-center gap-1.5 border transition-all",
-                   copiedAnnouncement
-                     ? "bg-emerald-600 text-white border-emerald-500/40"
-                     : "bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-text-main border-border"
-                 )}
-               >
-                 {copiedAnnouncement ? (
-                   <>
-                     <Check size={12} strokeWidth={3} />
-                     <span>Copiado! ✓</span>
-                   </>
-                 ) : (
-                   <>
-                     <Copy size={12} />
-                     <span>Copiar Chamada de Grupo 📋</span>
-                   </>
-                 )}
-               </Button>
+               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                 <Button
+                   onClick={handleCopyGroupAnnouncement}
+                   className={cn(
+                     "w-full sm:w-auto h-9 px-4 rounded-xl text-[10px] uppercase font-black tracking-wider inline-flex items-center justify-center gap-1.5 border transition-all cursor-pointer",
+                     copiedAnnouncement
+                       ? "bg-emerald-600 text-white border-emerald-500/40"
+                       : "bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 text-text-main border-border"
+                   )}
+                 >
+                   {copiedAnnouncement ? (
+                     <>
+                       <Check size={12} strokeWidth={3} />
+                       <span>Copiado! ✓</span>
+                     </>
+                   ) : (
+                     <>
+                       <Copy size={12} />
+                       <span>Copiar Chamada de Grupo 📋</span>
+                     </>
+                   )}
+                 </Button>
+
+                 <Button
+                   onClick={handleSendGroupAnnouncement}
+                   className="w-full sm:w-auto h-9 px-4 rounded-xl text-[10px] uppercase font-black tracking-wider inline-flex items-center justify-center gap-1.5 border border-emerald-500/30 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                 >
+                   <MessageSquare size={12} />
+                   <span>Enviar no Grupo (WhatsApp)</span>
+                 </Button>
+               </div>
 
                <button
                  type="button"
@@ -2049,6 +2142,24 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
 
              {showCustomReminder && (
                <div className="space-y-3 pt-3 border-t border-border/40 animate-fade-in">
+                 <div className="space-y-1.5 p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/60">
+                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                     <label className="text-[10px] font-black uppercase tracking-wider text-text-main">
+                       Mensagem de Lembrete Geral (Grupo WhatsApp) 📢
+                     </label>
+                   </div>
+                   <textarea
+                     value={groupReminderTemplate}
+                     onChange={e => setGroupReminderTemplate(e.target.value)}
+                     rows={3}
+                     className="w-full bg-white/50 dark:bg-zinc-950/50 border border-border/80 rounded-xl p-2.5 text-xs text-text-main focus:outline-none focus:ring-1 focus:ring-brand leading-relaxed"
+                     placeholder="Editar a mensagem de lembrete geral para o grupo do WhatsApp..."
+                   />
+                   <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-semibold leading-normal">
+                     As listas de quem já marcou, quem falta marcar e o link do app serão adicionados automaticamente abaixo dessa mensagem.
+                   </p>
+                 </div>
+
                  <div className="space-y-1.5 p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/60">
                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                      <label className="text-[10px] font-black uppercase tracking-wider text-text-main">
@@ -2415,8 +2526,8 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
               ? (cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`)
               : '';
             const waUrl = formattedPhone
-              ? `https://wa.me/${formattedPhone}?text=${encodeURIComponent(submissionStatus.message)}`
-              : `https://wa.me/?text=${encodeURIComponent(submissionStatus.message)}`;
+              ? `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(submissionStatus.message)}`
+              : `https://api.whatsapp.com/send?text=${encodeURIComponent(submissionStatus.message)}`;
 
             return (
               <div
@@ -2561,6 +2672,117 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {releaseGroupToast && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] px-4 py-2.5 rounded-xl bg-zinc-900/95 border border-emerald-500/40 text-white text-xs font-bold shadow-2xl flex items-center gap-2 whitespace-nowrap"
+            >
+              <Check size={14} className="text-emerald-400 shrink-0" />
+              <span>Texto copiado! Cole no grupo do WhatsApp</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal (Desktop) / Gaveta Inferior (Mobile) de Confirmação Pós-Liberação para o Líder */}
+        <AnimatePresence>
+          {releaseModalData && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReleaseModalData(null)}
+              className="fixed inset-0 z-[105] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center md:p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 40, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.98 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full md:max-w-md bg-slate-900 border-t md:border border-emerald-500/30 rounded-t-3xl md:rounded-3xl p-5 pb-7 md:p-6 shadow-2xl space-y-4 text-center text-white"
+              >
+                <div className="w-10 h-1 rounded-full bg-white/15 mx-auto -mt-1 mb-1 md:hidden" />
+
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                  <Check size={26} strokeWidth={3} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-lg font-black text-white tracking-tight">
+                    Marcação Liberada!
+                  </h3>
+                  <p className="text-xs font-bold text-slate-300 leading-relaxed max-w-sm mx-auto">
+                    A equipe já foi notificada pelo aplicativo. Deseja avisar também no grupo do WhatsApp?
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msg = buildReleaseConvocationMessage(releaseModalData.deadline, releaseModalData.hours);
+                      navigator.clipboard.writeText(msg).catch(() => {});
+                      const grpLink = (releaseModalData.groupLink || '').trim();
+                      if (grpLink) {
+                        setReleaseGroupToast(true);
+                        setTimeout(() => setReleaseGroupToast(false), 4000);
+                        window.open(grpLink, '_blank', 'noopener,noreferrer');
+                      } else {
+                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+                      }
+                      setReleaseModalData(null);
+                    }}
+                    className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 cursor-pointer"
+                  >
+                    <MessageSquare size={16} className="shrink-0" />
+                    <span>AVISAR NO GRUPO DO WHATSAPP</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const msg = buildReleaseConvocationMessage(releaseModalData.deadline, releaseModalData.hours);
+                      try {
+                        await navigator.clipboard.writeText(msg);
+                        setCopiedReleaseModalText(true);
+                        setTimeout(() => setCopiedReleaseModalText(false), 2500);
+                      } catch (e) {
+                        console.error('Erro ao copiar texto:', e);
+                      }
+                    }}
+                    className={cn(
+                      "w-full py-2.5 px-4 rounded-xl border font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 cursor-pointer",
+                      copiedReleaseModalText
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                        : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-200"
+                    )}
+                  >
+                    {copiedReleaseModalText ? (
+                      <>
+                        <Check size={14} strokeWidth={3} />
+                        <span>COPIADO! ✓</span>
+                      </>
+                    ) : (
+                      <span>COPIAR TEXTO 📋</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReleaseModalData(null)}
+                    className="w-full pt-1 text-xs font-bold text-slate-400 hover:text-white underline underline-offset-4 transition-colors cursor-pointer"
+                  >
+                    Agora não / Fechar
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Gaveta Inferior (Bottom Sheet) do Passo 2 no Mobile (< md) */}
         <AnimatePresence>
           {isMobileDaySheetOpen && selectedDate && (
@@ -2616,6 +2838,14 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                     </p>
                   </div>
                 )}
+                {!isLocked && isLockedAfterSubmission && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-center shrink-0">
+                    <p className="text-[11px] font-black text-amber-500 flex items-center justify-center gap-1.5 leading-tight">
+                      <Lock size={12} className="shrink-0" />
+                      <span>Marcação finalizada. Caso precise alterar algum dia, entre em contato com a liderança.</span>
+                    </p>
+                  </div>
+                )}
 
                 {/* Botões CONTE COMIGO e NÃO POSSO em formato retangular compacto */}
                 <div className="grid grid-cols-2 gap-2.5 shrink-0">
@@ -2627,7 +2857,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                         key={status}
                         type="button"
                         onClick={() => setDayAvailability(selectedDate, status)}
-                        disabled={isLocked}
+                        disabled={isLocked || isLockedAfterSubmission}
                         className={cn(
                           "h-11 px-3 rounded-xl flex items-center justify-center transition-all border gap-2 cursor-pointer",
                           isActive
@@ -2635,7 +2865,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                                 ? "bg-green-500 border-green-400 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]"
                                 : "bg-red-500 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]")
                             : "bg-black/5 dark:bg-white/5 border-border text-text-main font-black hover:bg-black/10",
-                          isLocked && "opacity-50 cursor-not-allowed"
+                          (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {status === 'available' ? <Check size={16} strokeWidth={3} /> : <X size={16} strokeWidth={3} />}
@@ -2676,28 +2906,28 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
                           <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-border/50">
                             <button
                               type="button"
-                              disabled={isLocked}
+                              disabled={isLocked || isLockedAfterSubmission}
                               onClick={() => toggleServiceAvailability(service.id, 'available')}
                               className={cn(
                                 "h-8 px-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                 myServiceStatus === 'available'
                                   ? "bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20"
                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted",
-                                isLocked && "opacity-50 cursor-not-allowed"
+                                (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                               )}
                             >
                               <Check size={12} strokeWidth={3} /> Disponível
                             </button>
                             <button
                               type="button"
-                              disabled={isLocked}
+                              disabled={isLocked || isLockedAfterSubmission}
                               onClick={() => toggleServiceAvailability(service.id, 'unavailable')}
                               className={cn(
                                 "h-8 px-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border",
                                 myServiceStatus === 'unavailable'
                                   ? "bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20"
                                   : "bg-black/5 dark:bg-white/5 border-border text-text-muted",
-                                isLocked && "opacity-50 cursor-not-allowed"
+                                (isLocked || isLockedAfterSubmission) && "opacity-50 cursor-not-allowed"
                               )}
                             >
                               <X size={12} strokeWidth={3} /> Não posso

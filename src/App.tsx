@@ -20826,6 +20826,24 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   </div>
                 )}
 
+                <Button
+                  onClick={() => {
+                    const churchSuffix = churchData 
+                      ? ` no ministério de louvor da *${churchData.name}*` 
+                      : '';
+                    const codeSuffix = churchData 
+                      ? `\n\nAo cadastrar sua conta, informe nosso código de ingresso:\n👉 *${churchData.inviteCode}*` 
+                      : '';
+                    const inviteMsg = `Olá! Quero te convidar para usar o app *Liloupro*${churchSuffix}! 🎵\n\nAbra o aplicativo por aqui:\n${window.location.origin}${codeSuffix}`;
+                    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(inviteMsg)}`;
+                    window.open(whatsappUrl, '_blank');
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-500 text-white font-black text-xs uppercase tracking-widest h-11 gap-2 flex items-center justify-center rounded-xl shadow-lg shadow-green-600/20 transition-all select-none border border-green-500/10 cursor-pointer"
+                >
+                  <Share2 size={15} strokeWidth={3} />
+                  Convidar via WhatsApp
+                </Button>
+
                 {/* Multi-Igreja Controls */}
                 {isMasterDeveloper && !isRemoteSupportMode && (
                 <div className="space-y-3 pt-2">
@@ -20987,73 +21005,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
              </Card>
            )}
 
-           {/* Compartilhar & Convidar pelo WhatsApp */}
-           <Card className="p-8 space-y-6 bg-gradient-to-br from-green-500/10 via-brand/5 to-transparent border-green-500/20 shadow-lg shadow-green-500/5">
-              <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                <Share2 size={14} className="text-green-500" strokeWidth={3} /> Compartilhar &amp; Convidar
-              </h3>
-              <p className="text-xs text-text-muted leading-relaxed">
-                Convide músicos, cantores e lideranças para fazerem parte do {churchData ? `ministério de louvor da ${churchData.name}` : "Liloupro"}. Envie um link com convite pronto diretamente pelo WhatsApp!
-              </p>
-              
-              <Button
-                onClick={() => {
-                  const churchSuffix = churchData 
-                    ? ` no ministério de louvor da *${churchData.name}*` 
-                    : '';
-                  const codeSuffix = churchData 
-                    ? `\n\nAo cadastrar sua conta, informe nosso código de ingresso:\n👉 *${churchData.inviteCode}*` 
-                    : '';
-                  const inviteMsg = `Olá! Quero te convidar para usar o app *Liloupro*${churchSuffix}! 🎵\n\nAbra o aplicativo por aqui:\n${window.location.origin}${codeSuffix}`;
-                  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(inviteMsg)}`;
-                  window.open(whatsappUrl, '_blank');
-                }}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-black text-xs uppercase tracking-widest h-11 gap-2 flex items-center justify-center rounded-xl shadow-lg shadow-green-600/20 transition-all select-none border border-green-500/10 cursor-pointer"
-              >
-                <Share2 size={15} strokeWidth={3} />
-                Convidar via WhatsApp
-              </Button>
-           </Card>
-
-            {/* Assistente Liloupro (IA & Voz) */}
-            <Card className="p-8 space-y-6 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-transparent border-sky-500/20 shadow-lg shadow-sky-500/5">
-               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                 <Mic size={14} className="text-sky-400 animate-pulse" /> Assistente Liloupro (IA & Comandos de Voz)
-               </h3>
-               <p className="text-xs text-text-muted leading-relaxed">
-                 O assistente inteligente auxilia ministros e membros a navegar, buscar letras/cifras, controlar o metrônomo/afinador e consultar guias interativos de cada tela.
-               </p>
-               
-               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                 <Button
-                   onClick={() => {
-                     if (typeof window !== 'undefined') {
-                       window.dispatchEvent(new CustomEvent('liloupro:open-assistant'));
-                     }
-                   }}
-                   className="flex-1 bg-gradient-to-r from-blue-600 to-sky-600 hover:brightness-110 text-white font-black text-xs uppercase tracking-widest h-11 gap-2 flex items-center justify-center rounded-xl shadow-lg shadow-sky-600/20 transition-all select-none border border-sky-400/30 cursor-pointer"
-                 >
-                   <Mic size={16} />
-                   Abrir Assistente Agora
-                 </Button>
-
-                 <Button
-                   variant="secondary"
-                   onClick={() => {
-                     try {
-                       localStorage.setItem('liloupro_assistant_retracted_v2', 'true');
-                       window.dispatchEvent(new CustomEvent('liloupro:reset-assistant-pos'));
-                       alert('Posição do botão do assistente restaurada com sucesso!');
-                     } catch {}
-                   }}
-                   className="border-border text-text-main hover:bg-black/5 dark:hover:bg-white/5 font-black text-xs uppercase tracking-widest h-11 px-4 rounded-xl transition-all"
-                 >
-                   Restaurar Botão Flutuante
-                 </Button>
-               </div>
-            </Card>
-
-            {/* Custom Church Branding Controls & Live Preview Cards */}
+             {/* Custom Church Branding Controls & Live Preview Cards */}
             {isAdmin && churchData && (
               <>
                 <Card className="p-8 space-y-6">
@@ -21873,7 +21825,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   </div>
                   
                   <div className="flex-1 space-y-3 w-full animate-fade-in">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest block text-left">Foto de Perfil (Enviar do aparelho, tirar com a câmera ou predefinição)</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest block text-left">Foto de Perfil (Enviar do aparelho ou tirar com a câmera)</label>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                       <div 
@@ -21941,30 +21893,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { id: 'singer1', title: 'Cantora', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'singer2', title: 'Cantor', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'guitar1', title: 'Guitarra', url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'guitar2', title: 'Violão', url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=150&h=150&q=80' },
-                        { id: 'piano', title: 'Teclado', url: 'https://images.unsplash.com/photo-1552422535-c45813c61732?auto=format&fit=crop&w=150&h=150&q=80' }
-                      ].map(preset => (
-                        <button 
-                          key={preset.id}
-                          type="button"
-                          onClick={() => setUserPhotoUrl(preset.url)}
-                          className={cn(
-                            "w-8 h-8 rounded-full overflow-hidden border-2 transition-all hover:scale-105 shadow-sm shrink-0",
-                            userPhotoUrl === preset.url ? "border-brand ring-2 ring-brand/30" : "border-border hover:border-text-muted"
-                          )}
-                          title={preset.title}
-                        >
-                          <img referrerPolicy="no-referrer" src={preset.url} className="w-full h-full object-cover" alt={preset.title} />
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-text-muted">Arraste um arquivo ou selecione um preset acima.</p>
                   </div>
                 </div>
 
@@ -22000,18 +21928,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     value={userBirthDate}
                     onChange={val => setUserBirthDate(val)}
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Versão Padrão da Bíblia</label>
-                  <select
-                    value={defaultBibleVersion}
-                    onChange={(e) => setDefaultBibleVersion(e.target.value)}
-                    className="w-full h-11 bg-black/5 dark:bg-white/5 border border-border text-xs text-text-main px-4 rounded-xl flex items-center font-bold focus:outline-none focus:border-sky-500 cursor-pointer"
-                  >
-                    <option value="BLIVRE">Bíblia Livre (BLIVRE) — Padrão</option>
-                    <option value="TB">Tradução Brasileira — 1917 (TB)</option>
-                  </select>
                 </div>
 
                 <Button 
@@ -22067,196 +21983,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                 </div>
               </div>
            </Card>
-
-            {/* PWA Connection & Notification Guide Card */}
-            <Card className="p-8 space-y-6 md:col-span-2 border-amber-500/15 bg-amber-500/[0.01] dark:bg-amber-500/[0.02]">
-               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-                 <div className="space-y-1">
-                   <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                     <Smartphone size={18} className="text-amber-500" /> Guia de Instalação PWA &amp; Notificações
-                   </h3>
-                   <p className="text-xs text-text-muted">
-                     Instale o aplicativo na sua tela de início para ativar recursos de segundo plano e o selo de aviso (badge) no ícone.
-                   </p>
-                 </div>
-                 
-                 {/* OS Tab Selector */}
-                 <div className="flex bg-black/10 dark:bg-white/10 p-1 rounded-xl border border-border/40 gap-1 w-fit shrink-0">
-                   <button
-                     type="button"
-                     onClick={() => setPwaGuideTab('android')}
-                     className={cn(
-                       "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                       pwaGuideTab === 'android'
-                         ? "bg-amber-500 text-black shadow-md font-extrabold"
-                         : "text-text-muted hover:text-text-main"
-                     )}
-                   >
-                     Android / Chrome
-                   </button>
-                   <button
-                     type="button"
-                     onClick={() => setPwaGuideTab('ios')}
-                     className={cn(
-                       "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                       pwaGuideTab === 'ios'
-                         ? "bg-amber-500 text-black shadow-md font-extrabold"
-                         : "text-text-muted hover:text-text-main"
-                     )}
-                   >
-                     iOS / iPhone (Safari)
-                   </button>
-                 </div>
-               </div>
-
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-2">
-                 {/* Step 1: Instalação */}
-                 <div className="space-y-4">
-                   <h4 className="text-xs font-black text-brand uppercase tracking-wider flex items-center gap-2">
-                     <span className="w-5 h-5 rounded-full bg-brand/10 text-brand flex items-center justify-center text-[10px] font-extrabold">1</span>
-                     Passo 1: Instalar na Tela Inicial (PWA)
-                   </h4>
-                   
-                   {pwaGuideTab === 'android' ? (
-                     <div className="space-y-3 text-xs leading-relaxed text-text-muted pl-7">
-                       <p>
-                         Para aproveitar o app como se fosse um aplicativo nativo da Play Store, siga os passos abaixo:
-                       </p>
-                       <ul className="space-y-2 list-disc list-inside">
-                         <li>Abra o aplicativo utilizando o navegador <strong className="text-text-main">Google Chrome</strong>.</li>
-                         <li>Clique no botão de <strong className="text-text-main">três pontos (Menu)</strong> no canto superior direito do Chrome.</li>
-                         <li>Toque na opção <strong className="text-text-main font-semibold">"Instalar aplicativo"</strong> ou <strong className="text-text-main font-semibold">"Adicionar à tela inicial"</strong>.</li>
-                         <li>Confirme e aguarde o ícone do aplicativo aparecer na sua tela principal ou gaveta de apps.</li>
-                       </ul>
-                     </div>
-                   ) : (
-                     <div className="space-y-3 text-xs leading-relaxed text-text-muted pl-7">
-                       <p>
-                         A Apple exige que o aplicativo seja instalado através do Safari para habilitar o envio de notificações de sistema:
-                       </p>
-                       <ul className="space-y-2 list-disc list-inside">
-                         <li>Certifique-se de carregar este site no navegador oficial <strong className="text-text-main font-semibold">Safari</strong> do seu iPhone.</li>
-                         <li>Toque no botão de <strong className="text-text-main">Compartilhar</strong> (o ícone de um quadrado com uma seta apontando para cima, localizado no rodapé do Safari).</li>
-                         <li>Role a folha de opções para baixo e toque em <strong className="text-text-main">"Adicionar à Tela de Início"</strong>.</li>
-                         <li>Toque em <strong className="text-text-main">"Adicionar"</strong> no canto superior direito para confirmar.</li>
-                       </ul>
-                     </div>
-                   )}
-                 </div>
-
-                 {/* Step 2: Permissões de Notificação e Badges */}
-                 <div className="space-y-4">
-                   <h4 className="text-xs font-black text-brand uppercase tracking-wider flex items-center gap-2">
-                     <span className="w-5 h-5 rounded-full bg-brand/10 text-brand flex items-center justify-center text-[10px] font-extrabold">2</span>
-                     Passo 2: Ativar Avisos e Selo (Badge) no Ícone
-                   </h4>
-
-                   {pwaGuideTab === 'android' ? (
-                     <div className="space-y-3 text-xs leading-relaxed text-text-muted pl-7">
-                       <p>
-                         Garanta que o sistema do celular atualize a bolinha de avisos (badge) mesmo com o aplicativo fechado ou em segundo plano:
-                       </p>
-                       <ul className="space-y-2 lg:space-y-3 list-decimal list-inside">
-                         <li>Dê um toque longo sobre o ícone do app recém-instalado na sua tela inicial e escolha <strong className="text-text-main">"Informações do app"</strong> (ou toque no ícone com a letra "i").</li>
-                         <li>Entre na seção de <strong className="text-text-main">"Notificações"</strong> do Android e confirme se a chave geral está ligada, incluindo <strong className="text-text-main">"Permitir selo no ícone"</strong> ou "Permitir ponto de notificação".</li>
-                         <li>Retorne na tela de informações do app, acesse <strong className="text-text-main">"Bateria"</strong> ou "Uso de bateria" e selecione a opção <strong className="text-text-main font-semibold">"Sem Restrições"</strong> (isso impede que o Android suspenda as sincronizações de avisos do app em segundo plano).</li>
-                       </ul>
-                     </div>
-                   ) : (
-                     <div className="space-y-3 text-xs leading-relaxed text-text-muted pl-7">
-                       <p>
-                         O iOS do iPhone requer passos específicos de configuração de permissões do sistema após a instalação:
-                       </p>
-                       <ul className="space-y-2 lg:space-y-3 list-decimal list-inside">
-                         <li>Carregue o app tocando no ícone criado na sua <strong className="text-text-main">Tela de Início</strong> (e não pelo navegador normal).</li>
-                         <li>Clique no botão <strong className="text-text-main font-black text-brand">"Permitir Notificações no Celular"</strong> acima nesta página para disparar o pedido inicial do iOS e autorize clicando em "Permitir".</li>
-                         <li>Abra o aplicativo de <strong className="text-text-main font-semibold">Ajustes</strong> nativo do seu iPhone, role até encontrar a lista com todos os aplicativos no final e toque sobre o nome deste app.</li>
-                         <li>Toque em <strong className="text-text-main font-semibold font-black text-brand">"Notificações"</strong> e garanta que <strong className="text-text-main font-black text-brand">"Avisos" (Badges)</strong> estão totalmente liberados no sistema do iOS para ligar a bolinha vermelha no ícone.</li>
-                       </ul>
-                     </div>
-                   )}
-                 </div>
-               </div>
-
-               {/* Seção de Teste de Notificações e Badges */}
-               <div id="pwa-test-notifications-panel" className="p-5 rounded-xl border border-dashed border-amber-500/30 dark:border-amber-500/40 bg-amber-500/[0.02] space-y-4">
-                 <div className="flex gap-2.5 items-start">
-                   <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                     <Zap size={16} className="text-amber-500 animate-pulse" />
-                   </div>
-                   <div className="space-y-1">
-                     <h4 className="text-xs font-black text-text-main uppercase tracking-wider">
-                       Testador Integrado de Avisos &amp; Selos (PWA)
-                     </h4>
-                     <p className="text-[11px] text-text-muted leading-relaxed">
-                       Agende um aviso local automático para comprovar que as notificações no sistema operam perfeitamente e o contador numérico (marcação vermelha/badge) sobre o ícone do aplicativo se atualiza corretamente mesmo sem o aplicativo estar em primeiro plano.
-                     </p>
-                   </div>
-                 </div>
-
-                 <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                   <button
-                     id="pwa-instant-test-btn"
-                     type="button"
-                     onClick={triggerTestNotification}
-                     className="flex-1 h-11 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-500 text-slate-950 hover:bg-emerald-400 font-extrabold flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                   >
-                     <Zap size={14} className="fill-slate-950 shrink-0" />
-                     <span>Testar Notificação Agora</span>
-                   </button>
-
-                   <button
-                     id="pwa-schedule-test-btn"
-                     type="button"
-                     onClick={handleScheduleTestNotification}
-                     disabled={isTestingBadge}
-                     className={cn(
-                       "flex-1 h-11 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md",
-                       isTestingBadge
-                         ? "bg-amber-500 text-black animate-pulse font-extrabold"
-                         : "bg-brand text-white hover:brightness-110 shadow-brand/10 font-bold"
-                     )}
-                   >
-                     <Clock size={14} className={isTestingBadge ? "animate-spin" : ""} />
-                     {testCountdown !== null 
-                       ? `Disparando em ${testCountdown}s... MINIMIZE AGORA!` 
-                       : "Agendar Teste (Em 5 segundos)"
-                     }
-                   </button>
-
-                   <button
-                     id="pwa-clear-badge-btn"
-                     type="button"
-                     onClick={handleClearTestBadge}
-                     className="px-4 h-11 rounded-xl border border-border bg-black/5 dark:bg-white/5 font-black text-[10px] uppercase tracking-widest text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 flex items-center justify-center gap-2 transition-all shrink-0"
-                   >
-                     <RefreshCcw size={14} />
-                     Zerar Ícone (Limpar Selo)
-                   </button>
-                 </div>
-
-                 <div className="text-[10px] text-text-muted italic flex items-start gap-1.5 pl-1.5 leading-relaxed">
-                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                   <span><strong>Passo a passo do teste:</strong> Clique no botão de agendamento acima, minimize o aplicativo (ou bloqueie a tela do celular) em até 5 segundos e aguarde. O seu celular disparará o aviso e mudará o badge do app para 3.</span>
-                 </div>
-               </div>
-
-               {/* Consulta Rápida à Bíblia */}
-               <QuickBibleSearch />
-
-               {/* Banner de Notas */}
-               <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-3">
-                 <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                 <div className="space-y-1">
-                   <p className="text-[10px] uppercase font-black tracking-wider text-amber-500">
-                     Por que isso é necessário?
-                   </p>
-                   <p className="text-[10px] text-text-muted leading-relaxed">
-                     Os navegadores modernos (especialmente no iOS) bloqueiam notificações e atualizações de selos numéricos (badges) sobre o ícone por questões de privacidade e segurança do sistema a menos que o app seja primeiramente adicionado à tela de início (como PWA) e possua permissão de notificação explícita dada nas configurações do smartphone.
-                   </p>
-                 </div>
-               </div>
-            </Card>
 
            {/* Admin Settings (Conditional) */}
            {isAdmin && (
