@@ -989,15 +989,15 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
       const missingCount = localMissingMembers.length;
       const finishedCount = localFinishedMembers.length + 1; // including current user
       
-      // Get Admin phones and emails from settings and members list
+      // Get Admin phones and emails from church doc, settings and members list
       let adminTargets: { name: string; phone: string }[] = [];
       let adminEmailTargets: { name: string; email: string }[] = [];
       try {
-        const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
-        if (settingsSnap.exists()) {
-          const sd = settingsSnap.data();
-          if (sd.whatsappAdmin) {
-            const p = cleanWhatsapp(sd.whatsappAdmin);
+        const churchSnap = await getDoc(doc(db, 'churches', userChurchId));
+        if (churchSnap.exists()) {
+          const leaderWhatsapp = churchSnap.data()?.leaderWhatsapp;
+          if (leaderWhatsapp) {
+            const p = cleanWhatsapp(leaderWhatsapp);
             if (p) {
               const matchingMember = allMembers.find(m => m.whatsapp && cleanWhatsapp(m.whatsapp) === p);
               adminTargets.push({
@@ -1006,6 +1006,14 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               });
             }
           }
+        }
+      } catch (e) {
+        console.log("Could not load church leaderWhatsapp");
+      }
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', settingsDocId));
+        if (settingsSnap.exists()) {
+          const sd = settingsSnap.data();
           if (sd.whatsappAdmin2) {
             const p2 = cleanWhatsapp(sd.whatsappAdmin2);
             if (p2) {
@@ -2246,122 +2254,84 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
         </AnimatePresence>
 
         <AnimatePresence>
-          {submissionStatus && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-xl bg-card border border-border shadow-2xl rounded-3xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+          {submissionStatus && (() => {
+            const rawAdminPhone = submissionStatus.admins?.[0]?.phone || '';
+            const cleanDigits = rawAdminPhone.replace(/\D/g, '');
+            const formattedPhone = cleanDigits
+              ? (cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`)
+              : '';
+            const waUrl = formattedPhone
+              ? `https://wa.me/${formattedPhone}?text=${encodeURIComponent(submissionStatus.message)}`
+              : `https://wa.me/?text=${encodeURIComponent(submissionStatus.message)}`;
+
+            return (
+              <div
+                onClick={() => setSubmissionStatus(null)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
               >
-                <div className="p-6 sm:p-8 flex-1 overflow-y-auto text-center space-y-6">
-                  <div className="mx-auto w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/5">
-                    <Check size={32} strokeWidth={3} className="animate-bounce" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-black text-text-main tracking-tight">Disponibilidade Enviada!</h2>
-                    <p className="text-xs font-bold text-text-muted max-w-md mx-auto">
-                      Suas preferências foram registradas com sucesso no aplicativo. Além disso, criamos uma notificação em tempo real no painel administrativo dos coordenadores.
-                    </p>
-                  </div>
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative w-full max-w-md max-h-[90vh] bg-card border border-border shadow-2xl rounded-3xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionStatus(null)}
+                    aria-label="Fechar"
+                    className="absolute top-4 right-4 z-10 p-1.5 rounded-full text-text-muted hover:text-text-main hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
 
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-left space-y-3">
-                    <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Smartphone size={14} /> Canal WhatsApp das Lideranças
-                    </h3>
-                    <p className="text-[11px] font-bold text-text-muted leading-relaxed">
-                      Seu navegador pode ter bloqueado a abertura automática da janela de envio. Para garantir que os líderes recebam sua mensagem formatada no celular, toque em enviar abaixo para cada um deles:
-                    </p>
+                  <div className="p-6 sm:p-7 flex-1 overflow-y-auto text-center space-y-5">
+                    <div className="mx-auto w-14 h-14 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/5">
+                      <Check size={28} strokeWidth={3} className="animate-bounce" />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-text-main tracking-tight">Disponibilidade Enviada!</h2>
+                      <p className="text-xs font-bold text-text-muted max-w-sm mx-auto leading-relaxed">
+                        Suas preferências foram registradas com sucesso no aplicativo e a liderança já foi notificada em tempo real.
+                      </p>
+                    </div>
 
-                    <div className="space-y-2.5 pt-1">
-                      {submissionStatus.admins.length > 0 ? (
-                        submissionStatus.admins.map((adm, idx) => {
-                          const waUrl = `https://wa.me/${adm.phone}?text=${encodeURIComponent(submissionStatus.message)}`;
-                          return (
-                            <div key={adm.phone + idx} className="flex gap-2 items-center bg-card border border-border/80 rounded-xl p-3 justify-between shadow-sm">
-                              <div className="text-left w-2/3">
-                                <p className="text-xs font-black text-text-main pr-2 truncate">{adm.name}</p>
-                                <p className="text-[9px] font-mono text-text-muted mt-0.5">{adm.phone}</p>
-                              </div>
-                              <Button
-                                onClick={() => window.open(waUrl, '_blank')}
-                                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all text-xs shrink-0"
-                              >
-                                Enviar 💬
-                              </Button>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-xs font-bold text-center py-2 text-text-muted">Nenhum número de WhatsApp administrativo configurado.</p>
-                      )}
+                    <div className="pt-1">
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 hover:scale-[1.01] active:scale-95 transition-all"
+                      >
+                        <Smartphone size={16} />
+                        Avisar Liderança no WhatsApp
+                      </a>
                     </div>
                   </div>
 
-                  <div className="bg-sky-500/10 border border-sky-500/20 p-4 rounded-2xl text-left space-y-3">
-                    <h3 className="text-xs font-black text-sky-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Mail size={14} /> Canal E-mail dos Administradores
-                    </h3>
-                    <p className="text-[11px] font-bold text-text-muted leading-relaxed">
-                      Envie o relatório de confirmação de disponibilidade diretamente para o e-mail oficial dos coordenadores da igreja:
-                    </p>
-
-                    <div className="space-y-2.5 pt-1">
-                      {submissionStatus.adminEmails && submissionStatus.adminEmails.length > 0 ? (
-                        submissionStatus.adminEmails.map((adm, idx) => {
-                          const mailSubject = `🗓️ Disponibilidade Concluída - ${currentUserData?.name || 'Membro'} - ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-                          const mailtoUrl = `mailto:${adm.email}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(submissionStatus.message)}`;
-                          return (
-                            <div key={adm.email + idx} className="flex gap-2 items-center bg-card border border-border/80 rounded-xl p-3 justify-between shadow-sm">
-                              <div className="text-left w-2/3">
-                                <p className="text-xs font-black text-text-main pr-2 truncate">{adm.name}</p>
-                                <p className="text-[9px] font-mono text-text-muted mt-0.5 truncate">{adm.email}</p>
-                              </div>
-                              <Button
-                                onClick={() => window.open(mailtoUrl, '_self')}
-                                className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-black text-[10px] uppercase tracking-wide rounded-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all text-xs shrink-0"
-                              >
-                                Enviar E-mail ✉️
-                              </Button>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-xs font-bold text-center py-2 text-text-muted">Nenhum e-mail administrativo configurado.</p>
-                      )}
-                    </div>
+                  <div className="p-4 bg-black/5 dark:bg-white/5 border-t border-border flex items-center justify-center gap-3 shrink-0">
+                    <Button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(submissionStatus.message);
+                        alert("Copiado com sucesso para a área de transferência!");
+                      }}
+                      variant="secondary" 
+                      className="flex-1 max-w-[180px] font-black uppercase text-[10px] tracking-widest h-10 border border-border rounded-xl"
+                    >
+                       Copiar Texto 📋
+                    </Button>
+                    <Button 
+                      onClick={() => setSubmissionStatus(null)} 
+                      className="flex-1 max-w-[180px] bg-brand text-white font-black uppercase text-[10px] tracking-widest h-10 rounded-xl"
+                    >
+                       Entendido ✅
+                    </Button>
                   </div>
-
-                  <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-text-muted pl-1">Prévia da Mensagem Gerada</label>
-                    <pre className="text-[10px] bg-black/15 dark:bg-white/5 border border-border p-4 rounded-xl font-mono text-text-main whitespace-pre-wrap leading-tight text-left select-all cursor-pointer shadow-inner max-h-[160px] overflow-y-auto" title="Clique para selecionar e copiar">
-                      {submissionStatus.message}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-black/5 dark:bg-white/5 border-t border-border flex items-center justify-center gap-3">
-                  <Button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(submissionStatus.message);
-                      alert("Copiado com sucesso para a área de transferência!");
-                    }}
-                    variant="secondary" 
-                    className="flex-1 max-w-[180px] font-black uppercase text-[10px] tracking-widest h-10 border border-border rounded-xl"
-                  >
-                     Copiar Texto 📋
-                  </Button>
-                  <Button 
-                    onClick={() => setSubmissionStatus(null)} 
-                    className="flex-1 max-w-[180px] bg-brand text-white font-black uppercase text-[10px] tracking-widest h-10 rounded-xl"
-                  >
-                     Entendido ✅
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-          )}
+                </motion.div>
+              </div>
+            );
+          })()}
         </AnimatePresence>
 
         {/* Floating Sticky Bottom Action Bar for Mobile/Desktop Usability */}

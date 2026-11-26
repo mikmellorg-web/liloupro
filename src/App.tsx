@@ -20447,10 +20447,16 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 
   useEffect(() => {
     if (!isAdmin || !userChurchId) return;
+    const unsubChurch = onSnapshot(doc(db, 'churches', userChurchId), (churchSnap) => {
+      if (churchSnap.exists()) {
+        setAdminPhone(churchSnap.data().leaderWhatsapp || '');
+      } else {
+        setAdminPhone('');
+      }
+    });
     const unsub = onSnapshot(doc(db, 'settings', settingsDocId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        setAdminPhone(data.whatsappAdmin || '');
         setAdminPhone2(data.whatsappAdmin2 || '');
         setAdminPhone3(data.whatsappAdmin3 || '');
         setAdminEmail(data.adminEmail || '');
@@ -20458,7 +20464,6 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         setAdminEmail3(data.adminEmail3 || '');
         setWhatsappGroupLink(data.whatsappGroupLink || '');
       } else {
-        setAdminPhone('');
         setAdminPhone2('');
         setAdminPhone3('');
         setAdminEmail('');
@@ -20467,7 +20472,10 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         setWhatsappGroupLink('');
       }
     });
-    return () => unsub();
+    return () => {
+      unsubChurch();
+      unsub();
+    };
   }, [isAdmin, userChurchId, settingsDocId]);
 
   const handleUpdateProfile = async () => {
@@ -20495,8 +20503,11 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
     if (!userChurchId) return;
     setIsSavingPhone(true);
     try {
+      await updateDoc(doc(db, 'churches', userChurchId), {
+        leaderWhatsapp: adminPhone.trim(),
+        updatedAt: new Date().toISOString()
+      });
       await setDoc(doc(db, 'settings', settingsDocId), {
-        whatsappAdmin: adminPhone,
         whatsappAdmin2: adminPhone2,
         whatsappAdmin3: adminPhone3,
         adminEmail: adminEmail,
@@ -22186,6 +22197,19 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                   />
                   <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
                     Adicione o link de convite do grupo do WhatsApp do ministério de louvor para abrir de forma automática ao compartilhar escalas.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">WhatsApp da Liderança (Avisos de Disponibilidade)</label>
+                  <Input 
+                    placeholder="Ex: 53999999999 (DDD + Número)"
+                    value={adminPhone}
+                    onChange={e => setAdminPhone(e.target.value)}
+                    className="font-mono h-11 bg-white/5 border-white/10"
+                  />
+                  <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
+                    Cadastre o WhatsApp do administrador para receber avisos diretos sempre que um membro concluir a marcação de disponibilidade.
                   </p>
                 </div>
 
