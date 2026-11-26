@@ -888,6 +888,10 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
     }
   };
 
+  const [showClearMonthModal, setShowClearMonthModal] = useState(false);
+  const [isClearingMonth, setIsClearingMonth] = useState(false);
+  const [clearMonthToast, setClearMonthToast] = useState(false);
+
   const activeLockHours = useMemo(() => {
     if (lockStatus?.hours) return Number(lockStatus.hours);
     if (lockStatus?.deadline && lockStatus?.unlockedAt) {
@@ -963,6 +967,75 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
 
   const availableDaysCount = availabilities.filter(a => a.status === 'available').length;
   const daysWithServices = services.map(s => new Date(s.date).getDate());
+
+  const hasUnlockedMonthMarkings = useMemo(() => {
+    if (!user || isLocked || isExpiredFreePlan) return false;
+    const hasDayMarkings = availabilities.some(
+      a => a.userId === user.uid && String(a.date || '').startsWith(currentMonthStr) && (a.status === 'available' || a.status === 'unavailable')
+    );
+    const hasServiceMarkings = services.some(
+      s => String(s.date || '').startsWith(currentMonthStr) && (s.availability?.[user.uid] === 'available' || s.availability?.[user.uid] === 'unavailable')
+    );
+    return hasDayMarkings || hasServiceMarkings;
+  }, [user, isLocked, isExpiredFreePlan, availabilities, services, currentMonthStr]);
+
+  const handleClearMonthAvailability = async () => {
+    if (!user || !userChurchId || isLocked || isExpiredFreePlan || isClearingMonth) return;
+    setIsClearingMonth(true);
+    try {
+      const monthAvailDocs = availabilities.filter(
+        a => a.userId === user.uid && String(a.date || '').startsWith(currentMonthStr)
+      );
+      await Promise.all(
+        monthAvailDocs.map(a => {
+          const docId = a.id || `${user.uid}_${a.date}`;
+          return deleteDoc(doc(db, 'availability', docId));
+        })
+      );
+
+      const monthServicesWithUser = services.filter(
+        s => String(s.date || '').startsWith(currentMonthStr) && s.availability && s.availability[user.uid] !== undefined
+      );
+      await Promise.all(
+        monthServicesWithUser.map(svc => {
+          const updatedAvail = { ...(svc.availability || {}) };
+          delete updatedAvail[user.uid];
+          return updateDoc(doc(db, 'services', svc.id), { availability: updatedAvail });
+        })
+      );
+
+      setAvailabilities(prev => prev.filter(a => !(a.userId === user.uid && String(a.date || '').startsWith(currentMonthStr))));
+      setServices(prev =>
+        prev.map(s => {
+          if (!String(s.date || '').startsWith(currentMonthStr) || !s.availability || s.availability[user.uid] === undefined) {
+            return s;
+          }
+          const updatedAvail = { ...s.availability };
+          delete updatedAvail[user.uid];
+          return { ...s, availability: updatedAvail };
+        })
+      );
+
+      const updatedStatus = { ...(currentUserData?.availabilityStatus || {}) };
+      let statusChanged = false;
+      if (updatedStatus[currentMonthStr] !== undefined) {
+        delete updatedStatus[currentMonthStr];
+        statusChanged = true;
+      }
+      await updateDoc(doc(db, 'members', user.uid), {
+        ...(statusChanged ? { availabilityStatus: updatedStatus } : {}),
+        lastAvailabilityUpdate: serverTimestamp()
+      });
+
+      setShowClearMonthModal(false);
+      setClearMonthToast(true);
+      setTimeout(() => setClearMonthToast(false), 3500);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'availability');
+    } finally {
+      setIsClearingMonth(false);
+    }
+  };
 
   const handleFinishAvailability = async () => {
     if (!user || isFinished) return;
@@ -1463,7 +1536,7 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
             </div>
 
             {/* Passo 1: Marque os dias que você pode */}
-            <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4 relative z-10">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4 relative z-10 flex-wrap gap-2">
               <div className="flex items-center gap-2.5 text-left">
                 <span className="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-black text-xs shadow-md shadow-brand/20 shrink-0">
                   1
@@ -1476,9 +1549,22 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
                   <h3 className="text-sm font-black text-text-main tracking-tight leading-tight">Marque os dias que você pode</h3>
                 </div>
               </div>
-              <span className="text-[10px] font-bold text-text-muted hidden sm:inline-flex items-center gap-1 bg-black/5 dark:bg-white/5 px-2.5 py-1 rounded-lg border border-border/40">
-                <Calendar size={12} className="text-brand" /> Toque no dia
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {hasUnlockedMonthMarkings && (
+                  <button
+                    type="button"
+                    onClick={() => setShowClearMonthModal(true)}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-text-muted hover:text-red-400 bg-transparent hover:bg-red-500/10 px-2.5 py-1 rounded-lg border border-border/40 hover:border-red-500/30 transition-all cursor-pointer"
+                    title="Limpar suas marcações desbloqueadas deste mês"
+                  >
+                    <Trash2 size={11} />
+                    <span>Limpar mês</span>
+                  </button>
+                )}
+                <span className="text-[10px] font-bold text-text-muted hidden sm:inline-flex items-center gap-1 bg-black/5 dark:bg-white/5 px-2.5 py-1 rounded-lg border border-border/40">
+                  <Calendar size={12} className="text-brand" /> Toque no dia
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-7 mb-4">
@@ -2332,6 +2418,75 @@ export function AvailabilityView({ createNotifications, theme }: { createNotific
               </div>
             );
           })()}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showClearMonthModal && (
+            <div
+              onClick={() => !isClearingMonth && setShowClearMonthModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-sm max-h-[85vh] bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col"
+              >
+                <div className="p-5 overflow-y-auto text-center space-y-3">
+                  <div className="mx-auto w-11 h-11 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center border border-red-500/20">
+                    <Trash2 size={20} />
+                  </div>
+                  <h3 className="text-base font-black text-text-main tracking-tight">
+                    Limpar marcações do mês?
+                  </h3>
+                  <p className="text-xs font-bold text-text-muted leading-relaxed">
+                    Isso vai apagar todas as suas marcações (Conte Comigo e Não Posso) nos dias ainda dentro do prazo deste mês. Os dias com culto agendado continuarão marcados em azul para você refazer sua escolha.
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-black/5 dark:bg-white/5 border-t border-border flex items-center justify-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isClearingMonth}
+                    onClick={() => setShowClearMonthModal(false)}
+                    className="flex-1 h-9 px-3 rounded-xl border border-border bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-text-main font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isClearingMonth}
+                    onClick={handleClearMonthAvailability}
+                    className="flex-1 h-9 px-3 rounded-xl border border-red-500/30 bg-red-500/15 hover:bg-red-500/25 text-red-400 font-black uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isClearingMonth ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Limpando...</span>
+                      </>
+                    ) : (
+                      <span>Sim, limpar</span>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {clearMonthToast && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-zinc-900/95 border border-emerald-500/30 text-white text-xs font-bold shadow-2xl flex items-center gap-2"
+            >
+              <Check size={14} className="text-emerald-400 shrink-0" />
+              <span>Marcações do mês limpas com sucesso!</span>
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* Floating Sticky Bottom Action Bar for Mobile/Desktop Usability */}

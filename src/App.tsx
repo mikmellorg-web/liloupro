@@ -21420,142 +21420,142 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                      </div>
                      <p className="text-xs text-text-muted leading-relaxed">
                        {previewDeviceMode === 'mobile' 
-                         ? "Simulação em tempo real da tela inicial do seu celular. Veja exatamente como o ícone e a marca do seu aplicativo se destacam no smartphone!"
+                         ? "Veja como sua identidade visual se comportará na tela inicial da igreja logada na visão de celular."
                          : "Veja como sua identidade visual se comportará nos principais cards, botões e cabeçalhos do portal web."
                        }
                      </p>
                    </div>
 
                    {previewDeviceMode === 'mobile' ? (
-                     /* Sleek Real Smartphone Frame Replica */
+                     /* Sleek Real Smartphone Frame Replica - Logged-in Church Initial Screen (Mobile View) */
                      <div className="relative flex justify-center py-2">
-                       <div className="w-60 h-[400px] bg-slate-950 rounded-[44px] border-[6px] border-zinc-800 shadow-2xl relative overflow-hidden flex flex-col justify-between p-4 font-sans select-none border-amber-500/20">
+                       <div
+                         className="w-60 h-[400px] bg-surface rounded-[44px] border-[6px] border-zinc-800 shadow-2xl relative overflow-hidden flex flex-col justify-between p-3.5 font-sans select-none text-[var(--text-main)]"
+                         style={{
+                           '--brand': themeColorPreview === 'custom' ? customBrandColorPreview : COLOR_PRESETS[themeColorPreview]?.brandDark,
+                           '--primary': themeColorPreview === 'custom' ? customBrandColorPreview : COLOR_PRESETS[themeColorPreview]?.primary,
+                         } as React.CSSProperties}
+                       >
                          {/* Speaker & Camera notch */}
                          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-zinc-800 rounded-b-2xl z-20 flex items-center justify-center">
                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 mr-2" />
                            <span className="w-10 h-1 bg-zinc-900 rounded-full" />
                          </div>
 
-                         {/* Wallpaper */}
-                         <div className="absolute inset-0 bg-gradient-to-b from-[#080d1a] via-[#0f172a] to-[#030712] z-0 opacity-95" />
-                         <div className="absolute top-1/4 left-1/4 w-36 h-36 bg-amber-500/15 rounded-full filter blur-[40px] z-0 animate-pulse" />
-                         <div className="absolute bottom-1/4 right-1/4 w-36 h-36 bg-sky-500/15 rounded-full filter blur-[40px] z-0 animate-pulse" />
-
                          {/* Status Bar */}
-                         <div className="flex justify-between items-center text-[9px] text-white/70 font-semibold z-10 pt-1.5 px-3">
+                         <div className="flex justify-between items-center text-[9px] text-text-muted font-semibold z-10 pt-1.5 px-2">
                            <span>19:42</span>
                            <div className="flex items-center gap-1.5">
                              <span className="text-[8px] font-bold tracking-wider">5G</span>
-                             <div className="w-3.5 h-2 border border-white/70 rounded-[2px] flex items-center p-[1px]">
-                               <div className="w-full h-full bg-white rounded-[1px]" />
+                             <div className="w-3.5 h-2 border border-current rounded-[2px] flex items-center p-[1px]">
+                               <div className="w-full h-full bg-current rounded-[1px]" />
                              </div>
                            </div>
                          </div>
 
-                         {/* Home Screen App Grid */}
-                         <div className="grid grid-cols-4 gap-y-6 gap-x-2 z-10 mt-5 px-1 flex-1 content-start">
-                           <div className="flex flex-col items-center gap-1 opacity-40">
-                             <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-md">
-                               <span className="text-sm">💬</span>
-                             </div>
-                             <span className="text-[7px] text-white/80 truncate max-w-full">Whats</span>
-                           </div>
-                           <div className="flex flex-col items-center gap-1 opacity-40">
-                             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md">
-                               <span className="text-sm">🌐</span>
-                             </div>
-                             <span className="text-[7px] text-white/80 truncate max-w-full">Safari</span>
-                           </div>
-                           <div className="flex flex-col items-center gap-1 opacity-40">
-                             <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md">
-                               <span className="text-sm">📺</span>
-                             </div>
-                             <span className="text-[7px] text-white/80 truncate max-w-full">Video</span>
-                           </div>
-                           <div className="flex flex-col items-center gap-1 opacity-40">
-                             <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-white shadow-md">
-                               <span className="text-sm">⚙️</span>
-                             </div>
-                             <span className="text-[7px] text-white/80 truncate max-w-full">Ajustes</span>
-                           </div>
-
-                           {/* THE LILOUPRO / CHURCH ICON - PROMINENT & FLOATING */}
-                           <motion.div 
-                             initial={{ scale: 0.95, y: 3 }}
-                             animate={{ scale: [1, 1.05, 1], y: [0, -4, 0] }}
-                             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                             className="flex flex-col items-center gap-1.5 col-span-4 justify-self-center my-3"
-                           >
-                             <div className="relative">
-                               {/* Outer Golden Glow ring */}
-                               <div className="absolute -inset-2 bg-gradient-to-r from-amber-500 to-amber-300 rounded-2xl opacity-50 blur-md animate-pulse" />
-                               
-                               {/* Icon Preview */}
-                               <div className={cn(
-                                 "w-16 h-16 border border-amber-500/40 shadow-2xl relative overflow-hidden flex items-center justify-center z-10",
-                                 logoRadiusPreview === 'rounded-none' ? 'rounded-none' :
-                                 logoRadiusPreview === 'rounded-lg' ? 'rounded-xl' :
-                                 logoRadiusPreview === 'rounded-2xl' ? 'rounded-3xl' :
-                                 logoRadiusPreview === 'rounded-full' ? 'rounded-full' : 'rounded-2xl',
-                                 logoBgPreview === 'white' ? 'bg-white' :
-                                 logoBgPreview === 'black' ? 'bg-zinc-950' :
-                                 logoBgPreview === 'theme' ? 'bg-brand' :
-                                 logoBgPreview === 'transparent' ? 'bg-[#070b13]' : 'bg-[#070b13]'
-                               )}
-                               style={{
-                                 backgroundColor: (logoBgPreview === 'custom' && logoBgCustomColorPreview) ? logoBgCustomColorPreview : undefined
-                               }}>
-                                 <img 
-                                   src={logoPreview || churchData?.logoUrl || luxuryAppIcon} 
-                                   referrerPolicy="no-referrer"
-                                   alt="Ícone do Aplicativo no Celular" 
-                                   className={cn(
-                                     "w-full h-full",
-                                     logoFitPreview === 'cover' ? "object-cover" : "object-contain",
-                                     logoPaddingPreview || "p-1"
-                                   )}
-                                 />
+                         {/* Mobile App Header (Church Logo + Church Name) */}
+                         <div className="mt-2.5 pb-2.5 border-b border-border/30 flex items-center justify-between gap-2 z-10 px-1">
+                           <div className="flex items-center gap-2 min-w-0">
+                             {logoPreview ? (
+                               <img 
+                                 src={logoPreview} 
+                                 referrerPolicy="no-referrer"
+                                 className={cn(
+                                   "w-7 h-7 border border-border/40 shrink-0",
+                                   logoFitPreview === 'cover' ? "object-cover" : "object-contain",
+                                   logoRadiusPreview === 'rounded-none' ? 'rounded-none' :
+                                   logoRadiusPreview === 'rounded-lg' ? 'rounded' :
+                                   logoRadiusPreview === 'rounded-xl' ? 'rounded-md' :
+                                   logoRadiusPreview === 'rounded-2xl' ? 'rounded-lg' : 'rounded-full',
+                                   logoPaddingPreview === 'p-0' ? 'p-0' :
+                                   logoPaddingPreview === 'p-1' ? 'p-[1px]' :
+                                   logoPaddingPreview === 'p-2' ? 'p-[2px]' : 'p-1',
+                                   logoBgPreview === 'white' ? 'bg-white' :
+                                   logoBgPreview === 'black' ? 'bg-zinc-950' :
+                                   logoBgPreview === 'theme' ? 'bg-brand/10' :
+                                   logoBgPreview === 'transparent' ? 'bg-transparent' : 'bg-white/5'
+                                 )}
+                                 style={{
+                                   backgroundColor: (logoBgPreview === 'custom' && logoBgCustomColorPreview) ? logoBgCustomColorPreview : undefined
+                                 }}
+                                 alt="Logo Mockup" 
+                               />
+                             ) : (
+                               <div className="w-7 h-7 bg-[var(--brand)] rounded-lg flex items-center justify-center shrink-0">
+                                 <Music2 size={13} className="text-background" />
                                </div>
-                               
-                               {/* Dynamic Red Notification Badge */}
-                               {unreadBadgeCount > 0 && (
-                                 <button
-                                   type="button"
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setUnreadBadgeCount(0);
-                                   }}
-                                   className="absolute -top-1.5 -right-1.5 bg-red-500 text-white font-black text-[9px] min-w-[20px] h-5 px-1 rounded-full z-20 shadow-lg border border-red-400 flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                                   title="Clique para zerar a notificação"
-                                 >
-                                   {unreadBadgeCount}
-                                 </button>
-                               )}
-                             </div>
-                             <span className="text-[10px] font-black tracking-wider text-amber-300 drop-shadow-md truncate max-w-[140px] text-center">
-                               {churchData?.name || "LiLouPro"}
+                             )}
+                             <span className="text-[10px] font-black tracking-tight truncate text-text-main">
+                               {churchData?.name || "Minha Igreja"}
                              </span>
-                           </motion.div>
+                           </div>
+                           <div className="w-5 h-5 rounded-full bg-[var(--brand)]/15 border border-[var(--brand)]/30 flex items-center justify-center shrink-0">
+                             <span className="text-[8px] font-black text-[var(--brand)]">
+                               {(user?.displayName || "M")[0].toUpperCase()}
+                             </span>
+                           </div>
                          </div>
 
-                         {/* Dock */}
-                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2 flex justify-around items-center z-10 mb-2 border border-white/10 mx-1">
-                           <div className="w-8 h-8 rounded-xl bg-green-500/40" />
-                           <div className="w-8 h-8 rounded-xl bg-blue-400/40" />
-                           {/* Active PWA Icon on Dock */}
-                           <div className="w-8 h-8 rounded-xl bg-[#070b13] border border-amber-500/40 overflow-hidden flex items-center justify-center shadow-md">
-                             <img 
-                               src={logoPreview || churchData?.logoUrl || luxuryAppIcon} 
-                               referrerPolicy="no-referrer"
-                               className="w-full h-full object-cover" 
-                               alt="PWA Dock" 
-                             />
+                         {/* Mobile Dashboard Content */}
+                         <div className="flex-1 py-3 px-1 space-y-3 z-10 flex flex-col justify-between overflow-hidden">
+                           <div className="space-y-2.5">
+                             <div className="space-y-0.5">
+                               <h4 className="text-[11px] font-black text-text-main leading-tight truncate">
+                                 Olá, {user?.displayName?.split(' ')[0] || "Membro"} 👋
+                               </h4>
+                               <p className="text-[8px] text-text-muted truncate">
+                                 Portal de Serviços de Louvor
+                               </p>
+                             </div>
+
+                             {/* Mini grid content cards (Mobile View) */}
+                             <div className="grid grid-cols-2 gap-2">
+                               <div className="p-2.5 rounded-xl bg-[var(--brand)]/5 border border-[var(--brand)]/15 space-y-1.5">
+                                 <div className="w-7 h-1.5 bg-[var(--brand)] rounded opacity-75" />
+                                 <div className="w-12 h-1 bg-[var(--brand)]/20 rounded" />
+                               </div>
+                               <div className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40 space-y-1.5">
+                                 <div className="w-7 h-1.5 bg-text-muted rounded opacity-75" />
+                                 <div className="w-12 h-1 bg-text-muted/25 rounded" />
+                               </div>
+                             </div>
+
+                             <div className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-border/40 space-y-1.5">
+                               <div className="flex items-center justify-between">
+                                 <div className="w-16 h-1.5 bg-[var(--brand)]/60 rounded" />
+                                 <div className="w-6 h-1.5 bg-text-muted/30 rounded" />
+                               </div>
+                               <div className="w-24 h-1 bg-text-muted/25 rounded" />
+                             </div>
                            </div>
-                           <div className="w-8 h-8 rounded-xl bg-amber-600/40" />
+
+                           {/* Action button mock */}
+                           <button 
+                             type="button"
+                             className="w-full py-2 rounded-lg bg-[var(--brand)] text-[9px] font-black text-[var(--brand-text)] uppercase tracking-wider flex items-center justify-center gap-1.5 opacity-95 shadow-sm"
+                           >
+                             <Sparkles size={10} className="text-[var(--brand-text)]" /> Simular Ação
+                           </button>
+                         </div>
+
+                         {/* Mobile Bottom Navigation Bar */}
+                         <div className="pt-2 border-t border-border/30 flex items-center justify-around z-10 px-1">
+                           <div className="px-3 py-1 rounded-lg bg-[var(--brand)]/10 border border-[var(--brand)]/20 flex flex-col items-center gap-0.5">
+                             <Home size={10} className="text-[var(--brand)]" />
+                             <div className="w-5 h-0.5 bg-[var(--brand)] rounded" />
+                           </div>
+                           <div className="px-3 py-1 rounded-lg flex flex-col items-center gap-0.5 opacity-45">
+                             <Music size={10} className="text-text-muted" />
+                             <div className="w-5 h-0.5 bg-text-muted rounded" />
+                           </div>
+                           <div className="px-3 py-1 rounded-lg flex flex-col items-center gap-0.5 opacity-45">
+                             <Users size={10} className="text-text-muted" />
+                             <div className="w-5 h-0.5 bg-text-muted rounded" />
+                           </div>
                          </div>
 
                          {/* Home Indicator */}
-                         <div className="w-20 h-1 bg-white/40 rounded-full self-center mb-0.5 z-10" />
+                         <div className="w-20 h-1 bg-text-muted/30 rounded-full self-center mt-2 z-10" />
                        </div>
                      </div>
                    ) : (
@@ -22193,7 +22193,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     placeholder="Ex: https://chat.whatsapp.com/Gj3Hdf..."
                     value={whatsappGroupLink}
                     onChange={e => setWhatsappGroupLink(e.target.value)}
-                    className="font-mono h-11 bg-white/5 border-white/10"
+                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
                   />
                   <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
                     Adicione o link de convite do grupo do WhatsApp do ministério de louvor para abrir de forma automática ao compartilhar escalas.
@@ -22206,7 +22206,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                     placeholder="Ex: 53999999999 (DDD + Número)"
                     value={adminPhone}
                     onChange={e => setAdminPhone(e.target.value)}
-                    className="font-mono h-11 bg-white/5 border-white/10"
+                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
                   />
                   <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
                     Cadastre o WhatsApp do administrador para receber avisos diretos sempre que um membro concluir a marcação de disponibilidade.
