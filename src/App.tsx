@@ -2807,8 +2807,38 @@ function MainContent() {
       window.location.hash === '#apresentacao'
     );
   });
-  const [activeTab, setActiveTab] = useState<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>('home');
-  const navigateTabSafely = useCallback((nextTab: React.SetStateAction<'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master'>) => {
+  type AppTab = 'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master';
+  const [activeTab, setActiveTabRaw] = useState<AppTab>('home');
+  const [isAvailabilityPendingOpen, setIsAvailabilityPendingOpen] = useState(false);
+  const [pendingExitTab, setPendingExitTab] = useState<AppTab | null>(null);
+  const isAvailabilityPendingOpenRef = useRef(false);
+
+  useEffect(() => {
+    isAvailabilityPendingOpenRef.current = isAvailabilityPendingOpen;
+  }, [isAvailabilityPendingOpen]);
+
+  useEffect(() => {
+    if (activeTab !== 'availability' || !isAvailabilityPendingOpen) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeTab, isAvailabilityPendingOpen]);
+
+  const setActiveTab = useCallback((nextTab: React.SetStateAction<AppTab>) => {
+    setActiveTabRaw(prev => {
+      const resolved = typeof nextTab === 'function' ? nextTab(prev) : nextTab;
+      if (prev === 'availability' && resolved !== 'availability' && isAvailabilityPendingOpenRef.current) {
+        setPendingExitTab(resolved);
+        return prev;
+      }
+      return resolved;
+    });
+  }, []);
+
+  const navigateTabSafely = useCallback((nextTab: React.SetStateAction<AppTab>) => {
     setActiveTab(prev => {
       const resolved = typeof nextTab === 'function' ? nextTab(prev) : nextTab;
       if (resolved === 'master' && !isMasterDeveloper) {
@@ -2816,7 +2846,7 @@ function MainContent() {
       }
       return resolved;
     });
-  }, [isMasterDeveloper]);
+  }, [isMasterDeveloper, setActiveTab]);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [memberJoinWelcome, setMemberJoinWelcome] = useState<MemberJoinWelcomePayload | null>(() => readPendingJoinWelcome());
 
@@ -5178,7 +5208,7 @@ function MainContent() {
               onOpenUpgradeModal={(check) => setUpgradeModalResult(check)}
             />
           )}
-          {activeTab === 'availability' && <AvailabilityView key="availability" createNotifications={createNotifications} theme={theme} />}
+          {activeTab === 'availability' && <AvailabilityView key="availability" createNotifications={createNotifications} theme={theme} onPendingOpenChange={setIsAvailabilityPendingOpen} />}
           {activeTab === 'liturgy' && (
             <LiturgyView 
               key="liturgy" 
@@ -5309,6 +5339,59 @@ function MainContent() {
                   className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
                 >
                   Continuar para o App
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Alerta ao tentar sair da aba Minha Disponibilidade sem concluir */}
+      <AnimatePresence>
+        {pendingExitTab !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl shadow-2xl p-6 sm:p-7 space-y-5 text-white relative overflow-hidden"
+            >
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <AlertTriangle size={24} />
+                </div>
+                <p className="text-sm font-bold text-slate-200 leading-relaxed">
+                  Você ainda não terminou de marcar seus dias disponíveis para os cultos. Por favor, marque e comunique a liderança clicando em <span className="text-amber-400 font-black">AVISAR LIDERANÇA NO WHATSAPP</span>.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPendingExitTab(null)}
+                  className="w-full py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                >
+                  Continuar marcação
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = pendingExitTab;
+                    setPendingExitTab(null);
+                    isAvailabilityPendingOpenRef.current = false;
+                    setIsAvailabilityPendingOpen(false);
+                    if (target) {
+                      setActiveTabRaw(target);
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Sair sem concluir
                 </button>
               </div>
             </motion.div>
