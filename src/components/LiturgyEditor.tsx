@@ -1364,34 +1364,24 @@ export function LiturgyEditor({
                  Clonar Anterior
                </button>
                {(service.liturgy || []).length > 0 && (
-                 <>
-                   <button 
-                     onClick={handleShareLiturgyWhatsApp} 
-                     disabled={isSaving}
-                     className="text-[10px] sm:text-[11px] font-black text-white transition-all uppercase tracking-widest flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 px-5 py-2 rounded-full border border-emerald-600/30 shadow-lg active:scale-95 disabled:opacity-50 cursor-pointer"
-                   >
-                     <Share2 size={14}/>
-                     Compartilhar no WhatsApp
-                   </button>
-                   <button 
-                     onClick={() => {
-                       if (confirmDeleteLiturgy) {
-                         handleClearLiturgy();
-                       } else {
-                         setConfirmDeleteLiturgy(true);
-                       }
-                     }}
-                     disabled={isSaving}
-                     className={`text-[10px] sm:text-[11px] font-black transition-all uppercase tracking-widest flex items-center gap-2 px-5 py-2 rounded-full border active:scale-95 disabled:opacity-50 cursor-pointer ${
-                       confirmDeleteLiturgy 
-                         ? 'bg-red-600 text-white border-red-600 animate-pulse' 
-                         : 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
-                     }`}
-                   >
-                     <Trash2 size={14}/>
-                     {confirmDeleteLiturgy ? 'Confirmar Excluir?' : 'Excluir Liturgia'}
-                   </button>
-                 </>
+                 <button 
+                   onClick={() => {
+                     if (confirmDeleteLiturgy) {
+                       handleClearLiturgy();
+                     } else {
+                       setConfirmDeleteLiturgy(true);
+                     }
+                   }}
+                   disabled={isSaving}
+                   className={`text-[10px] sm:text-[11px] font-black transition-all uppercase tracking-widest flex items-center gap-2 px-5 py-2 rounded-full border active:scale-95 disabled:opacity-50 cursor-pointer ${
+                     confirmDeleteLiturgy 
+                       ? 'bg-red-600 text-white border-red-600 animate-pulse' 
+                       : 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
+                   }`}
+                 >
+                   <Trash2 size={14}/>
+                   {confirmDeleteLiturgy ? 'Confirmar Excluir?' : 'Excluir Liturgia'}
+                 </button>
                )}
              </div>
            )}

@@ -902,6 +902,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Attach single foreground listener for active app sessions
     setupForegroundMessageListener((payload) => {
       console.log('[FCM] Notificação em primeiro plano recebida:', payload);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('liloupro:fcm-foreground', { detail: payload }));
+      }
     }).then((unsub) => {
       if (!isActive) {
         if (unsub) unsub();

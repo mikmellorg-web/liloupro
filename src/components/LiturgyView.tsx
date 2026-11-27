@@ -1899,7 +1899,7 @@ export default function LiturgyView({
                 className="bg-red-600 hover:bg-red-700 text-white px-6 border-none shadow-lg transition-all font-bold"
               >
                 <Play size={18} className="fill-white" />
-                Ouvir Playlist ({playlistSongs.length})
+                Playlist ({playlistSongs.length})
               </Button>
             )}
             {selectedService.playlistUrl && (
@@ -1926,7 +1926,7 @@ export default function LiturgyView({
                   className="bg-brand text-white hover:bg-brand/90 px-6 border-none shadow-md transition-all font-bold"
                 >
                   <PdfIcon className="w-5 h-5" />
-                  Baixar PDF
+                  Liturgia
                 </Button>
                 <Button 
                   onClick={() => downloadCifrasCultoPDF(selectedService, { allSongs, members, churchData, user })} 
@@ -1934,14 +1934,14 @@ export default function LiturgyView({
                   title="Baixar todas as cifras completas do culto em PDF formatadas em 2 colunas"
                 >
                   <PdfIcon className="w-5 h-5" />
-                  Cifras do Culto (PDF)
+                  Cifras do Culto
                 </Button>
                 <Button 
                   onClick={() => setIsCadernoModalOpen(true)} 
                   className="bg-[#1a73e8] text-white hover:bg-[#1557b0] px-5 sm:px-6 border-none shadow-md transition-all font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-95"
                 >
                   <GoogleDocsIcon size={18} />
-                  Criar Caderno no Google Docs
+                  Google Docs
                 </Button>
                 <Button 
                   onClick={handleShareWhatsApp} 
@@ -2093,56 +2093,6 @@ export default function LiturgyView({
                       </div>
                     </div>
                   </Card>
-
-                  {/* Quick summary badges */}
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {playlistSongs.length > 0 && onStartPlaylist && (
-                      <Button 
-                        onClick={() => onStartPlaylist(playlistSongs)} 
-                        className="bg-red-600 hover:bg-red-700 text-white text-xs px-5 h-9 border-none shadow-md transition-all font-bold rounded-full"
-                      >
-                        <Play size={14} className="fill-white mr-1" />
-                        Tocar Setlist ({playlistSongs.length})
-                      </Button>
-                    )}
-                    {selectedService.playlistUrl && (
-                      <a 
-                        href={selectedService.playlistUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          if (onStartPlaylist && (parseYoutubePlaylistId(selectedService.playlistUrl) || parseYoutubeVideoId(selectedService.playlistUrl))) {
-                            e.preventDefault();
-                            onStartPlaylist([{ id: selectedService.id || 'service_pl', title: selectedService.title || 'Playlist do Culto', youtube: selectedService.playlistUrl }]);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 bg-white text-[#E60000] hover:bg-white/90 text-xs px-5 h-9 border border-[#E60000]/20 shadow-sm transition-all font-bold rounded-full cursor-pointer"
-                      >
-                        <Youtube size={14} fill="#E60000" className="mr-1" />
-                        YouTube
-                      </a>
-                    )}
-                    {selectedService.liturgy?.length > 0 && (
-                      <>
-                        <Button 
-                          onClick={() => downloadCifrasCultoPDF(selectedService, { allSongs, members, churchData, user })} 
-                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs px-4 h-9 border-none shadow-md transition-all font-bold rounded-full flex items-center gap-1.5"
-                          title="Cifras do Culto em PDF (2 colunas)"
-                        >
-                          <PdfIcon className="w-4 h-4" />
-                          Cifras do Culto
-                        </Button>
-                        <Button 
-                          onClick={() => setIsCadernoModalOpen(true)} 
-                          className="bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs px-4 h-9 border-none shadow-md transition-all font-bold rounded-full flex items-center gap-1.5"
-                          title="Caderno no Google Docs"
-                        >
-                          <GoogleDocsIcon size={14} />
-                          Google Docs
-                        </Button>
-                      </>
-                    )}
-                  </div>
 
                   {/* Liturgy items in mobile list */}
                   <div className="space-y-3">

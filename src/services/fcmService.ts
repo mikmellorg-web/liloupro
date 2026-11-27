@@ -233,10 +233,17 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
 
   try {
     let resolvedChurchId = '';
+    let existingTokens: string[] = [];
     try {
       const existingMemberSnap = await getDoc(doc(db, 'members', currentUser.uid));
       if (existingMemberSnap.exists()) {
-        resolvedChurchId = String(existingMemberSnap.data()?.churchId || '');
+        const memberDocData = existingMemberSnap.data();
+        resolvedChurchId = String(memberDocData?.churchId || '');
+        if (Array.isArray(memberDocData?.fcmTokens)) {
+          existingTokens = memberDocData.fcmTokens.filter((t: any) => typeof t === 'string' && t.trim().length > 0);
+        } else if (typeof memberDocData?.fcmToken === 'string' && memberDocData.fcmToken.trim()) {
+          existingTokens = [memberDocData.fcmToken.trim()];
+        }
       }
     } catch {}
 
@@ -249,23 +256,7 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
     const safeTokenSuffix = token.slice(-16).replace(/[^a-zA-Z0-9]/g, '');
     const tokenDocId = `${currentUser.uid}_${safeTokenSuffix}`;
 
-    // 1. Limpa tokens antigos ou duplicados do próprio usuário na coleção 'fcm_tokens'
-    try {
-      const userTokensSnap = await getDocs(
-        query(collection(db, 'fcm_tokens'), where('uid', '==', currentUser.uid))
-      );
-      const staleDeletions: Promise<any>[] = [];
-      userTokensSnap.forEach((docSnap) => {
-        if (docSnap.id !== tokenDocId || docSnap.data()?.token !== token) {
-          staleDeletions.push(deleteDoc(doc(db, 'fcm_tokens', docSnap.id)).catch(() => {}));
-        }
-      });
-      if (staleDeletions.length > 0) {
-        await Promise.allSettled(staleDeletions);
-      }
-    } catch {}
-
-    // 2. Se o mesmo dispositivo/navegador estava vinculado a outra conta na igreja, remove o vínculo órfão
+    // 1. Se o mesmo dispositivo/navegador estava vinculado a outra conta na igreja, remove o vínculo órfão
     if (resolvedChurchId) {
       try {
         const churchTokensQuery = resolvedChurchId === 'semente'
@@ -285,7 +276,7 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       } catch {}
     }
 
-    // 3. Registra o vínculo único e atualizado na coleção 'fcm_tokens' com churchId ativo
+    // 2. Registra/atualiza o token deste aparelho na coleção 'fcm_tokens' sem apagar outros aparelhos do usuário
     await setDoc(doc(db, 'fcm_tokens', tokenDocId), {
       token,
       uid: currentUser.uid,
@@ -295,14 +286,15 @@ export const registerTokenInFirestore = async (token: string): Promise<{ success
       updatedAt: new Date()
     }, { merge: true });
 
-    // 4. Atualiza o documento do membro autenticado mantendo apenas o token ativo (sem acumular duplicatas)
+    // 3. Atualiza o documento do membro autenticado mesclando os tokens (sem duplicatas e mantendo até os 5 mais recentes)
     try {
+      const mergedTokens = [...existingTokens.filter(t => t !== token), token].slice(-5);
       const memberRef = doc(db, 'members', currentUser.uid);
       await setDoc(memberRef, {
         uid: currentUser.uid,
         email: currentUser.email || '',
         name: currentUser.displayName || '',
-        fcmTokens: [token],
+        fcmTokens: mergedTokens,
         fcmToken: token,
         lastFcmToken: token,
         lastFcmTokenUpdate: new Date(),

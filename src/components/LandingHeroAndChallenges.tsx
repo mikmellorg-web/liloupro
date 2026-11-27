@@ -307,11 +307,17 @@ export default function LandingHeroAndChallenges({ onEnterApp }: LandingHeroAndC
               {activeHeroImage ? (
                 <div className="relative w-full overflow-hidden border border-blue-400/20 rounded-2xl shadow-2xl shadow-black/50 bg-[#0F172A] transform-gpu">
                   <img
-                    src="/hero-liloupro.jpg"
+                    src={activeHeroImage}
                     alt="Interface do LiLouPro no Celular, Notebook e Tablet"
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (target.src && !target.src.endsWith(defaultHeroDevicesImg)) {
+                        target.src = defaultHeroDevicesImg;
+                      }
+                    }}
                     className="w-full h-auto object-contain block rounded-2xl shadow-2xl landing-crisp-img"
                   />
                   {/* Sutil vinheta interna para fusão suave com o fundo escuro */}

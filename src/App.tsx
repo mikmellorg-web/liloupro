@@ -2808,7 +2808,29 @@ function MainContent() {
     );
   });
   type AppTab = 'home' | 'songs' | 'calendar' | 'members' | 'liturgy' | 'availability' | 'settings' | 'admin' | 'projection' | 'chat' | 'theory' | 'bible' | 'offline' | 'master';
-  const [activeTab, setActiveTabRaw] = useState<AppTab>('home');
+  const resolveNotificationTab = useCallback((rawInput?: string | null): AppTab | null => {
+    if (!rawInput || typeof rawInput !== 'string') return null;
+    const trimmed = rawInput.trim();
+    if (!trimmed) return null;
+    let candidate = trimmed.toLowerCase();
+    if (trimmed.includes('?') || trimmed.startsWith('/') || trimmed.startsWith('http')) {
+      try {
+        const parsedUrl = new URL(trimmed, typeof window !== 'undefined' ? window.location.origin : 'https://liloupro.app');
+        candidate = (parsedUrl.searchParams.get('tab') || '').trim().toLowerCase();
+      } catch {
+        const match = trimmed.match(/[?&]tab=([^&#]+)/i);
+        candidate = match ? decodeURIComponent(match[1]).trim().toLowerCase() : '';
+      }
+    }
+    if (candidate === 'dashboard') candidate = 'home';
+    const validTabs: AppTab[] = ['home', 'songs', 'calendar', 'members', 'liturgy', 'availability', 'settings', 'admin', 'projection', 'chat', 'theory', 'bible', 'offline'];
+    return validTabs.includes(candidate as AppTab) ? (candidate as AppTab) : null;
+  }, []);
+
+  const [activeTab, setActiveTabRaw] = useState<AppTab>(() => {
+    if (typeof window === 'undefined') return 'home';
+    return resolveNotificationTab(window.location.search) || 'home';
+  });
   const [isAvailabilityPendingOpen, setIsAvailabilityPendingOpen] = useState(false);
   const [pendingExitTab, setPendingExitTab] = useState<AppTab | null>(null);
   const isAvailabilityPendingOpenRef = useRef(false);
@@ -2867,13 +2889,14 @@ function MainContent() {
   useEffect(() => {
     if (typeof window === 'undefined' || !user) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'members') {
-      navigateTabSafely('members');
+    const targetTab = resolveNotificationTab(params.get('tab'));
+    if (targetTab) {
+      navigateTabSafely(targetTab);
       params.delete('tab');
       const nextUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
       window.history.replaceState({}, document.title, nextUrl);
     }
-  }, [user, navigateTabSafely]);
+  }, [user, navigateTabSafely, resolveNotificationTab]);
 
   // HARD-LOCK ROUTE GUARD: Bloqueia acesso ao Painel Master e à Página de Apresentação
   // para qualquer usuário cujo e-mail autenticado não seja exatamente mikmellorg@gmail.com
@@ -3191,6 +3214,7 @@ function MainContent() {
       gain2.connect(ctx.destination);
       osc2.start(now + 0.08);
       osc2.stop(now + 0.45);
+      setTimeout(() => { if (ctx.state !== 'closed') ctx.close().catch(() => {}); }, 600);
     } catch (err) {
       console.warn("Chime error:", err);
     }
@@ -3261,7 +3285,14 @@ function MainContent() {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       const handleSWMessage = (event: MessageEvent) => {
         if (event.data && event.data.type === 'NOTIFICATION_OPEN_REQUEST') {
-          setShowNotifications(true);
+          const payloadData = event.data?.data;
+          const targetTab = resolveNotificationTab(payloadData?.targetTab || payloadData?.url);
+          if (targetTab) {
+            setActiveTab(targetTab);
+            setShowNotifications(false);
+          } else {
+            setShowNotifications(true);
+          }
         }
       };
       navigator.serviceWorker.addEventListener('message', handleSWMessage);
@@ -3269,7 +3300,36 @@ function MainContent() {
         navigator.serviceWorker.removeEventListener('message', handleSWMessage);
       };
     }
-  }, []);
+  }, [resolveNotificationTab, setActiveTab]);
+
+  // Listen for Foreground FCM Push messages and trigger visual/audio banner if not already triggered by onSnapshot
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleFcmForeground = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (!detail) return;
+      const title = (detail?.notification?.title || detail?.data?.title || '').trim();
+      const body = (detail?.notification?.body || detail?.data?.body || '').trim();
+      if (!title && !body) return;
+
+      const deterministicTag = computeDeterministicNotifTag(title, body, detail?.data?.tag);
+      const lastShownTs = recentAlertFingerprintsRef.current.get(deterministicTag);
+      if (lastShownTs && Date.now() - lastShownTs <= 5000) {
+        return;
+      }
+
+      triggerWhatsAppNotificationAlert({
+        title: title || 'LiLouPro • Notificação',
+        content: body,
+        type: detail?.data?.type,
+        tag: deterministicTag
+      });
+    };
+    window.addEventListener('liloupro:fcm-foreground', handleFcmForeground);
+    return () => {
+      window.removeEventListener('liloupro:fcm-foreground', handleFcmForeground);
+    };
+  }, [computeDeterministicNotifTag, triggerWhatsAppNotificationAlert]);
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('app-theme') as 'dark' | 'light') || 'dark';
@@ -3454,7 +3514,7 @@ function MainContent() {
     );
     const unsub = onSnapshot(q, (snap) => {
       const rawItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }))
-        .filter((n: any) => !n.deleted)
+        .filter((n: any) => !n.deleted && (!n.churchId || !userChurchId || n.churchId === userChurchId))
         .sort((a: any, b: any) => {
           const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
           const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
@@ -3501,7 +3561,7 @@ function MainContent() {
       console.error("Notifications snapshot error:", error);
     });
     return unsub;
-  }, [user, triggerWhatsAppNotificationAlert]);
+  }, [user, userChurchId, triggerWhatsAppNotificationAlert]);
 
   useEffect(() => {
     // 1. Native platform Badging API call (runs in active window context)
@@ -3618,33 +3678,6 @@ function MainContent() {
     return getServiceSongs(activeLiturgyService, allSongs);
   }, [activeLiturgyService, allSongs]);
 
-  // Sincroniza tokens de push dos membros com o servidor para lembretes em segundo plano mesmo com app fechado
-  useEffect(() => {
-    if (!allMembers || allMembers.length === 0) return;
-    const membersWithTokens = allMembers.filter(m => {
-      const tokens = m.fcmTokens || (m.fcmToken ? [m.fcmToken] : []);
-      return Array.isArray(tokens) && tokens.length > 0;
-    });
-
-    if (membersWithTokens.length > 0) {
-      fetch('/api/notifications/sync-members-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          members: membersWithTokens.map(m => ({
-            uid: m.uid || m.id,
-            name: m.name,
-            email: m.email,
-            fcmTokens: m.fcmTokens || (m.fcmToken ? [m.fcmToken] : []),
-            notifyDayBeforeReminder: m.notifyDayBeforeReminder !== false
-          }))
-        })
-      }).catch(err => {
-        console.warn('[Sync Tokens] Aviso:', err);
-      });
-    }
-  }, [allMembers]);
-
   useEffect(() => {
     if (!user || allServices.length === 0 || allMembers.length === 0) return;
 
@@ -3680,66 +3713,81 @@ function MainContent() {
           }
         });
 
-        // Itera sobre TODOS os membros escalados no culto
+        // Processa APENAS o usuário atualmente logado (evita leituras/escritas em notificações de outros membros)
         for (const [scheduledUid, roles] of Object.entries(memberRolesMap)) {
+          if (scheduledUid !== user.uid) continue;
+
           const memberProfile = allMembers.find(m => m.id === scheduledUid || m.uid === scheduledUid);
           // Se o membro desativou o lembrete de 24h nas preferências, respeita a escolha
           if (memberProfile?.notifyDayBeforeReminder === false) {
             continue;
           }
 
-          const notificationId = `reminder-${service.id}-${scheduledUid}`;
-          const notifRef = doc(db, 'notifications', notificationId);
+          const notifId = `reminder-${service.id}-${scheduledUid}`;
+          const notifRef = doc(db, 'notifications', notifId);
+          const localReminderKey = `liloupro_reminder_sent_${service.id}_${user.uid}`;
+
+          let alreadySentLocal = false;
+          try {
+            alreadySentLocal = Boolean(localStorage.getItem(localReminderKey));
+          } catch {}
+          const alreadyInMemory = notifications.some(n => n.id === notifId);
+
+          if (alreadySentLocal || alreadyInMemory) {
+            continue;
+          }
 
           try {
-            const notifSnap = await getDoc(notifRef);
-            if (!notifSnap.exists()) {
-              const myRoles = roles.join(', ') || 'Equipe de Louvor';
-              const serviceDateObj = new Date(service.date);
-              const timeStr = serviceDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-              const dateStr = serviceDateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-              const notifTitle = '⏰ Lembrete de Escala (24h)';
-              const notifContent = `Você está escalado para o culto "${service.title}" em menos de 24 horas (${dateStr} às ${timeStr}h). Função: ${myRoles}.`;
+            const myRoles = roles.join(', ') || 'Equipe de Louvor';
+            const serviceDateObj = new Date(service.date);
+            const timeStr = serviceDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = serviceDateObj.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            const notifTitle = '⏰ Lembrete de Escala (24h)';
+            const notifContent = `Você está escalado para o culto "${service.title}" em menos de 24 horas (${dateStr} às ${timeStr}h). Função: ${myRoles}.`;
 
-              // 1. Grava no Firestore na central de notificações do membro
-              await setDoc(notifRef, {
-                userId: scheduledUid,
+            // 1. Grava no Firestore na central de notificações do membro
+            await setDoc(notifRef, {
+              userId: scheduledUid,
+              title: notifTitle,
+              content: notifContent,
+              type: 'service',
+              read: false,
+              churchId: userChurchId,
+              createdAt: serverTimestamp()
+            });
+
+            try {
+              localStorage.setItem(localReminderKey, String(Date.now()));
+            } catch {}
+
+            // 2. DISPARA NOTIFICAÇÃO PUSH (FCM) IMEDIATAMENTE PARA O APARELHO (CELULAR COM APP FECHADO)
+            const memberTokens: string[] = [];
+            if (memberProfile?.fcmTokens && Array.isArray(memberProfile.fcmTokens)) {
+              memberTokens.push(...memberProfile.fcmTokens);
+            }
+            if (memberProfile?.fcmToken && typeof memberProfile.fcmToken === 'string') {
+              memberTokens.push(memberProfile.fcmToken);
+            }
+            if ((memberProfile as any)?.lastFcmToken && typeof (memberProfile as any).lastFcmToken === 'string') {
+              memberTokens.push((memberProfile as any).lastFcmToken);
+            }
+
+            const validTokens = Array.from(new Set(memberTokens.filter(t => t && t.trim().length > 10)));
+            if (validTokens.length > 0) {
+              sendPushNotification({
+                tokens: validTokens,
                 title: notifTitle,
-                content: notifContent,
-                type: 'service',
-                read: false,
-                createdAt: serverTimestamp()
+                body: notifContent,
+                url: '/?tab=liturgy',
+                data: {
+                  type: 'service_reminder',
+                  serviceId: service.id,
+                  targetUid: scheduledUid,
+                  roles: myRoles
+                }
+              }).catch(pushErr => {
+                console.warn(`[Scale Reminder] Falha ao enviar push para membro ${scheduledUid}:`, pushErr);
               });
-
-              // 2. DISPARA NOTIFICAÇÃO PUSH (FCM) IMEDIATAMENTE PARA O APARELHO (CELULAR COM APP FECHADO)
-              const memberTokens: string[] = [];
-              if (memberProfile?.fcmTokens && Array.isArray(memberProfile.fcmTokens)) {
-                memberTokens.push(...memberProfile.fcmTokens);
-              }
-              if (memberProfile?.fcmToken && typeof memberProfile.fcmToken === 'string') {
-                memberTokens.push(memberProfile.fcmToken);
-              }
-              if ((memberProfile as any)?.lastFcmToken && typeof (memberProfile as any).lastFcmToken === 'string') {
-                memberTokens.push((memberProfile as any).lastFcmToken);
-              }
-
-              const validTokens = Array.from(new Set(memberTokens.filter(t => t && t.trim().length > 10)));
-              if (validTokens.length > 0) {
-                sendPushNotification({
-                  tokens: validTokens,
-                  title: notifTitle,
-                  body: notifContent,
-                  url: '/?tab=liturgy',
-                  data: {
-                    type: 'service_reminder',
-                    serviceId: service.id,
-                    targetUid: scheduledUid,
-                    roles: myRoles
-                  }
-                }).catch(pushErr => {
-                  console.warn(`[Scale Reminder] Falha ao enviar push para membro ${scheduledUid}:`, pushErr);
-                });
-              }
             }
           } catch (e) {
             console.error("Error setting scale reminder notification:", e);
@@ -3754,7 +3802,7 @@ function MainContent() {
     };
 
     checkUpcomingReminders();
-  }, [user, allServices, allMembers]);
+  }, [user, allServices, allMembers, notifications, userChurchId]);
 
   const handleMarkNotifAsRead = async (id: string) => {
     try {
@@ -3766,11 +3814,7 @@ function MainContent() {
 
   const handleDeleteNotif = async (id: string) => {
     try {
-      if (id.startsWith('reminder-')) {
-        await updateDoc(doc(db, 'notifications', id), { deleted: true });
-      } else {
-        await deleteDoc(doc(db, 'notifications', id));
-      }
+      await deleteDoc(doc(db, 'notifications', id));
     } catch (e) {
       console.error(e);
     }
@@ -3779,13 +3823,9 @@ function MainContent() {
   const handleClearReadNotifications = async () => {
     try {
       const readNotifications = notifications.filter(n => n.read);
-      const operations = readNotifications.map(n => {
-        if (n.id.startsWith('reminder-')) {
-          return updateDoc(doc(db, 'notifications', n.id), { deleted: true });
-        } else {
-          return deleteDoc(doc(db, 'notifications', n.id));
-        }
-      });
+      const operations = readNotifications.map(n =>
+        deleteDoc(doc(db, 'notifications', n.id)).catch(() => {})
+      );
       await Promise.all(operations);
     } catch (e) {
       console.error("Error clearing notifications:", e);
@@ -3879,9 +3919,9 @@ function MainContent() {
 
       // 1. Gravar no mural / central de notificações in-app com notificationId determinístico por destinatário
       if (targets.length > 0) {
-        const creations = targets.map(m => {
+        const batchPromises = targets.map(m => {
           const userId = String(m.uid || m.id || '').trim();
-          if (!userId) return Promise.resolve();
+          if (!userId) return Promise.resolve(null);
           const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
           const deterministicNotifId = `notif_${eventHash}_${minuteBucket}_${safeUserId}`;
           return setDoc(doc(db, 'notifications', deterministicNotifId), {
@@ -3892,12 +3932,12 @@ function MainContent() {
             read: false,
             ...(userChurchId ? { churchId: userChurchId } : {}),
             createdAt: serverTimestamp()
-          }).catch(err => {
-            console.warn('[Notifications] Aviso ao gravar notificação in-app para usuário:', userId, err);
+          }).catch((err) => {
+            console.warn('[Notifications] Aviso de colisão/permissão no mesmo minuto ao gravar notificação in-app para usuário:', userId, err);
             return null;
           });
         });
-        await Promise.allSettled(creations);
+        await Promise.all(batchPromises);
       }
 
       // 2. Disparar Web Push (FCM) em background para os aparelhos dos destinatários (estritamente 1 token ativo por usuário)
@@ -20375,6 +20415,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
           gain2.connect(ctx.destination);
           osc2.start(now + 0.08);
           osc2.stop(now + 0.45);
+          setTimeout(() => { if (ctx.state !== 'closed') ctx.close().catch(() => {}); }, 600);
         }
       } catch (e) {}
 
@@ -20603,7 +20644,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
         churchId: userChurchId,
         updatedAt: serverTimestamp()
       }, { merge: true });
-      alert("Configurações administrativas de WhatsApp e E-mail salvas com sucesso!");
+      alert("Configurações administrativas de WhatsApp salvas com sucesso!");
     } catch (error) {
       console.error(error);
       alert("Erro ao salvar configurações.");
@@ -22235,7 +22276,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
 }
 
 function AdminDashboardView() {
-  const { user, memberData } = useAuth();
+  const { user, memberData, churchData } = useAuth();
   const isMaster = user?.email?.toLowerCase().trim() === 'mikmellorg@gmail.com';
   const userChurchId = memberData?.churchId || (isMaster ? 'semente' : '');
   const settingsDocId = userChurchId === 'semente' ? 'notifications' : `notifications_${userChurchId}`;
@@ -22341,13 +22382,11 @@ function AdminDashboardView() {
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', settingsDocId), (snap) => {
-      if (snap.exists()) {
-        setWhatsappAdminPhone(snap.data().whatsappAdmin || '');
-      } else {
-        setWhatsappAdminPhone('');
-      }
+      const effectiveAdminWhatsapp = churchData?.leaderWhatsapp || (snap.exists() ? snap.data()?.whatsappAdmin : '') || '';
+      setWhatsappAdminPhone(effectiveAdminWhatsapp);
     }, (error) => {
       console.log("Error loading notifications settings for admin dashboard:", error);
+      setWhatsappAdminPhone(churchData?.leaderWhatsapp || '');
     });
 
     return () => {
@@ -22356,7 +22395,7 @@ function AdminDashboardView() {
       unsubServices();
       unsubSettings();
     };
-  }, [user, userChurchId, settingsDocId]);
+  }, [user, userChurchId, settingsDocId, churchData?.leaderWhatsapp]);
 
   const filteredServicesByTime = useMemo(() => {
     if (timeRange === 'all') return services;
@@ -22644,7 +22683,7 @@ function AdminDashboardView() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {!whatsappAdminPhone && (
+      {!(churchData?.leaderWhatsapp || whatsappAdminPhone) && (
         <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left select-none shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex gap-3.5 items-start">
             <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500 shrink-0">

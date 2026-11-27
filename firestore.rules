@@ -477,7 +477,7 @@ service cloud.firestore {
       allow get: if isMasterDeveloper() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && (isMasterDeveloper() || (userChurchId() != '' && incoming().get('churchId', userChurchId()) == userChurchId()));
       allow update: if isSignedIn() && (isMasterDeveloper() || resource.data.userId == request.auth.uid) && incoming().diff(existing()).affectedKeys().hasOnly(['read', 'deleted']);
-      allow delete: if isSignedIn() && (isMasterDeveloper() || resource.data.userId == request.auth.uid);
+      allow delete: if isMasterDeveloper() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     // Chat Rules (Strict Tenant Isolation)

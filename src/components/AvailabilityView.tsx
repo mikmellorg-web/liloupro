@@ -1309,6 +1309,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
           content: `${currentUserData?.name || 'Um ministro'} acabou de concluir a sua marcação para ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}.`,
           type: 'general',
           read: false,
+          churchId: userChurchId,
           createdAt: serverTimestamp()
         }).catch(err => {
           console.warn('[Availability Notifications] Erro ao gravar notificação in-app:', err);
@@ -1346,6 +1347,7 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
 
         const adminUidSet = new Set<string>(adminUsersDocs.map(a => a.id || a.uid).filter(Boolean));
         if (currentUserId) adminUidSet.delete(currentUserId);
+        const adminUserIds = Array.from(adminUidSet);
 
         const adminEmailSet = new Set<string>([
           ...(userChurchId === 'semente' ? ['mikmellorg@gmail.com', 'miqueiasmellopro@gmail.com'] : []),
@@ -1355,25 +1357,27 @@ export function AvailabilityView({ createNotifications, theme, onPendingOpenChan
         if (currentUserEmail) adminEmailSet.delete(currentUserEmail);
 
         try {
-          if (adminTokens.length === 0 && userChurchId) {
+          if (userChurchId && (adminUserIds.length > 0 || adminEmailSet.size > 0)) {
             const fcmQuery = userChurchId === 'semente'
               ? collection(db, 'fcm_tokens')
               : query(collection(db, 'fcm_tokens'), where('churchId', '==', userChurchId));
             const fcmSnap = await getDocs(fcmQuery);
-            const tokensByUid = new Map<string, string>();
+            const fcmFoundTokens: string[] = [];
             fcmSnap.forEach(docSnap => {
               const data = docSnap.data();
-              const token = data.token;
-              if (!token) return;
+              const token = typeof data.token === 'string' ? data.token.trim() : '';
+              if (!token || token.length <= 15) return;
               const dataEmail = (data.email || '').toLowerCase().trim();
               const dataUid = data.uid || '';
               if (dataUid === currentUserId || dataEmail === currentUserEmail) return;
 
               if (adminEmailSet.has(dataEmail) || adminUidSet.has(dataUid)) {
-                tokensByUid.set(dataUid || dataEmail, token);
+                fcmFoundTokens.push(token);
               }
             });
-            tokensByUid.forEach(tok => addTokenSafe(tok));
+            const mergedUniqueTokens = Array.from(new Set([...adminTokens, ...fcmFoundTokens]));
+            adminTokens.length = 0;
+            adminTokens.push(...mergedUniqueTokens);
           }
         } catch (fcmErr) {
           console.warn('[Push Availability] Erro ao consultar fcm_tokens no Firestore:', fcmErr);

@@ -2,7 +2,8 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { initializeApp as initClientApp, getApps as getClientApps } from "firebase/app";
 import { 
@@ -4600,130 +4601,96 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
       deterministicTag = 'liloupro-' + Math.abs(hash).toString(36);
     }
 
-    // 1. Envio oficial via Firebase Admin SDK (FCM HTTP v1)
-    if (getApps().length) {
-      try {
-        const messagePayload: MulticastMessage = {
+    // Envio oficial via Firebase Admin SDK (FCM HTTP v1)
+    if (!getApps().length) {
+      const configErr = "[FCM Dispatcher] Firebase Admin SDK não está inicializado. Verifique se FIREBASE_SERVICE_ACCOUNT está configurado.";
+      console.error(configErr);
+      return {
+        success: false,
+        sentCount: 0,
+        errors: [{ error: configErr }]
+      };
+    }
+
+    try {
+      const messagePayload: MulticastMessage = {
+        notification: {
+          title: payloadTitle,
+          body: payloadBody,
+        },
+        data: {
+          title: payloadTitle,
+          body: payloadBody,
+          url: url || "/",
+          tag: deterministicTag,
+          ...(data || {})
+        },
+        webpush: {
+          headers: {
+            Urgency: "high",
+            TTL: "86400"
+          },
           notification: {
             title: payloadTitle,
             body: payloadBody,
-          },
-          data: {
-            title: payloadTitle,
-            body: payloadBody,
-            url: url || "/",
+            icon: "/pwa-512x512.png?v=4.0",
+            badge: "/pwa-192x192.png?v=4.0",
             tag: deterministicTag,
-            ...(data || {})
+            vibrate: [200, 100, 200, 100, 200, 100, 400]
           },
-          webpush: {
-            headers: {
-              Urgency: "high",
-              TTL: "86400"
-            },
-            notification: {
-              title: payloadTitle,
-              body: payloadBody,
-              icon: "/pwa-512x512.png?v=4.0",
-              badge: "/pwa-192x192.png?v=4.0",
-              tag: deterministicTag,
-              vibrate: [200, 100, 200, 100, 200, 100, 400]
-            },
-            fcmOptions: {
-              link: url || "/"
-            }
-          },
-          tokens: uniqueTokens
-        };
-
-        const response = await getMessaging().sendEachForMulticast(messagePayload);
-        console.log(`[FCM Dispatcher] HTTP v1 resultado: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
-
-        const errors: any[] = [];
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            errors.push({ token: uniqueTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
+          fcmOptions: {
+            link: url || "/"
           }
-        });
+        },
+        tokens: uniqueTokens
+      };
 
-        return {
-          success: response.successCount > 0,
-          sentCount: response.successCount,
-          errors: errors.length > 0 ? errors : undefined
-        };
-      } catch (adminSendErr: any) {
-        console.warn("[FCM Dispatcher] Falha no envio via Admin SDK:", adminSendErr?.message || adminSendErr);
-      }
-    }
+      const response = await getMessaging().sendEachForMulticast(messagePayload);
+      console.log(`[FCM Dispatcher] HTTP v1 resultado: ${response.successCount} sucesso(s), ${response.failureCount} falha(s).`);
 
-    // 2. Fallback legado
-    let sentCount = 0;
-    const errors: string[] = [];
-
-    for (const token of validTokens) {
-      try {
-        const fcmResponse = await fetch("https://fcm.googleapis.com/fcm/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `key=${process.env.FIREBASE_SERVER_KEY || "AIzaSyD5TRm6D05LxqHuN8kthOHIfwGBxTXK5Hk"}`
-          },
-          body: JSON.stringify({
-            to: token,
-            notification: {
-              title: payloadTitle,
-              body: payloadBody,
-              icon: "/pwa-512x512.png?v=4.0",
-              badge: "/pwa-192x192.png?v=4.0"
-            },
-            data: {
-              ...data,
-              title: payloadTitle,
-              body: payloadBody,
-              url: url || "/"
-            },
-            priority: "high"
-          })
-        });
-
-        if (fcmResponse.ok) {
-          sentCount++;
-        } else {
-          const errText = await fcmResponse.text();
-          errors.push(errText);
+      const errors: any[] = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          errors.push({ token: uniqueTokens[idx].slice(0, 10) + "...", error: resp.error ? resp.error.message : "Unknown" });
         }
-      } catch (itemErr: any) {
-        errors.push(itemErr?.message || String(itemErr));
-      }
-    }
+      });
 
-    return {
-      success: sentCount > 0,
-      sentCount,
-      errors: errors.length > 0 ? errors : undefined
-    };
+      return {
+        success: response.successCount > 0,
+        sentCount: response.successCount,
+        errors: errors.length > 0 ? errors : undefined
+      };
+    } catch (adminSendErr: any) {
+      const errMsg = adminSendErr?.message || String(adminSendErr);
+      console.warn("[FCM Dispatcher] Falha no envio via Admin SDK (verifique FIREBASE_SERVICE_ACCOUNT):", errMsg);
+      return {
+        success: false,
+        sentCount: 0,
+        errors: [{ error: errMsg }]
+      };
+    }
   }
 
-  // Rotina de verificação automática de escalas e disparo de lembretes para todos os escalados
+  // Rotina de verificação automática de escalas e disparo de lembretes para todos os escalados via Firebase Admin SDK
   async function checkAndSendScaleReminders(): Promise<{ sentCount: number; upcomingCount: number; checkedServices: number }> {
     try {
-      const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-      if (!fs.existsSync(firebaseConfigPath)) {
+      if (!getApps().length) {
         return { sentCount: 0, upcomingCount: 0, checkedServices: 0 };
       }
 
-      const clientConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
-      const clientApp = getClientApps().find(a => a.name === "server-scale-scheduler") ||
-        initClientApp(clientConfig, "server-scale-scheduler");
-      let clientDb: any;
-      try {
-        clientDb = initClientFirestore(clientApp, {
-          experimentalForceLongPolling: true,
-        }, clientConfig.firestoreDatabaseId);
-      } catch {
-        clientDb = getClientFirestore(clientApp, clientConfig.firestoreDatabaseId);
+      const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+      let databaseId: string | undefined = undefined;
+      if (fs.existsSync(firebaseConfigPath)) {
+        try {
+          const clientConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+          if (clientConfig.firestoreDatabaseId && clientConfig.firestoreDatabaseId !== "(default)") {
+            databaseId = clientConfig.firestoreDatabaseId;
+          }
+        } catch {}
       }
 
-      const servicesSnap = await clientGetDocs(clientCollection(clientDb, "services"));
+      const adminDb = databaseId ? getAdminFirestore(getApp(), databaseId) : getAdminFirestore(getApp());
+      const servicesSnap = await adminDb.collection("services").get();
       if (servicesSnap.empty) {
         return { sentCount: 0, upcomingCount: 0, checkedServices: 0 };
       }
@@ -4786,19 +4753,53 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
           }
 
           const memberInfo = tokenRegistryMap.get(memberUid);
-          if (memberInfo && memberInfo.notifyDayBeforeReminder === false) {
+          let memberDocData: any = null;
+          try {
+            const memberDocSnap = await adminDb.collection("members").doc(memberUid).get();
+            if (memberDocSnap.exists) {
+              memberDocData = memberDocSnap.data();
+            }
+          } catch {}
+
+          if (memberDocData?.notifyDayBeforeReminder === false || (!memberDocData && memberInfo?.notifyDayBeforeReminder === false)) {
             continue; // Usuário desativou preferência de lembrete
           }
 
-          const tokens = memberInfo?.tokens || [];
-          const validTokens = tokens.filter(t => typeof t === "string" && t.trim().length > 10);
+          const collectedTokens: string[] = [];
+          if (Array.isArray(memberDocData?.fcmTokens)) {
+            collectedTokens.push(...memberDocData.fcmTokens);
+          }
+          if (typeof memberDocData?.fcmToken === "string") {
+            collectedTokens.push(memberDocData.fcmToken);
+          }
+          if (typeof memberDocData?.lastFcmToken === "string") {
+            collectedTokens.push(memberDocData.lastFcmToken);
+          }
+
+          try {
+            const fcmTokensSnap = await adminDb.collection("fcm_tokens").where("uid", "==", memberUid).get();
+            fcmTokensSnap.forEach(tDoc => {
+              const tok = tDoc.data()?.token;
+              if (typeof tok === "string") {
+                collectedTokens.push(tok);
+              }
+            });
+          } catch {}
+
+          if (Array.isArray(memberInfo?.tokens)) {
+            collectedTokens.push(...memberInfo.tokens);
+          }
+
+          const validTokens = Array.from(
+            new Set(collectedTokens.map(t => (typeof t === "string" ? t.trim() : "")).filter(t => t.length > 10))
+          );
 
           const rolesText = roles.join(", ") || "Equipe de Louvor";
           const title = `⏰ Lembrete de Escala • ${service.title || "Culto"}`;
           const body = `Você está na escala para o culto "${service.title}" em menos de 24 horas (${dateStr} às ${timeStr}h). Função: ${rolesText}.`;
 
           if (validTokens.length > 0) {
-            console.log(`[Scale Reminders Server] Disparando push para ${memberInfo?.name || memberUid} (${validTokens.length} aparelhos) no culto "${service.title}"`);
+            console.log(`[Scale Reminders Server] Disparando push para ${memberDocData?.name || memberInfo?.name || memberUid} (${validTokens.length} aparelhos) no culto "${service.title}"`);
             const result = await dispatchFcmPush(validTokens, title, body, "/?tab=liturgy", {
               type: "service_reminder",
               serviceId: service.id,
@@ -4868,7 +4869,7 @@ REGRAS CRÍTICAS E INVIOLÁVEIS DE EXTRAÇÃO:
       if (email) existing.email = email;
       if (notifyDayBeforeReminder !== undefined) existing.notifyDayBeforeReminder = notifyDayBeforeReminder !== false;
 
-      existing.tokens = [cleanToken];
+      existing.tokens = [...existing.tokens.filter(t => t !== cleanToken), cleanToken].slice(-5);
       existing.updatedAt = Date.now();
       tokenRegistryMap.set(uid, existing);
       saveFcmRegistryToDisk();
