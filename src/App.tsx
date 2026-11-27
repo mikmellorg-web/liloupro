@@ -19172,6 +19172,9 @@ function MembersView({ onOpenUpgradeModal }: { onOpenUpgradeModal?: (check: Reso
           photoUrl: newMember.photoUrl || '',
           birthDate: newMember.birthDate || ''
         });
+        if (user && (editingMember.id === user.uid || editingMember.uid === user.uid)) {
+          await updateProfile(user, { displayName: newMember.name }).catch(() => {});
+        }
         setEditingMember(null);
         setIsAdding(false);
         setNewMember({ name: '', email: '', whatsapp: '', roles: [], photoUrl: '', birthDate: '' });
@@ -20664,13 +20667,13 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
        )}
 
        {section === 'general' ? (
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
             <LocalThemeStyleOverride 
               themeColor={themeColorPreview} 
               customBrandColor={customBrandColorPreview} 
             />
            {/* Notification Preferences Card */}
-            <Card className="p-8 space-y-6">
+            <Card className="p-8 space-y-6 h-full flex flex-col justify-between">
                <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
                  <Bell size={14} className="text-brand" /> Preferências de Notificação
                </h3>
@@ -20787,8 +20790,9 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                </div>
             </Card>
 
-            {/* Sua Igreja / Organização (Multi-Igreja / Tenancy Isolation) */}
-           <Card className="p-8 space-y-6">
+            {/* Sua Igreja / Organização + Link Padrão de Compartilhamento (Coluna Direita equilibrada com Preferências de Notificação) */}
+            <div className="flex flex-col gap-6 h-full justify-between">
+           <Card className="p-6 space-y-4">
               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
                 <Home size={14} className="text-brand" /> Sua Igreja / Organização
               </h3>
@@ -20892,118 +20896,55 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
               </div>
            </Card>
 
-           {/* Suporte Técnico Remoto Delegado (Apenas Admin/Líder de Igrejas Clientes, ou quando houver suporte ativo) */}
-           {isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (!isMasterDeveloper || isRemoteSupportActiveForChurch || isRemoteSupportMode) && (
-             <Card className="p-8 space-y-5 border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent">
-               <div className="flex items-center justify-between gap-2 flex-wrap">
-                 <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                   <ShieldCheck size={14} className="text-amber-500" /> Suporte Técnico Remoto LiLouPro
-                 </h3>
-                 {!isChurchEligibleForRemoteSupport ? (
-                   <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-500 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider">
-                     Recurso exclusivo do Plano Premium
-                   </span>
-                 ) : isRemoteSupportActiveForChurch ? (
-                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-500 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider">
-                     • Acesso Ativo (2h)
-                   </span>
-                 ) : (
-                   <span className="px-2.5 py-0.5 rounded-full bg-black/10 dark:bg-white/10 border border-border text-text-muted text-[10px] font-black uppercase tracking-wider">
-                     🔒 Bloqueado
-                   </span>
-                 )}
-               </div>
+           {/* Admin Settings (Link Padrão de Compartilhamento & WhatsApp da Liderança) */}
+           {isAdmin && (
+             <Card className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                    <Share2 size={16} className="text-brand" /> Link Padrão de Compartilhamento (Grupo de Louvor)
+                  </h3>
+                  <p className="text-xs text-text-muted leading-relaxed mt-1">
+                    Configure o link de convite do grupo do WhatsApp do ministério de louvor para agilizar o compartilhamento de escalas e avisos com a equipe.
+                  </p>
+                </div>
 
-               {!isChurchEligibleForRemoteSupport ? (
-                 <div className="bg-black/5 dark:bg-white/5 border border-amber-500/25 rounded-2xl p-4 space-y-2">
-                   <p className="text-xs text-text-muted leading-relaxed">
-                     O suporte remoto assistido com PIN temporário está disponível exclusivamente para igrejas no <strong className="text-text-main">Plano Premium</strong>.
-                   </p>
-                 </div>
-               ) : isRemoteSupportActiveForChurch ? (
-                 (() => {
-                   const remSec = Math.max(0, Math.floor((remoteSupportExpiresMs - remoteSupportNowMs) / 1000));
-                   const hrs = Math.floor(remSec / 3600);
-                   const mins = Math.floor((remSec % 3600) / 60);
-                   const secs = remSec % 60;
-                   const countdownStr = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                   const currentPin = churchData?.remoteSupport?.pin || '------';
-                   return (
-                     <div className="space-y-4">
-                       <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
-                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
-                             PIN Temporário (Informe ao Suporte)
-                           </span>
-                           <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-300 flex items-center gap-1">
-                             <Clock size={12} /> Expira em {countdownStr}
-                           </span>
-                         </div>
-                         <div className="flex items-center justify-between gap-3">
-                           <span className="text-2xl sm:text-3xl font-mono font-black tracking-[0.28em] text-text-main select-all">
-                             {currentPin}
-                           </span>
-                           <Button
-                             type="button"
-                             variant="secondary"
-                             onClick={() => {
-                               try {
-                                 navigator.clipboard.writeText(currentPin);
-                                 setRemoteSupportCopied(true);
-                                 setTimeout(() => setRemoteSupportCopied(false), 2000);
-                               } catch {}
-                             }}
-                             className="shrink-0 text-xs font-bold gap-1.5"
-                           >
-                             {remoteSupportCopied ? <Check size={14} /> : <Copy size={14} />}
-                             {remoteSupportCopied ? 'Copiado' : 'Copiar PIN'}
-                           </Button>
-                         </div>
-                         <p className="text-[11px] text-text-muted leading-relaxed">
-                           O suporte oficial só entra digitando este PIN e nunca pode excluir sua igreja, remover o líder principal ou alterar seu plano.
-                         </p>
-                       </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">Link Padrão de Compartilhamento (Grupo de Louvor)</label>
+                  <Input 
+                    placeholder="Ex: https://chat.whatsapp.com/Gj3Hdf..."
+                    value={whatsappGroupLink}
+                    onChange={e => setWhatsappGroupLink(e.target.value)}
+                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
+                  />
+                  <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
+                    Adicione o link de convite do grupo do WhatsApp do ministério de louvor para abrir de forma automática ao compartilhar escalas.
+                  </p>
+                </div>
 
-                       {!isRemoteSupportMode && (
-                         <Button
-                           type="button"
-                           disabled={isUpdatingRemoteSupport}
-                           onClick={handleRevokeRemoteSupport}
-                           className="w-full min-h-[44px] bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20"
-                         >
-                           {isUpdatingRemoteSupport ? 'Encerrando...' : 'Encerrar Acesso Agora'}
-                         </Button>
-                       )}
-                     </div>
-                   );
-                 })()
-               ) : (
-                 <div className="space-y-3">
-                   <p className="text-xs text-text-muted leading-relaxed">
-                     Precisa de ajuda para cadastrar músicas, cifras ou montar escalas? Gere um <strong className="text-text-main">PIN temporário de 6 dígitos</strong> (válido por <strong className="text-text-main">2 horas</strong>) para autorizar o suporte técnico oficial com seu total controle.
-                   </p>
-                   <Button
-                     type="button"
-                     disabled={isUpdatingRemoteSupport || isRemoteSupportMode}
-                     onClick={handleGenerateRemoteSupportPin}
-                     className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
-                   >
-                     <KeyRound size={15} />
-                     {isUpdatingRemoteSupport ? 'Gerando PIN...' : 'Gerar PIN de Suporte (2 horas)'}
-                   </Button>
-                 </div>
-               )}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">WhatsApp da Liderança (Avisos de Disponibilidade)</label>
+                  <Input 
+                    placeholder="Ex: 53999999999 (DDD + Número)"
+                    value={adminPhone}
+                    onChange={e => setAdminPhone(e.target.value)}
+                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
+                  />
+                  <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
+                    Cadastre o WhatsApp do administrador para receber avisos diretos sempre que um membro concluir a marcação de disponibilidade.
+                  </p>
+                </div>
 
-               {isRemoteSupportActiveForChurch && churchData?.remoteSupport?.sessionStartedAt && (
-                 <div className="pt-3 border-t border-border/50 text-[11px] text-text-muted space-y-0.5">
-                   <p className="font-bold text-emerald-500 text-[10px] uppercase tracking-wider">Sessão de Suporte em Andamento:</p>
-                   <p>
-                     Início: {new Date(churchData.remoteSupport.sessionStartedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                   </p>
-                 </div>
-               )}
+                <Button 
+                  onClick={handleSavePhone} 
+                  disabled={isSavingPhone}
+                  className="w-full h-11 mt-1 font-bold uppercase tracking-wider text-xs"
+                >
+                  {isSavingPhone ? <RefreshCcw size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
+                  Salvar Configurações Administrativas
+                </Button>
              </Card>
            )}
+            </div>
 
              {/* Custom Church Branding Controls & Live Preview Cards */}
             {isAdmin && churchData && (
@@ -21790,251 +21731,168 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
               </>
             )}
 
-           {/* Profile Card */}
-           <Card className="p-8 space-y-6">
-              <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                <Users size={14} className="text-brand" /> Perfil do Usuário
-              </h3>
-              
-              <div className="space-y-4">
-                {/* Profile Photo Display & Preset Selector */}
-                <div className="flex flex-col sm:flex-row items-center gap-6 pb-4 border-b border-border/10">
-                  <div className="relative shrink-0">
-                    <div className="w-20 h-20 rounded-full bg-brand/10 border-2 border-brand/40 overflow-hidden flex items-center justify-center shadow-lg relative group">
-                      {userPhotoUrl ? (
-                        <img 
-                          referrerPolicy="no-referrer"
-                          src={userPhotoUrl} 
-                          alt="Foto do perfil" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-3xl font-black text-text-main">{userName?.[0] || user?.email?.[0] || '?'}</span>
-                      )}
-                    </div>
-                    {userPhotoUrl && (
-                      <button 
-                        onClick={() => setUserPhotoUrl('')}
-                        type="button"
-                        className="absolute -bottom-1 -right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full text-[8px] font-black border border-surface shadow-md"
-                        title="Remover foto"
-                      >
-                        <X size={10} />
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 space-y-3 w-full animate-fade-in">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest block text-left">Foto de Perfil (Enviar do aparelho ou tirar com a câmera)</label>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                      <div 
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onDrop={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const file = e.dataTransfer.files?.[0];
-                          if (file && file.type.startsWith('image/')) {
-                            try {
-                              const base64 = await compressAndResizeImage(file);
-                              setUserPhotoUrl(base64);
-                            } catch (err) {
-                              console.error(err);
-                              alert('Erro ao carregar a imagem. Tente outro arquivo.');
-                            }
-                          }
-                        }}
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*';
-                          input.onchange = async (e: any) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              try {
-                                const base64 = await compressAndResizeImage(file);
-                                setUserPhotoUrl(base64);
-                              } catch (err) {
-                                console.error(err);
-                                alert('Erro ao carregar a imagem. Tente outro arquivo.');
-                              }
-                            }
-                          };
-                          input.click();
-                        }}
-                        className="border border-dashed border-border hover:border-brand/60 bg-black/5 dark:bg-white/5 rounded-2xl p-3 px-4 transition-all duration-200 flex flex-col items-center justify-center text-center gap-1 cursor-pointer group active:scale-[0.98] min-h-[84px]"
-                      >
-                        <Upload size={16} className="text-text-muted group-hover:text-brand transition-colors animate-pulse" />
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-black text-text-main group-hover:text-brand transition-colors">
-                            Selecionar Arquivo
-                          </p>
-                          <p className="text-[9px] text-text-muted leading-tight">
-                            Arraste ou clique para buscar
-                          </p>
-                        </div>
-                      </div>
+           {/* Cards Menores Agrupados na Base (Suporte Remoto, Aparência e Sistema/Sair por último no celular) */}
+           <div className={cn(
+             "md:col-span-2 grid grid-cols-1 gap-6 items-stretch",
+             (isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (!isMasterDeveloper || isRemoteSupportActiveForChurch || isRemoteSupportMode))
+               ? "md:grid-cols-3"
+               : "md:grid-cols-2"
+           )}>
+             {/* Suporte Técnico Remoto Delegado (Apenas Admin/Líder de Igrejas Clientes, ou quando houver suporte ativo) */}
+             {isAdmin && churchData && churchData.id !== 'semente' && churchData.id !== 'demo_sandbox' && (!isMasterDeveloper || isRemoteSupportActiveForChurch || isRemoteSupportMode) && (
+               <Card className="p-6 space-y-4 border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent h-full flex flex-col justify-between">
+                 <div className="flex items-center justify-between gap-2 flex-wrap">
+                   <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                     <ShieldCheck size={14} className="text-amber-500" /> Suporte Técnico Remoto LiLouPro
+                   </h3>
+                   {!isChurchEligibleForRemoteSupport ? (
+                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-500 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                       Recurso exclusivo do Plano Premium
+                     </span>
+                   ) : isRemoteSupportActiveForChurch ? (
+                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-500 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+                       • Acesso Ativo (2h)
+                     </span>
+                   ) : (
+                     <span className="px-2.5 py-0.5 rounded-full bg-black/10 dark:bg-white/10 border border-border text-text-muted text-[10px] font-black uppercase tracking-wider">
+                       🔒 Bloqueado
+                     </span>
+                   )}
+                 </div>
 
-                      <div 
-                        onClick={() => setIsCameraActive(true)}
-                        className="border border-dashed border-border hover:border-brand/60 bg-black/5 dark:bg-white/5 rounded-2xl p-3 px-4 transition-all duration-200 flex flex-col items-center justify-center text-center gap-1 cursor-pointer group active:scale-[0.98] min-h-[84px]"
-                      >
-                        <Camera size={16} className="text-text-muted group-hover:text-brand transition-colors" />
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-black text-text-main group-hover:text-brand transition-colors">
-                            Tirar Foto na Hora
-                          </p>
-                          <p className="text-[9px] text-text-muted leading-tight">
-                            Tirar selfie diretamente do celular
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                 {!isChurchEligibleForRemoteSupport ? (
+                   <div className="bg-black/5 dark:bg-white/5 border border-amber-500/25 rounded-2xl p-4 space-y-2">
+                     <p className="text-xs text-text-muted leading-relaxed">
+                       O suporte remoto assistido com PIN temporário está disponível exclusivamente para igrejas no <strong className="text-text-main">Plano Premium</strong>.
+                     </p>
+                   </div>
+                 ) : isRemoteSupportActiveForChurch ? (
+                   (() => {
+                     const remSec = Math.max(0, Math.floor((remoteSupportExpiresMs - remoteSupportNowMs) / 1000));
+                     const hrs = Math.floor(remSec / 3600);
+                     const mins = Math.floor((remSec % 3600) / 60);
+                     const secs = remSec % 60;
+                     const countdownStr = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                     const currentPin = churchData?.remoteSupport?.pin || '------';
+                     return (
+                       <div className="space-y-4">
+                         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                           <div className="flex items-center justify-between gap-2 flex-wrap">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
+                               PIN Temporário (Informe ao Suporte)
+                             </span>
+                             <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                               <Clock size={12} /> Expira em {countdownStr}
+                             </span>
+                           </div>
+                           <div className="flex items-center justify-between gap-3">
+                             <span className="text-2xl sm:text-3xl font-mono font-black tracking-[0.28em] text-text-main select-all">
+                               {currentPin}
+                             </span>
+                             <Button
+                               variant="secondary"
+                               onClick={() => {
+                                 try {
+                                   navigator.clipboard.writeText(currentPin);
+                                   setRemoteSupportCopied(true);
+                                   setTimeout(() => setRemoteSupportCopied(false), 2000);
+                                 } catch {}
+                               }}
+                               className="shrink-0 text-xs font-bold gap-1.5"
+                             >
+                               {remoteSupportCopied ? <Check size={14} /> : <Copy size={14} />}
+                               {remoteSupportCopied ? 'Copiado' : 'Copiar PIN'}
+                             </Button>
+                           </div>
+                           <p className="text-[11px] text-text-muted leading-relaxed">
+                             O suporte oficial só entra digitando este PIN e nunca pode excluir sua igreja, remover o líder principal ou alterar seu plano.
+                           </p>
+                         </div>
 
-                <div className="space-y-1.5">
-                  <AnimatePresence>
-                    {isCameraActive && (
-                      <CameraCapture 
-                        onCapture={(base64) => setUserPhotoUrl(base64)} 
-                        onClose={() => setIsCameraActive(false)} 
-                      />
-                    )}
-                  </AnimatePresence>
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Nome de Exibição</label>
-                  <Input 
-                    value={userName}
-                    onChange={e => setUserName(e.target.value)}
-                    placeholder="Seu nome"
-                  />
-                </div>
+                         {!isRemoteSupportMode && (
+                           <Button
+                             disabled={isUpdatingRemoteSupport}
+                             onClick={handleRevokeRemoteSupport}
+                             className="w-full min-h-[44px] bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20"
+                           >
+                             {isUpdatingRemoteSupport ? 'Encerrando...' : 'Encerrar Acesso Agora'}
+                           </Button>
+                         )}
+                       </div>
+                     );
+                   })()
+                 ) : (
+                   <div className="space-y-3">
+                     <p className="text-xs text-text-muted leading-relaxed">
+                       Precisa de ajuda para cadastrar músicas, cifras ou montar escalas? Gere um <strong className="text-text-main">PIN temporário de 6 dígitos</strong> (válido por <strong className="text-text-main">2 horas</strong>) para autorizar o suporte técnico oficial com seu total controle.
+                     </p>
+                     <Button
+                       disabled={isUpdatingRemoteSupport || isRemoteSupportMode}
+                       onClick={handleGenerateRemoteSupportPin}
+                       className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
+                     >
+                       <KeyRound size={15} />
+                       {isUpdatingRemoteSupport ? 'Gerando PIN...' : 'Gerar PIN de Suporte (2 horas)'}
+                     </Button>
+                   </div>
+                 )}
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">E-mail</label>
-                  <Input 
-                    value={user?.email || ''}
-                    disabled
-                    className="opacity-50 cursor-not-allowed"
-                  />
-                </div>
+                 {isRemoteSupportActiveForChurch && churchData?.remoteSupport?.sessionStartedAt && (
+                   <div className="pt-3 border-t border-border/50 text-[11px] text-text-muted space-y-0.5">
+                     <p className="font-bold text-emerald-500 text-[10px] uppercase tracking-wider">Sessão de Suporte em Andamento:</p>
+                     <p>
+                       Início: {new Date(churchData.remoteSupport.sessionStartedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                     </p>
+                   </div>
+                 )}
+               </Card>
+             )}
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest pl-1">Data de Nascimento (Opcional)</label>
-                  <EasyBirthDatePicker 
-                    value={userBirthDate}
-                    onChange={val => setUserBirthDate(val)}
-                  />
-                </div>
-
-                <Button 
-                  onClick={handleUpdateProfile} 
-                  className="w-full mt-2" 
-                  disabled={isSaving || (userName === (user?.displayName || '') && userPhotoUrl === (currentMember?.photoUrl || '') && userBirthDate === (currentMember?.birthDate || '') && defaultBibleVersion === (currentMember?.defaultBibleVersion || 'BLIVRE'))}
-                >
-                  {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
-                  Salvar Alterações
-                </Button>
-              </div>
-           </Card>
-
-           {/* Appearance Card */}
-           <Card className="p-8 space-y-6">
-              <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                <Activity size={14} className="text-brand" /> Aparência
-              </h3>
-              
-              <div className="space-y-4">
-                <p className="text-xs text-text-muted font-bold uppercase tracking-wider">Modo de Visualização:</p>
+             {/* Appearance Card */}
+             <Card className="p-6 space-y-4 h-full flex flex-col justify-between">
+                <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
+                  <Activity size={14} className="text-brand" /> Aparência
+                </h3>
                 
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={() => onThemeChange('dark')}
-                    className={cn(
-                      "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
-                      theme === 'dark' 
-                        ? "bg-brand/20 border-brand text-text-main shadow-lg shadow-brand/10 scale-105" 
-                        : "bg-surface border-border text-text-muted hover:bg-black/5 dark:hover:bg-white/5 opacity-60"
-                    )}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-900 border border-white/10 flex items-center justify-center text-white">
-                      <Zap size={20} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Escuro</span>
-                  </button>
-   
-                  <button 
-                    onClick={() => onThemeChange('light')}
-                    className={cn(
-                      "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
-                      theme === 'light' 
-                        ? "bg-brand/20 border-brand text-brand shadow-lg shadow-brand/10 scale-105" 
-                        : "bg-surface border-border text-text-muted hover:bg-black/5 dark:hover:bg-white/5 opacity-60"
-                    )}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-white border border-black/10 flex items-center justify-center text-primary">
-                      <Sparkles size={20} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Claro</span>
-                  </button>
+                <div className="space-y-3">
+                  <p className="text-xs text-text-muted font-bold uppercase tracking-wider">Modo de Visualização:</p>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => onThemeChange('dark')}
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
+                        theme === 'dark' 
+                          ? "bg-brand/20 border-brand text-text-main shadow-lg shadow-brand/10 scale-105" 
+                          : "bg-surface border-border text-text-muted hover:bg-black/5 dark:hover:bg-white/5 opacity-60"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-900 border border-white/10 flex items-center justify-center text-white">
+                        <Zap size={20} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Escuro</span>
+                    </button>
+     
+                    <button 
+                      onClick={() => onThemeChange('light')}
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all flex flex-col items-center gap-2",
+                        theme === 'light' 
+                          ? "bg-brand/20 border-brand text-brand shadow-lg shadow-brand/10 scale-105" 
+                          : "bg-surface border-border text-text-muted hover:bg-black/5 dark:hover:bg-white/5 opacity-60"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white border border-black/10 flex items-center justify-center text-primary">
+                        <Sparkles size={20} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Claro</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-           </Card>
-
-           {/* Admin Settings (Conditional) */}
-           {isAdmin && (
-             <Card className="p-8 space-y-6">
-                <div>
-                  <h3 className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                    <Share2 size={16} className="text-brand" /> Link Padrão de Compartilhamento (Grupo de Louvor)
-                  </h3>
-                  <p className="text-xs text-text-muted leading-relaxed mt-1">
-                    Configure o link de convite do grupo do WhatsApp do ministério de louvor para agilizar o compartilhamento de escalas e avisos com a equipe.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">Link Padrão de Compartilhamento (Grupo de Louvor)</label>
-                  <Input 
-                    placeholder="Ex: https://chat.whatsapp.com/Gj3Hdf..."
-                    value={whatsappGroupLink}
-                    onChange={e => setWhatsappGroupLink(e.target.value)}
-                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
-                  />
-                  <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
-                    Adicione o link de convite do grupo do WhatsApp do ministério de louvor para abrir de forma automática ao compartilhar escalas.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-brand uppercase tracking-widest pl-1">WhatsApp da Liderança (Avisos de Disponibilidade)</label>
-                  <Input 
-                    placeholder="Ex: 53999999999 (DDD + Número)"
-                    value={adminPhone}
-                    onChange={e => setAdminPhone(e.target.value)}
-                    className="font-mono h-11 bg-white/5 border-white/10 text-white dark:text-white opacity-100 placeholder:text-slate-400 dark:placeholder:text-slate-400"
-                  />
-                  <p className="text-[9px] text-zinc-400 pl-1 leading-normal">
-                    Cadastre o WhatsApp do administrador para receber avisos diretos sempre que um membro concluir a marcação de disponibilidade.
-                  </p>
-                </div>
-
-                <Button 
-                  onClick={handleSavePhone} 
-                  disabled={isSavingPhone}
-                  className="w-full h-11 mt-2 font-bold uppercase tracking-wider text-xs"
-                >
-                  {isSavingPhone ? <RefreshCcw size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
-                  Salvar Configurações Administrativas
-                </Button>
              </Card>
-           )}
 
-           {/* Information Card */}
-           <Card className="p-8 space-y-6 bg-brand/5">
+             {/* Information Card (SEMPRE o último para celular e desktop) */}
+             <Card className="p-6 space-y-4 bg-brand/5 h-full flex flex-col justify-between">
               <h3 className="text-[10px] font-black text-text-main uppercase tracking-widest flex items-center gap-2">
                 <Activity size={14} className="text-brand" /> Sistema e Informações
               </h3>
@@ -22245,6 +22103,7 @@ function SettingsView({ theme, onThemeChange, isAdmin, allMembers, onReplaySplas
                  )}
               </div>
            </Card>
+           </div>
          </div>
        ) : (
          <AdminDashboardView />
@@ -23583,49 +23442,6 @@ function AdminDashboardView() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Song Key Audit Section */}
-      {songsWithKeyIssues.length > 0 && (
-        <Card className="p-8 border-amber-500/30 bg-amber-500/5">
-           <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500">
-                 <Sparkles size={24} />
-              </div>
-              <div>
-                 <h3 className="text-sm font-black text-text-main uppercase tracking-widest leading-none">Auditoria de Músicas</h3>
-                 <p className="text-[10px] text-text-muted font-bold mt-1 uppercase tracking-wider">Músicas com possível divergência entre cabeçalho e cifra</p>
-              </div>
-           </div>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {songsWithKeyIssues.map(s => {
-                const detected = detectKey(s.chords);
-                return (
-                  <div key={s.id} className="p-4 bg-white/5 border border-border rounded-xl flex items-center justify-between group">
-                    <div className="overflow-hidden">
-                      <p className="text-sm font-bold text-text-main truncate">{s.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] font-black uppercase text-red-400 bg-red-400/10 px-2 py-0.5 rounded">Cabeçalho: <span className="normal-case">{s.baseKey}</span></span>
-                        <span className="text-[9px] font-black uppercase text-green-400 bg-green-400/10 px-2 py-0.5 rounded">Detectado: <span className="normal-case">{detected}</span></span>
-                      </div>
-                    </div>
-                    <ConfirmButton 
-                      title="Fix Key"
-                      onConfirm={async () => {
-                        if (detected) {
-                          await updateDoc(doc(db, 'songs', s.id), { baseKey: detected });
-                        }
-                      }}
-                      className="p-2 bg-brand/10 text-brand rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-brand/20"
-                    >
-                      <Check size={16} />
-                    </ConfirmButton>
-                  </div>
-                );
-              })}
-           </div>
-        </Card>
-      )}
 
       {/* Participation Stats Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-12">
